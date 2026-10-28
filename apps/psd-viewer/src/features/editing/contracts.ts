@@ -4,9 +4,12 @@ import type {
   PsdEditorSession,
   PsdExactRasterTreeEdit,
   PsdReopenSaveContract,
+  PsdSourceHostColorPolicy,
   PsdSourceHostSaveContext,
+  PsdSourceHostTypeRendering,
   PsdStateMetadataEdit
 } from '@app-game/psd/editor';
+import { photoshop26DefaultSaveChoices } from '@app-game/psd/editor';
 import type { PsdInfo, PsdLayerNode, PsdStates } from '@app-game/psd/viewer';
 
 /** A viewer refusal retains a machine-readable dependency path, independently of backend exceptions. */
@@ -67,6 +70,10 @@ export type EditingSaveOptions = {
   mode: 'source';
   /** Explicit RGB blend gamma choice, independent of carried source host facts. */
   linearBlending: boolean;
+  /** Text gamma defaults to 1.45; null disables it. Captured independently of display settings. */
+  textGamma?: PsdSourceHostTypeRendering['textGamma'];
+  /** Defaults to factory sRGB/Preserve/Leave Untagged. Unsupported choices receive named refusals. */
+  colorPolicy?: PsdSourceHostColorPolicy;
 };
 
 /** Each tree action saves one pristine source under v5; refusal never selects a weaker contract. */
@@ -93,6 +100,11 @@ export function sourceSaveOperands(
       softwareAgent: viewerAgent,
       linearBlending: options.linearBlending
     },
+    typeRendering: {
+      textGamma:
+        options.textGamma === undefined ? photoshop26DefaultSaveChoices.typeRendering.textGamma : options.textGamma
+    },
+    colorPolicy: { ...photoshop26DefaultSaveChoices.colorPolicy, ...options.colorPolicy },
     editTime: now.valueOf() / 1000
   };
 }
@@ -117,6 +129,21 @@ export function localIsoTime(instant: Date): string {
 /** Concise explanations retain the backend's named dependency separately for diagnosis. */
 export function readableRefusal(error: EditingFailure): string {
   const path = 'propertyPath' in error ? error.propertyPath : '';
+  if (path === 'save.sourceHost.colorPolicy.missingProfile') {
+    return 'Assigning a working profile is not qualified for exact saves. Choose Leave untagged.';
+  }
+  if (path === 'save.sourceHost.colorPolicy.rgb') {
+    return 'Off and Convert are not qualified for exact saves. Choose Preserve Embedded Profiles; samples will not be converted.';
+  }
+  if (path === 'save.sourceHost.colorPolicy.workingRGB') {
+    return 'Adobe RGB (1998) working space is not qualified for exact saves. Choose sRGB IEC61966-2.1.';
+  }
+  if (path === 'save.sourceHost.type.coverage') {
+    return 'This text coverage is not qualified for exact saving. Disabling text gamma may allow unchanged cached text; unsupported layout, masks and styles still refuse.';
+  }
+  if (path === 'save.sourceHost.type.fontAvailabilityAndTextGamma') {
+    return 'Enabled text gamma needs font and layout eligibility that the browser cannot establish. Disabling text gamma may allow unchanged cached text to save.';
+  }
   if (/typeRendering|font|Txt2|typeGraph/i.test(path)) {
     return 'This document has text layers whose fonts the browser cannot vouch for.';
   }

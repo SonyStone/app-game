@@ -88,3 +88,12 @@
 .toolbar [aria-label='Save status']:empty {
   display: none;
 }
+
+.toolbar input[type='number'] {
+  width: 64px;
+  flex: 0 0 64px;
+}
+.toolbar [aria-label='Color settings'] {
+  font-size: 10px;
+  width: 100%;
+}

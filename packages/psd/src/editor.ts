@@ -178,7 +178,7 @@ export type PsdReopenSaveWriters = NonNullable<PsdReopenSaveOperands['writers']>
 
 /**
  * Browser v5 context, forwarded from WASM. Supply pristine source bytes, real action/save clocks,
- * fresh crypto.randomUUID identities, the honest saving agent and the user's RGB blending choice only.
+ * fresh crypto.randomUUID identities, the honest saving agent and the user's save choices only.
  * The library derives layer times and source host facts. No profiles, fonts or current-host writers are accepted.
  * Supply initialEvent only after a named missing-preparation-event refusal on initialized source history.
  */
@@ -186,6 +186,26 @@ export type PsdSourceHostSaveContext = Extract<
   PsdReopenSaveContext,
   { contract: 'photoshop26.reopen-equivalent/v5-source-host' }
 >;
+
+/** Text blending choice, paired with colorPolicy. Null disables gamma; enabled values must be exact hundredths
+ * from 1.00 through 3.00. Photoshop 26's factory value is 1.45. This does not certify font/layout eligibility.
+ */
+export type PsdSourceHostTypeRendering = NonNullable<PsdSourceHostSaveContext['typeRendering']>;
+
+/** Color choices, paired with typeRendering. Factory defaults are sRGB, preserve and leaveUntagged.
+ * Omitted missingProfile means leaveUntagged. Assignment, Off, Convert and Adobe RGB currently refuse edited saves.
+ * Preserve retains embedded ICC bytes; Leave Untagged neither assigns a profile nor converts samples.
+ * Omitting both choice objects preserves the narrower legacy endpoint-only contract.
+ */
+export type PsdSourceHostColorPolicy = NonNullable<PsdSourceHostSaveContext['colorPolicy']>;
+
+/** Photoshop 26 factory choices. Pass both objects explicitly to opt into the qualified untagged route.
+ * RGB blending gamma is independent and defaults to off via save.linearBlending = false.
+ */
+export const photoshop26DefaultSaveChoices = {
+  typeRendering: { textGamma: 1.45 },
+  colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', missingProfile: 'leaveUntagged' }
+} as const satisfies { typeRendering: PsdSourceHostTypeRendering; colorPolicy: PsdSourceHostColorPolicy };
 
 /**
  * Honest v4 attribution with real explicit host writers, optional carried type facts and localized Background name.

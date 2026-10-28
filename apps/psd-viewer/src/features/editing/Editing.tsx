@@ -42,6 +42,8 @@ export function Editing(props: {
   onRevision: (revision: number, display?: EditingState['display']) => void;
 }) {
   const [linearBlending, setLinearBlending] = createSignal(false);
+  const [textGammaEnabled, setTextGammaEnabled] = createSignal(true);
+  const [textGammaValue, setTextGammaValue] = createSignal('1.45');
   const [enabled, setEnabled] = createSignal(false);
   const [state, setState] = createSignal<EditingState>();
   const [failure, setFailure] = createSignal<EditingFailure>();
@@ -131,7 +133,11 @@ export function Editing(props: {
       kind: 'edit',
       revision: state()?.revision ?? 0,
       command,
-      options: { mode: 'source', linearBlending: linearBlending() }
+      options: {
+        mode: 'source',
+        linearBlending: linearBlending(),
+        textGamma: textGammaEnabled() ? Number(textGammaValue()) : null
+      }
     });
   }
 
@@ -140,7 +146,11 @@ export function Editing(props: {
       kind: 'edit',
       revision: state()?.revision ?? 0,
       command: { kind: 'tree', edit },
-      options: { mode: 'source', linearBlending: linearBlending() }
+      options: {
+        mode: 'source',
+        linearBlending: linearBlending(),
+        textGamma: textGammaEnabled() ? Number(textGammaValue()) : null
+      }
     });
   }
 
@@ -282,6 +292,45 @@ export function Editing(props: {
             />
             Blend RGB colors using gamma 1
           </label>
+          <label>
+            <input
+              type="checkbox"
+              aria-label="Blend text colors using gamma"
+              checked={textGammaEnabled()}
+              onChange={(event) => setTextGammaEnabled(event.currentTarget.checked)}
+            />
+            Blend text colors using gamma
+            <input
+              type="number"
+              aria-label="Text gamma value"
+              min="1"
+              max="3"
+              step="0.01"
+              disabled={!textGammaEnabled()}
+              value={textGammaValue()}
+              onInput={(event) => setTextGammaValue(event.currentTarget.value)}
+            />
+          </label>
+          <div aria-label="Color settings">
+            <strong>Color settings</strong>
+            <p>
+              RGB working space: sRGB IEC61966-2.1 · RGB color policy: Preserve Embedded Profiles · Missing profiles:
+              Leave untagged
+            </p>
+          </div>
+          <p>Exact for Photoshop with the same settings. Defaults match Photoshop 26 factory settings.</p>
+          <details>
+            <summary>About save settings</summary>
+            <p>
+              These are your choices, not detected Photoshop preferences. Disabling text gamma allows more unchanged
+              cached text to save without installed fonts.
+            </p>
+            <p>
+              Keeps embedded profiles. Untagged samples use working sRGB without assigning a profile or converting
+              samples.
+            </p>
+          </details>
+          <p>Changes affect later actions only. Undo and redo retain each action's save choices.</p>
           <div class={styles.actions}>
             <button
               type="button"

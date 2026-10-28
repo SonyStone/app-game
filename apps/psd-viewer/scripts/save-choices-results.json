@@ -1,0 +1,471 @@
+{
+  "contract": "photoshop26.reopen-equivalent/v5-source-host",
+  "reference": "evidence/2026-10-23-psd-batch-19/METRIC.md",
+  "choices": {
+    "default": {
+      "textGamma": 1.45
+    },
+    "off": {
+      "textGamma": null
+    }
+  },
+  "sharedChoices": {
+    "linearBlending": false,
+    "workingRGB": "sRGB IEC61966-2.1",
+    "rgb": "preserve",
+    "missingProfile": "leaveUntagged"
+  },
+  "families": [
+    {
+      "family": "rename",
+      "batch19": "387/466",
+      "default": "387/466",
+      "textOff": "388/466"
+    },
+    {
+      "family": "opacity",
+      "batch19": "168/466",
+      "default": "168/466",
+      "textOff": "168/466"
+    },
+    {
+      "family": "pixels",
+      "batch19": "353/466",
+      "default": "353/466",
+      "textOff": "355/466"
+    },
+    {
+      "family": "out",
+      "batch19": "343/466",
+      "default": "343/466",
+      "textOff": "343/466"
+    },
+    {
+      "family": "delete",
+      "batch19": "199/466",
+      "default": "199/466",
+      "textOff": "199/466"
+    },
+    {
+      "family": "group-group-selected",
+      "batch19": "380/466",
+      "default": "380/466",
+      "textOff": "380/466"
+    },
+    {
+      "family": "group-opacity",
+      "batch19": "189/225",
+      "default": "189/225",
+      "textOff": "189/225"
+    },
+    {
+      "family": "group-blend",
+      "batch19": "189/225",
+      "default": "189/225",
+      "textOff": "189/225"
+    },
+    {
+      "family": "group-visibility",
+      "batch19": "189/225",
+      "default": "189/225",
+      "textOff": "189/225"
+    },
+    {
+      "family": "group-out",
+      "batch19": "167/225",
+      "default": "167/225",
+      "textOff": "167/225"
+    },
+    {
+      "family": "group-delete",
+      "batch19": "167/225",
+      "default": "167/225",
+      "textOff": "167/225"
+    },
+    {
+      "family": "group-ungroup",
+      "batch19": "167/225",
+      "default": "167/225",
+      "textOff": "167/225"
+    }
+  ],
+  "runs": {
+    "default": {
+      "generatedAt": "2026-10-28T20:32:56.469Z",
+      "uiSaves": 169,
+      "uiAttempts": 216,
+      "allOutputsReopenedWithExpectedStack": true,
+      "manifestSha256": "e463ad97e4d94012cfd0238e7c5b2ec2b523cee94373205b40104ddd069ba80e",
+      "publicCensus": [
+        {
+          "family": "rename",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "opacity",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "pixels",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "out",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "delete",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "group-group-selected",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "group-opacity",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-blend",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-visibility",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-out",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-delete",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-ungroup",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        }
+      ],
+      "ui": [
+        {
+          "family": "rename",
+          "admitted": 37,
+          "attempts": 51,
+          "share": 0.7254901960784313
+        },
+        {
+          "family": "opacity",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "pixels",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "out",
+          "admitted": 11,
+          "attempts": 12,
+          "share": 0.9166666666666666
+        },
+        {
+          "family": "delete",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "group-group-selected",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "group-opacity",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-blend",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-visibility",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-out",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-delete",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-ungroup",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "fill",
+          "admitted": 2,
+          "attempts": 3,
+          "share": 0.6666666666666666
+        },
+        {
+          "family": "blend",
+          "admitted": 3,
+          "attempts": 3,
+          "share": 1
+        },
+        {
+          "family": "visibility",
+          "admitted": 2,
+          "attempts": 3,
+          "share": 0.6666666666666666
+        },
+        {
+          "family": "resolution",
+          "admitted": 3,
+          "attempts": 6,
+          "share": 0.5
+        },
+        {
+          "family": "fileInfoCopyright",
+          "admitted": 1,
+          "attempts": 4,
+          "share": 0.25
+        }
+      ],
+      "errors": []
+    },
+    "off": {
+      "generatedAt": "2026-10-28T20:33:46.414Z",
+      "uiSaves": 169,
+      "uiAttempts": 216,
+      "allOutputsReopenedWithExpectedStack": true,
+      "manifestSha256": "945610c0bc4d40bff37016aa8835c66c6886656041c3a3779a2f5de48f82fb76",
+      "publicCensus": [
+        {
+          "family": "rename",
+          "admitted": 1,
+          "attempts": 53,
+          "share": 0.018867924528301886
+        },
+        {
+          "family": "opacity",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "pixels",
+          "admitted": 1,
+          "attempts": 53,
+          "share": 0.018867924528301886
+        },
+        {
+          "family": "out",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "delete",
+          "admitted": 0,
+          "attempts": 53,
+          "share": 0
+        },
+        {
+          "family": "group-group-selected",
+          "admitted": 1,
+          "attempts": 53,
+          "share": 0.018867924528301886
+        },
+        {
+          "family": "group-opacity",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-blend",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-visibility",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-out",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-delete",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        },
+        {
+          "family": "group-ungroup",
+          "admitted": 0,
+          "attempts": 1,
+          "share": 0
+        }
+      ],
+      "ui": [
+        {
+          "family": "rename",
+          "admitted": 37,
+          "attempts": 51,
+          "share": 0.7254901960784313
+        },
+        {
+          "family": "opacity",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "pixels",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "out",
+          "admitted": 11,
+          "attempts": 12,
+          "share": 0.9166666666666666
+        },
+        {
+          "family": "delete",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "group-group-selected",
+          "admitted": 11,
+          "attempts": 14,
+          "share": 0.7857142857142857
+        },
+        {
+          "family": "group-opacity",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-blend",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-visibility",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-out",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-delete",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "group-ungroup",
+          "admitted": 11,
+          "attempts": 13,
+          "share": 0.8461538461538461
+        },
+        {
+          "family": "fill",
+          "admitted": 2,
+          "attempts": 3,
+          "share": 0.6666666666666666
+        },
+        {
+          "family": "blend",
+          "admitted": 3,
+          "attempts": 3,
+          "share": 1
+        },
+        {
+          "family": "visibility",
+          "admitted": 2,
+          "attempts": 3,
+          "share": 0.6666666666666666
+        },
+        {
+          "family": "resolution",
+          "admitted": 3,
+          "attempts": 6,
+          "share": 0.5
+        },
+        {
+          "family": "fileInfoCopyright",
+          "admitted": 1,
+          "attempts": 4,
+          "share": 0.25
+        }
+      ],
+      "errors": []
+    }
+  },
+  "limitations": [
+    "Frozen API census and stratified UI sample have separate denominators.",
+    "No new Photoshop verification or population-wide exactness claim.",
+    "Research evidence remains read-only; this receipt places the measured families alongside the batch 19 reference."
+  ]
+}
