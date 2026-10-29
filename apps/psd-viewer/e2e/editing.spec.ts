@@ -275,7 +275,7 @@ for (const textGamma of [1.45, null]) {
       opened.value.dispose();
     }
     expect((await readPsd(bytes)).layers.some((layer) => layer.name === 'Untagged save')).toBe(true);
-    await expect(page.getByLabel('Save report')).toContainText('Also strictly exact:');
+    await expect(page.getByLabel('Save report')).toContainText('Photoshop will show the same image and the same layers');
     await expect(page.getByLabel('Save report')).toContainText('PSD Viewer rendered');
     await page.getByLabel('Save report').screenshot({ path: '/tmp/psd-visual-save-report.png' });
     await page.locator('input[accept=".psd,.psb"]').setInputFiles({

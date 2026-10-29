@@ -379,44 +379,44 @@ export function Editing(props: {
           {(notes) => (
             <section aria-label="Save report">
               <Show when={notes().length}>
+                <p>Photoshop will show the same image and the same layers as after making these edits itself.</p>
                 <p>
-                  Also strictly exact:{' '}
                   {notes().every((note) =>
                     note.contract === 'photoshop26.visual/v3'
                       ? note.strictExact
                       : note.contract === 'photoshop26.reopen-equivalent/v5-source-host'
                   )
-                    ? 'Yes'
-                    : 'No'}
-                  .
+                    ? 'It also matches Photoshop’s own save exactly.'
+                    : 'Some hidden details, such as the stored preview image, were written by PSD Viewer instead.'}
                 </p>
-                <p>Transactions included in this saved revision:</p>
-              </Show>
-              <For each={notes()}>
-                {(note) => (
-                  <Show when={note.contract === 'photoshop26.visual/v3' ? note : undefined}>
-                    {(visual) => (
-                      <>
-                        <p>
-                          Writer: {visual().route}. Strictly exact transaction: {visual().strictExact ? 'Yes' : 'No'}.
-                        </p>
-                        <p>
-                          PSD Viewer rendered {visual().rendered.join('; ') || 'nothing'}; carried{' '}
-                          {visual().carried.join('; ') || 'nothing'}; rewrote{' '}
-                          {visual().rewritten.join('; ') || 'nothing'}.
-                        </p>
-                        <p>Carried metadata is source-owned.</p>
-                        <p>Approximations: {visual().approximations.join('; ') || 'None'}.</p>
-                      </>
+                <details>
+                  <summary>What PSD Viewer wrote</summary>
+                  <For each={notes()}>
+                    {(note) => (
+                      <Show when={note.contract === 'photoshop26.visual/v3' ? note : undefined}>
+                        {(visual) => (
+                          <>
+                            <p>
+                              Writer: {visual().route}. Exact transaction: {visual().strictExact ? 'Yes' : 'No'}.
+                            </p>
+                            <p>
+                              PSD Viewer rendered {visual().rendered.join('; ') || 'nothing'}; carried{' '}
+                              {visual().carried.join('; ') || 'nothing'} from the original file; rewrote{' '}
+                              {visual().rewritten.join('; ') || 'nothing'}.
+                            </p>
+                            <p>Approximations: {visual().approximations.join('; ') || 'None'}.</p>
+                          </>
+                        )}
+                      </Show>
                     )}
+                  </For>
+                  <Show when={notes().some((note) => note.contract !== 'photoshop26.visual/v3')}>
+                    <p>Exact transactions follow Photoshop’s own save and have no approximations.</p>
                   </Show>
-                )}
-              </For>
-              <Show when={!notes().length}>
-                <p>No visual transaction. Source bytes preserved or bounded metadata saved.</p>
+                </details>
               </Show>
-              <Show when={notes().some((note) => note.contract !== 'photoshop26.visual/v3')}>
-                <p>Strict v5 does not expose product accounting. No visual approximations for its transactions.</p>
+              <Show when={!notes().length}>
+                <p>No edits to write. The original file’s contents were kept.</p>
               </Show>
             </section>
           )}
