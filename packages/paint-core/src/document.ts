@@ -1,3 +1,4 @@
+import type { PsdNewDocumentContext } from '@app-game/psd';
 import { packTile, type TileData } from './tilePixels';
 export { TILE_BYTES } from './tilePixels';
 
@@ -44,10 +45,21 @@ type HistoryEntry = {
   bytes: number;
 };
 
+/** Creation identity and allocated layer IDs retained in Paint checkpoints and portable drawings. */
+export type PsdDocumentIdentity = {
+  /** Original Paint creation facts; opening a legacy/imported drawing starts a new Paint identity. */
+  creation: PsdNewDocumentContext['creation'];
+  /** Monotonic allocation prevents reusing deleted layer IDs. */
+  nextLayerId: number;
+  /** Includes deleted layers so undo can reuse their identities. Times are Unix seconds. */
+  layers: Record<string, { id: number; time: number }>;
+};
+
 /** Owns layer order and bounded tile-snapshot history. GPU resources are disposable caches of these pixels. */
 export function createDocument(options: { paged?: boolean } = {}) {
   let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
+  let psdIdentity = newPsdIdentity();
   /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
   let linearBlending = true;
   let revision = 0;
@@ -68,8 +80,10 @@ export function createDocument(options: { paged?: boolean } = {}) {
       else layer?.tiles.delete(change.key);
     }
     active = direction === 'before' ? entry.activeBefore : entry.activeAfter;
+    touchPsdLayers(psdIdentity, entry);
   };
   const record = (value: Omit<HistoryEntry, 'id'>) => {
+    touchPsdLayers(psdIdentity, value);
     const entry = { ...value, id: ++nextHistoryId };
     for (const entry of redo) historyBytes -= entry.bytes;
     redo.length = 0;
@@ -366,6 +380,24 @@ export function createDocument(options: { paged?: boolean } = {}) {
 
       return entry?.tiles;
     },
+    /**
+     * Copies creation facts and stable layer identities in the document model. Each export adds only current save
+     * facts; the flat initializer does not accumulate earlier PSD saved events. Legacy imports get a new identity.
+     */
+    psdIdentity(): PsdDocumentIdentity {
+      for (const layer of layers) {
+        if (!Object.hasOwn(psdIdentity.layers, layer.id)) {
+          Object.defineProperty(psdIdentity.layers, layer.id, {
+            value: { id: psdIdentity.nextLayerId++, time: Date.parse(psdIdentity.creation.when) / 1000 },
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
+        }
+      }
+
+      return structuredClone(psdIdentity);
+    },
     /** Whether layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
     linearBlending: () => linearBlending,
     /**
@@ -378,9 +410,10 @@ export function createDocument(options: { paged?: boolean } = {}) {
         revision++;
       }
     },
-    /** Replaces a document after validation, clearing its session-only undo history. */
-    replace(next: Layer[], selected: string, linear = true) {
+    /** Replaces a validated drawing and clears undo history. Missing identity starts new Paint creation facts. */
+    replace(next: Layer[], selected: string, linear = true, identity?: PsdDocumentIdentity) {
       layers = next;
+      psdIdentity = identity ? structuredClone(identity) : newPsdIdentity();
       active = selected;
       linearBlending = linear;
       undo.length = redo.length = 0;
@@ -462,6 +495,21 @@ export type LayerAction =
 function newLayer(id: string, name: string): Layer {
   return { id, name, visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
 }
+/** Starts a Paint identity, independently of future save events and imported PSD provenance. */
+function newPsdIdentity(): PsdDocumentIdentity {
+  const uuid = crypto.randomUUID();
+  return {
+    creation: {
+      originalDocumentId: `xmp.did:${uuid}`,
+      instanceId: `xmp.iid:${uuid}`,
+      when: new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00'),
+      creatorTool: 'Paint'
+    },
+    nextLayerId: 2,
+    layers: {}
+  };
+}
+
 function tileBytes(changes: TileChange[]): number {
   return changes.reduce((n, c) => n + (c.before?.byteLength ?? 0) + (c.after?.byteLength ?? 0), 0);
 }
@@ -476,6 +524,28 @@ export type HistorySource = { id: number; label: string; layers: Layer[] };
 
 function cloneLayers(layers: readonly Layer[]): Layer[] {
   return layers.map((layer) => ({ ...layer, tiles: new Map(layer.tiles) }));
+}
+
+/** Records actual edit clocks only for layers whose metadata or committed pixels changed, including undo/redo. */
+function touchPsdLayers(identity: PsdDocumentIdentity, entry: Pick<HistoryEntry, 'before' | 'after' | 'tiles'>) {
+  const changed = new Set(entry.tiles.map((tile) => tile.layerId));
+  const before = new Map(entry.before.map((layer) => [layer.id, layer]));
+  for (const layer of entry.after) {
+    if (JSON.stringify(before.get(layer.id)) !== JSON.stringify(layer)) {
+      changed.add(layer.id);
+    }
+  }
+
+  const time = Date.now() / 1000;
+  for (const id of changed) {
+    const allocated = Object.hasOwn(identity.layers, id) ? identity.layers[id]!.id : identity.nextLayerId++;
+    Object.defineProperty(identity.layers, id, {
+      value: { id: allocated, time },
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  }
 }
 
 /** Applies one retained history delta to private snapshot maps, including deleted/recreated layers. */

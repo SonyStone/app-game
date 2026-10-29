@@ -105,20 +105,36 @@ describe('the king of the hill map', () => {
     }
   }, 60_000);
 
-  it("gives each team's Sniper perches that watch the point along lines longer than its shell flies", () => {
+  it("gives each team's Sniper perches that watch the point, out of the point's guns' reach, along lines longer than its shell flies", () => {
     for (const team of ['red', 'blue'] as const) {
       const perches = findPerches(grid, KOTH_MAP, team, TACTICS.sniper.perch!);
 
       expect(perches.length).toBeGreaterThanOrEqual(4);
 
       for (const perch of perches) {
-        expect(sightClear(grid, perch, KOTH_MAP.point)).toBe(true);
+        // Its view of the point is clear, or clear once the thin wall in the way is broken.
+        expect(sightClear(grid, perch, KOTH_MAP.point) || perch.opening !== undefined).toBe(true);
+        expect(Math.hypot(perch.x - KOTH_MAP.point.x, perch.y - KOTH_MAP.point.y)).toBeGreaterThan(TACTICS.soldier.reach);
       }
+
+      // The best one, in the hall beside its pillar, sees the point as built.
+      expect(sightClear(grid, perches[0], KOTH_MAP.point)).toBe(true);
 
       // Lines through the point reach the enemy's half far beyond it.
       const longest = Math.max(...perches.map((perch) => openRay(grid, perch, Math.atan2(KOTH_MAP.point.y - perch.y, KOTH_MAP.point.x - perch.x))));
 
       expect(longest).toBeGreaterThan(TANK_CLASSES.sniper.shell.range);
+    }
+  });
+
+  it('names the brick tooth in the hall as the wall to break for the perch it hides the point from', () => {
+    for (const team of ['red', 'blue'] as const) {
+      const side = team === 'red' ? -1 : 1;
+      const perches = findPerches(grid, KOTH_MAP, team, TACTICS.sniper.perch!);
+      const walls = perches.flatMap((perch) => (perch.opening ? [perch.opening.wall] : []));
+
+      // The tooth stands 420-450 px out from the point, from its middle to the low wall.
+      expect(walls.some((wall) => wall.x * side > 415 && wall.x * side < 455 && wall.y > -20 && wall.y < 125)).toBe(true);
     }
   });
 

@@ -10,8 +10,10 @@ describe('the weapons of the classes', () => {
       const weapon = createWeapon(tankClass, () => 0.5);
       const fired = hold(weapon, { fire: true, reach: 300 }, 12);
       const gaps = fired.slice(1).map((time, index) => time - fired[index]);
+      const spinUp = tankClass.weapon.kind === 'spin' ? tankClass.weapon.spinUp : 0;
 
-      expect(fired[0]).toBe(0);
+      // Only a gatling waits, once, for its barrels.
+      expect(fired[0]).toBeCloseTo(spinUp, 1);
       expect(Math.max(...gaps)).toBeCloseTo(tankClass.interval, 5);
       expect(Math.min(...gaps)).toBeCloseTo(tankClass.interval, 5);
     }
@@ -27,20 +29,24 @@ describe('the weapons of the classes', () => {
     expect(Math.max(...volley) - Math.min(...volley)).toBeCloseTo(spread, 2);
   });
 
-  it("fire a Heavy's gatling the moment the trigger is pulled, slowing the tank while it spins", () => {
+  it("spin a Heavy's gatling up before its first round, slowing the tank while it spins, and fire at once when revved ahead", () => {
     const tankClass = TANK_CLASSES.heavy;
     const weapon = createWeapon(tankClass, Math.random);
-    const slowdown = tankClass.weapon.kind === 'spin' ? tankClass.weapon.slowdown : NaN;
+    const spec = tankClass.weapon.kind === 'spin' ? tankClass.weapon : undefined;
     const fired = hold(weapon, { fire: true }, 1);
 
-    expect(fired[0]).toBe(0);
-    expect(fired.length).toBe(Math.round(1 / tankClass.interval));
-    expect(weapon.speedShare).toBeCloseTo(slowdown);
+    expect(fired[0]).toBeCloseTo(spec!.spinUp, 1);
+    expect(fired.length).toBe(Math.floor((1 - spec!.spinUp) / tankClass.interval) + 1);
+    expect(weapon.speedShare).toBeCloseTo(spec!.slowdown);
 
     hold(weapon, { fire: false }, 1);
 
     expect(weapon.spin).toBe(0);
     expect(weapon.speedShare).toBe(1);
+
+    // Revved without firing, it fires the moment the trigger is pulled.
+    expect(hold(weapon, { fire: false, rev: true }, 1)).toEqual([]);
+    expect(hold(weapon, { fire: true }, 0.05)[0]).toBe(0);
   });
 
   it('charge a Sniper shot while the trigger is held and fire it when let go, a rail growing in power and in how near the core it kills', () => {

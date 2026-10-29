@@ -4,7 +4,7 @@ import { aimAngle } from './aim';
 import type { Tank } from './bodies';
 import { createCamera, screenToWorld, worldToScreen, zoomCamera } from './camera';
 import type { Aim } from './input';
-import { createLookAhead } from './lookahead';
+import { createLookAhead, type Bounds } from './lookahead';
 
 type Point = { x: number; y: number };
 
@@ -111,7 +111,8 @@ describe('the look-ahead camera', () => {
         { x: -300, y: size.height + 2000 },
         { x: size.width, y: 0 }
       ]) {
-        const scene = createScene({ x: 0, y: 0 }, { share: 0.8, size });
+        for (const slack of [0, 0.7]) {
+        const scene = createScene({ x: 0, y: 0 }, { share: 0.8, size, slack });
 
         for (let frame = 0; frame < 120; frame++) {
           scene.frame(undefined, { kind: 'point', ...cursor });
@@ -123,8 +124,90 @@ describe('the look-ahead camera', () => {
         expect(tank.x).toBeLessThanOrEqual(size.width - margin + 1e-6);
         expect(tank.y).toBeGreaterThanOrEqual(margin - 1e-6);
         expect(tank.y).toBeLessThanOrEqual(size.height - margin + 1e-6);
+        }
       }
     }
+  });
+
+  it('with slack, holds the view still while the tank moves about, so a still cursor keeps the gun on one spot', () => {
+    const scene = createScene({ x: 0, y: 0 }, { slack: 0.3 });
+    scene.sweep(center, { x: 1000, y: 380 }, 6);
+
+    for (let frame = 0; frame < 60; frame++) {
+      scene.frame();
+    }
+
+    const view = { x: scene.camera.x, y: scene.camera.y };
+    const held = scene.frame();
+    let moved = 0;
+    let slid = 0;
+
+    // Circles of 40 px about where it stood, turning all the while, as a tank dodging on the spot.
+    for (let frame = 0; frame < 120; frame++) {
+      const turn = (frame / 60) * Math.PI * 2;
+      scene.hull.x = 40 * Math.sin(turn);
+      scene.hull.y = 40 * (1 - Math.cos(turn));
+      scene.hull.rotation = turn;
+      const now = scene.frame();
+      moved = Math.max(moved, Math.hypot(scene.camera.x - view.x, scene.camera.y - view.y));
+      slid = Math.max(slid, Math.hypot(now.aimed.x - held.aimed.x, now.aimed.y - held.aimed.y));
+    }
+
+    expect(moved).toBe(0);
+    expect(slid).toBe(0);
+  });
+
+  it('with slack, follows a tank that drives off just enough to keep it and its lead in the box', () => {
+    const scene = createScene({ x: 0, y: 0 }, { slack: 0.3 });
+    const cursor = { x: 1100, y: 450 };
+    scene.sweep(center, cursor, 6);
+
+    for (let frame = 0; frame < 120; frame++) {
+      scene.hull.x += 250 * FRAME;
+      scene.frame();
+    }
+
+    // The lead points along the screen's x axis, the drive runs along the world's, which the view turns by 0.3 rad.
+    const tank = worldToScreen(scene.camera, scene.pivot(), screen);
+    const goal = { x: tank.x + SHARE * (cursor.x - center.x), y: tank.y };
+    expect(Math.max(Math.abs(goal.x - center.x) / (screen.width / 2), Math.abs(goal.y - center.y) / (screen.height / 2))).toBeCloseTo(0.3, 3);
+  });
+
+  it('with slack, shows no more than a strip of empty ground beyond the map, and keeps the tank on the screen', () => {
+    const bounds = { minX: -1300, minY: -460, maxX: 1300, maxY: 460 };
+    const scene = createScene({ x: -1250, y: 0 }, { slack: 0.3, bounds, rotation: 0 });
+    // Aiming back at the map's edge, which a rigid view would lead past it.
+    scene.sweep(center, { x: 100, y: 450 }, 6);
+
+    for (let frame = 0; frame < 120; frame++) {
+      scene.frame();
+    }
+
+    const corner = screenToWorld(scene.camera, { x: 0, y: 0 }, screen);
+    expect(corner.x).toBeGreaterThanOrEqual(bounds.minX - 40 - 1e-6);
+    const tank = worldToScreen(scene.camera, scene.pivot(), screen);
+    expect(tank.x).toBeGreaterThanOrEqual(110 - 1e-6);
+  });
+
+  it("with slack, keeps the gun's aim through the Sniper's scope zooming about the tank", () => {
+    const scene = createScene({ x: -200, y: 80 }, { slack: 0.3 });
+    const scope = createScope();
+    scene.sweep(center, { x: 1290, y: 300 }, 5);
+
+    // The lead eases out first, pushing the view, which a still cursor does not keep the aim through.
+    for (let frame = 0; frame < 60; frame++) {
+      scene.frame();
+    }
+
+    const held = scene.frame();
+    let drift = 0;
+
+    for (let frame = 0; frame < 240; frame++) {
+      const now = scene.frame((camera) => scope.step(camera, screen, worldToScreen(camera, scene.pivot(), screen), frame < 150, FRAME));
+      drift = Math.max(drift, Math.abs(angleBetween(now.angle, held.angle)));
+    }
+
+    expect((drift * 180) / Math.PI).toBeLessThan(0.2);
   });
 
   it('leads along a stick’s direction, which the camera never turns', () => {
@@ -176,10 +259,14 @@ describe('the look-ahead camera', () => {
  * for the cursor before aiming, the gun aims at the ground under the cursor, then the view eases
  * with the frame's time. The hull turns about its center; the gun turns at `MOUNT` off it.
  */
-function createScene(start: Point, options: { share?: number; size?: { width: number; height: number } } = {}) {
+function createScene(
+  start: Point,
+  options: { share?: number; size?: { width: number; height: number }; slack?: number; bounds?: Bounds; rotation?: number } = {}
+) {
   const size = options.size ?? screen;
   const share = options.share ?? SHARE;
-  const camera = { ...createCamera(start), zoom: 1.6, rotation: 0.3 };
+  const slack = options.slack ?? 0;
+  const camera = { ...createCamera(start), zoom: 1.6, rotation: options.rotation ?? 0.3 };
   const lookAhead = createLookAhead();
   const hull = { ...start, rotation: 0 };
   let cursor: Aim = { kind: 'point', x: size.width / 2, y: size.height / 2 };
@@ -199,12 +286,12 @@ function createScene(start: Point, options: { share?: number; size?: { width: nu
      */
     frame(between?: (view: typeof camera) => void, aim?: Aim) {
       cursor = aim ?? cursor;
-      lookAhead.place(camera, size, pivot(), cursor, { share, dt: 0 });
+      lookAhead.place(camera, size, pivot(), cursor, { share, dt: 0, slack, bounds: options.bounds });
       const from = pivot();
       const angle = aimAngle(undefined as unknown as Tank, cursor, camera, size, from)!;
       const aimed = cursor.kind === 'point' ? screenToWorld(camera, cursor, size) : from;
       between?.(camera);
-      lookAhead.place(camera, size, pivot(), cursor, { share, dt: FRAME });
+      lookAhead.place(camera, size, pivot(), cursor, { share, dt: FRAME, slack, bounds: options.bounds });
       return { angle, aimed, pivot: from };
     },
 

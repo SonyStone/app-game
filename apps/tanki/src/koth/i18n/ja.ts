@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Japanese text; the class names follow the Japanese Team Fortress 2. */
 export const ja: Dictionary = {
@@ -37,7 +37,8 @@ export const ja: Dictionary = {
     botReaction: 'ボットの反応',
     botSight: 'ボットの視界',
     zoom: 'ズーム',
-    lead: 'カメラの先読み'
+    lead: 'カメラの先読み',
+    slack: 'カメラの遊び'
   },
   knobGroup: { move: '移動', weapon: '武器', armor: '装甲', point: '拠点', bot: 'ボット' },
   classKnob: {
@@ -63,11 +64,11 @@ export const ja: Dictionary = {
     blastHole: '爆発クレーター',
     blastDepth: '爆発の深さ',
     blastKnockback: '爆風',
-    selfPush: 'ロケットジャンプ',
     wallDamage: '壁へのダメージ',
     fragments: '破片',
     fuse: '信管',
     chargeTime: 'チャージ時間',
+    spinUp: 'スピンアップ',
     railPower: 'レール貫通力',
     fullRailPower: 'フル貫通力',
     fullRange: 'フル射程',
@@ -135,7 +136,7 @@ export const ja: Dictionary = {
   short: { scout: 'スカ', soldier: 'ソル', heavy: 'ヘビ', demoman: 'デモ', sniper: 'スナ' },
   classRole: {
     scout: '高速で側面へ。至近距離の散弾、背後から最も危険。占拠速度2倍',
-    soldier: '爆風と破片のロケット。足元に撃ってロケットジャンプ',
+    soldier: '爆風と破片のロケット。直撃が最も深く削る',
     heavy: '低速・重装甲。至近距離で装甲を削るガトリング。拠点を守る',
     demoman: '遮蔽物越しに跳ねるグレネードを投げる。大爆発。壁を壊す',
     sniper: '固定砲：押してチャージ。スコープでコアが見える。レールがコアを貫けば撃破'
@@ -149,10 +150,11 @@ export const ja: Dictionary = {
     next: '次のリスポーン',
     hint: '1–5 またはクリックで選択 · 自陣ならすぐ、他では次のリスポーンで変更 · C か Esc で閉じる'
   },
-  botRole: { assault: '突撃', flank: '側面', support: '援護', anchor: '守備', sniper: '狙撃' },
+  botRole: { assault: '突撃', flank: '側面', support: '援護', lead: '先鋒', sniper: '狙撃' },
   seat: {
     you: 'あなた',
     youBot: 'あなた (ボット)',
+    turret: 'タレット',
     red: (seat: number) => `赤 ${seat}`,
     blue: (seat: number) => `青 ${seat}`
   },
@@ -168,7 +170,36 @@ export const ja: Dictionary = {
     nextRespawn: (tankClass: string) => `次のリスポーン: ${tankClass}`,
     gauge: { idle: '押す', charging: 'チャージ', full: '最大' }
   },
-  plan: { push: '進撃', hold: '防衛', regroup: '再集結', gather: '集合中', go: '突入' },
+  radio: {
+    kit: 'キット',
+    repairing: '修理',
+    needHelp: '助けて！',
+    helping: '今行く',
+    flanking: '回り込む',
+    focus: '狙え！',
+    perch: '配置',
+    fallBack: '後退',
+    holdPoint: '守る',
+    holdLane: '守る',
+    capturing: '占領',
+    gather: '集合',
+    countdown: (say: RadioWords) => `攻撃まで${say.seconds}`,
+    go: '突撃！',
+    followMe: '続け！',
+    waitForTeam: '待機',
+    switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
+    breaching: '突破',
+    clearView: '壊して！',
+    wayOpen: '開いた！',
+    fallBackTeam: '後退',
+    coverRetreat: '援護',
+    captured: '確保！',
+    regroup: '再集結',
+    sniper: 'スナイパー！',
+    kitTrap: '罠'
+  },
+  lane: { north: '北通り', center: 'ホール', south: '南通り' },
+  plan: { push: '進撃', hold: '防衛', regroup: '再集結', fallBack: '後退', gather: '集合中', go: '突入' },
   result: {
     wins: { red: '赤チームの勝利', blue: '青チームの勝利' },
     team: { red: '赤', blue: '青' },

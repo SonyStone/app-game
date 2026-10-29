@@ -1,4 +1,4 @@
-import { canDrive, findBreachPath, findPath, isOpenAt, obstacleDistance, sampleDistance, type NavGrid } from './navigation';
+import { canDrive, findBreachPath, findPath, obstacleDistance, sampleDistance, type NavGrid } from './navigation';
 
 type Point = { x: number; y: number };
 
@@ -13,9 +13,9 @@ export type Obstacle = { x: number; y: number; radius: number };
  * seconds and after the tank got stuck.
  *
  * A tank that wants to move but has not for a while is stuck, for example against a crate it
- * cannot shove or another tank: it backs off to one side for a moment, alternating sides, and
- * then plans again. A tank stuck closer to walls than its hull needs, as in a crater shot into a
- * building, drives straight away from them instead.
+ * cannot shove, another tank, or in a crater shot into a building: it backs out for a moment the
+ * way with the most room, never the way that just failed nor one it tried already since it last
+ * moved, and then plans again (see `wayOut`).
  *
  * The hull trails its tow point and cuts corners, so a tank given its heading eases off when its
  * nose is about to meet a wall at speed: it touches walls gently instead of ramming them. Pressed
@@ -31,9 +31,7 @@ export function createDriver(grid: NavGrid) {
   let check: { at: number; position: Point } | undefined;
   let stuckSince: number | undefined;
   let unstick: { until: number; direction: Point } | undefined;
-  let side = 1;
-  // Ways out tried since the tank last moved.
-  let tries = 0;
+  const tried: Point[] = [];
   let longestStall = 0;
   let stalls = 0;
   let last: { at: number; position: Point } | undefined;
@@ -108,14 +106,12 @@ export function createDriver(grid: NavGrid) {
 
       if (stuckSince !== undefined && now - stuckSince >= STUCK_TIME) {
         stalls++;
-        // Back away from whatever blocks the way, to one side, then think again. Out of a pocket
-        // among walls and wrecks it backs away from them, and if that did not free it, off to
-        // either side of that in turn.
-        const away = isOpenAt(grid, position) ? undefined : awayFromWalls(grid, position);
-        const direction = away && tries === 0 ? away : rotate(away ?? { x: -toward.x, y: -toward.y }, side * UNSTICK_ANGLE);
+        // Back out the way with the most room, then think again: of eight directions, the one that
+        // stays farthest from walls for a hull length, but not the way that just failed or one tried
+        // already since the tank last moved, so each try is a new way out of a pocket.
+        const direction = wayOut(grid, position, toward, tried);
         unstick = { until: now + UNSTICK_TIME, direction };
-        tries++;
-        side = -side;
+        tried.push(direction);
         plannedAt = -Infinity;
         return unstick.direction;
       }
@@ -124,6 +120,25 @@ export function createDriver(grid: NavGrid) {
       last = { at: now, position: { x: position.x, y: position.y } };
       const ease = options.heading === undefined || speed < BRAKE_SPEED ? 1 : easeBeforeWall(position, options.heading, options.nose ?? NOSE, steered);
       return { x: steered.x * throttle * ease, y: steered.y * throttle * ease };
+    },
+
+    /**
+     * Backs the tank out for a moment the way with the most room, as from being stuck, for a hull
+     * that is not driving but cannot do what it does instead, as a casemate wedged in a crater
+     * that cannot turn on the spot: never the way the hull's nose, at `heading`, points nor one
+     * tried already since the tank last moved. `backingOut` gives the direction meanwhile.
+     */
+    backOut(now: number, position: Point, heading: number) {
+      stalls++;
+      const direction = wayOut(grid, position, { x: Math.cos(heading), y: Math.sin(heading) }, tried);
+      unstick = { until: now + UNSTICK_TIME, direction };
+      tried.push(direction);
+      plannedAt = -Infinity;
+    },
+
+    /** The drive direction while the tank backs out of where it got stuck, else `undefined`. */
+    backingOut(now: number) {
+      return unstick && now < unstick.until ? unstick.direction : undefined;
     },
 
     /** Forgets the path and the stall history, for a new tank; the clock may have started over. */
@@ -137,7 +152,7 @@ export function createDriver(grid: NavGrid) {
       check = undefined;
       stuckSince = undefined;
       unstick = undefined;
-      tries = 0;
+      tried.length = 0;
     }
   };
 
@@ -195,7 +210,7 @@ export function createDriver(grid: NavGrid) {
       longestStall = Math.max(longestStall, now - stuckSince);
     } else {
       stuckSince = undefined;
-      tries = 0;
+      tried.length = 0;
     }
 
     check = { at: now, position };
@@ -217,11 +232,14 @@ const MIN_THROTTLE = 0.35;
 /** A tank that moved less than `STALL_DISTANCE` px over `STALL_CHECK` s is stalling; after `STUCK_TIME` s it is stuck. */
 const STALL_CHECK = 0.4;
 const STALL_DISTANCE = 6;
-const STUCK_TIME = 1.2;
+const STUCK_TIME = 1;
 const UNSTICK_TIME = 0.7;
 /** Extra cost of a step into a cell only something breakable closes, on a way planned when every way is closed. */
 const THROUGH_COST = 4;
-const UNSTICK_ANGLE = 0.9;
+/** Directions a stuck tank weighs for a way out, how far ahead it probes each, and the room a direction tried already counts as lacking. */
+const WAY_OUT_DIRECTIONS = 8;
+const WAY_OUT_PROBE = 45;
+const WAY_OUT_TRIED = 1000;
 /**
  * A tank faster than `BRAKE_SPEED` px/s whose nose, `NOSE` px ahead of a medium tank's center, is
  * closer than `BRAKE_GAP` px to an obstacle drives at `BRAKE_THROTTLE`, slow enough that touching a
@@ -267,12 +285,34 @@ function avoid(position: Point, toward: Point, obstacles: readonly Obstacle[]) {
   return normalize({ x, y });
 }
 
-/** The direction in which the distance to walls grows fastest at `point`; `undefined` where it is flat. */
-function awayFromWalls(grid: NavGrid, point: Point) {
-  const step = grid.cell / 2;
-  const at = (dx: number, dy: number) => sampleDistance(grid, grid.distance, { x: point.x + dx, y: point.y + dy });
-  const slope = { x: at(step, 0) - at(-step, 0), y: at(0, step) - at(0, -step) };
-  return Math.hypot(slope.x, slope.y) > 1e-3 ? normalize(slope) : undefined;
+/**
+ * The way out for a stuck tank at `point`: of `WAY_OUT_DIRECTIONS` directions, the one whose
+ * nearest wall along a probe of `WAY_OUT_PROBE` px stays farthest, counting the way it was trying
+ * to go and directions within 45 degrees of a way tried already as having no room.
+ */
+function wayOut(grid: NavGrid, point: Point, blocked: Point, tried: readonly Point[]) {
+  let best: { direction: Point; room: number } | undefined;
+
+  for (let index = 0; index < WAY_OUT_DIRECTIONS; index++) {
+    const angle = (index / WAY_OUT_DIRECTIONS) * Math.PI * 2;
+    const direction = { x: Math.cos(angle), y: Math.sin(angle) };
+    const near = (other: Point) => direction.x * other.x + direction.y * other.y > Math.SQRT1_2;
+    let room = Infinity;
+
+    for (let along = WAY_OUT_PROBE / 3; along <= WAY_OUT_PROBE; along += WAY_OUT_PROBE / 3) {
+      room = Math.min(room, sampleDistance(grid, grid.distance, { x: point.x + direction.x * along, y: point.y + direction.y * along }));
+    }
+
+    if (near(blocked) || tried.some(near)) {
+      room -= WAY_OUT_TRIED;
+    }
+
+    if (!best || room > best.room) {
+      best = { direction, room };
+    }
+  }
+
+  return best!.direction;
 }
 
 function distance(a: Point, b: Point) {
@@ -284,8 +324,3 @@ function normalize(vector: Point) {
   return length > 1e-9 ? { x: vector.x / length, y: vector.y / length } : { x: 0, y: 0 };
 }
 
-function rotate(vector: Point, angle: number) {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  return { x: vector.x * cos - vector.y * sin, y: vector.x * sin + vector.y * cos };
-}

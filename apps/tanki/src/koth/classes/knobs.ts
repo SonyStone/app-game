@@ -295,7 +295,6 @@ export const CLASS_KNOBS = [
   { id: 'blastHole', group: 'weapon', path: 'shell.blast.hole', range: [0.5, 15, 0.1], unit: 'length', applies: 'now' },
   { id: 'blastDepth', group: 'weapon', path: 'shell.blast.depth', range: [0, 10, 0.1], unit: 'length', applies: 'now' },
   { id: 'blastKnockback', group: 'weapon', path: 'shell.blast.knockback', range: [0, 2000, 10], applies: 'now' },
-  { id: 'selfPush', group: 'weapon', path: 'shell.blast.self', range: [0, 6, 0.1], unit: 'factor', applies: 'now' },
   {
     id: 'wallDamage',
     group: 'weapon',
@@ -307,6 +306,7 @@ export const CLASS_KNOBS = [
   { id: 'fragments', group: 'weapon', path: 'shell.fragments.count', range: [0, 24, 1], applies: 'now', integer: true },
   { id: 'fuse', group: 'weapon', path: 'shell.lob.fuse', range: [0.3, 4, 0.05], unit: 'time', applies: 'now' },
   { id: 'chargeTime', group: 'weapon', path: 'weapon.time', range: [0.3, 6, 0.1], unit: 'time', applies: 'now' },
+  { id: 'spinUp', group: 'weapon', path: 'weapon.spinUp', range: [0, 1.5, 0.05], unit: 'time', applies: 'now' },
   { id: 'railPower', group: 'weapon', path: 'shell.rail.power', range: [0, 60, 1], unit: 'length', applies: 'now' },
   {
     id: 'fullRailPower',

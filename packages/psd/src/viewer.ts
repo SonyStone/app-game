@@ -2,8 +2,20 @@
 // Photoshop saved, by the viewer module built in photoshop-analysis/psd-wasm with its `viewer` feature. Paint's flat
 // codec (`readPsd`, `writePsd` in ./index) stays in its own, much smaller module.
 import type {
+  PsdAllocationError as AllocationError,
+  PsdBudgetError as BudgetError,
+  PsdBudgetOptions as BudgetOptions,
   PsdFontLibrary as FontLibraryHandle,
   PsdDocumentHandle,
+  PsdSourceHandle,
+  PsdNativeRect as NativeRect,
+  PsdNativeRegion as NativeRegion,
+  PsdNativeRender as NativeRender,
+  PsdNativeRenderOptions as NativeOptions,
+  PsdRegionCapability as RegionCapability,
+  PsdSavedPath as SavedPath,
+  PsdRegionPixels as RegionPixels,
+  PsdRegionRect as RegionRect,
   RenderedImage
 } from '../wasm-viewer/photoshop_psd_viewer.js';
 
@@ -11,10 +23,16 @@ import type {
  * Opens a PSD or PSB for viewing, loading the viewer module on first use. The document keeps the parsed file in
  * WebAssembly memory until {@link PsdViewerDocument.close}. Files that are not Photoshop documents, or whose header or
  * outer sections are unusable, fail with `kind: 'invalid'`; damaged inner structures stay readable.
+ * Admission defaults to 128 MiB per allocation and 2 GiB live. The 30,806×45,624 public PSB needs more than the
+ * WASM32 default 64 MiB for compressed source storage even though its rendered output stays windowed. `budget`
+ * overrides these limits; the binding counts both input copies automatically. Policy refusals have `kind: 'budget'`.
  */
-export async function openPsd(bytes: Uint8Array | ArrayBuffer): Promise<PsdResult<PsdViewerDocument>> {
+export async function openPsd(
+  bytes: Uint8Array | ArrayBuffer,
+  budget: PsdBudgetOptions = {}
+): Promise<PsdResult<PsdViewerDocument>> {
   const codec = await loadPsdViewer();
-  const opened = attempt(() => codec.PsdDocumentHandle.open(asBytes(bytes)));
+  const opened = attempt(() => codec.PsdDocumentHandle.openWithBudget(asBytes(bytes), { ...openingBudget, ...budget }));
   if (!opened.ok) {
     return opened;
   }
@@ -40,13 +58,21 @@ export async function openPsd(bytes: Uint8Array | ArrayBuffer): Promise<PsdResul
  * Photoshop's prompts are answered by `answers`. A prompt Photoshop shows that `answers` leaves unanswered fails with
  * `kind: 'needsAnswer'` and the prompt; open again with its answer. Files Photoshop refuses and the strict reader
  * cannot read, and Cancel answers, fail with `kind: 'refused'` and Photoshop's behavior as the message.
+ * Uses the same default admission budget as {@link openPsd}; recovery still decodes whole channels.
  */
 export async function openPsdLikePhotoshop(
   bytes: Uint8Array | ArrayBuffer,
-  answers: PsdOpenAnswers = {}
+  answers: PsdOpenAnswers = {},
+  budget: PsdBudgetOptions = {}
 ): Promise<PsdResult<PsdViewerDocument>> {
   const codec = await loadPsdViewer();
-  const outcome = attempt(() => codec.PsdDocumentHandle.openLikePhotoshop(asBytes(bytes), answers) as OpenOutcome);
+  const outcome = attempt(
+    () =>
+      codec.PsdDocumentHandle.openLikePhotoshopWithBudget(asBytes(bytes), answers, {
+        ...openingBudget,
+        ...budget
+      }) as OpenOutcome
+  );
   if (!outcome.ok) {
     return outcome;
   }
@@ -131,7 +157,7 @@ function strictOpening(): PsdOpening {
 }
 
 /**
- * Creates an empty font library for re-rendering type layers from their text, loading the viewer module on first use.
+ * Creates an empty font library for type rerasterization and imported cache mixing, loading WASM on first use.
  * Fonts come only from the caller: nothing is loaded from the system. One library serves any number of documents.
  */
 export async function createFontLibrary(): Promise<PsdFontLibrary> {
@@ -141,6 +167,9 @@ export async function createFontLibrary(): Promise<PsdFontLibrary> {
   const library: PsdFontLibrary = {
     add(bytes) {
       return open ? attempt(() => handle.add(asBytes(bytes)) as PsdFontInfo) : closedFailure();
+    },
+    addActiveFace(bytes, faceIndex, provenance) {
+      return open ? attempt(() => handle.addActiveFace(asBytes(bytes), faceIndex, provenance)) : closedFailure();
     },
     fonts() {
       return open ? (handle.fonts() as PsdFontInfo[]) : [];
@@ -160,6 +189,9 @@ export async function createFontLibrary(): Promise<PsdFontLibrary> {
   return library;
 }
 
+/** Per-call buffer admission limits. Retained bytes cover caller-owned fonts, input and caches. */
+export type PsdBudgetOptions = BudgetOptions;
+
 /** A value, or the reason it could not be produced. */
 export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailure };
 
@@ -168,11 +200,14 @@ export type PsdResult<T> = { ok: true; value: T } | { ok: false; error: PsdFailu
  * names it, for example `layer "Logo": a non-parallelogram smart-object quad`), `invalid` for unreadable input. Opening
  * as Photoshop does ({@link openPsdLikePhotoshop}) fails with `refused` when Photoshop does not open the file, the
  * message naming Photoshop's behavior, and with `needsAnswer` when Photoshop asks `prompt` first, the message being the
- * prompt's text.
+ * prompt's text. `budget` is a host policy refusal, with the resource, requested amount and limit preserved from WASM.
+ * `allocation` means an audited buffer allocation failed, preserving its requested byte count.
  */
 export type PsdFailure =
   | { kind: 'unsupported' | 'invalid' | 'refused'; message: string }
-  | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt };
+  | { kind: 'needsAnswer'; message: string; prompt: PsdOpenPrompt }
+  | ({ kind: 'budget'; message: string } & Pick<BudgetError, 'resource' | 'requested' | 'limit'>)
+  | ({ kind: 'allocation'; message: string } & Pick<AllocationError, 'requested'>);
 
 /** An open document. Every call is synchronous; run it in a worker for large files. */
 export type PsdViewerDocument = {
@@ -187,15 +222,90 @@ export type PsdViewerDocument = {
   /**
    * Composites the document at its depth with `settings`. `visibility` overrides the saved visibility of layer
    * records by index for this render only. With {@link PsdRenderSettings.typeLayers}, type layers re-render from their
-   * text with `fonts` (none when omitted). The render keeps its full-depth composite for {@link difference} until
-   * disposed or the document closes.
+   * text with `fonts` (none when omitted). Active faces also supply imported cache-mixing decisions with
+   * `typeLayers: false`; an unknown active-name inventory must stay omitted. The render keeps its full-depth
+   * composite for {@link difference} until disposed or the document closes.
+   * Targets Photoshop 26 with caller-supplied settings; historical authoring state is not reconstructed.
+   * A successful render can differ from the saved snapshot, even for Photoshop 26 files. Use {@link merged}
+   * for the stored pixels; an empty approximation list describes only this render policy.
    */
   render(
     settings: PsdRenderSettings,
     visibility?: Iterable<readonly [number, boolean]>,
     fonts?: PsdFontLibrary
   ): PsdResult<PsdRender>;
-  /** The fonts the document's type layers use and whether `fonts` holds each (none when omitted). */
+  /**
+   * Composites exact process channels, then converts them separately to caller-configured display sRGB.
+   * Requires `approximate: false`; display conversion can still report approximations without changing process
+   * samples. Profiles come only from the document and `color`, never from installed profiles. Returned arrays own
+   * their storage and need no disposal. This result cannot be passed to `difference`.
+   */
+  renderColor(
+    settings: PsdRenderSettings & { approximate: false },
+    color: PsdColorSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdColorRender>;
+  /**
+   * Decodes native saved process and auxiliary planes without compositing, unmatting or display conversion.
+   * The saved image may be stale. Optional visibility needs one boolean per saved plane and only describes the view.
+   * Returned arrays own their storage; calls after close fail.
+   */
+  savedProcessChannels(visibility?: boolean[]): PsdResult<PsdSavedProcessChannels>;
+  /** Renders one in-canvas rectangle. Pixels and metadata own their storage; no dispose call is needed. */
+  renderRegion(
+    rectangle: PsdRegionRect,
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels>;
+  /** Renders 1 to 256 rectangles in one snapshot. Their combined area must fit maxWorkPixels. */
+  renderRegions(
+    rectangles: PsdRegionRect[],
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels[]>;
+  /** Samples the fresh layer render at (step*x, step*y). Step must be a positive integer. */
+  renderOverview(
+    step: number,
+    settings: PsdWindowSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionPixels>;
+  /**
+   * Samples the potentially stale saved composite, ignoring render settings and edits. Use only as a temporary
+   * first frame, replacing it with a fresh layer render. Zero uses the WASM default work limit.
+   * `budget` overrides WASM32 admission defaults and accounts for caller-retained storage.
+   */
+  savedOverview(step: number, maxWorkPixels?: number, budget?: PsdBudgetOptions): PsdResult<PsdRegionPixels>;
+  /** Plans storage for a native window, preserving typed full-canvas causes and admission refusals. */
+  regionCapability(
+    rect: PsdNativeRect,
+    options?: PsdNativeRenderOptions,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdRegionCapability>;
+  /** Composites a window at native precision; output owns its storage and requires no disposal. */
+  renderNativeRegion(
+    rect: PsdNativeRect,
+    options?: PsdNativeRenderOptions,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdNativeRender>;
+  /** Reads selected original saved planes, possibly stale, without unmatting or conversion. */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Reads original layer/mask channels at native depth; each plane clips independently. */
+  layerRegion(
+    index: number,
+    rect: PsdNativeRect,
+    ids: Int16Array,
+    budget?: PsdBudgetOptions
+  ): PsdResult<PsdNativeRegion>;
+  /** Queries original path identities, knots and geometry; invalid individual geometry retains a typed refusal. */
+  savedPaths(budget?: PsdBudgetOptions): PsdResult<PsdSavedPath[]>;
+  /**
+   * The fonts the document's type layers use, their availability in `fonts` (none when omitted), and supplied
+   * releases that differ from the document's recorded versions. Availability alone does not imply exact text.
+   */
   fonts(fonts?: PsdFontLibrary): PsdResult<PsdDocumentFonts>;
   /**
    * Whether type layer record `index` re-renders from its text with `fonts`, re-rendering it once to decide; `null`
@@ -204,11 +314,17 @@ export type PsdViewerDocument = {
   textSupport(index: number, fonts?: PsdFontLibrary): PsdResult<PsdTextSupport | null>;
   /**
    * Photoshop's saved merged image as straight 8-bit RGBA, other color modes than RGB and Grayscale converted to sRGB
-   * as renders are; `unsupported` when the file has none.
+   * as renders are; `unsupported` when the file has none. Displays the stored snapshot without reconstructing layers
+   * or validating historical text state. Decoding it does not certify an editable state or next-open composition.
    */
   merged(): PsdResult<PsdImage>;
-  /** Compares a live render of this document with the merged image as Photoshop stores it. */
+  /**
+   * Compares a live render with the stored snapshot. Differences can reflect authoring-state changes rather than
+   * next-open rendering errors. Equality applies only to these pixels and does not authorize an edit.
+   */
   difference(render: PsdRender): PsdResult<PsdDifference>;
+  /** Lists saved named path resources and vector-mask carriers without interpreting descriptors. Geometry is unavailable in this WASM binding. */
+  paths(): PsdResult<PsdPathSummary[]>;
   /** Everything known about one layer record. */
   layerDetail(index: number): PsdResult<PsdLayerDetail>;
   /** One layer's own pixels and mask channels at 8 bits. */
@@ -217,11 +333,193 @@ export type PsdViewerDocument = {
   close(): void;
 };
 
+/** Document-space native window. Each returned plane may clip independently. */
+export type PsdNativeRect = NativeRect;
+
+/** Original big-endian samples, including packed Bitmap rows and float payloads; no matte or mask processing. */
+export type PsdNativeRegion = NativeRegion;
+
+/** Straight native composite; 16-bit internal levels run from 0 to 32768, floats retain their IEEE bits. */
+export type PsdNativeRender = NativeRender;
+
+/** Storage preflight only. A successful plan does not certify strict rendering semantics. */
+export type PsdRegionCapability = Omit<RegionCapability, 'refusal'> & { refusal: PsdFailure | null };
+
+/** Native render options preserve the window compositor's depth, state, fonts and per-call budget. */
+export type PsdNativeRenderOptions = Omit<NativeOptions, 'grayProfile' | 'smartObjects' | 'availableFonts'> &
+  Partial<Pick<PsdRenderSettings, 'grayProfile' | 'smartObjects' | 'availableFonts'>>;
+
+/** Saved resource identity and Q24 geometry, or a typed refusal for that individual path. */
+export type PsdSavedPath = Omit<SavedPath, 'outcome' | 'error' | 'components'> &
+  (
+    | { outcome: 'refused'; error: PsdFailure }
+    | Pick<Extract<SavedPath, { outcome: 'geometry' }>, 'outcome' | 'components'>
+  );
+
+/** Source header and logical section spans. Offsets remain bigint throughout host reads. */
+export type PsdSourceInfo = {
+  width: number;
+  height: number;
+  depth: 1 | 8 | 16 | 32;
+  channels: number;
+  mode: number;
+  colorMode: { offset: bigint; length: bigint };
+  resources: { offset: bigint; length: bigint };
+  layers: { offset: bigint; length: bigint };
+  merged: { offset: bigint; length: bigint } | null;
+};
+
+/** Physical primary layer metadata, without importing compositor state or reading channel payloads. */
+export type PsdSourceLayer = PsdNativeRect & {
+  index: number;
+  name: string;
+  channels: { id: number; offset: bigint; length: bigint }[];
+};
+
+/** A host-owned synchronous reader, suitable for FileReaderSync in a worker or pread in Node. */
+export type PsdSourceRead = Parameters<typeof PsdSourceHandle.open>[0];
+
+/** Bounded saved/layer extraction. Alternate Lr16/Lr32 layer carriers may refuse while savedRegion remains usable. */
+export type PsdViewerSource = {
+  readonly info: PsdSourceInfo;
+  /** Reads selected saved planes without a compressed-file copy. Saved pixels may be stale and retain their matte. */
+  savedRegion(rect: PsdNativeRect, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Samples the saved composite on a native integer grid. Output coordinates are grid coordinates; no filtering or matte removal occurs. */
+  savedOverview(step: number, indices: Uint16Array, budget?: PsdBudgetOptions): PsdResult<PsdNativeRegion>;
+  /** Indexes primary physical records and bigint stream spans without reading pixels. */
+  layerInfo(budget?: PsdBudgetOptions): PsdResult<PsdSourceLayer[]>;
+  /** Reads original layer/mask channels, clipped independently, without applying density or feather. */
+  layerRegion(
+    index: number,
+    rect: PsdNativeRect,
+    ids: Int16Array,
+    budget?: PsdBudgetOptions
+  ): PsdResult<PsdNativeRegion>;
+  /** Releases metadata and the host reader; later operations fail. Safe to call repeatedly. */
+  close(): void;
+};
+
+/** Opens strict outer envelopes through host reads. Never materializes the full file; no global cap is raised. */
+export async function openPsdSource(
+  read: PsdSourceRead,
+  length: bigint,
+  budget?: PsdBudgetOptions
+): Promise<PsdResult<PsdViewerSource>> {
+  const codec = await loadPsdViewer();
+  const opened = attempt(() => codec.PsdSourceHandle.open(read, length, budget));
+  if (!opened.ok) {
+    return opened;
+  }
+
+  const handle = opened.value;
+  const info = attempt(() => handle.info() as PsdSourceInfo);
+  if (!info.ok) {
+    handle.free();
+    return info;
+  }
+
+  let open = true;
+  return {
+    ok: true,
+    value: {
+      info: info.value,
+      savedRegion: (rect, indices, options) =>
+        open
+          ? attempt(() => handle.savedRegion(rect, indices, options))
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      savedOverview: (step, indices, options) => {
+        if (!open) {
+          return { ok: false, error: { kind: 'invalid', message: 'the source is closed' } };
+        }
+        return attempt(() => {
+          if (!Number.isSafeInteger(step) || step < 1) {
+            throw new Error('Saved overview stride must be a positive integer');
+          }
+          const merged = info.value.merged;
+          if (!merged) {
+            throw Object.assign(new Error('No saved merged image'), { name: 'PsdUnsupportedError' });
+          }
+          const compressionBytes = read(merged.offset, 2);
+          const compression = new DataView(
+            compressionBytes.buffer,
+            compressionBytes.byteOffset,
+            compressionBytes.byteLength
+          ).getUint16(0);
+          const header = read(0n, 6);
+          const psb = header[5] === 2;
+          const width = Math.ceil(info.value.width / step);
+          const height = Math.ceil(info.value.height / step);
+          if (width * height * indices.length * Math.max(1, info.value.depth / 8) > 64 * 1024 ** 2) {
+            throw Object.assign(new Error('Saved overview exceeds the bounded 64 MiB output policy'), {
+              name: 'PsdBudgetError',
+              resource: 'live bytes',
+              requested: BigInt(width * height * indices.length * Math.max(1, info.value.depth / 8)),
+              limit: 64n * 1024n ** 2n
+            });
+          }
+          if (new Set(indices).size !== indices.length) {
+            throw new Error('Duplicate saved channel selection');
+          }
+          let retainedBytes = options?.retainedBytes ?? 0;
+          const planes = Array.from(indices, (id) => {
+            if (id >= info.value.channels) {
+              throw new Error('Saved channel index is outside the header');
+            }
+            const bytes = handle.readGrid(
+              merged.offset + 2n,
+              merged.length - 2n,
+              compression,
+              info.value.width,
+              info.value.height * info.value.channels,
+              info.value.depth,
+              psb,
+              0,
+              id * info.value.height,
+              info.value.width,
+              info.value.height,
+              step,
+              { ...options, retainedBytes }
+            );
+            retainedBytes += bytes.byteLength;
+            return { id, left: 0, top: 0, width, height, bytes };
+          });
+          return {
+            depth: info.value.depth,
+            mode: info.value.mode,
+            encoding: 'big-endian-wire',
+            source: 'savedComposite',
+            planes
+          };
+        });
+      },
+      layerInfo: (options) =>
+        open
+          ? attempt(() => handle.layerInfo(options) as PsdSourceLayer[])
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      layerRegion: (index, rect, ids, options) =>
+        open
+          ? attempt(() => handle.layerRegion(index, rect, ids, options))
+          : { ok: false, error: { kind: 'invalid', message: 'the source is closed' } },
+      close() {
+        if (open) {
+          open = false;
+          handle.free();
+        }
+      }
+    }
+  };
+}
+
 /**
  * Photoshop's rendering preferences, which documents do not record. New options are added as optional fields, which
  * older viewer modules ignore.
  */
 export type PsdRenderSettings = {
+  /**
+   * Caller-owned working-Gray ICC bytes. Modern transparent rectangle gradients require the admitted
+   * Dot Gain 20% profile. Omission keeps their existing refusal/cache policy; no installed profile is read.
+   */
+  grayProfile?: Uint8Array | null;
   /** Color Settings' "Blend RGB Colors Using Gamma 1.0": mix coverage in linear light. Off by default. */
   linearBlending: boolean;
   /** "Blend Text Colors Using Gamma", 1.45 by default; `null` when off. */
@@ -255,6 +553,12 @@ export type PsdRenderSettings = {
    */
   typeLayers: boolean;
   /**
+   * Known active PostScript-name inventory for imported missing-font decisions. Omit or use null when unknown.
+   * An empty array means known-empty. A partial list of supplied font files is not an inventory. Ignored by WASM
+   * without active face bytes; never enables rerasterization.
+   */
+  availableFonts?: readonly string[] | null;
+  /**
    * A saved layer comp or animation frame ({@link PsdViewerDocument.states}) to render instead of the document as
    * saved; visibility overrides apply over it. Exact within the frames and comps Photoshop 26's rules are verified for;
    * outside them the render fails, or with `approximate` applies the same rules and lists them. The merged image
@@ -262,6 +566,22 @@ export type PsdRenderSettings = {
    * the document as saved.
    */
   state?: PsdStateChoice | null;
+};
+
+/** A nonempty integer rectangle inside the document canvas. */
+export type PsdRegionRect = RegionRect;
+
+/** Transferable RGBA8 with document origin, sampling stride, allocation strategy and fidelity metadata. */
+export type PsdRegionPixels = RegionPixels;
+
+/**
+ * Window rendering settings. The work limit defaults to 16,777,216 pixels and bounds individual allocations and batch
+ * output, not total memory. Spatial dependencies exceeding it fail as unsupported before a full-canvas allocation.
+ */
+export type PsdWindowSettings = PsdRenderSettings & {
+  maxWorkPixels?: number;
+  /** Overrides WASM32 admission defaults; retainedBytes includes caller-owned input, fonts and caches. */
+  budget?: PsdBudgetOptions;
 };
 
 /** A saved state to render: a frame or a layer comp by its persistent ID. */
@@ -304,17 +624,25 @@ export const photoshopDefaultSettings: PsdRenderSettings = {
 };
 
 /**
- * Fonts supplied for re-rendering type layers, by PostScript name. Adding a font of a name already present replaces
- * it. Every call is synchronous.
+ * Host-supplied fonts for type rerasterization and imported cache mixing. Adding a raster font replaces that name;
+ * distinct active faces under one name make imported validation abstain. Every call is synchronous.
  */
 export type PsdFontLibrary = {
   /**
    * Adds a TrueType or OpenType CFF font file (`.ttf`, `.otf`) under its PostScript name. Font collections (`.ttc`),
    * WOFF files, fonts without a PostScript name and outlines the renderer does not read fail as `unsupported`, other
-   * bytes as `invalid`.
+   * bytes as `invalid`. Standalone TrueType bytes also supply imported validation; `addActiveFace` preserves an
+   * explicit source identifier and supports original collection indices without adding raster fonts.
    */
   add(bytes: Uint8Array | ArrayBuffer): PsdResult<PsdFontInfo>;
-  /** The fonts added, sorted by PostScript name. */
+  /**
+   * Registers original active TrueType sfnt/TTC/OTC bytes for imported cache mixing, without adding raster fonts.
+   * Pass the original collection index and a source identifier. Validate the returned PostScript name against the
+   * intended face. CFF and invalid faces fail. Distinct same-name faces abstain; identical faces deduplicate.
+   * Use with `typeLayers: false`; partial face input never implies that other fonts are missing.
+   */
+  addActiveFace(bytes: Uint8Array | ArrayBuffer, faceIndex: number, provenance: string): PsdResult<string>;
+  /** The raster fonts added, sorted by PostScript name. */
   fonts(): PsdFontInfo[];
   /**
    * Supplies Photoshop 26.0.0's `hyph_en_US.dic`, which hyphenated paragraph text needs; other dictionaries fail as
@@ -334,8 +662,11 @@ export type PsdFontInfo = { name: string; format: 'TrueType' | 'CFF'; size: numb
  * records using it; and the type layer records bottom to top with their fonts, or the error reading their text.
  */
 export type PsdDocumentFonts = {
+  /** Raster font availability by PostScript name; a present font can still have a release mismatch. */
   fonts: { name: string; available: boolean; layers: number[] }[];
   layers: { index: number; name: string; visible: boolean; fonts: string[]; error?: string }[];
+  /** Supplied raster fonts or unique active faces whose releases differ from the document's recorded versions. */
+  releaseMismatches: PsdFontReleaseMismatch[];
 };
 
 /**
@@ -343,12 +674,40 @@ export type PsdDocumentFonts = {
  * it: `reason` is the renderer's refusal when not, such as a missing font or an unverified setting. 16- and 32-bit
  * compositors can still refuse the layer's blending.
  */
-export type PsdTextSupport = { fonts: string[]; missing: string[]; supported: boolean; reason?: string };
+export type PsdTextSupport = {
+  fonts: string[];
+  /** Fonts unavailable for rasterization, separate from supplied release mismatches. */
+  missing: string[];
+  /** Supplied release mismatches for this layer's fonts. Any mismatch prevents exact text support. */
+  releaseMismatches: PsdFontReleaseMismatch[];
+  /** Whether re-rendering succeeds without a known release mismatch; equal versions do not prove identical outlines. */
+  supported: boolean;
+  reason?: string;
+};
+
+/**
+ * A supplied font with the required PostScript name but a different release from the document's recorded version.
+ * Version evidence diagnoses mismatches; equal versions cannot certify identical charstrings because PSDs do not
+ * embed the font programs.
+ */
+export type PsdFontReleaseMismatch = {
+  /** The font's PostScript name. */
+  name: string;
+  /** The renderer's explanation of the mismatch. */
+  reason: string;
+  /** Version saved in the document's text resources. */
+  recordedVersion: string;
+  /** Version in the supplied face, omitted when the face has no version metadata. */
+  suppliedVersion?: string;
+};
 
 /** Straight (not premultiplied) 8-bit RGBA, row by row. */
 export type PsdImage = { width: number; height: number; pixels: Uint8Array };
 
-/** A composite: 8-bit RGBA for display, its depth, and how long compositing took. */
+/**
+ * A composite for the existing viewer display path. `pixels` are display RGBA8, not native process channels.
+ * Use `renderColor` for separately identified process and configured sRGB samples.
+ */
 export type PsdRender = PsdImage & {
   /**
    * The depth the compositor worked at; 16- and 32-bit composites, and CMYK and Lab composites made in their own
@@ -360,11 +719,138 @@ export type PsdRender = PsdImage & {
   /**
    * What this render approximated, in words, one entry each: the conversion to sRGB of a CMYK or Lab composite made
    * exactly in its channels, or what `approximate` allowed (a color-mode conversion, a reduction to 8 bits, and each
-   * layer setting left out or substituted, as `“layer”: setting — what was done`); empty for exact renders.
+   * layer setting left out or substituted, as `“layer”: setting — what was done`). Includes saved-state selection
+   * reports. Empty means no approximation under this render policy, not equivalence to historical saved pixels.
    */
   approximations: string[];
   /** Frees the full-depth composite kept for comparisons; `pixels` stay usable. */
   dispose(): void;
+};
+
+/**
+ * Explicit process-to-sRGB conversion settings. The caller attests that `srgb` describes sRGB; unrecognized
+ * serializations use a reported approximation. Missing or invalid required profiles fail instead of being guessed.
+ */
+export type PsdColorSettings = {
+  /** Destination sRGB ICC profile bytes, required for every configured conversion. */
+  srgb: Uint8Array;
+  /** Working RGB profile for untagged RGB or expanded Indexed data. Embedded profiles take precedence. */
+  workingRgb?: Uint8Array;
+  /** Working Gray profile for untagged Grayscale or expanded Bitmap data. */
+  workingGray?: Uint8Array;
+  /** Working CMYK profile for untagged CMYK data. */
+  workingCmyk?: Uint8Array;
+  /** ACE-target conversion; generic ICC fallbacks are reported separately. Defaults to `ace`. */
+  engine?: 'ace';
+  /** Rendering intent, `relative` by default. */
+  intent?: 'relative' | 'perceptual' | 'saturation' | 'absolute';
+  /** Defaults to true. */
+  blackPointCompensation?: boolean;
+  /** Defaults to false. True reports an approximation because ACE dither is not implemented. */
+  dither?: boolean;
+  /** Direct float evaluation, true by default. Float display conversion remains approximate. */
+  preciseFloat?: boolean;
+  /** Records an import already applied by the caller; never changes process samples. Defaults to `preserve`. */
+  importPolicy?: 'preserve' | 'convert' | 'off';
+  /** Correct continuous display bounds for the saved pixel aspect ratio, false by default. */
+  pixelAspectCorrection?: boolean;
+  /** Defaults to false. True, or an OCIO document kind, fails because an external OCIO processor is required. */
+  ocio?: boolean;
+  /** Defaults to false; true fails because proof presentation is unsupported. */
+  proof?: boolean;
+  /** Defaults to false; true fails because scene-referred presentation is unsupported. */
+  sceneReferred?: boolean;
+  /** Defaults to false; true fails because HDR preview presentation is unsupported. */
+  hdrPreview?: boolean;
+};
+
+/**
+ * Color channels followed by a separate alpha sample per interleaved pixel. Wire16 uses PSD's wire scale, not Q15.
+ * Packed Bitmap rows are the exception: most significant bit first, 1 means black, byte padded per row, no alpha.
+ */
+export type PsdColorSamples =
+  | { encoding: 'packed-bitmap' | 'byte'; values: Uint8Array }
+  | { encoding: 'wire16'; values: Uint16Array }
+  | { encoding: 'float32'; values: Float32Array };
+
+/** Exact process composite and its separately converted display output. No WASM resources are retained. */
+export type PsdColorRender = {
+  width: number;
+  height: number;
+  /** Native Photoshop color mode number; process samples are never implicitly sRGB. */
+  mode: number;
+  /** Process color channel count before alpha. Indexed stores an index plus alpha; its palette stays in colorModeData. */
+  colorChannels: number;
+  /** Original color-mode data, including the Indexed palette or ink data. */
+  colorModeData: Uint8Array;
+  /** Exact native process samples. Float RGB/Gray process samples are linear. */
+  process: PsdColorSamples;
+  /** Target-encoded RGB plus alpha at process precision, independent of process samples. */
+  srgb: PsdColorSamples;
+  /** Display sRGB RGBA8, reduced without dither for browser display. */
+  rgba8: Uint8Array;
+  /** Display conversion provenance; exactness here describes conversion only. */
+  conversion: PsdDisplayConversion;
+  /** DisplayConversion messages suitable for the viewer's existing approximation list. */
+  approximations: string[];
+  /** Continuous presentation bounds, optionally corrected for pixel aspect ratio; sample dimensions do not change. */
+  displayWidth: number;
+  displayHeight: number;
+};
+
+/** Provenance of configured display conversion, independent of exact process compositing. */
+export type PsdDisplayConversion = {
+  exact: boolean;
+  requestedEngine: 'ace';
+  engine: 'ACE verified integer route' | 'generic ICC';
+  operation: string;
+  /** WASM provenance spelling: `Some(Embedded)`, `Some(Working)` or `None` for fixed document Lab. */
+  sourceOrigin: string;
+  destinationSHA256: string;
+  importPolicy: 'Preserve' | 'Convert' | 'Off';
+  intent: string;
+  blackPointCompensation: boolean;
+  dither: boolean;
+  /** Null for an admitted exact route; otherwise the generic conversion and omitted ACE dither are identified. */
+  approximation: {
+    kind: 'DisplayConversion';
+    sourceSHA256: string;
+    destinationSHA256: string;
+    intent: string;
+    blackPointCompensation: boolean;
+    preciseFloat: boolean;
+    dither: boolean;
+    aceDitherImplemented: false;
+  } | null;
+};
+
+/** Native saved planes, preserving auxiliary plates, profile resources and float bit patterns. */
+export type PsdSavedProcessChannels = {
+  width: number;
+  height: number;
+  mode: number;
+  depth: number;
+  /** Native decoded bytes, including original byte order, Bitmap packing and saved matte. */
+  planes: PsdSavedProcessPlane[];
+  colorModeData: Uint8Array;
+  /** Original channel metadata and color-profile resource payloads, including ICC resource 1039 when present. */
+  resources: { id: number; bytes: Uint8Array }[];
+  metadataError: string | null;
+  source: string;
+};
+
+/** One saved plane and its optional channel display metadata; visibility is null when the caller supplied none. */
+export type PsdSavedProcessPlane = {
+  index: number;
+  role: 'process' | 'mergedTransparency' | 'spot' | 'alpha' | 'auxiliary';
+  bytes: Uint8Array;
+  visible: boolean | null;
+  name?: string;
+  persistentId?: number;
+  displayKind?: number;
+  colorSpace?: number;
+  color?: number[];
+  opacityOrSolidityPercent?: number;
 };
 
 /**
@@ -399,6 +885,16 @@ export type PsdDifference = PsdImage & {
   max: number;
   /** Counts of the 32 smallest absolute differences that occur. */
   histogram: { difference: number; samples: number }[];
+};
+
+/** Saved path carrier metadata. Geometry requires a future typed WASM query. */
+export type PsdPathSummary = {
+  name: string;
+  source: 'resource' | 'vectorMask';
+  resourceId?: number;
+  layerIndex?: number;
+  disabled?: boolean;
+  geometry: 'unavailable';
 };
 
 /** A rectangle as Photoshop stores it, bottom and right exclusive. */
@@ -649,6 +1145,12 @@ export type ViewerCodec = typeof import('../wasm-viewer/photoshop_psd_viewer.js'
 /** What the bindings accept as the WebAssembly module: a URL, a response, bytes or a compiled module. */
 export type ViewerWasmInput = NonNullable<Parameters<ViewerCodec['default']>[0]>;
 
+/** Allows compressed source storage for existing huge PSBs without admitting a full-canvas render. */
+const openingBudget = {
+  allocationBytes: 128 * 1024 * 1024,
+  liveBytes: 2 * 1024 * 1024 * 1024
+} satisfies PsdBudgetOptions;
+
 let pending: Promise<ViewerCodec> | undefined;
 
 /** The WebAssembly handles behind the libraries {@link createFontLibrary} made, until freed. */
@@ -706,6 +1208,81 @@ function makeViewerDocument(
       images.set(render, image);
       return { ok: true, value: render };
     },
+    renderColor(settings, color, visibility = [], fonts) {
+      return open
+        ? attempt(
+            () =>
+              handle.renderColor(
+                { ...settings, visibility: [...visibility] },
+                color,
+                libraryOf(fonts)
+              ) as PsdColorRender
+          )
+        : closed();
+    },
+    savedProcessChannels(visibility) {
+      return open ? attempt(() => handle.savedProcessChannels(visibility) as PsdSavedProcessChannels) : closed();
+    },
+    renderRegion(rectangle, settings, visibility = [], fonts) {
+      const { left, top, width, height } = rectangle;
+      return open
+        ? attempt(() =>
+            handle.renderRegion(
+              left,
+              top,
+              width,
+              height,
+              { ...settings, visibility: [...visibility] },
+              libraryOf(fonts)
+            )
+          )
+        : closed();
+    },
+    renderRegions(rectangles, settings, visibility = [], fonts) {
+      return open
+        ? attempt(() =>
+            handle.renderRegions(rectangles, { ...settings, visibility: [...visibility] }, libraryOf(fonts))
+          )
+        : closed();
+    },
+    renderOverview(step, settings, visibility = [], fonts) {
+      return open
+        ? attempt(() => handle.renderOverview(step, { ...settings, visibility: [...visibility] }, libraryOf(fonts)))
+        : closed();
+    },
+    savedOverview(step, maxWorkPixels = 0, budget) {
+      return open ? attempt(() => handle.savedOverview(step, maxWorkPixels, budget)) : closed();
+    },
+    regionCapability(rect, options, fonts) {
+      return open
+        ? attempt(() => {
+            const plan = handle.regionCapability(rect, nativeRenderOptions(options), libraryOf(fonts));
+            return { ...plan, refusal: plan.refusal ? toFailure(plan.refusal) : null };
+          })
+        : closed();
+    },
+    renderNativeRegion(rect, options, fonts) {
+      return open
+        ? attempt(() => handle.renderNativeRegion(rect, nativeRenderOptions(options), libraryOf(fonts)))
+        : closed();
+    },
+    savedRegion(rect, indices, budget) {
+      return open ? attempt(() => handle.savedRegion(rect, indices, budget)) : closed();
+    },
+    layerRegion(index, rect, ids, budget) {
+      return open ? attempt(() => handle.layerRegion(index, rect, ids, budget)) : closed();
+    },
+    savedPaths(budget) {
+      return open
+        ? attempt(() =>
+            handle
+              .savedPaths(budget)
+              .map(
+                (path): PsdSavedPath => (path.outcome === 'refused' ? { ...path, error: toFailure(path.error) } : path)
+              )
+          )
+        : closed();
+    },
     fonts(fonts) {
       return open ? attempt(() => handle.documentFonts(libraryOf(fonts)) as PsdDocumentFonts) : closed();
     },
@@ -725,6 +1302,40 @@ function makeViewerDocument(
       }
 
       return attempt(() => handle.difference(image) as PsdDifference);
+    },
+    paths() {
+      if (!open) {
+        return closed();
+      }
+
+      return attempt(() => {
+        const resources = (handle.info() as PsdInfo).resources
+          .filter((resource) => resource.id >= 2000 && resource.id <= 2997)
+          .map(
+            (resource): PsdPathSummary => ({
+              name: resource.name || `Path ${resource.id}`,
+              source: 'resource',
+              resourceId: resource.id,
+              geometry: 'unavailable'
+            })
+          );
+        const masks = (nodes: readonly PsdLayerNode[]): PsdPathSummary[] =>
+          nodes.flatMap((node) => [
+            ...(node.vectorMask
+              ? [
+                  {
+                    name: `${node.name} vector mask`,
+                    source: 'vectorMask' as const,
+                    layerIndex: node.index,
+                    disabled: node.vectorMask.disabled,
+                    geometry: 'unavailable' as const
+                  }
+                ]
+              : []),
+            ...masks(node.children ?? [])
+          ]);
+        return [...resources, ...masks(layers)];
+      });
     },
     layerDetail(index) {
       return open ? attempt(() => handle.layerDetail(index) as PsdLayerDetail) : closed();
@@ -748,6 +1359,21 @@ function makeViewerDocument(
   };
 }
 
+/** Normalize nullable rendering defaults to the native binding's omitted fields. */
+function nativeRenderOptions(options: PsdNativeRenderOptions | undefined): NativeOptions | undefined {
+  if (!options) {
+    return undefined;
+  }
+
+  const { grayProfile, smartObjects, availableFonts, ...rest } = options;
+  return {
+    ...rest,
+    grayProfile: grayProfile ?? undefined,
+    smartObjects: smartObjects ?? undefined,
+    availableFonts: availableFonts ? [...availableFonts] : undefined
+  };
+}
+
 /** The failure of a call on a freed font library. */
 function closedFailure(): PsdResult<never> {
   return { ok: false, error: { kind: 'invalid', message: 'the font library was freed' } };
@@ -767,8 +1393,36 @@ function attempt<T>(run: () => T): PsdResult<T> {
   }
 }
 
-/** The module names expected errors `PsdUnsupportedError` and `PsdError`; anything else is invalid input too. */
+/** Preserves typed budget/allocation failures separately from unsupported features and unreadable input. */
 function toFailure(error: unknown): PsdFailure {
+  if (
+    error instanceof Error &&
+    error.name === 'PsdAllocationError' &&
+    'requested' in error &&
+    typeof error.requested === 'bigint'
+  ) {
+    return { kind: 'allocation', message: error.message, requested: error.requested };
+  }
+
+  if (
+    error instanceof Error &&
+    error.name === 'PsdBudgetError' &&
+    'resource' in error &&
+    typeof error.resource === 'string' &&
+    'requested' in error &&
+    typeof error.requested === 'bigint' &&
+    'limit' in error &&
+    typeof error.limit === 'bigint'
+  ) {
+    return {
+      kind: 'budget',
+      message: `This operation exceeds the viewer's resource budget (${error.resource}: ${error.requested} requested, limit ${error.limit}).`,
+      resource: error.resource,
+      requested: error.requested,
+      limit: error.limit
+    };
+  }
+
   if (error instanceof Error) {
     return { kind: error.name === 'PsdUnsupportedError' ? 'unsupported' : 'invalid', message: error.message };
   }

@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Russian text; the class names follow the Russian Team Fortress 2. */
 export const ru: Dictionary = {
@@ -37,7 +37,8 @@ export const ru: Dictionary = {
     botReaction: 'Реакция ботов',
     botSight: 'Обзор ботов',
     zoom: 'Масштаб',
-    lead: 'Упреждение камеры'
+    lead: 'Упреждение камеры',
+    slack: 'Свобода камеры'
   },
   knobGroup: { move: 'Движение', weapon: 'Оружие', armor: 'Броня', point: 'Точка', bot: 'Боты' },
   classKnob: {
@@ -63,11 +64,11 @@ export const ru: Dictionary = {
     blastHole: 'Воронка взрыва',
     blastDepth: 'Глубина взрыва',
     blastKnockback: 'Отброс взрывом',
-    selfPush: 'Рокет-джамп',
     wallDamage: 'Урон стенам',
     fragments: 'Осколки',
     fuse: 'Запал',
     chargeTime: 'Время заряда',
+    spinUp: 'Раскрутка',
     railPower: 'Пробой рельсы',
     fullRailPower: 'Пробой (полный)',
     fullRange: 'Дальность (полный)',
@@ -135,7 +136,7 @@ export const ru: Dictionary = {
   short: { scout: 'Рз', soldier: 'Сл', heavy: 'Пл', demoman: 'Пд', sniper: 'Сн' },
   classRole: {
     scout: 'Быстрый, обходит с флангов; дробовик в упор, страшнее всего сзади; захват ×2',
-    soldier: 'Ракеты с осколками и взрывом; выстрел себе под ноги — ракетный прыжок',
+    soldier: 'Ракеты с осколками и взрывом; прямое попадание бьёт глубже всего',
     heavy: 'Медленный, в плитах; поток пуль сверлит броню вблизи; держит точку',
     demoman: 'Навесом бросает прыгающие гранаты из-за укрытия; большой взрыв; ломает стены',
     sniper: 'Каземат: зажать для заряда; прицел видит ядра; рельса через ядро убивает'
@@ -149,10 +150,11 @@ export const ru: Dictionary = {
     next: 'при возрождении',
     hint: '1–5 или клик · на базе класс сменится сразу, иначе при следующем возрождении · C или Esc закрывает'
   },
-  botRole: { assault: 'штурм', flank: 'фланг', support: 'поддержка', anchor: 'якорь', sniper: 'снайпер' },
+  botRole: { assault: 'штурм', flank: 'фланг', support: 'поддержка', lead: 'танк', sniper: 'снайпер' },
   seat: {
     you: 'Вы',
     youBot: 'Вы (бот)',
+    turret: 'Турель',
     red: (seat: number) => `Красный ${seat}`,
     blue: (seat: number) => `Синий ${seat}`
   },
@@ -168,7 +170,36 @@ export const ru: Dictionary = {
     nextRespawn: (tankClass: string) => `Следующее возрождение: ${tankClass}`,
     gauge: { idle: 'Зажать', charging: 'Заряд', full: 'Полный' }
   },
-  plan: { push: 'натиск', hold: 'оборона', regroup: 'сбор', gather: 'собираются', go: 'идут' },
+  radio: {
+    kit: 'Аптечка',
+    repairing: 'Чиниться',
+    needHelp: 'Помогите!',
+    helping: 'Иду!',
+    flanking: 'В обход',
+    focus: 'Цель!',
+    perch: 'На позицию',
+    fallBack: 'Назад',
+    holdPoint: 'Держу',
+    holdLane: 'Держу',
+    capturing: 'Захват',
+    gather: 'Сбор',
+    countdown: (say: RadioWords) => `Атака: ${say.seconds}`,
+    go: 'Вперёд!',
+    followMe: 'За мной!',
+    waitForTeam: 'Жду',
+    switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
+    breaching: 'Пробиваю',
+    clearView: 'Снесите!',
+    wayOpen: 'Проход!',
+    fallBackTeam: 'Отходим',
+    coverRetreat: 'Прикрываю',
+    captured: 'Наша!',
+    regroup: 'Сгруппироваться',
+    sniper: 'Снайпер!',
+    kitTrap: 'Ловушка'
+  },
+  lane: { north: 'север', center: 'центр', south: 'юг' },
+  plan: { push: 'натиск', hold: 'оборона', regroup: 'сбор', fallBack: 'отход', gather: 'собираются', go: 'идут' },
   result: {
     wins: { red: 'Победа красных', blue: 'Победа синих' },
     team: { red: 'Красные', blue: 'Синие' },

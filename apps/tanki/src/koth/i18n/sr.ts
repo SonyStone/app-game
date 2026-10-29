@@ -1,4 +1,4 @@
-import type { Dictionary } from './en';
+import type { Dictionary, RadioWords } from './en';
 
 /** The game's Serbian text, in Cyrillic. */
 export const sr: Dictionary = {
@@ -37,7 +37,8 @@ export const sr: Dictionary = {
     botReaction: 'Реакција ботова',
     botSight: 'Видик ботова',
     zoom: 'Зум',
-    lead: 'Камера унапред'
+    lead: 'Камера унапред',
+    slack: 'Слобода камере'
   },
   knobGroup: { move: 'Кретање', weapon: 'Оружје', armor: 'Оклоп', point: 'Тачка', bot: 'Ботови' },
   classKnob: {
@@ -63,11 +64,11 @@ export const sr: Dictionary = {
     blastHole: 'Кратер експлозије',
     blastDepth: 'Дубина експлозије',
     blastKnockback: 'Удар експлозије',
-    selfPush: 'Ракетни скок',
     wallDamage: 'Штета зидовима',
     fragments: 'Гелери',
     fuse: 'Упаљач',
     chargeTime: 'Време пуњења',
+    spinUp: 'Залетање цеви',
     railPower: 'Пробој шине',
     fullRailPower: 'Пробој (пун)',
     fullRange: 'Домет (пун)',
@@ -135,7 +136,7 @@ export const sr: Dictionary = {
   short: { scout: 'Из', soldier: 'Во', heavy: 'Тш', demoman: 'Ми', sniper: 'Сн' },
   classRole: {
     scout: 'Брз, заобилази бокове; сачмара из близине, најопаснија с леђа; осваја дупло брже',
-    soldier: 'Ракете с експлозијом и гелерима; пуцањ под ноге — ракетни скок',
+    soldier: 'Ракете с експлозијом и гелерима; директан погодак пробија најдубље',
     heavy: 'Спор, у плочама; рафал гатлинга буши оклоп изблиза; држи тачку',
     demoman: 'Баца гранате које одскачу преко заклона; велика експлозија; руши зидове',
     sniper: 'Казамат: држи за пуњење; нишан показује језгра; шина кроз језгро убија'
@@ -149,10 +150,11 @@ export const sr: Dictionary = {
     next: 'следећи респаун',
     hint: '1–5 или клик · у бази се мења одмах, другде при следећем респауну · C или Esc затвара'
   },
-  botRole: { assault: 'јуриш', flank: 'бок', support: 'подршка', anchor: 'сидро', sniper: 'снајпер' },
+  botRole: { assault: 'јуриш', flank: 'бок', support: 'подршка', lead: 'предводник', sniper: 'снајпер' },
   seat: {
     you: 'Ти',
     youBot: 'Ти (бот)',
+    turret: 'Турела',
     red: (seat: number) => `Црвени ${seat}`,
     blue: (seat: number) => `Плави ${seat}`
   },
@@ -168,7 +170,36 @@ export const sr: Dictionary = {
     nextRespawn: (tankClass: string) => `Следећи респаун: ${tankClass}`,
     gauge: { idle: 'Држи', charging: 'Пуњење', full: 'Пуно' }
   },
-  plan: { push: 'напад', hold: 'одбрана', regroup: 'прегруписавање', gather: 'окупљају се', go: 'улазе' },
+  radio: {
+    kit: 'Комплет',
+    repairing: 'Поправка',
+    needHelp: 'Помоћ!',
+    helping: 'Стижем',
+    flanking: 'Заобилазим',
+    focus: 'Мета!',
+    perch: 'На положај',
+    fallBack: 'Назад',
+    holdPoint: 'Држим',
+    holdLane: 'Држим',
+    capturing: 'Заузимам',
+    gather: 'Окупљање',
+    countdown: (say: RadioWords) => `Напад: ${say.seconds}`,
+    go: 'Напред!',
+    followMe: 'За мном!',
+    waitForTeam: 'Чекам',
+    switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
+    breaching: 'Пробијам',
+    clearView: 'Срушите!',
+    wayOpen: 'Пролаз!',
+    fallBackTeam: 'Повлачење',
+    coverRetreat: 'Покривам',
+    captured: 'Наша!',
+    regroup: 'Окупите се',
+    sniper: 'Снајпер!',
+    kitTrap: 'Замка'
+  },
+  lane: { north: 'север', center: 'центар', south: 'југ' },
+  plan: { push: 'напад', hold: 'одбрана', regroup: 'прегруписавање', fallBack: 'повлачење', gather: 'окупљају се', go: 'улазе' },
   result: {
     wins: { red: 'Црвени побеђују', blue: 'Плави побеђују' },
     team: { red: 'Црвени', blue: 'Плави' },

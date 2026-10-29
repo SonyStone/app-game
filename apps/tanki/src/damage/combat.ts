@@ -126,8 +126,6 @@ export type BlastSpec = {
    * makes the blast a wall breaker. Defaults to 1.
    */
   structures?: number;
-  /** Share of the knockback the shooter's own tank takes, which lets it jump; its armor is spared. Defaults to 1. */
-  self?: number;
 };
 
 /** How a tank's turret is drawn and where its muzzle is. */
@@ -205,7 +203,8 @@ export type CombatLayout = {
  *   seed it; defaults to `Math.random`.
  * @param options.onHit - Called when a shot chips, ricochets off or detonates a tank.
  * @param options.onDestroyed - Called when a tank blows up or loses all its armor, with the tank
- *   whose shot did it, if any. The tank is already out of `tanks`.
+ *   whose shot did it, if any, and where it was. The tank is already out of `tanks` and its body
+ *   gone from the world.
  * @param options.onShot - Called for every shot with its path: the muzzle, each ricochet and the end.
  *   A shell reports its path when it stops.
  * @param options.onWallsChanged - Called with the world bounds of a piece of wall or a wreck
@@ -226,7 +225,7 @@ export function createCombat(
     wrecks?: number;
     random?: () => number;
     onHit?: (target: Tank, shooter: Tank | undefined, part: 'armor' | 'core' | 'ricochet') => void;
-    onDestroyed?: (victim: Tank, killer: Tank | undefined) => void;
+    onDestroyed?: (victim: Tank, killer: Tank | undefined, at: Point) => void;
     onShot?: (shooter: Tank, path: readonly Point[]) => void;
     onWallsChanged?: (bounds: Bounds) => void;
     pace?: () => { readonly shellSpeed: number; readonly damage: number };
@@ -283,6 +282,7 @@ export function createCombat(
   // Wrecks left this step, which the blast of the shot that made them tore open already.
   const freshWrecks = new Set<number>();
   const shells: Shell[] = [];
+  const mounts: Mount[] = [];
   const shellDraw = createShellDraw(renderer, createShellField());
   const grenadeDraw = createShellDraw(renderer, createGrenadeField());
 
@@ -368,6 +368,45 @@ export function createCombat(
       tank: { color: number; team?: string; pullSpeed?: number; respawn?: boolean; hull?: HullSpec; mass?: number; look?: TankLook }
     ) {
       return spawnTank(placement, tank);
+    },
+
+    /**
+     * Puts a gun on a fixed mount on the field, as a base's turret: it has no hull, so nothing
+     * hits, breaks or moves it, and it fights for `gun.team`, its shells sparing that team's tanks
+     * without friendly fire. Its turret is drawn as a tank's is, with `gun.look`, in `gun.color`,
+     * and stays on the field through `reset`.
+     *
+     * @returns The gun: its world heading in radians, which the caller turns, where its muzzle is,
+     *   and `fire`, which fires `shell` from the muzzle along the heading with a muzzle blast of
+     *   `flash` (1 for a tank gun) and turns gatling barrels on. Shells of a mounted gun credit no
+     *   tank with a kill.
+     */
+    mountGun(gun: { x: number; y: number; angle: number; team: string; color: number; look: TankLook }) {
+      const mount: Mount = { ...gun, kick: 0, spin: 0 };
+      mounts.push(mount);
+
+      return {
+        get angle() {
+          return mount.angle;
+        },
+
+        set angle(angle: number) {
+          mount.angle = angle;
+        },
+
+        muzzle() {
+          return mountMuzzle(mount);
+        },
+
+        fire(shell: ShellSpec, flash = 1) {
+          const start = mountMuzzle(mount);
+          const direction = { x: Math.cos(mount.angle), y: Math.sin(mount.angle) };
+          addShell(undefined, mount.team, start, direction, shell, { primary: true });
+          muzzleBlast(start, direction, undefined, undefined, flash);
+          mount.kick = BARREL_KICK * Math.max(flash, 0.4);
+          mount.spin += MOUNT_SPIN;
+        }
+      };
     },
 
     /** Takes `tank` off the field without a trace or a respawn, as when a player changes class in the base. */
@@ -678,6 +717,10 @@ export function createCombat(
         }
       }
 
+      for (const mount of mounts) {
+        mount.kick *= Math.exp(-BARREL_RETURN * dt);
+      }
+
       for (const body of armored) {
         body.flash = Math.max(body.flash - dt * 8, 0);
         body.barrelKick *= Math.exp(-BARREL_RETURN * dt);
@@ -784,6 +827,19 @@ export function createCombat(
         }
       }
 
+      for (const mount of mounts) {
+        renderer.addBody({
+          ...turretDraw(mount.look.turret),
+          style: mount.look.turret,
+          spin: mount.spin,
+          x: mount.x - Math.cos(mount.angle) * mount.kick,
+          y: mount.y - Math.sin(mount.angle) * mount.kick,
+          angle: mount.angle,
+          color: rgb(mount.color),
+          flash: 0
+        });
+      }
+
       // Shells cast a shadow of their own and glow on what they pass; lobbed ones rise toward the camera.
       for (const shell of shells) {
         const size = shell.spec.size ?? 1;
@@ -827,6 +883,10 @@ export function createCombat(
     reset() {
       for (const body of [...armored]) {
         remove(body);
+      }
+
+      for (const mount of mounts) {
+        mount.kick = 0;
       }
 
       scrap.reset();
@@ -956,9 +1016,10 @@ export function createCombat(
     const { boxes, area } = solidBoxes(body.field, blockCells(body.field));
 
     if (boxes.length === 0) {
+      const last = body.body.translation();
       remove(body);
       scheduleRespawn(body);
-      reportDestroyed(body);
+      reportDestroyed(body, { x: last.x, y: last.y });
       return;
     }
 
@@ -1155,7 +1216,7 @@ export function createCombat(
     hit: ReturnType<typeof castShot>,
     end: Point,
     direction: Point,
-    tank: Tank,
+    tank: Tank | undefined,
     blow: Pick<ShellSpec, 'hole' | 'depth' | 'knockback' | 'ricochet'>,
     canBounce: boolean
   ) {
@@ -1444,7 +1505,7 @@ export function createCombat(
    * @param options.primary - The shell was fired by a gun rather than thrown out by a blast, so
    *   `onShot` reports its path.
    */
-  function addShell(tank: Tank, team: string | undefined, start: Point, direction: Point, specified: ShellSpec, options: { reach?: number; primary: boolean }) {
+  function addShell(tank: Tank | undefined, team: string | undefined, start: Point, direction: Point, specified: ShellSpec, options: { reach?: number; primary: boolean }) {
     const spec = pacedShell(specified, pace().shellSpeed);
     const shell: Shell = {
       id: shellId++,
@@ -1529,10 +1590,10 @@ export function createCombat(
    * the rounds of that stream that hit near it lately, and marks this round for the ones to come
    * (see `drillDepth`); 0 for a shell that does not drill or hits anything else.
    */
-  function drilled(hit: ReturnType<typeof castShot>, point: Point, shooter: Tank, spec: DrillSpec | undefined) {
+  function drilled(hit: ReturnType<typeof castShot>, point: Point, shooter: Tank | undefined, spec: DrillSpec | undefined) {
     const body = hit.target;
 
-    if (!spec || !body?.tank || hit.part !== 'armor') {
+    if (!spec || !shooter || !body?.tank || hit.part !== 'armor') {
       return 0;
     }
 
@@ -1578,11 +1639,17 @@ export function createCombat(
       if (hit.target?.tank && !lob.landed) {
         shell.path.push(end);
 
-        // A grenade that flies into an open core destroys it before it goes off.
+        hit.target.lastShooter = shell.shooter;
+
+        // A grenade that flies into an open core destroys it before it goes off; one that hits the
+        // armor chips its own crater where it struck, as a rocket does, so a direct hit counts for
+        // more than a near miss.
         if (hit.part === 'core') {
-          hit.target.lastShooter = shell.shooter;
           reportHit(hit.target, shell.shooter, 'core');
           destroy(hit.target, shell.direction);
+        } else {
+          damage(hit.target, end, shell.direction, shell.spec);
+          reportHit(hit.target, shell.shooter, 'armor');
         }
 
         detonate(shell, end);
@@ -1676,8 +1743,8 @@ export function createCombat(
 
   /** Whether a shell flies through `body`: its own tank until the first ricochet, and teammates without friendly fire. */
   function passesShell(shell: Shell, body: Armored) {
-    const shooter = byTank.get(shell.shooter);
-    return (body.tank === shell.shooter && shell.bounces === 0) || passesAsTeammate(shell.team, shooter, body);
+    const shooter = shell.shooter && byTank.get(shell.shooter);
+    return (shell.shooter !== undefined && body.tank === shell.shooter && shell.bounces === 0) || passesAsTeammate(shell.team, shooter, body);
   }
 
   /** How far the shell's current leg will likely reach, for the fade along its trail. */
@@ -1741,7 +1808,7 @@ export function createCombat(
   function stopShell(shell: Shell) {
     shells.splice(shells.indexOf(shell), 1);
 
-    if (shell.primary) {
+    if (shell.primary && shell.shooter) {
       options.onShot?.(shell.shooter, shell.path);
     }
   }
@@ -1752,9 +1819,9 @@ export function createCombat(
     }
   }
 
-  function reportDestroyed(body: Armored) {
+  function reportDestroyed(body: Armored, at: Point) {
     if (body.tank) {
-      options.onDestroyed?.(body.tank, body.lastShooter);
+      options.onDestroyed?.(body.tank, body.lastShooter, at);
     }
   }
 
@@ -2036,7 +2103,7 @@ export function createCombat(
       freshWrecks.add(wreck);
     }
     scheduleRespawn(body);
-    reportDestroyed(body);
+    reportDestroyed(body, { x: at.x, y: at.y });
   }
 
   /** Sends a piece knocked out of a wall flying; it lands and stays as scrap. */
@@ -2089,8 +2156,8 @@ export function createCombat(
 
       const falloff = 1 - 0.5 * (reach.distance / spec.radius);
 
+      // A blast spares its own tank altogether: with no height to jump to, a push from its own shot would only throw it about.
       if (own) {
-        throwBody(body, reach.direction, spec.knockback * falloff * (spec.self ?? 1));
         continue;
       }
 
@@ -2408,9 +2475,18 @@ type Armored = {
 type WreckHit = NonNullable<ReturnType<Wrecks['cast']>>['wreck'];
 
 /** A shell in flight. */
+/** A gun on a fixed mount (see `mountGun`), with its barrels' kick and spin for drawing. */
+type Mount = { x: number; y: number; angle: number; team: string; color: number; look: TankLook; kick: number; spin: number };
+
+/** Where a mounted gun's muzzle is, `look.muzzle` px along its heading from its mount. */
+function mountMuzzle(mount: Mount): Point {
+  return { x: mount.x + Math.cos(mount.angle) * mount.look.muzzle, y: mount.y + Math.sin(mount.angle) * mount.look.muzzle };
+}
+
 type Shell = {
   id: number;
-  shooter: Tank;
+  /** The tank that fired the shell; `undefined` for a mounted gun's (see `mountGun`). */
+  shooter: Tank | undefined;
   team: string | undefined;
   spec: ShellSpec;
   x: number;
@@ -2495,6 +2571,8 @@ const IMPACT_LIGHT = 45;
 const EXPLOSION_LIGHT = 260;
 const BARREL_KICK = 3;
 const BARREL_RETURN = 14;
+/** How far a mounted gatling's barrels turn with each shot, in radians. */
+const MOUNT_SPIN = 0.9;
 const MUZZLE_SHAKE = 1.2;
 const EXPLOSION_SHAKE = 6;
 const BLAST_SHAKE = 3.5;

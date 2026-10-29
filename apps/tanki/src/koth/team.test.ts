@@ -83,10 +83,11 @@ function boardFor(combat: ReturnType<typeof createCombat>, grid: ReturnType<type
     rivals: [blue],
     clock: () => 0,
     capture: () => createCaptureState(CAPTURE_RULES),
-    holdTime: CAPTURE_RULES.holdTime
+    holdTime: CAPTURE_RULES.holdTime,
+    kits: []
   });
 
-  board.see(enemy);
+  board.see(enemy, red);
   board.update();
   expect(Number.isFinite(member.x)).toBe(true);
   return board;

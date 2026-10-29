@@ -183,7 +183,8 @@ function drive(
     rivals,
     clock: () => time,
     capture: () => createCaptureState(CAPTURE_RULES),
-    holdTime: CAPTURE_RULES.holdTime
+    holdTime: CAPTURE_RULES.holdTime,
+    kits: []
   });
   const trigger = (shooter: Member, pull: Trigger) => {
     shooter.trigger = pull;
@@ -195,7 +196,7 @@ function drive(
 
   while (time < seconds && arrivedAt === Infinity) {
     if (rival) {
-      board.see(rival);
+      board.see(rival, member);
     }
 
     board.update();

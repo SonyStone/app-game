@@ -36,13 +36,20 @@ export default defineConfig(({ command }) => ({
       },
       workbox: {
         // Precache the editor, the drawing worker and color-management WASM.
-        // ABR parser runtimes are cached after their first use, preserving lazy loading.
+        // ABR and PSD runtimes are cached after their first use, preserving lazy loading.
         globPatterns: ['**/*.{js,css,html,svg,png,jpg,ico,woff2,wasm}'],
-        globIgnores: ['**/abr-js-runtime-*.js', '**/abr-wasm-runtime-*.js', '**/photoshop_abr_wasm_bg-*.wasm'],
+        globIgnores: [
+          '**/abr-js-runtime-*.js', '**/abr-wasm-runtime-*.js', '**/photoshop_abr_wasm_bg-*.wasm',
+          '**/photoshop_psd_wasm_bg-*.wasm', '**/photoshop_psd_viewer_bg-*.wasm'
+        ],
         runtimeCaching: [{
           urlPattern: /\/(?:abr-(?:js|wasm)-runtime-[^/]+\.js|photoshop_abr_wasm_bg-[^/]+\.wasm)$/,
           handler: 'CacheFirst',
           options: { cacheName: 'abr-codecs', expiration: { maxEntries: 12 } }
+        }, {
+          urlPattern: /\/photoshop_psd_(?:wasm|viewer)_bg-[^/]+\.wasm$/,
+          handler: 'CacheFirst',
+          options: { cacheName: 'psd-codecs', expiration: { maxEntries: 4 } }
         }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: 'index.html',

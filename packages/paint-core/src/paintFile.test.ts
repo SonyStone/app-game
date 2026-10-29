@@ -111,3 +111,12 @@ describe('portable paged drawings', () => {
     expect(loaded.layers[0]!.tiles.get('-2,1')).toBe(ref);
   });
 });
+
+it('keeps PSD creation and layer identity in portable binary drawings', async () => {
+  const document = createDocument();
+  const identity = document.psdIdentity();
+  const snapshot = snapshotDocument(document.layers, document.active.id, defaultCamera(), {}, true, identity);
+  const binary = await writePaintFile(snapshot, async (pixels) => pixels as Uint8Array);
+  const reopened = await readPaintFile(binary);
+  expect(reopened.psdIdentity).toEqual(identity);
+});

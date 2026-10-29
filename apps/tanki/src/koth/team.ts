@@ -3,9 +3,12 @@ import { SIGHT_OVER_RUBBLE, type Combat } from '../damage/combat';
 import type { Role } from './brain';
 import type { Trigger, Weapon } from './classes/weapon';
 import type { KothMap } from './map';
-import { findPerches } from './classes/perch';
+import { findPerches, type Perch } from './classes/perch';
+import { findPosts, findShortcuts, isOpened, type Post, type Shortcut } from './front';
+import type { Kit } from './kits';
+import { createRadio, type CalloutOptions, type RadioLine } from './radio';
 import { TACTICS } from './classes/tactics';
-import { cellAt, cellCenter, sightReach, traceClear, type NavGrid } from './navigation';
+import { cellAt, cellCenter, isOpenCell, searchNearest, sightReach, traceClear, type NavGrid } from './navigation';
 import { rivalOf, type CaptureState, type TeamId } from './rules';
 import type { TankClass, TankClassId } from './tanks';
 
@@ -67,10 +70,21 @@ export type Sighting = {
  * - Roles: an assault, a flanker, a support and another assault, filled from the living members
  *   and kept stable; a human always plays assault.
  * - Intent: push for the point, hold it, or regroup when too many members are down.
+ * - Breaching: while the team pushes, a Demoman, Heavy or Soldier breaks open a wall on the
+ *   team's side that shuts a short way between the hall and a side street (see `findShortcuts`),
+ *   so the team can switch lanes quickly, and says so.
+ * - Jobs while the team holds the point: one bot keeps to the point and the others take posts in
+ *   front of it, one on each way the enemy comes back by (see `findPosts`), so the enemy is met
+ *   before it reaches the point and the team is not all standing in the open on it. The Heavy
+ *   takes the hall, the busiest way; a Sniper keeps its perch.
  * - A coordinated push: when the enemy defends the point, the team first gathers at staging spots
  *   in different lanes and then goes in together, so the point is hit from several sides.
  * - Focus fire on the enemy most worth killing; each support covers an ally, and each ally under
  *   fire gets a helper.
+ * - The radio (see `./radio`): its bots say what they are about to do, and the board has them
+ *   call out the team's plan as it changes: gathering for a push, the countdown and the go, the
+ *   point taken, a regroup, a newly seen enemy sniper, a call for help, a repair kit that turned
+ *   out to be a trap.
  */
 export function createTeamBoard(
   team: TeamId,
@@ -84,10 +98,14 @@ export function createTeamBoard(
     capture: () => CaptureState;
     /** Seconds of holding the point that win the match. */
     holdTime: number;
+    /** The repair kits on the map, live. */
+    kits: readonly Readonly<Kit>[];
   }
 ) {
   const { combat, grid, map } = context;
   const sightings = new Map<Tank, Sighting>();
+  // Repair kits members drive to, with when they expect to get there.
+  const claims = new Map<Point, { member: Member; eta: number; until: number }>();
   const cellCount = grid.cols * grid.rows;
   /** Distance to walls, wrecks, crates and rubble for sight traces. */
   const sight = new Float32Array(cellCount);
@@ -100,11 +118,49 @@ export function createTeamBoard(
   const help = new Map<Member, { ally: Member; attacker: Tank }>();
   const covers = new Map<Member, Member>();
   const staging = new Map<Member, { arrived: boolean; at: number }>();
-  let intent: 'push' | 'hold' | 'regroup' = 'push';
+  let intent: 'push' | 'hold' | 'regroup' | 'fallBack' = 'push';
+  /** When the team began to fall back to mend, and the bot covering its retreat. */
+  let fallBackSince = 0;
+  let coverer: Member | undefined;
   let push: { phase: 'none' | 'gather' | 'go'; since: number; lane: 'north' | 'south' } = { phase: 'none', since: 0, lane: 'north' };
   let focus: Tank | undefined;
+  const radio = createRadio(context.clock);
+  /** When the gathered team goes in, once everyone is at their staging spot. */
+  let launchAt: number | undefined;
+  /** Members who called for help and still need it, so each call is made once. */
+  const calling = new Set<Member>();
+  let focusCalledAt = -Infinity;
+  /** Members that were alive when the push went in, and since when each latecomer waits for company. */
+  const pushers = new Set<Member>();
+  const lateSince = new Map<Member, number>();
+  /** Where members were destroyed lately, and until when such a spot counts as deadly. */
+  const losses: { x: number; y: number; until: number }[] = [];
   let perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
-  const perchOf = new Map<Member, Point>();
+  let posts = findPosts(grid, map, team);
+  let postsRevision = grid.revision;
+  let postsAt = 0;
+  /** Each member's job while the team holds the point: the point itself or a post in front of it. */
+  const jobs = new Map<Member, Post | 'point'>();
+  /** Open cells well inside the point, and the one the bot keeping the point stands on. */
+  const pointCells = Array.from({ length: cellCount }, (_, cell) => cell).filter(
+    (cell) => isOpenCell(grid, cell) && distanceTo(cellCenter(grid, cell), map.point) < map.point.radius - KEEPER_MARGIN
+  );
+  let keeperCell: number | undefined;
+  let shortcuts = findShortcuts(grid, map, team, thinWall);
+  /** The bot opening a shortcut, and since when; when each shortcut was last tried and given up. */
+  let breach: { member: Member; shortcut: Shortcut; since: number } | undefined;
+  const triedAt = new Map<Shortcut, number>();
+  /** Shortcuts a bot broke through, open at least as wide as a hull though the grid may not count them open yet. */
+  const opened = new Set<Shortcut>();
+  const perchOf = new Map<Member, Perch>();
+  /** Each bot Sniper's lookout while its perch is of no use, and when it last saw an enemy from there (see `chooseLookouts`). */
+  const lookoutOf = new Map<Member, { perch: Perch; coveredAt: number }>();
+  /** Since when each bot Sniper's perch has seen none of the enemies the team sees. */
+  const blindSince = new Map<Member, number>();
+  /** Each member's staging spot out of the known enemies' sight, found anew every update. */
+  const safeStaging = new Map<Member, Point>();
+  /** Snipers fallen back to their base from an unsafe perch, and when their perch was last unsafe. */
+  const fallenBack = new Map<Member, number>();
   // Teams update half an interval apart, so their work falls on different steps.
   let nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
 
@@ -140,9 +196,74 @@ export function createTeamBoard(
       return alive(tank) ? sightings.get(tank) : undefined;
     },
 
-    /** Records that a member sees `tank` now. */
-    see(tank: Tank) {
+    /** Lines the team's bots are saying, and the markers they put on the map. */
+    get callouts() {
+      return radio.callouts;
+    },
+
+    /** Has `member` say `line` on the team's radio; see `Radio.say`. */
+    say(member: Member, line: RadioLine, options?: CalloutOptions) {
+      return radio.say(member, line, options);
+    },
+
+    /**
+     * Records that a member was destroyed at `position` now. Destroyed at a repair kit, it warns
+     * the team off that kit (see `isDeadly`), and a bot of the team says so.
+     */
+    noteLoss(position: Point) {
+      losses.push({ x: position.x, y: position.y, until: context.clock() + DEADLY_TIME });
+      const kit = context.kits.find((candidate) => distanceTo(candidate, position) < DEADLY_RADIUS);
+      const speaker = kit && nearestBot(kit);
+
+      if (kit && speaker) {
+        radio.say(speaker, 'kitTrap', { priority: 2, marker: { kind: 'danger', x: kit.x, y: kit.y } });
+      }
+    },
+
+    /**
+     * Whether a member was destroyed within `DEADLY_RADIUS` px of `point` in the last
+     * `DEADLY_TIME` s: a repair kit there is a trap the enemy watches, so the team keeps away.
+     */
+    isDeadly(point: Point) {
+      const now = context.clock();
+      return losses.some((loss) => loss.until > now && distanceTo(loss, point) < DEADLY_RADIUS);
+    },
+
+    /**
+     * Claims `kit` for `member`, who expects to reach it at `eta` (clock seconds), so teammates
+     * leave it to the one there first (see `kitClaimed`). A claim lasts `CLAIM_TIME` s unless renewed.
+     */
+    claimKit(member: Member, kit: Point, eta: number) {
+      claims.set(kit, { member, eta, until: context.clock() + CLAIM_TIME });
+    },
+
+    /**
+     * Whether a teammate of `member` other than itself claimed `kit` and gets there before `eta`:
+     * two tanks never drive to the same kit, as only one of them can have it.
+     */
+    kitClaimed(member: Member, kit: Point, eta: number) {
+      const claim = claims.get(kit);
+      return claim !== undefined && claim.member !== member && claim.member.tank !== undefined && claim.until > context.clock() && claim.eta <= eta;
+    },
+
+    /**
+     * Records that `member` sees `tank` now. An enemy sniper the team did not know of is called
+     * out with a marker where it is.
+     */
+    see(tank: Tank, member: Member) {
+      const known = sightings.has(tank);
       record(tank);
+      const rival = context.rivals.find((other) => other.tank === tank);
+
+      if (!known && rival?.tankClass.id === 'sniper') {
+        const at = tank.hull.translation();
+        radio.say(member, 'sniper', { priority: 2, tankClass: 'sniper', marker: { kind: 'enemy', x: at.x, y: at.y, on: tank } });
+      }
+    },
+
+    /** How far `tank`, an enemy, can hit from, for whether it endangers a spot it sees. */
+    threatReach(tank: Tank) {
+      return threatReach(tank);
     },
 
     /** Exposure of a cell to known enemies' guns: 0 out of their sight, about 1 per enemy that sees it. */
@@ -152,15 +273,7 @@ export function createTeamBoard(
 
     /** Whether a tank in `cell` would be out of every known enemy's sight, its whole hull included. */
     isHidden(cell: number) {
-      const col = cell % grid.cols;
-
-      return (
-        danger[cell] === 0 &&
-        (col === 0 || danger[cell - 1] === 0) &&
-        (col === grid.cols - 1 || danger[cell + 1] === 0) &&
-        (cell < grid.cols || danger[cell - grid.cols] === 0) &&
-        (cell >= cellCount - grid.cols || danger[cell + grid.cols] === 0)
-      );
+      return isHidden(cell);
     },
 
     /** Extra path cost of a cell taken by a crate. */
@@ -200,11 +313,18 @@ export function createTeamBoard(
     },
 
     /**
-     * The member's spot on the point, on its own side and spread out from the others: an anchor
-     * near its middle, and a sniper on its perch, from where it watches the point.
+     * The member's spot on the point, on its own side and spread out from the others: the lead
+     * near its middle, and a sniper on its perch, from where it watches the point. The bot that
+     * keeps the point while the team holds it stands where the fewest known enemies see it,
+     * close to cover (see `chooseKeeperCell`).
      */
     pointSpot(member: Member) {
       const side = team === 'red' ? Math.PI : 0;
+
+      if (jobs.get(member) === 'point' && keeperCell !== undefined) {
+        return cellCenter(grid, keeperCell);
+      }
+
       const spread = member.index % 2 === 0 ? 1 : -1;
       let angle = side + spread * 0.45;
 
@@ -212,7 +332,7 @@ export function createTeamBoard(
         return perchSpot(member);
       }
 
-      if (member.role === 'anchor') {
+      if (member.role === 'lead') {
         return { x: map.point.x + Math.cos(side + spread * 0.3) * POINT_SPOT * 0.4, y: map.point.y + Math.sin(side + spread * 0.3) * POINT_SPOT * 0.4 };
       }
 
@@ -230,30 +350,96 @@ export function createTeamBoard(
      * the flanker in a side lane, a sniper on its perch.
      */
     stagingSpot(member: Member): Point {
-      const lanes = map.lanes[team];
-      const back = team === 'red' ? -1 : 1;
-
       if (member.role === 'sniper') {
         return perchSpot(member);
       }
 
-      if (member.role === 'flank') {
-        return lanes[push.lane];
+      // A spot the enemy sees is no place to gather: the nearest hidden one instead, found once an update.
+      let spot = safeStaging.get(member);
+
+      if (!spot) {
+        const planned = plannedStaging(member);
+        const cell = isHidden(cellAt(grid, planned)) ? undefined : searchNearest(grid, planned, STAGE_SEARCH, (candidate) => isHidden(candidate), { cost: (candidate) => danger[candidate] * 4 });
+        spot = cell === undefined ? planned : cellCenter(grid, cell);
+        safeStaging.set(member, spot);
       }
 
-      if (member.role === 'support') {
-        return { x: lanes.center.x + back * 70, y: lanes.center.y + (member.index % 2 === 0 ? 60 : -60) };
-      }
-
-      return { x: lanes.center.x, y: lanes.center.y + (member.index % 2 === 0 ? 75 : -75) };
+      return spot;
     },
 
     /**
-     * Where a sniper watches the point from: the team's best perch in least danger from the
-     * enemies it knows of, kept while it stays out of their sight.
+     * Where a sniper watches from, and where it looks while nothing is in sight: its perch, a spot
+     * forward of it while the fight is out of the perch's view, or its base while the perch is
+     * unsafe (see `perchSpot`).
      */
-    perchSpot(member: Member): Point {
+    perchSpot(member: Member): Perch {
       return perchSpot(member);
+    },
+
+    /** Whether `member` covers the team's retreat from a perch while the team falls back to mend. */
+    coversRetreat(member: Member) {
+      return intent === 'fallBack' && coverer === member;
+    },
+
+    /**
+     * The tank that leads the team's push, its armor first into the fire: a living Heavy bot with
+     * at least `LEAD_ARMOR` of its armor; `undefined` without one.
+     */
+    spearhead() {
+      return members.find((member) => member.tank && !member.human && member.role === 'lead' && combat.armorLeft(member.tank) >= LEAD_ARMOR);
+    },
+
+    /**
+     * Whether `member` should wait at its staging spot rather than go in: it came back after the
+     * push went in, is still more than `LATE_FAR` px from the point and has no ally within
+     * `LATE_BUDDY` px, so going in now would be alone. It waits `LATE_WAIT` s at most, enough for
+     * the next wave of respawns, and goes in as soon as an ally comes by.
+     */
+    mustWait(member: Member) {
+      const at = member.tank?.hull.translation();
+
+      if (push.phase !== 'go' || pushers.has(member) || member.human || !at || distanceTo(at, map.point) < LATE_FAR) {
+        return false;
+      }
+
+      const company = members.some((other) => other !== member && other.tank && distanceTo(other.tank.hull.translation(), at) < LATE_BUDDY);
+      const since = lateSince.get(member) ?? context.clock();
+      lateSince.set(member, since);
+
+      if (company) {
+        pushers.add(member);
+        return false;
+      }
+
+      return context.clock() - since < LATE_WAIT;
+    },
+
+    /** Records that `member` broke through the shortcut it was asked to open; it says so. */
+    finishBreach(member: Member) {
+      if (breach?.member === member) {
+        opened.add(breach.shortcut);
+        radio.say(member, 'wayOpen', { priority: 2, lane: breach.shortcut.lane, marker: { kind: 'gather', ...breach.shortcut.wall } });
+        breach = undefined;
+      }
+    },
+
+    /** The shortcut `member` was asked to break open, if any. */
+    breachOf(member: Member) {
+      return breach?.member === member ? breach.shortcut : undefined;
+    },
+
+    /** Whether `member` keeps the point while the team holds it. */
+    keepsPoint(member: Member) {
+      return jobs.get(member) === 'point';
+    },
+
+    /**
+     * The post `member` holds in front of the point while the team holds it, `undefined` when it
+     * has none: it keeps to the point, has no job yet, or the team does not hold the point.
+     */
+    postOf(member: Member) {
+      const job = jobs.get(member);
+      return job === 'point' ? undefined : job;
     },
 
     /** Where the team regroups. */
@@ -263,8 +449,7 @@ export function createTeamBoard(
 
     /** The member's own spot in the base. */
     baseSpot(member: Member) {
-      const spawn = map.bases[team].spawns[member.index % map.bases[team].spawns.length];
-      return { x: spawn.x, y: spawn.y };
+      return baseSpotOf(member);
     },
 
     /** Refreshes knowledge, danger, roles, intent, the push, focus and help a few times a second. */
@@ -277,11 +462,19 @@ export function createTeamBoard(
 
       nextUpdate = now + UPDATE_INTERVAL;
       forget(now);
+      safeStaging.clear();
+      // Old losses no longer warn of anything.
+      losses.splice(0, losses.length, ...losses.filter((loss) => loss.until > now));
       revealPoint();
       buildSightField();
       buildDanger();
       assignRoles();
       decideIntent(now);
+      chooseLookouts(now);
+      refreshPosts(now);
+      assignBreach(now);
+      assignJobs();
+      chooseKeeperCell();
       chooseFocus();
       assignCovers();
       assignHelp(now);
@@ -290,16 +483,38 @@ export function createTeamBoard(
     /** Forgets everything, for a new match. */
     reset() {
       sightings.clear();
+      claims.clear();
       help.clear();
       covers.clear();
       staging.clear();
       danger.fill(0);
       intent = 'push';
+      fallBackSince = 0;
+      coverer = undefined;
       push = { phase: 'none', since: 0, lane: 'north' };
       focus = undefined;
+      losses.length = 0;
+      radio.reset();
+      launchAt = undefined;
+      calling.clear();
+      focusCalledAt = -Infinity;
+      pushers.clear();
+      lateSince.clear();
       perchOf.clear();
+      lookoutOf.clear();
+      blindSince.clear();
+      fallenBack.clear();
       // The walls stand as built again, and the Sniper's perch distance may have changed since.
       perches = findPerches(grid, map, team, TACTICS.sniper.perch!);
+      posts = findPosts(grid, map, team);
+      postsRevision = grid.revision;
+      postsAt = 0;
+      jobs.clear();
+      keeperCell = undefined;
+      shortcuts = findShortcuts(grid, map, team, thinWall);
+      breach = undefined;
+      triedAt.clear();
+      opened.clear();
       nextUpdate = team === 'red' ? 0 : UPDATE_INTERVAL / 2;
     }
   };
@@ -308,18 +523,207 @@ export function createTeamBoard(
     return combat.armorOf(tank) !== undefined;
   }
 
-  function perchSpot(member: Member): Point {
-    const exposure = (spot: Point) => danger[cellAt(grid, spot)];
-    const current = perchOf.get(member);
+  /**
+   * Where `member` watches from: the best perch no teammate has, kept for good, as the best ones
+   * lie in the middle, by the hall, from where the Sniper sees the most. While the perch is too
+   * dangerous (see `threatened`), the Sniper does not fight for it or look for another but falls
+   * back to its base, saying so, and comes back once the perch has been safe for `PERCH_CLEAR` s.
+   * A bot Sniper whose team fights on beyond the point, out of its perch's view, watches from a
+   * lookout instead while it has a safe one (see `chooseLookouts`).
+   */
+  function perchSpot(member: Member): Perch {
+    let perch = perchOf.get(member);
 
-    if (current && exposure(current) < PERCH_DANGER) {
-      return current;
+    if (!perch) {
+      const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
+      perch = perches.find((candidate) => !taken.has(candidate)) ?? { ...map.lanes[team].center, watch: map.point, score: 0 };
+      perchOf.set(member, perch);
     }
 
-    const taken = new Set([...perchOf.entries()].filter(([other]) => other !== member && other.tank).map(([, spot]) => spot));
-    const best = perches.filter((spot) => !taken.has(spot)).sort((a, b) => exposure(a) - exposure(b))[0] ?? map.lanes[team].center;
-    perchOf.set(member, best);
+    const now = context.clock();
+
+    let lookout = lookoutOf.get(member)?.perch;
+
+    if (lookout && threatened(lookout)) {
+      lookoutOf.delete(member);
+      lookout = undefined;
+    }
+
+    if (threatened(perch)) {
+      if (!fallenBack.has(member) && member.tank && !lookout) {
+        radio.say(member, 'fallBack', { priority: 2, marker: { kind: 'base', ...baseSpotOf(member) } });
+      }
+
+      fallenBack.set(member, now);
+    } else if (now - (fallenBack.get(member) ?? -Infinity) > PERCH_CLEAR) {
+      fallenBack.delete(member);
+    }
+
+    return lookout ?? (fallenBack.has(member) ? { ...baseSpotOf(member), watch: perch, score: 0 } : perch);
+  }
+
+  /**
+   * Sends each bot Sniper up to a lookout when its team holds the point and fights on beyond it,
+   * out of the view of the perch, which faces the point and sees little past it: once the perch
+   * has seen none of the enemies seen in the last `LOOKOUT_FRESH` s for `LOOKOUT_WAIT` s. Without
+   * the point the Sniper waits on its perch for the enemy to come for it. A lookout is the open
+   * spot hidden from every known enemy (see `isHidden`), within `LOOKOUT_RANGE` px of the perch,
+   * that sees the most of those enemies within `LOOKOUT_SIGHT` px, at least `LOOKOUT_GAP` px from
+   * each, nearest to the Sniper: `LOOKOUT_BEHIND` px behind the foremost teammate, at most
+   * `LOOKOUT_CROSS` px past the point and no farther back than the perch. The Sniper keeps its
+   * lookout while it sees an enemy from there and `LOOKOUT_KEEP` s longer, and goes back to its
+   * perch once the perch sees an enemy, the point is lost or the team regroups or falls back.
+   */
+  function chooseLookouts(now: number) {
+    const fresh = [...sightings.values()].filter((sighting) => now - sighting.seenAt < LOOKOUT_FRESH);
+    const reaches = new Map<Sighting, Float32Array>();
+    const seen = (spot: Point) =>
+      fresh.filter((sighting) => {
+        const reach = reaches.get(sighting) ?? sightReach(grid, sight, sighting.position, LOOKOUT_SIGHT, SIGHT_RAYS, rubbleSight);
+        reaches.set(sighting, reach);
+        return inReach(reach, sighting.position, spot);
+      });
+
+    for (const member of members) {
+      const home = perchOf.get(member);
+      const lookout = lookoutOf.get(member);
+
+      if (!member.tank || member.human || member.role !== 'sniper' || !home || intent === 'regroup' || intent === 'fallBack') {
+        lookoutOf.delete(member);
+        blindSince.delete(member);
+        continue;
+      }
+
+      if (context.capture().owner !== team || seen(home).length > 0) {
+        lookoutOf.delete(member);
+        blindSince.delete(member);
+        continue;
+      }
+
+      if (lookout && seen(lookout.perch).length > 0) {
+        lookout.coveredAt = now;
+        continue;
+      }
+
+      const kept = lookout !== undefined && now - lookout.coveredAt < LOOKOUT_KEEP;
+
+      if (fresh.length === 0) {
+        blindSince.delete(member);
+
+        if (!kept) {
+          lookoutOf.delete(member);
+        }
+
+        continue;
+      }
+
+      const blind = blindSince.get(member) ?? now;
+      blindSince.set(member, blind);
+
+      if (kept || now - blind < LOOKOUT_WAIT) {
+        continue;
+      }
+
+      const allies = members.filter((other) => other !== member && other.tank);
+      const perch = lookoutSpot(member.tank.hull.translation(), home, allies, seen);
+
+      if (perch) {
+        lookoutOf.set(member, { perch, coveredAt: now });
+      } else {
+        lookoutOf.delete(member);
+      }
+    }
+  }
+
+  /**
+   * The lookout of a Sniper at `from` whose perch is `home`, as `chooseLookouts` describes,
+   * watching the middle of the enemies it sees there.
+   */
+  function lookoutSpot(from: Point, home: Point, allies: readonly Member[], seen: (spot: Point) => Sighting[]): Perch | undefined {
+    const side = team === 'red' ? -1 : 1;
+    const ahead = (spot: Point) => (spot.x - map.point.x) * side;
+    // How far toward its own side of the point a spot must lie, the point's middle at 0: behind the foremost teammate, or the perch without one.
+    const front = Math.max(Math.min(...allies.map((ally) => ahead(ally.tank!.hull.translation()))) + LOOKOUT_BEHIND, -LOOKOUT_CROSS);
+    const back = Math.min(ahead(home), front);
+    const minCol = Math.max(Math.floor((home.x - LOOKOUT_RANGE - grid.originX) / grid.cell), 0);
+    const maxCol = Math.min(Math.ceil((home.x + LOOKOUT_RANGE - grid.originX) / grid.cell), grid.cols - 1);
+    const minRow = Math.max(Math.floor((home.y - LOOKOUT_RANGE - grid.originY) / grid.cell), 0);
+    const maxRow = Math.min(Math.ceil((home.y + LOOKOUT_RANGE - grid.originY) / grid.cell), grid.rows - 1);
+    let best: Perch | undefined;
+
+    for (let row = minRow; row <= maxRow; row++) {
+      for (let col = minCol; col <= maxCol; col++) {
+        const cell = row * grid.cols + col;
+        const at = cellCenter(grid, cell);
+
+        if (!isOpenCell(grid, cell) || !isHidden(cell) || ahead(at) < back || distanceTo(at, home) > LOOKOUT_RANGE) {
+          continue;
+        }
+
+        const watched = seen(at);
+
+        if (watched.length === 0 || watched.some((sighting) => distanceTo(at, sighting.position) < LOOKOUT_GAP)) {
+          continue;
+        }
+
+        const score = watched.length * LOOKOUT_SEEN - distanceTo(at, from) / LOOKOUT_TRAVEL;
+
+        if (!best || score > best.score) {
+          best = { x: at.x, y: at.y, watch: centroidOf(watched.map((sighting) => sighting.position)), score };
+        }
+      }
+    }
+
     return best;
+  }
+
+  /**
+   * Where `member` waits before a coordinated push as the lanes have it: assaults and supports in
+   * the middle lane, the flanker in a side lane.
+   */
+  function plannedStaging(member: Member): Point {
+    const lanes = map.lanes[team];
+    const back = team === 'red' ? -1 : 1;
+
+    if (member.role === 'flank') {
+      return lanes[push.lane];
+    }
+
+    if (member.role === 'support') {
+      return { x: lanes.center.x + back * 70, y: lanes.center.y + (member.index % 2 === 0 ? 60 : -60) };
+    }
+
+    return { x: lanes.center.x, y: lanes.center.y + (member.index % 2 === 0 ? 75 : -75) };
+  }
+
+  /** Whether a tank in `cell` would be out of every known enemy's sight, its whole hull included. */
+  function isHidden(cell: number) {
+    const col = cell % grid.cols;
+
+    return (
+      danger[cell] === 0 &&
+      (col === 0 || danger[cell - 1] === 0) &&
+      (col === grid.cols - 1 || danger[cell + 1] === 0) &&
+      (cell < grid.cols || danger[cell - grid.cols] === 0) &&
+      (cell >= cellCount - grid.cols || danger[cell + grid.cols] === 0)
+    );
+  }
+
+  /** The member's own spot in the base. */
+  function baseSpotOf(member: Member) {
+    const spawn = map.bases[team].spawns[member.index % map.bases[team].spawns.length];
+    return { x: spawn.x, y: spawn.y };
+  }
+
+  /** Whether `perch` is too dangerous to hold: a known enemy close to it, or a known enemy Sniper that sees it and has its gun on it. */
+  function threatened(perch: Point) {
+    return [...sightings.values()].some((sighting) => {
+      const range = distanceTo(sighting.position, perch);
+      const sniper = context.rivals.find((rival) => rival.tank === sighting.tank)?.tankClass.id === 'sniper';
+      const bearing = Math.atan2(perch.y - sighting.position.y, perch.x - sighting.position.x);
+      const aimed = Math.abs(Math.atan2(Math.sin(sighting.turret - bearing), Math.cos(sighting.turret - bearing))) < SNIPER_AIMED;
+      return range < PERCH_THREAT || (sniper && aimed && range < SNIPER_SIGHT && traceClear(grid, sight, sighting.position, perch, rubbleSight));
+    });
   }
 
   function record(tank: Tank) {
@@ -429,18 +833,19 @@ export function createTeamBoard(
 
   /**
    * Adds every known enemy's view to the danger map: the outline of what it can see, from rays
-   * cast through walls and crates, and every open cell within range and inside that outline,
+   * cast through walls and crates, and every open cell within its reach (see `threatReach`) and inside that outline,
    * weighted more in front of its gun.
    */
   function buildDanger() {
     danger.fill(0);
 
     for (const threat of sightings.values()) {
-      const reach = sightReach(grid, sight, threat.position, DANGER_RANGE, SIGHT_RAYS, rubbleSight);
-      const minCol = Math.max(Math.floor((threat.position.x - DANGER_RANGE - grid.originX) / grid.cell), 0);
-      const maxCol = Math.min(Math.ceil((threat.position.x + DANGER_RANGE - grid.originX) / grid.cell), grid.cols - 1);
-      const minRow = Math.max(Math.floor((threat.position.y - DANGER_RANGE - grid.originY) / grid.cell), 0);
-      const maxRow = Math.min(Math.ceil((threat.position.y + DANGER_RANGE - grid.originY) / grid.cell), grid.rows - 1);
+      const range = threatReach(threat.tank);
+      const reach = sightReach(grid, sight, threat.position, range, SIGHT_RAYS, rubbleSight);
+      const minCol = Math.max(Math.floor((threat.position.x - range - grid.originX) / grid.cell), 0);
+      const maxCol = Math.min(Math.ceil((threat.position.x + range - grid.originX) / grid.cell), grid.cols - 1);
+      const minRow = Math.max(Math.floor((threat.position.y - range - grid.originY) / grid.cell), 0);
+      const maxRow = Math.min(Math.ceil((threat.position.y + range - grid.originY) / grid.cell), grid.rows - 1);
 
       for (let row = minRow; row <= maxRow; row++) {
         for (let col = minCol; col <= maxCol; col++) {
@@ -454,7 +859,7 @@ export function createTeamBoard(
           const dy = grid.originY + row * grid.cell - threat.position.y;
           const distance = Math.hypot(dx, dy);
 
-          if (distance > DANGER_RANGE) {
+          if (distance > range) {
             continue;
           }
 
@@ -472,6 +877,11 @@ export function createTeamBoard(
     }
   }
 
+  /** How far `tank`, an enemy, can hit from: `SNIPER_REACH` px for a Sniper, `DANGER_RANGE` for the rest. */
+  function threatReach(tank: Tank) {
+    return context.rivals.find((rival) => rival.tank === tank)?.tankClass.id === 'sniper' ? SNIPER_REACH : DANGER_RANGE;
+  }
+
   /** Gives every member the role of its class: see `ROLE_OF_CLASS`. */
   function assignRoles() {
     for (const member of members) {
@@ -479,18 +889,49 @@ export function createTeamBoard(
     }
   }
 
+  /**
+   * Decides what the team wants and runs the coordinated push: gathering, a short countdown once
+   * everyone is at their staging spot, then going in together. The team's leader calls each
+   * change out on the radio.
+   */
   function decideIntent(now: number) {
     const capture = context.capture();
     const alive = members.filter((member) => member.tank).length;
     const rivalsAlive = context.rivals.filter((member) => member.tank).length;
     const enemyClock = capture.held[rivalOf(team)] / context.holdTime;
+    const before = intent;
+
+    const fit = members.filter((member) => member.tank && !battered(member));
+    const hurt = alive - fit.length;
 
     if (capture.owner === team) {
       intent = 'hold';
+    } else if (
+      enemyClock < FALL_BACK_CLOCK &&
+      (intent === 'fallBack' ? hurt > alive * FALL_BACK_DONE && now - fallBackSince < FALL_BACK_TIME : alive >= 2 && hurt >= Math.max(2, Math.ceil(alive * FALL_BACK_SHARE)))
+    ) {
+      if (intent !== 'fallBack') {
+        fallBackSince = now;
+        // The fittest bot that is no Sniper stays to cover the retreat; a Sniper keeps its perch anyway.
+        coverer = fit
+          .filter((member) => !member.human && member.role !== 'sniper')
+          .sort((a, b) => combat.armorLeft(b.tank!) - combat.armorLeft(a.tank!))[0];
+      }
+
+      intent = 'fallBack';
     } else if (alive <= rivalsAlive - 2 && enemyClock < 0.8) {
       intent = 'regroup';
     } else if (intent !== 'regroup' || alive >= rivalsAlive - 1) {
       intent = 'push';
+    }
+
+    // The bot covering a retreat that ended, or that was destroyed meanwhile, covers no more.
+    if (intent !== 'fallBack' || !coverer?.tank) {
+      coverer = undefined;
+    }
+
+    if (intent !== before) {
+      announceIntent();
     }
 
     const defended =
@@ -499,28 +940,242 @@ export function createTeamBoard(
     if (intent !== 'push' || !defended) {
       push = { ...push, phase: 'none' };
       staging.clear();
+      launchAt = undefined;
       return;
     }
 
     if (push.phase === 'none') {
       push = { phase: 'gather', since: now, lane: quieterLane() };
       staging.clear();
+      launchAt = undefined;
+      say(leader(), 'gather', { priority: 2, lane: 'center', marker: { kind: 'gather', ...map.lanes[team].center } });
     }
 
     if (push.phase === 'gather') {
       const waiting = [...staging.entries()].filter(([member, entry]) => member.tank && now - entry.at < 0.5);
-      const arrived = waiting.filter(([, entry]) => entry.arrived).length;
-      const everyone = waiting.length > 0 && arrived === waiting.length && (waiting.length >= 2 || now - push.since > 3);
+      // A badly hit tank at the staging spot is no help in a push: it goes to mend, and the team waits for it.
+      const arrived = waiting.filter(([member, entry]) => entry.arrived && !battered(member)).length;
+      // The player counts in when at the rally point, fit to fight.
+      const rally = map.lanes[team].center;
+      const playerReady = members.some((member) => member.human && member.tank && !battered(member) && distanceTo(member.tank.hull.translation(), rally) < PLAYER_RALLY);
+      const ready = arrived + (playerReady ? 1 : 0);
+      // A push needs two fit tanks and all but one of those alive; the team waits for those mending or back from
+      // respawn soon rather than going in short, unless the enemy is close to winning or the wait drags on.
+      const reinforced = members.some((member) => !member.tank && member.respawnAt !== undefined && member.respawnAt - now < REINFORCEMENTS);
+      const mending = members.some((member) => battered(member));
+      const tooFew = ready < Math.max(2, alive - 1) && (reinforced || mending) && enemyClock < FEW_CLOCK && now - push.since < GATHER_PATIENCE;
+      const everyone = !tooFew && waiting.length > 0 && arrived === waiting.length && (ready >= 2 || now - push.since > 3);
 
       // No waiting while the enemy is about to take a point nobody holds.
       const hurry = capture.capturer === rivalOf(team) && capture.owner !== rivalOf(team) && capture.progress > HURRY_PROGRESS;
 
-      if (everyone || hurry || now - push.since > GATHER_TIMEOUT) {
+      if (everyone) {
+        launchAt ??= now + COUNTDOWN;
+      }
+
+      if (launchAt !== undefined && now < launchAt && !hurry) {
+        say(leader(), 'countdown', { priority: 2, seconds: Math.ceil(launchAt - now) });
+      }
+
+      if ((launchAt !== undefined && now >= launchAt) || hurry || (now - push.since > GATHER_TIMEOUT && !tooFew)) {
         push = { ...push, phase: 'go', since: now };
+        launchAt = undefined;
+        pushers.clear();
+        lateSince.clear();
+        members.filter((member) => member.tank).forEach((member) => pushers.add(member));
+        const caller = leader();
+        say(caller, caller?.role === 'lead' ? 'followMe' : 'go', { priority: 2, marker: { kind: 'attack', x: map.point.x, y: map.point.y } });
       }
     } else if (push.phase === 'go' && now - push.since > PUSH_WINDOW) {
       push = { ...push, phase: 'none' };
     }
+  }
+
+  /** Calls out a new intent: the point taken, or a regroup. */
+  function announceIntent() {
+    if (intent === 'hold') {
+      const holder = members
+        .filter((member) => member.tank && !member.human)
+        .sort((a, b) => distanceTo(a.tank!.hull.translation(), map.point) - distanceTo(b.tank!.hull.translation(), map.point))[0];
+      say(holder, 'captured', { priority: 2 });
+    } else if (intent === 'regroup') {
+      say(leader(), 'regroup', { priority: 2, marker: { kind: 'gather', ...map.lanes[team].center } });
+    } else if (intent === 'fallBack') {
+      say(leader(), 'fallBackTeam', { priority: 2, marker: { kind: 'gather', ...map.lanes[team].center } });
+
+      if (coverer) {
+        const perch = perchSpot(coverer);
+        say(coverer, 'coverRetreat', { priority: 2, marker: { kind: 'hold', x: perch.x, y: perch.y } });
+      }
+    }
+  }
+
+  /** Whether a member's tank is badly hit: its core open or its armor below its class's retreat share. */
+  function battered(member: Member) {
+    return member.tank !== undefined && (combat.isCoreOpen(member.tank) || combat.armorLeft(member.tank) < TACTICS[member.tankClass.id].retreat);
+  }
+
+  /**
+   * The bot that calls the team's plan: the Heavy, which leads a push, else a Soldier, a Demoman,
+   * a Scout and last a Sniper, the nearest to the rally point among equals.
+   */
+  function leader() {
+    const rally = map.lanes[team].center;
+    return members
+      .filter((member) => member.tank && !member.human)
+      .sort((a, b) => LEAD_ORDER.indexOf(a.tankClass.id) - LEAD_ORDER.indexOf(b.tankClass.id) || distanceTo(a.tank!.hull.translation(), rally) - distanceTo(b.tank!.hull.translation(), rally))[0];
+  }
+
+  /** The living bot of the team nearest to `point`. */
+  function nearestBot(point: Point) {
+    return members
+      .filter((member) => member.tank && !member.human)
+      .sort((a, b) => distanceTo(a.tank!.hull.translation(), point) - distanceTo(b.tank!.hull.translation(), point))[0];
+  }
+
+  /** Has `member`, if any, say `line`. */
+  function say(member: Member | undefined, line: RadioLine, options?: CalloutOptions) {
+    if (member) {
+      radio.say(member, line, options);
+    }
+  }
+
+  /** Finds the posts again a while after walls fell or rose, so they stand beside the walls that still stand. */
+  function refreshPosts(now: number) {
+    if (grid.revision !== postsRevision && now - postsAt > POST_REFRESH) {
+      posts = findPosts(grid, map, team);
+      postsRevision = grid.revision;
+      postsAt = now;
+      jobs.clear();
+    }
+  }
+
+  /**
+   * Whether the wall closing `cell` is one a bot should break through for a shortcut: a thin
+   * wall of wood or brick, a fence or an alley wall, not a building.
+   */
+  function thinWall(cell: number) {
+    const blocker = combat.breakableNear(cellCenter(grid, cell), grid.clearance + 2);
+    return blocker !== undefined && (blocker.material === 'wood' || blocker.material === 'brick') && blocker.thickness <= SHORTCUT_THICKNESS;
+  }
+
+  /**
+   * Has one bot break open a wall still standing, but not while a push goes in: while the team
+   * gathers for a push, a shortcut (see `findShortcuts`), else, while it gathers or holds, the wall across the view of a
+   * Sniper at its perch (see `Perch.opening`), which the Sniper asks for. The bot is the first of
+   * a Demoman, a Soldier and a Heavy within `OPENER_RANGE` px of the wall with most of its armor.
+   * It says when it is through (see `finishBreach`). A breach that takes longer than `BREACH_TIME`
+   * s, or whose bot is destroyed, is given up, and that wall waits `BREACH_RETRY` s before it is
+   * tried again.
+   */
+  function assignBreach(now: number) {
+    if (breach) {
+      const view = breach.shortcut.lane === 'center';
+
+      if (!breach.member.tank || now - breach.since > BREACH_TIME || (view ? intent === 'regroup' || intent === 'fallBack' : intent !== 'push')) {
+        triedAt.set(breach.shortcut, now);
+        breach = undefined;
+      }
+
+      return;
+    }
+
+    const shut = (candidate: Shortcut) => !opened.has(candidate) && !isOpened(grid, candidate) && now - (triedAt.get(candidate) ?? -Infinity) > BREACH_RETRY;
+    const sniper = members.find((member) => member.tank && member.role === 'sniper' && !member.human && perchOf.get(member)?.opening);
+    const perch = sniper && perchOf.get(sniper)!;
+    const view = perch && intent !== 'regroup' && intent !== 'fallBack' && sniper.tank && distanceTo(sniper.tank.hull.translation(), perch) < VIEW_ASK ? perch.opening : undefined;
+    // Nobody leaves a push under way to break a wall.
+    const shortcut = (intent === 'push' && push.phase !== 'go' ? shortcuts.find(shut) : undefined) ?? (view && push.phase !== 'go' && shut(view) ? view : undefined);
+
+    if (!shortcut) {
+      return;
+    }
+
+    const opener = members
+      .filter(
+        (member) =>
+          member.tank &&
+          !member.human &&
+          OPENERS.includes(member.tankClass.id) &&
+          combat.armorLeft(member.tank) > OPENER_ARMOR &&
+          distanceTo(member.tank.hull.translation(), shortcut.wall) < OPENER_RANGE
+      )
+      .sort((a, b) => OPENERS.indexOf(a.tankClass.id) - OPENERS.indexOf(b.tankClass.id) || distanceTo(a.tank!.hull.translation(), shortcut.wall) - distanceTo(b.tank!.hull.translation(), shortcut.wall))[0];
+
+    if (opener) {
+      breach = { member: opener, shortcut, since: now };
+
+      if (shortcut === view && sniper) {
+        radio.say(sniper, 'clearView', { priority: 2, ally: opener, marker: { kind: 'breach', ...shortcut.wall } });
+      }
+    }
+  }
+
+  /**
+   * The spot on the point its keeper stands on: in the least danger from known enemies and as
+   * close to cover as can be, kept until another is clearly better, so the keeper does not dither.
+   */
+  function chooseKeeperCell() {
+    if (![...jobs.values()].includes('point')) {
+      keeperCell = undefined;
+      return;
+    }
+
+    const score = (cell: number) => danger[cell] * KEEPER_DANGER + Math.max(sight[cell] - grid.clearance, 0) / KEEPER_HUG;
+    const best = pointCells.reduce<number | undefined>((chosen, cell) => (chosen === undefined || score(cell) < score(chosen) ? cell : chosen), undefined);
+
+    if (keeperCell === undefined || (best !== undefined && score(best) + KEEPER_SWITCH < score(keeperCell))) {
+      keeperCell = best;
+    }
+  }
+
+  /**
+   * While the team holds the point, gives its bots their jobs: one keeps to the point, by
+   * `POINT_KEEPERS` order of class, and the rest take the posts, the hall's first, each the one
+   * it is best at (`POST_ORDER`) and nearest to; a Sniper keeps its perch and bots beyond the posts
+   * stay by the point. A bot keeps its job for as long as it lives and the team holds the point.
+   */
+  function assignJobs() {
+    if (intent !== 'hold') {
+      jobs.clear();
+      return;
+    }
+
+    const bots = members.filter((member) => member.tank && !member.human && member.role !== 'sniper');
+
+    for (const member of [...jobs.keys()]) {
+      if (!bots.includes(member)) {
+        jobs.delete(member);
+      }
+    }
+
+    const free = () => bots.filter((member) => !jobs.has(member));
+    const taken = new Set(jobs.values());
+
+    if (!taken.has('point')) {
+      const keeper = free().sort((a, b) => POINT_KEEPERS.indexOf(a.tankClass.id) - POINT_KEEPERS.indexOf(b.tankClass.id) || nearPoint(a) - nearPoint(b))[0];
+
+      if (keeper) {
+        jobs.set(keeper, 'point');
+      }
+    }
+
+    for (const post of posts.filter((candidate) => !taken.has(candidate))) {
+      const order = POST_ORDER[post.lane];
+      const guard = free().sort(
+        (a, b) =>
+          order.indexOf(a.tankClass.id) - order.indexOf(b.tankClass.id) ||
+          distanceTo(a.tank!.hull.translation(), post.at) - distanceTo(b.tank!.hull.translation(), post.at)
+      )[0];
+
+      if (guard) {
+        jobs.set(guard, post);
+      }
+    }
+  }
+
+  function nearPoint(member: Member) {
+    return distanceTo(member.tank!.hull.translation(), map.point);
   }
 
   /** The side lane with less danger at its staging spot, for the flanker. */
@@ -556,7 +1211,20 @@ export function createTeamBoard(
       }
     }
 
+    const previous = focus;
     focus = best?.tank;
+    const now = context.clock();
+
+    // A new focus is called by the bot nearest to it, now and then, so the team hears whom to shoot.
+    if (focus && focus !== previous && now - focusCalledAt > FOCUS_CALL) {
+      const at = sightings.get(focus)!.position;
+      const speaker = nearestBot(at);
+      const rival = context.rivals.find((other) => other.tank === focus);
+
+      if (speaker && rival && radio.say(speaker, 'focus', { priority: 2, tankClass: rival.tankClass.id, marker: { kind: 'enemy', x: at.x, y: at.y, on: focus } })) {
+        focusCalledAt = now;
+      }
+    }
   }
 
   /** Each support covers the human, if the team has one alive, or the assault nearest the point. */
@@ -584,6 +1252,12 @@ export function createTeamBoard(
       .filter((member) => member.tank && member.attacker && alive.has(member.attacker) && now - member.shotAt < HELP_WINDOW)
       .sort((a, b) => b.shotAt - a.shotAt);
 
+    for (const member of [...calling]) {
+      if (!victims.includes(member)) {
+        calling.delete(member);
+      }
+    }
+
     for (const victim of victims) {
       const at = victim.tank!.hull.translation();
       const candidates = members.filter(
@@ -602,6 +1276,12 @@ export function createTeamBoard(
       if (helper) {
         help.set(helper, { ally: victim, attacker: victim.attacker! });
       }
+
+      // A bot whose core lies open calls for help once while it is under fire and a helper is free to come.
+      if (helper && !calling.has(victim) && combat.isCoreOpen(victim.tank!)) {
+        calling.add(victim);
+        radio.say(victim, 'needHelp', { priority: 2, marker: { kind: 'help', x: at.x, y: at.y, on: victim.tank } });
+      }
     }
   }
 }
@@ -611,19 +1291,32 @@ export type TeamBoard = ReturnType<typeof createTeamBoard>;
 
 /**
  * The job of each class, after its part in a Team Fortress 2 team: the Scout flanks, the Soldier
- * assaults the point, the Heavy anchors on it, the Demoman supports the others with grenades
- * and the Sniper watches the point from afar.
+ * assaults the point, the Heavy leads the push and soaks up fire, the Demoman supports the
+ * others with grenades and the Sniper shoots from afar.
  */
-export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'anchor', demoman: 'support', sniper: 'sniper' };
+export const ROLE_OF_CLASS: Record<TankClassId, Role> = { scout: 'flank', soldier: 'assault', heavy: 'lead', demoman: 'support', sniper: 'sniper' };
 const UPDATE_INTERVAL = 0.25;
+/** Seconds a claim on a repair kit lasts unless its member renews it. */
+const CLAIM_TIME = 0.6;
 /** Seconds the team remembers an enemy it no longer sees. */
 const MEMORY = 4;
 /** Directions in which an enemy's view is traced for the danger map. */
 const SIGHT_RAYS = 360;
 /** Enemies beyond this many pixels are no danger: too far to see a tank to aim at. */
-export const DANGER_RANGE = 520;
+const DANGER_RANGE = 520;
+/** A Sniper's scope and rail reach this far, without charging, so it endangers all it sees within it. */
+const SNIPER_REACH = 900;
 /** The point counts as defended when an enemy was seen this close to it. */
 const DEFENDED_RADIUS = 350;
+/** How far from its planned staging spot, in path pixels, a member looks for one the enemy does not see. */
+const STAGE_SEARCH = 600;
+/** A lone tank waits to push while a teammate comes back from respawn within this many seconds. */
+const REINFORCEMENTS = 10;
+/** The enemy's share of the hold time up to which a team short of fit tanks waits for the rest before pushing, and the longest it waits, in seconds. */
+const FEW_CLOCK = 0.8;
+const GATHER_PATIENCE = 20;
+/** The player within this many pixels of the rally point counts as gathered for a push. */
+const PLAYER_RALLY = 300;
 /** Seconds the team waits for stragglers before it pushes anyway, and how long a push lasts. */
 const GATHER_TIMEOUT = 6;
 /** Capture progress of the enemy on a free point at which the team stops gathering and goes. */
@@ -634,11 +1327,114 @@ const HELP_WINDOW = 1.5;
 const HELP_RANGE = 700;
 /** Distance of the members' spots from the point's center. */
 const POINT_SPOT = 45;
-/** Danger at its perch from which a sniper moves to another. */
-const PERCH_DANGER = 1.5;
+/**
+ * A member back after the push went in waits for company if it is farther than `LATE_FAR` px from
+ * the point, until an ally comes within `LATE_BUDDY` px or `LATE_WAIT` s have passed.
+ */
+const LATE_FAR = 700;
+const LATE_BUDDY = 350;
+const LATE_WAIT = 6;
+/** Share of its armor a Heavy needs to lead a push. */
+const LEAD_ARMOR = 0.5;
+/** Classes in the order they keep to the point while the team holds it. */
+const POINT_KEEPERS: readonly TankClassId[] = ['demoman', 'soldier', 'heavy', 'scout'];
+/**
+ * Classes in the order they take each post: the Heavy holds the hall, the busiest way in; a Scout
+ * takes a post last, as it would rather hunt.
+ */
+const POST_ORDER: Record<Post['lane'], readonly TankClassId[]> = {
+  center: ['heavy', 'soldier', 'demoman', 'scout'],
+  north: ['soldier', 'demoman', 'scout', 'heavy'],
+  south: ['soldier', 'demoman', 'scout', 'heavy']
+};
+/** Classes in the order they are asked to open a shortcut, the Heavy last as it leads the push; the armor share they need and how near they must be. */
+const OPENERS: readonly TankClassId[] = ['demoman', 'soldier', 'heavy'];
+const OPENER_ARMOR = 0.6;
+const OPENER_RANGE = 700;
+/** A Sniper asks for the wall across its view once it is this close to its perch, in pixels. */
+const VIEW_ASK = 200;
+/** Thickest wall a shortcut goes through, in pixels; seconds a breach may take, and before a given-up one is tried again. */
+const SHORTCUT_THICKNESS = 40;
+const BREACH_TIME = 20;
+const BREACH_RETRY = 30;
+/**
+ * The point's keeper stands at least `KEEPER_MARGIN` px inside its edge; a spot scores
+ * `KEEPER_DANGER` per known enemy that sees it and one per `KEEPER_HUG` px from cover, and the
+ * keeper moves only for a spot `KEEPER_SWITCH` better.
+ */
+const KEEPER_MARGIN = 20;
+const KEEPER_DANGER = 10;
+const KEEPER_HUG = 30;
+const KEEPER_SWITCH = 2;
+/** Seconds after walls changed before the team looks for its posts again. */
+const POST_REFRESH = 3;
+/**
+ * The team falls back to mend when at least `FALL_BACK_SHARE` of its living members, and two, are
+ * badly hit and the enemy has held the point for less than `FALL_BACK_CLOCK` of the time that
+ * wins; it goes in again once no more than `FALL_BACK_DONE` of them are, or after
+ * `FALL_BACK_TIME` s.
+ */
+const FALL_BACK_SHARE = 0.6;
+const FALL_BACK_CLOCK = 0.75;
+const FALL_BACK_DONE = 0.25;
+const FALL_BACK_TIME = 30;
+/** Classes in the order they lead the team's push and call its plan. */
+const LEAD_ORDER: readonly TankClassId[] = ['heavy', 'soldier', 'demoman', 'scout', 'sniper'];
+/** Seconds of countdown from everyone at their staging spot to going in. */
+const COUNTDOWN = 2;
+/** Seconds between the team's calls of a new focus. */
+const FOCUS_CALL = 8;
+/** Seconds a spot where a member was destroyed counts as deadly, and how far around it. */
+const DEADLY_TIME = 20;
+const DEADLY_RADIUS = 110;
+/**
+ * A Sniper falls back from its perch when a known enemy comes within `PERCH_THREAT` px of it, as
+ * close as a brawler gets before it fires, or an enemy Sniper within `SNIPER_SIGHT` px sees it
+ * with its gun within `SNIPER_AIMED` rad of it; it comes back once the perch has been safe for
+ * `PERCH_CLEAR` s.
+ */
+const PERCH_THREAT = 220;
+const SNIPER_SIGHT = 900;
+const SNIPER_AIMED = 0.3;
+const PERCH_CLEAR = 5;
+/**
+ * A bot Sniper on a held point whose perch has seen none of the enemies seen in the last
+ * `LOOKOUT_FRESH` s for `LOOKOUT_WAIT` s watches from a lookout (see `chooseLookouts`): a spot
+ * within `LOOKOUT_RANGE` px of its perch that sees them within `LOOKOUT_SIGHT` px and at least
+ * `LOOKOUT_GAP` px away, beyond the 470-480 px a Soldier and a Demoman fire at, `LOOKOUT_BEHIND`
+ * px behind its foremost teammate and at most `LOOKOUT_CROSS` px past the point. Each enemy it
+ * sees there scores `LOOKOUT_SEEN`, each `LOOKOUT_TRAVEL` px to drive there one less. It keeps the
+ * spot `LOOKOUT_KEEP` s after it saw the last enemy from there.
+ */
+const LOOKOUT_FRESH = 2;
+const LOOKOUT_WAIT = 3;
+const LOOKOUT_SIGHT = 850;
+const LOOKOUT_GAP = 560;
+const LOOKOUT_RANGE = 650;
+const LOOKOUT_BEHIND = 60;
+const LOOKOUT_CROSS = 150;
+const LOOKOUT_SEEN = 3;
+const LOOKOUT_TRAVEL = 250;
+const LOOKOUT_KEEP = 4;
 /** Half size of a crate's armor. */
 const CRATE_HALF = { x: 21.25, y: 46.25 };
 const CRATE_COST = 3;
+
+/**
+ * Whether `to` is in the sight of a viewer at `from` whose free sight along each of
+ * `SIGHT_RAYS` directions `reach` holds, as `sightReach` gives it.
+ */
+function inReach(reach: Float32Array, from: Point, to: Point) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const bin = ((Math.atan2(dy, dx) / (Math.PI * 2)) * SIGHT_RAYS + SIGHT_RAYS) % SIGHT_RAYS;
+  return Math.hypot(dx, dy) <= Math.min(reach[Math.floor(bin) % SIGHT_RAYS], reach[Math.ceil(bin) % SIGHT_RAYS]);
+}
+
+/** The middle of `points`. */
+function centroidOf(points: readonly Point[]): Point {
+  return { x: points.reduce((sum, point) => sum + point.x, 0) / points.length, y: points.reduce((sum, point) => sum + point.y, 0) / points.length };
+}
 
 /** Signed distance to an axis-aligned box of half size `halfX` x `halfY` around the origin. */
 function boxDistance(x: number, y: number, halfX: number, halfY: number) {

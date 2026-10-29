@@ -39,7 +39,8 @@ export const en = {
     botReaction: 'Bot reaction',
     botSight: 'Bot sight',
     zoom: 'Zoom',
-    lead: 'Camera lead'
+    lead: 'Camera lead',
+    slack: 'Camera slack'
   },
   knobGroup: { move: 'Movement', weapon: 'Weapon', armor: 'Armor', point: 'Point', bot: 'Bots' },
   classKnob: {
@@ -65,11 +66,11 @@ export const en = {
     blastHole: 'Blast crater',
     blastDepth: 'Blast depth',
     blastKnockback: 'Blast push',
-    selfPush: 'Rocket jump',
     wallDamage: 'Wall damage',
     fragments: 'Fragments',
     fuse: 'Fuse',
     chargeTime: 'Charge time',
+    spinUp: 'Spin-up',
     railPower: 'Rail power',
     fullRailPower: 'Full power',
     fullRange: 'Full range',
@@ -137,7 +138,7 @@ export const en = {
   short: { scout: 'Sc', soldier: 'So', heavy: 'Hv', demoman: 'De', sniper: 'Sn' },
   classRole: {
     scout: 'Fast flanker; a point-blank scattergun, deadliest from behind; captures 2x',
-    soldier: 'Rockets with splash and shrapnel; rocket-jump by firing at your feet',
+    soldier: 'Rockets with splash and shrapnel; a direct hit chips deepest',
     heavy: 'Slow, plated; a gatling stream that drills armor up close; holds the point',
     demoman: 'Lobs bouncing grenades over cover; big splash; breaks walls',
     sniper: 'Casemate gun: hold to charge; the scope shows cores; a rail through one kills'
@@ -151,10 +152,11 @@ export const en = {
     next: 'next respawn',
     hint: '1–5 or click to pick · in your base the change is instant, elsewhere at your next respawn · C or Esc closes'
   },
-  botRole: { assault: 'assault', flank: 'flank', support: 'support', anchor: 'anchor', sniper: 'sniper' },
+  botRole: { assault: 'assault', flank: 'flank', support: 'support', lead: 'lead', sniper: 'sniper' },
   seat: {
     you: 'You',
     youBot: 'You (bot)',
+    turret: 'Turret',
     red: (seat: number) => `Red ${seat}`,
     blue: (seat: number) => `Blue ${seat}`
   },
@@ -170,7 +172,36 @@ export const en = {
     nextRespawn: (tankClass: string) => `Next respawn: ${tankClass}`,
     gauge: { idle: 'Hold', charging: 'Charge', full: 'Full' }
   },
-  plan: { push: 'push', hold: 'hold', regroup: 'regroup', gather: 'gathering', go: 'going in' },
+  radio: {
+    kit: 'Kit',
+    repairing: 'Repair',
+    needHelp: 'Help!',
+    helping: 'Coming',
+    flanking: 'Flank',
+    focus: 'Target!',
+    perch: 'Position',
+    fallBack: 'Back',
+    holdPoint: 'Hold',
+    holdLane: 'Hold',
+    capturing: 'Capture',
+    gather: 'Gather',
+    countdown: (say: RadioWords) => `Attack: ${say.seconds}`,
+    go: 'Go!',
+    followMe: 'On me!',
+    waitForTeam: 'Waiting',
+    switchClass: (say: RadioWords) => `→ ${say.tankClass}`,
+    breaching: 'Breach',
+    clearView: 'Break it!',
+    wayOpen: 'Open!',
+    fallBackTeam: 'Fall back',
+    coverRetreat: 'Cover',
+    captured: 'Ours!',
+    regroup: 'Regroup',
+    sniper: 'Sniper!',
+    kitTrap: 'Trap'
+  },
+  lane: { north: 'north street', center: 'hall', south: 'south street' },
+  plan: { push: 'push', hold: 'hold', regroup: 'regroup', fallBack: 'falling back', gather: 'gathering', go: 'going in' },
   result: {
     wins: { red: 'Red team wins', blue: 'Blue team wins' },
     team: { red: 'Red', blue: 'Blue' },
@@ -180,6 +211,9 @@ export const en = {
     again: 'Play again'
   }
 };
+
+/** Words a radio line can name, already translated: an enemy class, an ally, a way to the point, a count of seconds. */
+export type RadioWords = { tankClass: string; name: string; lane: string; seconds: number };
 
 /** The shape every language's text has. */
 export type Dictionary = typeof en;

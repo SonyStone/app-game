@@ -25,6 +25,8 @@ import { createKothI18n, KothI18nProvider } from './i18n/i18n';
 import { createKothMatch, type KothMatch } from './match';
 import type { Pace } from './pace';
 import { PauseMenu, type MenuPage } from './PauseMenu';
+import { BUBBLE_TIME } from './radio';
+import { RadioOverlay, type CalloutView } from './RadioOverlay';
 import { CAPTURE_RULES } from './rules';
 import { TANK_CLASS_IDS, type TankClassId } from './tanks';
 import { createTuning } from './tuning';
@@ -43,14 +45,15 @@ import { createTuning } from './tuning';
  * The player aims with a crosshair of the game's own instead of the cursor; a line from the gun
  * shows where the next shot goes and what it will hit (see `AimOverlay`). The view looks ahead
  * toward the aim: it leads the tank by a share of the cursor's offset from the screen's center, so
- * the screen shows what lies ahead of the gun rather than behind the tank, and a still cursor
- * keeps the gun's aim however the view settles (see `createLookAhead`). Every gun fires at a
+ * the screen shows what lies ahead of the gun rather than behind the tank, and holds still while
+ * the tank and its lead keep within a box about the screen's center, so the picture does not
+ * slide under the aim while the tank drives about (see `createLookAhead`). Every gun fires at a
  * steady cadence for as long as the button is held, with no clip and no reload to keep track of.
  *
  * Esc pauses the match and opens the menu (see `PauseMenu`), which holds the actions of the
  * keys below, the pace knobs, the game's speed, the tanks' and shells' speeds, the damage, the
- * bots' reaction and how far they see, the zoom and the view's lead, which take effect at once and
- * are kept for the next visit, and what every key does. Its second page is the class editor,
+ * bots' reaction and how far they see, the zoom and the view's lead and slack, which take effect
+ * at once and are kept for the next visit, and what every key does. Its second page is the class editor,
  * which changes each class's numbers, kept for the next visit too, and shares the whole tuning as
  * JSON or a link (see `createTuning`). Keys: 1-5 pick a class and C opens the
  * class menu, R restarts, B shows what the bots think, V hands the player's tank to a bot and
@@ -78,6 +81,7 @@ export default function KothRoute() {
   const [watching, setWatching] = createSignal(address.has('watch'));
   const [state, setState] = createSignal<HudState>();
   const [thoughts, setThoughts] = createSignal<ThoughtView[]>([]);
+  const [callouts, setCallouts] = createSignal<CalloutView[]>([]);
   const [aim, setAim] = createSignal<AimView>();
   const [menu, setMenu] = createSignal(!address.has('watch') && !address.has('class'));
   const [choice, setChoice] = createSignal<{ id: TankClassId; count: number }>();
@@ -143,12 +147,14 @@ export default function KothRoute() {
               onFrame={(frame) => {
                 setState(frame.state);
                 setThoughts(frame.thoughts);
+                setCallouts(frame.callouts);
                 setAim(frame.aim);
               }}
             />
           </Rapier2D>
         </GpuCanvas>
         <BotThoughts thoughts={thoughts()} />
+        <RadioOverlay callouts={callouts()} />
         <KothHud state={state()} watching={watching()} />
         <AimOverlay
           canvas={canvas()}
@@ -251,7 +257,7 @@ const PIXELS_PER_METER = 100;
  * @param choice - The class the player asked for last, handed to the match whenever it changes after mount.
  * @param playerClass - The player's first class, read once; anything but a class id means the Soldier.
  * @param pace - The match's pace, read every frame: the game's speed, the zoom it sets when it
- *   changes, the view's lead, and what the match itself works by.
+ *   changes, the view's lead and slack, and what the match itself works by.
  * @param paused - Holds the match, its effects and the view still; the frame is drawn again as it stands.
  * @param onFrame - Receives the display state after each frame, with the player's aim on screen.
  */
@@ -264,7 +270,7 @@ function KothScene(props: {
   playerClass: string | null;
   pace: Pace;
   paused: boolean;
-  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; aim: AimView | undefined }) => void;
+  onFrame: (frame: { state: HudState; thoughts: ThoughtView[]; callouts: CalloutView[]; aim: AimView | undefined }) => void;
 }) {
   const canvas = untrack(() => props.canvas);
   const rapier = useRapier2D();
@@ -280,6 +286,12 @@ function KothScene(props: {
   const input = makeArenaInput(canvas);
   const camera = createCamera(match.seat.tank?.hull.translation() ?? { x: 0, y: 0 });
   const lookAhead = createLookAhead();
+  const mapBounds = {
+    minX: -match.map.halfWidth,
+    minY: -match.map.halfHeight,
+    maxX: match.map.halfWidth,
+    maxY: match.map.halfHeight
+  };
   let lastTime: number | undefined;
   let pendingStep = 0;
   let seenRestarts = untrack(() => props.restarts);
@@ -348,6 +360,7 @@ function KothScene(props: {
       props.onFrame({
         state: match.hud(),
         thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+        callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
         aim: undefined
       });
       return;
@@ -365,7 +378,7 @@ function KothScene(props: {
 
     // The view goes onto the tank as it stands for the cursor as it is, so the gun aims at the ground the frame shows under the cursor.
     if (pivot) {
-      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0 });
+      lookAhead.place(camera, screen, pivot, controls.aim, { share: pace.lead, dt: 0, slack: slackOf(pace), bounds: mapBounds });
     }
 
     const aim = player && pivot ? aimAngle(player, controls.aim, camera, screen, pivot) : undefined;
@@ -395,6 +408,7 @@ function KothScene(props: {
     props.onFrame({
       state: match.hud(),
       thoughts: props.thoughts && !match.capture.winner ? thoughtsOnScreen(match, camera, screen) : [],
+      callouts: match.capture.winner ? [] : calloutsOnScreen(match, camera, screen, props.watching),
       aim: props.watching ? undefined : aimOnScreen(match, { angle: aim, reach }, view, screen)
     });
   }
@@ -402,9 +416,10 @@ function KothScene(props: {
   /**
    * Leads the player's tank toward the aim (see `createLookAhead`), follows a watched tank, or
    * frames the whole map while watching. While the player's casemate gun charges a shot, the view
-   * zooms out, as a sniper's scope shows more (see `createScope`), about the tank, which the lead
-   * keeps where it is on the screen: the ground under a still cursor slides out along the gun's
-   * line, and the gun keeps its aim.
+   * zooms out, as a sniper's scope shows more (see `createScope`), about the tank, which keeps
+   * its place on the screen: the ground under a still cursor slides out along the gun's line, and
+   * the gun keeps its aim. Zooming about the cursor instead threw the tank toward the cursor and
+   * showed the empty ground behind it. A view with slack gives the tank the scope's wider box.
    */
   function placeCamera(screen: { width: number; height: number }, dt: number, aim: Aim | undefined) {
     const followed = props.watching ? (watched === undefined ? undefined : match.members[watched]) : match.seat;
@@ -451,7 +466,12 @@ function KothScene(props: {
     }
 
     scope.step(camera, screen, worldToScreen(camera, pivot, screen), scoped, dt);
-    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt });
+    lookAhead.place(camera, screen, pivot, aim, { share: props.pace.lead, dt, slack: slackOf(props.pace), bounds: mapBounds });
+  }
+
+  /** The view's slack for `pace`, widened while the scope is open; none for a rigid view. */
+  function slackOf(pace: Pace) {
+    return pace.slack > 0 ? scope.followMargin(pace.slack) : 0;
   }
 }
 
@@ -510,6 +530,100 @@ function thoughtsOnScreen(
     };
   });
 }
+
+/**
+ * What the bots say on the radio, placed on screen: the player's team's lines, or both teams'
+ * while watching. A bubble fades over its last `BUBBLE_FADE` s and a marker over its last
+ * `MARKER_FADE` s; a marker off the screen is held `EDGE_INSET` px inside its edge. The shot flies
+ * from `SHOT_START` px off the speaker's tank to `SHOT_END` px short of the marker at `SHOT_SPEED`
+ * px/s, by the match's clock, and is left out when that leaves less than `SHOT_SHORTEST` px.
+ */
+function calloutsOnScreen(
+  match: KothMatch,
+  camera: ReturnType<typeof createCamera>,
+  screen: { width: number; height: number },
+  watching: boolean
+): CalloutView[] {
+  const now = match.time;
+  const team = match.seat.team;
+
+  return match
+    .callouts()
+    .filter((callout) => watching || callout.team === team)
+    .map((callout) => {
+      const said = now - callout.at;
+      const speaker = callout.speaker && said < BUBBLE_TIME ? worldToScreen(camera, callout.speaker, screen) : undefined;
+      const marker = callout.marker && worldToScreen(camera, callout.marker, screen);
+      const held = marker && {
+        x: Math.min(Math.max(marker.x, EDGE_INSET), screen.width - EDGE_INSET),
+        y: Math.min(Math.max(marker.y, EDGE_INSET), screen.height - EDGE_INSET)
+      };
+      const off = marker && held && (held.x !== marker.x || held.y !== marker.y);
+      const bubbleOpacity = Math.min((BUBBLE_TIME - said) / BUBBLE_FADE, 1);
+
+      return {
+        id: callout.id,
+        team: callout.team,
+        line: callout.line,
+        tankClass: callout.tankClass,
+        ally: callout.ally,
+        lane: callout.lane,
+        seconds: callout.seconds,
+        bubble: speaker && { x: speaker.x, y: speaker.y, opacity: bubbleOpacity },
+        shot: speaker && held ? shotBetween(speaker, held, said, bubbleOpacity) : undefined,
+        marker:
+          callout.marker && held
+            ? {
+                ...held,
+                kind: callout.marker.kind,
+                opacity: Math.min((callout.until - now) / MARKER_FADE, 1),
+                edge: off ? Math.atan2(marker.y - screen.height / 2, marker.x - screen.width / 2) : undefined
+              }
+            : undefined
+      };
+    });
+}
+
+const BUBBLE_FADE = 0.4;
+const MARKER_FADE = 0.8;
+const EDGE_INSET = 34;
+
+/**
+ * The radio shot from the speaker at `from` to the marker at `to`, on screen, cut short at both
+ * ends, `said` s after it was fired; none if too short. The bolt, `BOLT_LENGTH` px or less on a
+ * short way, comes out of the speaker and flies with its head reaching the target in `flight` s,
+ * then is gone.
+ */
+function shotBetween(from: { x: number; y: number }, to: { x: number; y: number }, said: number, opacity: number) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y);
+  const shown = length - SHOT_START - SHOT_END;
+
+  if (shown < SHOT_SHORTEST) {
+    return undefined;
+  }
+
+  const along = { x: (to.x - from.x) / length, y: (to.y - from.y) / length };
+  const at = (distance: number) => ({ x: from.x + along.x * (SHOT_START + distance), y: from.y + along.y * (SHOT_START + distance) });
+  const flight = Math.min(Math.max(shown / SHOT_SPEED, SHOT_QUICKEST), SHOT_SLOWEST);
+  const head = (said / flight) * shown;
+  const tail = Math.max(head - Math.min(BOLT_LENGTH, shown * 0.6), 0);
+
+  return {
+    bolt: head < shown ? { tail: at(tail), head: at(head) } : undefined,
+    to: at(shown),
+    flight,
+    opacity
+  };
+}
+
+const SHOT_START = 22;
+const SHOT_END = 12;
+const SHOT_SHORTEST = 24;
+const SHOT_SPEED = 1200;
+/** Seconds a shot flies at least and at most, so a near one is still seen and a far one does not keep the marker waiting. */
+const SHOT_QUICKEST = 0.15;
+const SHOT_SLOWEST = 0.4;
+const BOLT_LENGTH = 110;
 
 /** Sizes the canvas's drawing buffer to its CSS size times the device pixel ratio; returns the CSS size. */
 function fitCanvas(canvas: HTMLCanvasElement) {

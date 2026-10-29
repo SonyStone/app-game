@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createStrokeSampler, dabTiles, defaultBrush, TILE_SIZE, type Sample } from './brush';
 import { defaultCamera, panCamera, screenToWorld, transformAt, worldToScreen } from './camera';
 import { createDocument, TILE_BYTES } from './document';
@@ -292,4 +292,53 @@ describe('blending of saved documents', () => {
     expect(restoreDocument(saved(['normal'], 'linear')).linearBlending).toBe(true);
     expect(restoreDocument(saved(['multiply'], 'classic')).linearBlending).toBe(false);
   });
+});
+
+it('retains PSD identity and layer IDs through reorder, edits, undo and serialized checkpoints', () => {
+  const document = createDocument();
+  const paper = document.active.id;
+  const first = document.psdIdentity();
+  document.changeLayer({ type: 'add' });
+  const ink = document.active.id;
+  const added = document.psdIdentity();
+  expect(added.creation).toEqual(first.creation);
+  expect(added.layers[paper]!.id).toBe(first.layers[paper]!.id);
+  expect(added.layers[ink]!.id).toBeGreaterThan(first.layers[paper]!.id);
+  document.changeLayer({ type: 'move', id: ink, direction: -1 });
+  expect(document.psdIdentity().layers[ink]!.id).toBe(added.layers[ink]!.id);
+  document.changeLayer({ type: 'delete', id: ink });
+  document.undo();
+  expect(document.psdIdentity().layers[ink]!.id).toBe(added.layers[ink]!.id);
+  const identity = document.psdIdentity();
+  const saved = snapshotDocument(document.layers, document.active.id, defaultCamera(), {}, true, identity);
+  const restored = decodeDocument(encodeDocument(saved));
+  const reopened = createDocument();
+  reopened.replace(restored.layers, restored.activeId, restored.linearBlending, restored.psdIdentity);
+  expect(reopened.psdIdentity()).toEqual(identity);
+  const invalid = structuredClone(saved);
+  invalid.psdIdentity!.layers[ink]!.id = invalid.psdIdentity!.layers[paper]!.id;
+  expect(() => restoreDocument(invalid)).toThrow('Invalid PSD');
+  const beforeReplacement = reopened.psdIdentity().creation;
+  reopened.replace(restored.layers, restored.activeId);
+  expect(reopened.psdIdentity().creation.originalDocumentId).not.toBe(beforeReplacement.originalDocumentId);
+});
+
+it('records real layer edit clocks without changing untouched layer clocks', () => {
+  const document = createDocument();
+  const lower = document.active.id;
+  document.changeLayer({ type: 'add' });
+  const upper = document.active.id;
+  const before = document.psdIdentity();
+  const editedAt = Date.now() + 1000;
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(editedAt);
+  try {
+    document.changeLayer({ type: 'update', id: lower, patch: { name: 'Renamed' } });
+    const after = document.psdIdentity();
+    expect(after.layers[lower]!.time).toBe(editedAt / 1000);
+    expect(after.layers[upper]!.time).toBe(before.layers[upper]!.time);
+    expect(after.creation).toEqual(before.creation);
+    expect(after.layers[lower]!.id).toBe(before.layers[lower]!.id);
+  } finally {
+    clock.mockRestore();
+  }
 });

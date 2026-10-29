@@ -60,6 +60,13 @@ export function LayerInspector(props: { contents: LayerContents }) {
           ['Layer ID', properties().layerId?.toString()]
         ]}
       />
+      <Show when={!props.contents.pixels.ok ? props.contents.pixels.error.message : undefined}>
+        {(message) => (
+          <p class={styles.notes} role="note">
+            Saved layer pixel preview unavailable: {message()}
+          </p>
+        )}
+      </Show>
       <Show when={props.contents.pixels.ok ? props.contents.pixels.value : undefined}>
         {(pixels) => <PixelPreview pixels={pixels()} />}
       </Show>
@@ -87,6 +94,7 @@ function PixelPreview(props: { pixels: PsdLayerPixels }) {
   return (
     <section class={styles.section} aria-label="Layer pixels">
       <h3>Pixels</h3>
+      <p>Bounded saved layer and mask window. Density, feather and effects are not applied.</p>
       <div class={styles.previews}>
         <Show when={props.pixels.width && props.pixels.height} fallback={<span class={styles.muted}>No pixels</span>}>
           <figure>

@@ -67,7 +67,9 @@ function createScout(): TankClass {
  *   instead of a medium tank's six or seven and grenades thirteen or so, though two rockets into
  *   its rear still kill it. It weighs 2.2 medium tanks: hits barely shove it, and it rams harder
  *   than any other class.
- * - The gatling fires the moment the trigger is pulled, with no spin-up to wait for, ten rounds a
+ * - The gatling's barrels take 0.35 s to spin up before the first round, as Team Fortress 2's
+ *   minigun spins up, so a Heavy caught cold gives a Scout or Soldier at its side a moment to
+ *   strike or get away; a Heavy expecting a fight revs ahead and fires at once. Then ten rounds a
  *   second for as long as it is held. Each round flies 1500 px/s for 520 px, up to 0.05 rad off,
  *   and chips a small hole that shrinks to 0.3 by the end of its range, but the stream drills
  *   (see `DrillSpec`): a round landing within 7 px of the stream's rounds of the last half second
@@ -90,7 +92,7 @@ function createHeavy(): TankClass {
     mass: 2.2,
     interval: 0.1,
     shell: { speed: 1500, range: 520, hole: 2, depth: 1, knockback: 25, fade: 0.7, size: 0.4, drill: { radius: 7, gain: 0.8, most: 6, memory: 0.5 } },
-    weapon: { kind: 'spin', spread: 0.05, slowdown: 0.55 },
+    weapon: { kind: 'spin', spread: 0.05, slowdown: 0.55, spinUp: 0.35 },
     capture: 1,
     look: { turret: TURRET_GATLING, muzzle: 33 }
   };
@@ -134,7 +136,7 @@ function createDemoman(): TankClass {
       knockback: 250,
       ricochet: false,
       lob: { fuse: 1.15, gravity: 1500, bounce: 0.45, rebound: 0.7, roll: 4, minReach: 70 },
-      blast: { radius: 95, hole: 6.2, depth: 3.9, knockback: 600, structures: 3, self: 0.7 }
+      blast: { radius: 95, hole: 6.2, depth: 3.9, knockback: 600, structures: 3 }
     },
     weapon: { kind: 'lob' },
     capture: 1,

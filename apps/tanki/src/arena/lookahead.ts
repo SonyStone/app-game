@@ -31,9 +31,17 @@ type Size = { width: number; height: number };
  * back to the tank. However far the cursor goes, even off the canvas, the lead stops short of
  * putting the tank closer than `EDGE_MARGIN` to the screen's edge.
  *
- * Call `place` once a frame before aiming, with `dt` 0, to center the view on where the tank is
- * now for the cursor as it is now, and again after physics with the frame's `dt` to ease the lead
- * and follow the tank.
+ * With `slack` the view holds still instead, as the old arena's camera did: the tank plus its lead
+ * may stray that share of the half screen from the screen's center before the view follows, and
+ * then the view moves only as far as it must. A still view keeps the ground under a still cursor
+ * still, so the gun stays on the spot it aims at while the tank drives, turns and swings under it;
+ * the view moves when the tank leaves the box or the cursor swings the lead out of it. A view with
+ * slack also keeps within `bounds`, the map, but for `MAP_MARGIN`, rather than show the empty
+ * ground beyond it. Whatever the slack, the tank stays `EDGE_MARGIN` clear of the screen's edge.
+ *
+ * Call `place` once a frame before aiming, with `dt` 0, to put the view on where the tank is now
+ * for the cursor as it is now, and again after physics with the frame's `dt` to ease the lead and
+ * follow the tank.
  */
 export function createLookAhead() {
   let lead: Point = { x: 0, y: 0 };
@@ -45,14 +53,40 @@ export function createLookAhead() {
     },
 
     /**
-     * Eases the lead over a frame of `dt` seconds for `aim` and centers `camera` on `pivot` plus the lead.
+     * Eases the lead over a frame of `dt` seconds for `aim` and centers `camera` on `pivot` plus the
+     * lead, or with `slack` moves it only as far as it takes to bring them back into the box.
      *
      * @param pivot - Where the player's gun turns, in the world.
      * @param options.share - Share of the cursor's offset from the screen's center to lead by, 0 for none.
+     * @param options.slack - Share of the half screen the tank plus its lead may stray from the
+     *   screen's center before the view follows; 0, the default, follows rigidly.
+     * @param options.bounds - The map, which a view with slack keeps over; none for no limit.
      */
-    place(camera: Camera, screen: Size, pivot: Point, aim: Aim | undefined, options: { share: number; dt: number }) {
+    place(
+      camera: Camera,
+      screen: Size,
+      pivot: Point,
+      aim: Aim | undefined,
+      options: { share: number; dt: number; slack?: number; bounds?: Bounds }
+    ) {
       lead = stepLead(lead, aim, screen, options.share, options.dt);
-      centerOn(camera, pivot, lead);
+      const slack = options.slack ?? 0;
+
+      if (slack <= 0) {
+        centerOn(camera, pivot, lead);
+        return;
+      }
+
+      const goal = { ...camera };
+      centerOn(goal, pivot, lead);
+      pushView(camera, goal, { x: (screen.width / 2) * slack, y: (screen.height / 2) * slack });
+
+      if (options.bounds) {
+        keepOverMap(camera, screen, options.bounds);
+      }
+
+      const margin = edgeMargin(screen);
+      pushView(camera, pivot, { x: screen.width / 2 - margin, y: screen.height / 2 - margin });
     },
 
     /** Drops the lead at once, as when the view is handed to watching. */
@@ -107,6 +141,51 @@ export function centerOn(camera: Camera, pivot: Point, lead: Point) {
   camera.y = pivot.y + (lead.x * sin + lead.y * cos) / camera.zoom;
 }
 
+/** Moves `camera` just enough that `point`, in the world, lies within `box` screen pixels of the screen's center along each screen axis. */
+function pushView(camera: Camera, point: Point, box: Point) {
+  const cos = Math.cos(camera.rotation);
+  const sin = Math.sin(camera.rotation);
+  const dx = (point.x - camera.x) * camera.zoom;
+  const dy = (point.y - camera.y) * camera.zoom;
+  // Offset on the screen, in screen axes.
+  const across = dx * cos - dy * sin;
+  const down = dx * sin + dy * cos;
+  const shift = { x: across - clamp(across, -box.x, box.x), y: down - clamp(down, -box.y, box.y) };
+  // Back to world axes and pixels.
+  camera.x += (shift.x * cos + shift.y * sin) / camera.zoom;
+  camera.y += (-shift.x * sin + shift.y * cos) / camera.zoom;
+}
+
+/** A map's extent in world pixels. */
+export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
+
+/**
+ * Moves `camera` the least so that, along each screen axis, it shows no more than `MAP_MARGIN`
+ * beyond `bounds`, or, where the map is narrower than the screen, all of it. A turned view is
+ * kept over the map's extent along each screen axis, so a corner may still show.
+ */
+function keepOverMap(camera: Camera, screen: Size, bounds: Bounds) {
+  const cos = Math.cos(camera.rotation);
+  const sin = Math.sin(camera.rotation);
+  const middle = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+  const half = { x: (bounds.maxX - bounds.minX) / 2 + MAP_MARGIN, y: (bounds.maxY - bounds.minY) / 2 + MAP_MARGIN };
+
+  // The screen's x and y axes in the world.
+  for (const [axis, view] of [
+    [{ x: cos, y: -sin }, screen.width / 2 / camera.zoom],
+    [{ x: sin, y: cos }, screen.height / 2 / camera.zoom]
+  ] as const) {
+    const center = middle.x * axis.x + middle.y * axis.y;
+    const extent = half.x * Math.abs(axis.x) + half.y * Math.abs(axis.y);
+    const low = center - extent + view;
+    const high = center + extent - view;
+    const now = camera.x * axis.x + camera.y * axis.y;
+    const shift = clamp(now, Math.min(low, high), Math.max(low, high)) - now;
+    camera.x += axis.x * shift;
+    camera.y += axis.y * shift;
+  }
+}
+
 /**
  * Seconds over which the lead closes all but `1 / e` of its way to where it should be: about
  * 0.35 s to settle within a twentieth.
@@ -116,6 +195,8 @@ const LEAD_TIME = 0.12;
 const STICK_REACH = 0.8;
 /** Screen pixels the tank stays clear of the screen's edge, at most a fifth of the screen's smaller side. */
 const EDGE_MARGIN = 110;
+/** World pixels of empty ground beyond the map a view with slack may show. */
+const MAP_MARGIN = 40;
 /** Screen pixels from the screen's center within which a cursor counts as on the center. */
 const CENTERED = 1;
 

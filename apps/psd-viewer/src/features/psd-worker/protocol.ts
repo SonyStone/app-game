@@ -1,19 +1,30 @@
+import type { PsdGpuLayers } from '@app-game/psd/gpu';
 import type {
   PsdDifference,
   PsdDocumentFonts,
   PsdFailure,
-  PsdFontInfo,
   PsdImage,
   PsdInfo,
   PsdLayerDetail,
   PsdLayerNode,
   PsdLayerPixels,
+  PsdNativeRegion,
+  PsdNativeRender,
   PsdOpenAnswers,
   PsdOpening,
+  PsdRegionCapability,
+  PsdRegionPixels,
+  PsdRegionRect,
   PsdRenderSettings,
+  PsdSavedPath,
+  PsdSavedProcessChannels,
   PsdStates,
   PsdTextSupport
 } from '@app-game/psd/viewer';
+import type { EditingRequest, EditingResponse, EditingResult } from '../editing/contracts';
+import type { SessionFont } from '../fonts/addFontFile';
+import type { DisplayTile } from '../gpu-viewport/displayTiles';
+import type { PsdPerformanceSample } from '../telemetry/performance';
 
 /**
  * A request to the PSD worker. `id` pairs it with its reply. `open` opens as Photoshop does, with `answers` to the
@@ -21,10 +32,14 @@ import type {
  * file Photoshop refuses with a `refused` one. Requests about a document name it by the `document` id its
  * `opened` reply gave; the worker refuses requests for a document it no longer holds with a `stale` failure. The
  * worker keeps one font library for its lifetime, across documents: `addFonts` adds font files to it (their buffers
- * transferred), and renders with `typeLayers` re-render type layers with it.
+ * transferred), and cached renders use its active faces with `typeLayers: false`. Optional `typeLayers` renders use its raster fonts.
+ * Supplied files are partial input, so they never become an `availableFonts` missing-font inventory.
  */
-export type PsdRequest =
-  | { id: number; type: 'open'; bytes: ArrayBuffer; answers?: PsdOpenAnswers }
+export type PsdRequest = PsdRequestBody & { telemetry?: boolean };
+
+/** Request payload, independent of optional diagnostics. */
+type PsdRequestBody =
+  | { id: number; type: 'open'; bytes: ArrayBuffer | Blob; answers?: PsdOpenAnswers; mode?: 'strict' | 'source' }
   | {
       id: number;
       type: 'render';
@@ -33,6 +48,29 @@ export type PsdRequest =
       /** Visibility overrides as `[layer record index, visible]`. */
       visibility: [number, boolean][];
     }
+  | {
+      id: number;
+      type: 'renderWindow';
+      document: number;
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+      window: WindowRequest;
+      /** Per-worker native admission, including the retained host source. */
+      liveBytes?: number;
+    }
+  | { id: number; type: 'gpuLayers'; document: number; rect: PsdRegionRect; settings: PsdRenderSettings }
+  | { id: number; type: 'original'; document: number }
+  | { id: number; type: 'channels'; document: number; rect?: PsdRegionRect }
+  | { id: number; type: 'capability'; document: number; settings: PsdRenderSettings; visibility: [number, boolean][] }
+  | {
+      id: number;
+      type: 'inspect';
+      document: number;
+      rect: PsdRegionRect;
+      settings: PsdRenderSettings;
+      visibility: [number, boolean][];
+    }
+  | { id: number; type: 'paths'; document: number }
   | { id: number; type: 'merged'; document: number }
   | { id: number; type: 'difference'; document: number; render: number }
   | {
@@ -43,15 +81,26 @@ export type PsdRequest =
       settings: PsdRenderSettings;
       visibility: [number, boolean][];
     }
-  | { id: number; type: 'layer'; document: number; index: number }
-  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[] }
+  | { id: number; type: 'layer'; document: number; index: number; rect?: PsdRegionRect }
+  | { id: number; type: 'addFonts'; fonts: ArrayBuffer[]; sources?: string[] }
   | { id: number; type: 'listFonts' }
   | { id: number; type: 'documentFonts'; document: number }
   | { id: number; type: 'textSupport'; document: number; index: number }
+  | { id: number; type: 'editor'; document: number; request: EditingRequest }
   | { id: number; type: 'close' };
 
-/** The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied. */
-export type PsdReply =
+/**
+ * The worker's answer to the request with the same `id`. Pixel buffers are transferred, never copied.
+ * `documentFonts` and `textSupport` preserve the facade's release mismatches, separately from font availability.
+ */
+export type PsdReply = PsdReplyBody & {
+  performance?: PsdPerformanceSample[];
+  /** Actual WASM capacity and retained source, independent of optional telemetry. */
+  memory?: { wasmBytes: number; sourceBytes: number };
+};
+
+/** Reply payload, independent of optional diagnostics. */
+type PsdReplyBody =
   | {
       id: number;
       type: 'opened';
@@ -60,8 +109,19 @@ export type PsdReply =
       layers: PsdLayerNode[];
       states: PsdStates;
       opening: PsdOpening;
+      windowed?: boolean;
+      sourceBacked?: boolean;
+      capability?: PsdResultOf<PsdRegionCapability>;
+      sourceLayerFailure?: PsdFailure;
     }
+  | { id: number; type: 'gpuLayers'; source: PsdGpuLayers }
   | { id: number; type: 'rendered'; render: RenderedPixels }
+  | { id: number; type: 'windowRendered'; images: WindowPixels[]; milliseconds: number }
+  | { id: number; type: 'original'; bytes: Blob }
+  | { id: number; type: 'channels'; channels: PsdSavedProcessChannels }
+  | { id: number; type: 'paths'; paths: PsdSavedPath[] }
+  | { id: number; type: 'capability'; capability: PsdRegionCapability; windowed: boolean }
+  | { id: number; type: 'inspect'; saved: PsdResultOf<PsdNativeRegion>; current: PsdResultOf<PsdNativeRender> }
   | { id: number; type: 'merged'; image: PsdImage }
   | { id: number; type: 'difference'; difference: PsdDifference }
   | { id: number; type: 'blending'; detection: BlendingDetection }
@@ -69,14 +129,15 @@ export type PsdReply =
   | {
       id: number;
       type: 'fontsAdded';
-      /** Per file of the request, in order: the font added, or why it was refused. */
-      results: PsdResultOf<PsdFontInfo>[];
+      /** Per file of the request, in order: the faces added, or why it was refused. */
+      results: PsdResultOf<SessionFont[]>[];
       /** The library after adding. */
-      fonts: PsdFontInfo[];
+      fonts: SessionFont[];
     }
-  | { id: number; type: 'fonts'; fonts: PsdFontInfo[] }
+  | { id: number; type: 'fonts'; fonts: SessionFont[] }
   | { id: number; type: 'documentFonts'; report: PsdDocumentFonts }
   | { id: number; type: 'textSupport'; support: PsdTextSupport | null }
+  | { id: number; type: 'editor'; result: EditingResult<EditingResponse> }
   | { id: number; type: 'closed' }
   | { id: number; type: 'failed'; error: WorkerFailure };
 
@@ -95,10 +156,24 @@ export type BlendingDetection = {
 
 /** A render as it crosses to the UI: its id names it in `difference` requests. */
 export type RenderedPixels = PsdImage & {
+  /** Retained display tiles. When present, pixels is empty and must not be treated as an assembled surface. */
+  tiles?: readonly DisplayTile[];
+  /** Current camera demand, separate from fidelity approximations and GPU upload completion. */
+  quality?: {
+    completed: number;
+    required: number;
+    step: number;
+    coarse: boolean;
+    kind: 'pointPreview' | 'source' | 'filtered';
+  };
+  /** GPU candidates remain previews until this exact tile identity has strict bytes. */
+  compositing?: { preview: number };
   render: number;
   depth: 8 | 16 | 32;
   milliseconds: number;
   approximations: string[];
+  /** Present for a viewport surface or overview; its pixels map back into document space at this stride. */
+  window?: Pick<PsdRegionPixels, 'left' | 'top' | 'step' | 'strategy' | 'source' | 'exactToLayerRender'>;
 };
 
 /**
@@ -109,3 +184,24 @@ export type WorkerFailure = PsdFailure | { kind: 'stale' | 'superseded'; message
 
 /** A value or a failure, as the worker reports parts of a reply that may fail on their own. */
 export type PsdResultOf<T> = { ok: true; value: T } | { ok: false; error: WorkerFailure };
+
+/** Bounded rendering operations. Saved pixels are temporary for parsed documents and authoritative only as a saved snapshot in source sessions. */
+export type WindowRequest =
+  | { kind: 'regions'; rectangles: PsdRegionRect[]; mipStep?: number }
+  | { kind: 'overview'; step: number }
+  | { kind: 'saved'; step: number };
+
+/** Above this canvas size, avoid whole-document recovery, rendering and comparison allocations. */
+export function requiresWindowedRendering(size: { width: number; height: number; windowed?: boolean }): boolean {
+  return size.windowed ?? (size.width * size.height > 16_777_216 || size.width > 16_384 || size.height > 16_384);
+}
+
+/** At most four million work pixels per window call, including conservative spatial fallbacks. */
+export const windowWorkPixels = 4_194_304;
+
+/** Filtered display products accompany canonical source bytes; saved overviews never acquire a mip claim. */
+export type WindowPixels = PsdRegionPixels & {
+  /** Whether source output contains nonzero alpha; only populated batches calibrate throughput. */
+  populated?: boolean;
+  mips?: PsdRegionPixels[];
+};

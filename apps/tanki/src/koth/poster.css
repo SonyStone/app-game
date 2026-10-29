@@ -674,3 +674,121 @@
   font-weight: 700;
   background: var(--yellow);
 }
+
+/* What bots say on the radio (see `Radio.tsx`): a paper bubble over the speaker, edged in its team's color, with a tail. */
+.tk-bubble {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 28px));
+  padding: 1px 8px 2px;
+  background: var(--paper-light);
+  border: 2px solid var(--ink);
+  border-left: 6px solid var(--tk-bubble-team);
+  box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+  animation: tk-bubble-pop 0.18s ease-out;
+}
+
+.tk-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  border: 7px solid transparent;
+  border-top-color: var(--ink);
+  border-bottom: 0;
+  transform: translateX(-50%);
+}
+
+@keyframes tk-bubble-pop {
+  from {
+    scale: 0.6;
+  }
+}
+
+/*
+ * The shot a radio line fires from the speaker at what it is about: a bolt, drawn by the overlay
+ * frame by frame, and a ring that flashes where it hits after --tk-shot-flight.
+ */
+.tk-shot-bolt {
+  fill: none;
+  stroke-width: 10px;
+  stroke-linecap: butt;
+}
+
+.tk-shot-hit {
+  fill: none;
+  stroke: var(--tk-shot-team);
+  stroke-width: 4px;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tk-shot-hit 0.4s var(--tk-shot-flight) ease-out;
+}
+
+@keyframes tk-shot-hit {
+  from {
+    opacity: 1;
+    scale: 0.3;
+  }
+
+  to {
+    opacity: 0;
+    scale: 1.7;
+  }
+}
+
+/*
+ * A marker a radio line puts on the map; it pops up where the line's shot lands, pulses so the eye
+ * finds it, and points the way when held at the screen's edge.
+ */
+.tk-marker {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  transform: translate(-50%, -50%);
+  /* Pops up once the line's shot lands, then pulses. */
+  animation:
+    tk-marker-pop 0.3s var(--tk-marker-delay, 0s) cubic-bezier(0.3, 1.7, 0.5, 1) backwards,
+    tk-marker-pulse 0.9s calc(var(--tk-marker-delay, 0s) + 0.3s) ease-in-out infinite alternate;
+}
+
+@keyframes tk-marker-pop {
+  from {
+    scale: 0;
+  }
+}
+
+.tk-marker > svg {
+  display: block;
+  filter: drop-shadow(0 0 0 var(--tk-marker-team)) drop-shadow(0 0 3px var(--tk-marker-team));
+}
+
+.tk-marker-arrow {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  width: 0;
+  height: 0;
+  margin: -6px 0 0 -4px;
+  border: 6px solid transparent;
+  border-left: 9px solid var(--ink);
+  border-right: 0;
+  transform-origin: 4px 6px;
+}
+
+@keyframes tk-marker-pulse {
+  from {
+    scale: 1;
+  }
+
+  to {
+    scale: 1.18;
+  }
+}

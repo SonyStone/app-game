@@ -70,7 +70,7 @@ export type TankClassId = (typeof TANK_CLASS_IDS)[number];
 export const MEDIUM_TANK: TankClass = {
   id: 'soldier',
   name: 'Soldier',
-  role: 'Rockets with splash and shrapnel; rocket-jump by firing at your feet',
+  role: 'Rockets with splash and shrapnel; a direct hit chips deepest',
   speed: 250,
   turretSpeed: 10,
   mount: { kind: 'turret' },
@@ -95,8 +95,7 @@ export const MEDIUM_TANK: TankClass = {
  *   without making near misses as good as hits.
  * - Six fragments fly 75 px from the blast and only scratch the armor; the ones that fly back
  *   into the tank hit add a few chips around the crater.
- * - Its own tank takes twice the push of a blast at its feet, without damage: enough to throw it
- *   about four hull lengths through the air, the top-down rocket jump.
+ * - Its own blast spares it: there is no rocket jump, as a top-down tank has no height to jump to.
  */
 function rocket(): ShellSpec {
   return {
@@ -106,7 +105,7 @@ function rocket(): ShellSpec {
     depth: 2.5,
     knockback: 350,
     ricochet: false,
-    blast: { radius: 65, hole: 4, depth: 1.5, knockback: 450, self: 2.8 },
+    blast: { radius: 65, hole: 4, depth: 1.5, knockback: 450 },
     fragments: { count: 6, shell: { speed: 650, range: 75, hole: 1.3, depth: 0, knockback: 40, size: 0.35 } }
   };
 }

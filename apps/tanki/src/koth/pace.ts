@@ -29,6 +29,12 @@ export type Pace = {
   zoom: number;
   /** Share of the cursor's offset from the screen's center the view leads the tank by, 0 to center on the tank (see `createLookAhead`). */
   lead: number;
+  /**
+   * Share of the half screen the tank plus its lead may stray from the screen's center before the
+   * view follows, so the picture holds still while the tank moves about; 0 follows the tank
+   * rigidly (see `createLookAhead`).
+   */
+  slack: number;
 };
 
 /**
@@ -53,7 +59,8 @@ export const PACE_DEFAULTS: Pace = {
   botReaction: 1.6,
   botSight: 480,
   zoom: 1.5,
-  lead: 0.45
+  lead: 0.45,
+  slack: 0.3
 };
 
 /** The knobs of the tuning panel, in its order, with their ranges and how values are shown. */
@@ -65,7 +72,8 @@ export const PACE_KNOBS: readonly { key: keyof Pace; label: string; min: number;
   { key: 'botReaction', label: 'Bot reaction', min: 0.5, max: 3, step: 0.1, unit: '×' },
   { key: 'botSight', label: 'Bot sight', min: 250, max: 700, step: 10, unit: ' px' },
   { key: 'zoom', label: 'Zoom', min: 0.8, max: 2.4, step: 0.05, unit: '' },
-  { key: 'lead', label: 'Camera lead', min: 0, max: 0.8, step: 0.05, unit: '' }
+  { key: 'lead', label: 'Camera lead', min: 0, max: 0.8, step: 0.05, unit: '' },
+  { key: 'slack', label: 'Camera slack', min: 0, max: 0.7, step: 0.05, unit: '' }
 ];
 
 /**

@@ -25,9 +25,9 @@ export function panView(view: View, delta: { x: number; y: number }): View {
   return { scale: view.scale, x: view.x + delta.x, y: view.y + delta.y };
 }
 
-/** Zoom limits: 1/64 to 6400%. */
+/** Zoom limits: 1/65536 to 6400%. */
 export function clampScale(scale: number): number {
-  return Math.min(Math.max(scale, 1 / 64), 64);
+  return Math.min(Math.max(scale, 1 / 65536), 64);
 }
 
 /** Space kept around a fitted image, in viewport pixels. */

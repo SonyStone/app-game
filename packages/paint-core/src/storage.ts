@@ -2,7 +2,14 @@ import type { RendererToolState } from '@app-game/abr-paint/gpu/toolState';
 import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
-import { MAX_DOCUMENT_BYTES, MAX_DOCUMENT_TILES, TILE_BYTES, type DocumentHistory, type Layer } from './document';
+import {
+  MAX_DOCUMENT_BYTES,
+  MAX_DOCUMENT_TILES,
+  TILE_BYTES,
+  type DocumentHistory,
+  type Layer,
+  type PsdDocumentIdentity
+} from './document';
 import { packTile, unpackTile } from './tilePixels';
 
 /** Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. */
@@ -10,17 +17,19 @@ export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
 /**
  * Copies metadata while sharing immutable committed tile snapshots. `features` holds document feature data by feature
- * ID, including data of features this runtime does not have.
+ * ID, including data of features this runtime does not have. Optional PSD identity survives subsequent exports.
  */
 export function snapshotDocument(
   layers: Layer[],
   activeId: string,
   camera: Camera,
   features: Readonly<Record<string, unknown>> = {},
-  linearBlending = true
+  linearBlending = true,
+  psdIdentity?: PsdDocumentIdentity
 ) {
   return {
     version: 2 as const,
+    ...(psdIdentity ? { psdIdentity: structuredClone(psdIdentity) } : {}),
     tileSize: TILE_SIZE,
     activeId,
     blending: linearBlending ? ('linear' as const) : ('classic' as const),
@@ -44,6 +53,7 @@ export function restoreDocument(value: unknown): {
   camera: Camera;
   features: Record<string, unknown>;
   linearBlending: boolean;
+  psdIdentity?: PsdDocumentIdentity;
 } {
   const parsed = savedSchema.parse(value);
   if (
@@ -83,6 +93,7 @@ export function restoreDocument(value: unknown): {
     activeId: parsed.activeId,
     camera: parsed.camera,
     features: { ...legacy, ...parsed.features },
+    psdIdentity: parsed.psdIdentity,
     linearBlending
   };
 }
@@ -166,7 +177,27 @@ const handoffSchema = z.object({
     source: z.object({ id: z.number(), label: z.string(), layers: z.array(z.object({ tiles: z.instanceof(Map) })) })
   })
 });
+const psdIdentitySchema = z
+  .object({
+    creation: z.object({
+      originalDocumentId: z.string().regex(/^xmp\.did:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+      instanceId: z.string().regex(/^xmp\.iid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i),
+      when: z.iso.datetime({ offset: true }),
+      creatorTool: z.literal('Paint')
+    }),
+    nextLayerId: z.number().int().min(2).max(2147483647),
+    layers: z.record(z.string(), z.object({ id: z.number().int().positive().max(2147483647), time: finite.positive() }))
+  })
+  .refine((identity) => {
+    const ids = Object.values(identity.layers).map((layer) => layer.id);
+    return (
+      new Set(ids).size === ids.length &&
+      ids.every((id) => id < identity.nextLayerId) &&
+      identity.creation.originalDocumentId.slice(8) === identity.creation.instanceId.slice(8)
+    );
+  }, 'Invalid PSD creation or layer identities.');
 const savedSchema = z.object({
+  psdIdentity: psdIdentitySchema.optional(),
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   tileSize: z.literal(TILE_SIZE),
   activeId: z.string(),

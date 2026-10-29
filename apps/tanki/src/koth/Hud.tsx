@@ -168,6 +168,7 @@ function KillFeed(props: { feed: HudState['feed'] }) {
             <Show when={entry().killer}>
               {(killer) => <span style={{ color: TEAM_CSS[killer().team] }}>{seatName(t, killer())}</span>}
             </Show>
+            <Show when={entry().turret}>{(turret) => <span style={{ color: TEAM_CSS[turret()] }}>{t('seat.turret')}</span>}</Show>
             <span class="px-1.5">✕</span>
             <span style={{ color: TEAM_CSS[entry().victim.team] }}>{seatName(t, entry().victim)}</span>
           </div>
@@ -325,7 +326,7 @@ export function MatchResult(props: { state: HudState | undefined; onRestart: () 
 }
 
 /** The name of whoever sits in `seat`, in the display's language: the player, or a team's seat counted from 1. */
-function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) {
+export function seatName(t: ReturnType<typeof useKothI18n>['t'], seat: SeatHud) {
   if (seat.player) {
     return seat.human ? t('seat.you') : t('seat.youBot');
   }

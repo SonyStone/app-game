@@ -168,6 +168,7 @@
 }
 
 .inspector {
+  overflow-y: auto;
   border-left: 1px solid #1a1a1a;
 }
 
@@ -215,7 +216,7 @@
 }
 
 .inspectorBody {
-  flex: 1;
+  flex: 1 0 160px;
   min-height: 0;
   overflow: auto;
 }
@@ -246,24 +247,6 @@
   &:active {
     cursor: grabbing;
   }
-}
-
-.imageLayer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  transform-origin: 0 0;
-  background: repeating-conic-gradient(#cfcfcf 0 25%, #ffffff 0 50%) 0 0 / 16px 16px;
-}
-
-.canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.pixelated {
-  image-rendering: pixelated;
 }
 
 .welcome {
@@ -389,4 +372,90 @@
   justify-content: center;
   gap: 8px;
   color: #ffb3a9;
+}
+
+.previewLabel {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 24px);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 4px 6px;
+  background: #3a3020;
+  color: #f0d7a4;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.provenance {
+  margin: 0;
+  padding: 4px 10px;
+  background: #242424;
+  color: #aaa;
+  font-size: 10px;
+}
+
+.workspace {
+  input[type='number'],
+  input[type='search'],
+  select {
+    background: #242424;
+    color: #ddd;
+    border: 1px solid #555;
+    border-radius: 2px;
+    padding: 3px;
+    font: inherit;
+  }
+
+  details button,
+  [aria-label='Comparison controls'] button {
+    border: 1px solid #555;
+    background: #363636;
+    color: #ddd;
+    border-radius: 2px;
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  summary {
+    cursor: pointer;
+  }
+}
+
+/* A stable single line leaves canvas space to pixels. Expanded reports scroll independently. */
+.diagnostics {
+  flex-shrink: 0;
+  font-size: 11px;
+  background: #262626;
+  border-top: 1px solid #1a1a1a;
+
+  > summary {
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  &[open] {
+    max-height: 180px;
+    overflow: auto;
+  }
+}
+
+.canvasStatus {
+  position: absolute;
+  bottom: 32px;
+  left: 8px;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 4px 6px;
+  background: #3a3020;
+  color: #f0d7a4;
+  font-size: 11px;
+  pointer-events: none;
 }

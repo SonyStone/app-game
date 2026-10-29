@@ -8,11 +8,12 @@ import { angleBetween, inArc, turnInPlace } from './classes/casemate';
 import { TACTICS, TOUGHNESS } from './classes/tactics';
 import { chargedShell, type Trigger } from './classes/weapon';
 import { createDriver, type Obstacle } from './driver';
-import type { Kit } from './kits';
+import { KIT_REPAIR, type Kit } from './kits';
+import { isOpened, type Shortcut } from './front';
 import { inBase, onPoint, type KothMap } from './map';
 import { cellAt, floodCosts, isOpenAt, searchNearest, cellCenter, sightClear, type NavGrid } from './navigation';
 import { captureRate, rivalOf, type CaptureRules, type CaptureState } from './rules';
-import { DANGER_RANGE, type Member, type TeamBoard } from './team';
+import { type Member, type TeamBoard } from './team';
 
 type Point = { x: number; y: number };
 
@@ -86,6 +87,8 @@ export function createBot(member: Member, context: BotContext) {
   let kit: Readonly<Kit> | undefined;
   let gun: Aim = { target: undefined, since: 0, reaction: 0, offset: undefined, shots: 0, seenAt: -Infinity, settledFrom: 0, lag: undefined };
   let dodge: { until: number; direction: Point } | undefined;
+  /** Where a casemate hull turning on the spot stood in its turn at the last look, to tell a wedged one (see `wedged`). */
+  let swing: { at: number; rotation: number } | undefined;
   /** The drive direction the driver planned last step, where an idle turret looks. */
   let lastMove: Point = { x: 0, y: 0 };
   const judged = new Set<number>();
@@ -191,7 +194,13 @@ export function createBot(member: Member, context: BotContext) {
       const position = tank.hull.translation();
       const travel = task?.hold ? undefined : task?.destination;
       const cost = costFor(task?.route ?? 'normal');
-      const breach = breacher.step(now, tank, { destination: travel, allowed: task !== undefined && BREACH_ACTIONS.has(task.action), cost, route: driver.path });
+      const breach = breacher.step(now, tank, {
+      destination: travel,
+      allowed: task !== undefined && BREACH_ACTIONS.has(task.action),
+      prefer: task?.action === 'openWay',
+      cost,
+      route: driver.path
+    });
       // The gun may want the hull still or turning on the spot; the driver then waits, so it does not take the stop for being stuck.
       // A breach that shoots works the gun itself, and one under way drives the tank.
       const stance = breach?.aim !== undefined ? {} : aim(tank, dt, now, lastMove);
@@ -214,17 +223,53 @@ export function createBot(member: Member, context: BotContext) {
       // A casemate gun turns its whole hull to aim, on the spot, at a wall to break too; a charging one holds still.
       const turnTo = breach?.aim !== undefined ? (mount.kind === 'casemate' && !inArc(tank, breach.aim, mount.arc - ARC_MARGIN) ? breach.aim : undefined) : stance.turnTo;
 
-      if (turnTo !== undefined && mount.kind === 'casemate' && !dodge) {
+      const pivoting = turnTo !== undefined && mount.kind === 'casemate' && !dodge;
+      // A hull wedged where it cannot swing round, as in a crater shot into a building, backs out and tries again.
+      const backing = pivoting ? driver.backingOut(now) : undefined;
+
+      if (backing) {
+        member.pivot = undefined;
+        swing = undefined;
+        move = backing;
+      } else if (pivoting) {
         member.pivot ??= { x: position.x, y: position.y };
         move = turnInPlace(tank, member.pivot, turnTo, mount.traverse, tank.pullSpeed);
+
+        if (wedged(tank, now)) {
+          driver.backOut(now, position, tank.hull.rotation());
+          member.pivot = undefined;
+        }
       } else {
         member.pivot = undefined;
+        swing = undefined;
       }
 
       lastMove = planned;
       combat.drive(tank, move);
     }
   };
+
+  /**
+   * Whether the casemate hull turning on the spot is wedged: it turned less than `WEDGED_TURN`
+   * rad over the last `WEDGED_TIME` s, as it does when the sides of a crater or a corner keep it
+   * from swinging round. A turn that goes on turns faster than that until within the gun's arc.
+   */
+  function wedged(tank: Tank, now: number) {
+    const rotation = tank.hull.rotation();
+
+    if (!swing) {
+      swing = { at: now, rotation };
+      return false;
+    }
+
+    if (now - swing.at < WEDGED_TIME) {
+      return false;
+    }
+
+    const turned = Math.abs(angleBetween(swing.rotation, rotation));
+    swing = { at: now, rotation };
+    return turned < WEDGED_TURN;
+  }
 
   /**
    * The drive direction of a sidestep away from an enemy shell about to hit the tank, or
@@ -336,7 +381,7 @@ export function createBot(member: Member, context: BotContext) {
 
       if ((range < context.pace().botSight || inScope) && combat.lineOfSight(position, at)) {
         visible.add(enemy);
-        board.see(enemy);
+        board.see(enemy, member);
       }
     }
   }
@@ -353,18 +398,18 @@ export function createBot(member: Member, context: BotContext) {
     const underFire = context.clock() - member.shotAt < UNDER_FIRE;
     const inCover = board
       .known()
-      .every((sighting) => distance(sighting.position, position) > DANGER_RANGE || !combat.lineOfSight(sighting.position, position));
+      .every((sighting) => distance(sighting.position, position) > board.threatReach(sighting.tank) || !combat.lineOfSight(sighting.position, position));
 
     const reach = TACTICS[member.tankClass.id].reach;
 
     return {
       onPoint: onPoint(map, position),
       pointLocked: capture.locked > 0,
-      atPerch: member.role === 'sniper' && distance(position, board.perchSpot(member)) < PERCHED,
+      atPerch: (member.role === 'sniper' || board.coversRetreat(member)) && distance(position, board.perchSpot(member)) < PERCHED,
       pointOurs: capture.owner === member.team,
       enemyOnPoint: rivalsOnPoint() > 0,
-      mustStage: board.phase === 'gather',
-      staged: board.phase === 'go',
+      mustStage: board.phase === 'gather' || board.mustWait(member),
+      staged: board.phase === 'go' && !board.mustWait(member),
       hasTarget: target !== undefined,
       targetNearPoint: targetAt !== undefined && distance(targetAt, map.point) < NEAR_POINT,
       targetVisible: target !== undefined && visible.has(target),
@@ -378,19 +423,30 @@ export function createBot(member: Member, context: BotContext) {
       safe: inCover && !underFire,
       atBase: inBase(map.bases[member.team], position),
       repaired: !coreOpen && armor > REPAIRED,
+      combatReady: !coreOpen && armor >= TACTICS[member.tankClass.id].retreat,
       allyNeedsHelp: help !== undefined,
       attackerInRange: help !== undefined && visible.has(help.attacker) && distance(position, help.attacker.hull.translation()) < reach,
-      regroupCalled: board.intent === 'regroup'
+      // A Sniper keeps watching from its perch when the team regroups; when it falls back, the fit gather while the hurt mend.
+      regroupCalled:
+        member.role !== 'sniper' &&
+        (board.intent === 'regroup' || (board.intent === 'fallBack' && !board.coversRetreat(member) && !coreOpen && armor >= TACTICS[member.tankClass.id].retreat)),
+      fallBackCalled: board.intent === 'fallBack',
+      coveringRetreat: board.coversRetreat(member)
     };
   }
 
   /**
    * The enemy to fight: the team's focus if the team knows where it is, else the nearest enemy
-   * the bot sees, else the nearest one the team knows of.
+   * the bot sees, else the nearest one the team knows of. A flanker hunts its own prey instead
+   * (see `choosePrey`).
    */
   function chooseTarget(tank: Tank) {
     const position = tank.hull.translation();
     const focus = board.focus;
+
+    if (member.role === 'flank') {
+      return choosePrey(position);
+    }
 
     const sight = Math.max(context.pace().botSight, TACTICS[member.tankClass.id].reach);
 
@@ -401,6 +457,35 @@ export function createBot(member: Member, context: BotContext) {
     const nearest = (tanks: Tank[]) => tanks.sort((a, b) => distance(position, whereIs(a)) - distance(position, whereIs(b)))[0];
 
     return nearest([...visible]) ?? nearest(board.known().map((sighting) => sighting.tank).filter((enemy) => distance(position, whereIs(enemy)) < sight));
+  }
+
+  /**
+   * The enemy a flanker goes after, of those the team knows within `PREY_RANGE` px: the nearest,
+   * counting an enemy Sniper, an enemy with its core open or badly hit, and one with no ally of its
+   * own near, as nearer than it is, so a Scout hunts the Sniper and picks off stragglers rather
+   * than taking on a group head on.
+   */
+  function choosePrey(position: Point) {
+    let best: { tank: Tank; score: number } | undefined;
+
+    for (const sighting of board.known()) {
+      const at = whereIs(sighting.tank);
+      const range = distance(position, at);
+
+      if (range > PREY_RANGE) {
+        continue;
+      }
+
+      const sniper = classOf(sighting.tank) === 'sniper';
+      const alone = !board.known().some((other) => other !== sighting && distance(other.position, at) < PREY_ESCORT);
+      const score = range - (sniper ? PREY_SNIPER : 0) - (combat.isCoreOpen(sighting.tank) ? PREY_OPEN : 0) - (1 - combat.armorLeft(sighting.tank)) * PREY_HURT - (alone ? PREY_ALONE : 0);
+
+      if (!best || score < best.score) {
+        best = { tank: sighting.tank, score };
+      }
+    }
+
+    return best?.tank;
   }
 
   /**
@@ -436,13 +521,102 @@ export function createBot(member: Member, context: BotContext) {
       stats.goalChanges++;
     }
 
-    if (task && plan && steps[0] === task.action && choice.goal.name === plan.goal) {
+    // The same action for a different kit is a new task.
+    const sameKit = task?.action !== 'pickUpKit' || task.kit?.kit === kit;
+
+    if (task && plan && steps[0] === task.action && choice.goal.name === plan.goal && sameKit) {
       plan = { goal: choice.goal.name, steps, index: 0 };
       return;
     }
 
     plan = { goal: choice.goal.name, steps, index: 0 };
     task = startTask(tank, steps[0]);
+    announce(plan.goal, task);
+  }
+
+  /**
+   * Says on the team's radio what the bot sets out to do, when that is worth knowing: going for a
+   * repair kit or home to mend, working round an enemy, coming to an ally's help, taking its
+   * firing spot, or holding or taking the point. Calls for help and the team's focus are the
+   * board's to make (see `createTeamBoard`).
+   */
+  function announce(goal: BotGoal, task: Task) {
+    const at = (point: Point) => ({ x: point.x, y: point.y });
+
+    switch (task.action) {
+      case 'pickUpKit':
+        if (task.kit) {
+          board.say(member, 'kit', { marker: { kind: 'kit', ...at(task.kit.kit) } });
+        }
+
+        break;
+
+      case 'retreat':
+        if (goal === 'repair' || goal === 'patch') {
+          board.say(member, 'repairing', { marker: { kind: 'base', ...board.baseSpot(member) } });
+        }
+
+        break;
+
+      case 'flank':
+        if (task.target) {
+          board.say(member, 'flanking', { tankClass: classOf(task.target), marker: { kind: 'enemy', ...at(whereIs(task.target)), on: task.target } });
+        }
+
+        break;
+
+      case 'moveToSupport':
+        if (task.ally?.tank) {
+          board.say(member, 'helping', { ally: task.ally, marker: { kind: 'help', ...at(task.ally.tank.hull.translation()), on: task.ally.tank } });
+        }
+
+        break;
+
+      case 'openWay': {
+        const shortcut = board.breachOf(member);
+
+        if (shortcut) {
+          board.say(member, 'breaching', { priority: 2, lane: shortcut.lane, marker: { kind: 'breach', ...at(shortcut.wall) } });
+        }
+
+        break;
+      }
+
+      case 'stage':
+        if (board.phase === 'go') {
+          board.say(member, 'waitForTeam');
+        }
+
+        break;
+
+      case 'goToPerch':
+        board.say(member, 'perch', { marker: { kind: 'hold', ...at(board.perchSpot(member)) } });
+        break;
+
+      case 'guardPoint':
+        if (goal === 'defend') {
+          board.say(member, 'holdPoint', { marker: { kind: 'hold', ...at(map.point) } });
+        }
+
+        break;
+
+      case 'holdPost': {
+        const post = board.postOf(member);
+
+        if (post) {
+          board.say(member, 'holdLane', { lane: post.lane, marker: { kind: 'hold', ...at(post.at) } });
+        }
+
+        break;
+      }
+
+      case 'goToPoint':
+        if (goal === 'capture' && !facts.enemyOnPoint && board.phase === 'none') {
+          board.say(member, 'capturing', { marker: { kind: 'attack', ...at(map.point) } });
+        }
+
+        break;
+    }
   }
 
   function advancePlan(tank: Tank, now: number, status: 'done' | 'failed') {
@@ -461,9 +635,16 @@ export function createBot(member: Member, context: BotContext) {
     return (stats.actions[action] ??= { started: 0, done: 0, failed: 0 });
   }
 
-  /** What the bot does without a plan: guard the point if it is ours, else head for it. */
+  /**
+   * What the bot does without a plan: a Sniper goes to its perch; others hold their post or the
+   * point if the point is ours, else head for it.
+   */
   function idleAction(): BotAction {
-    return facts.pointOurs ? 'guardPoint' : 'goToPoint';
+    if (member.role === 'sniper') {
+      return 'goToPerch';
+    }
+
+    return facts.pointOurs ? (board.postOf(member) && !facts.enemyOnPoint ? 'holdPost' : 'guardPoint') : 'goToPoint';
   }
 
   /** The bot's situation for the planner: its facts plus travel, kill and capture estimates. */
@@ -482,8 +663,9 @@ export function createBot(member: Member, context: BotContext) {
     const progress = capture.capturer === member.team ? capture.progress : 0;
     const targetAt = target && whereIs(target);
     cover = findCover(position);
-    const choice = chooseKit(costs);
+    const choice = chooseKit(costs, travel(board.baseSpot(member)));
     kit = choice?.kit;
+    const armor = combat.armorLeft(tank);
 
     return {
       role: member.role,
@@ -498,12 +680,16 @@ export function createBot(member: Member, context: BotContext) {
         base: travel(board.baseSpot(member)),
         rally: travel(board.rally()),
         kit: choice?.travel ?? Infinity,
-        perch: member.role === 'sniper' ? travel(board.perchSpot(member)) : Infinity
+        perch: member.role === 'sniper' || board.coversRetreat(member) ? travel(board.perchSpot(member)) : Infinity,
+        post: travel(board.postOf(member)?.at),
+        // The wall itself cannot be driven to; the way to it is the way to the nearer of the places it joins.
+        breach: Math.min(travel(board.breachOf(member)?.from), travel(board.breachOf(member)?.to))
       },
       kill: { front: killTime(position, target, false), rear: killTime(position, target, true) },
       capture: ((1 - progress) * context.rules.captureTime) / captureRate(alliesOn + member.tankClass.capture),
       enemyClock: (capture.held[rival] / context.rules.holdTime) * (capture.owner === rival ? 1 : 0.6),
       targetClearsPoint: target !== undefined && onPoint(map, whereIs(target)) && rivalsOnPoint() <= 1,
+      kitRestores: choice !== undefined && armor + (1 - armor) * KIT_REPAIR[choice.kit.size] >= TACTICS[member.tankClass.id].retreat,
       eagerness: TACTICS[member.tankClass.id].point,
       current: plan?.goal
     };
@@ -538,7 +724,7 @@ export function createBot(member: Member, context: BotContext) {
 
     const weapon = tankClass.weapon;
     const shots = hits / accuracy;
-    const charging = weapon.kind === 'charge' ? shots * weapon.time : 0;
+    const charging = weapon.kind === 'charge' ? shots * weapon.time : weapon.kind === 'spin' ? weapon.spinUp * (1 - (member.weapon?.spin ?? 0)) : 0;
     return shots * tankClass.interval + charging + exposure;
   }
 
@@ -550,20 +736,44 @@ export function createBot(member: Member, context: BotContext) {
   /**
    * The repair kit most worth driving to, with the seconds that take: of the kits that lie there
    * or will be back by the time the bot arrives, the nearest, a small kit counting
-   * `SMALL_KIT_PENALTY` seconds longer for mending less.
+   * `SMALL_KIT_PENALTY` seconds longer for mending less, and a kit known enemies see counting
+   * `KIT_EXPOSURE` seconds longer per enemy. The bot waits a moment for a kit to come back only
+   * where no enemy sees it, never drives to one more than `KIT_DANGER` enemies see, and leaves
+   * alone a kit an ally was just destroyed at (see `TeamBoard.isDeadly`) or one a teammate gets
+   * to first (see `TeamBoard.kitClaimed`). A kit no nearer than the base, where the bot mends in
+   * full, or on the enemy's side of a point the team does not hold, is no kit to go for: a bot
+   * whose kit was taken goes home rather than from kit to kit across the map.
    *
    * @param costs - Driving costs from the bot to every cell, from `floodCosts`.
+   * @param home - Seconds of driving to the bot's base.
    */
-  function chooseKit(costs: Float32Array) {
+  function chooseKit(costs: Float32Array, home: number) {
     const now = context.clock();
-    let best: { kit: Readonly<Kit>; travel: number; score: number } | undefined;
+    const enemySide = Math.sign(map.bases[rivalOf(member.team)].zone.x - map.point.x);
+    const ours = context.capture().owner === member.team;
+    let best: { kit: Readonly<Kit>; travel: number } | undefined;
 
     for (const candidate of context.kits) {
       const travel = costs[cellAt(grid, candidate)] / (member.tankClass.speed * TRAVEL_SHARE);
-      const score = Math.max(travel, candidate.readyAt - now) + (candidate.size === 'small' ? SMALL_KIT_PENALTY : 0);
+      const exposure = board.danger(cellAt(grid, candidate));
+      const beyond = !ours && (candidate.x - map.point.x) * enemySide > 0;
 
-      if (Number.isFinite(travel) && candidate.readyAt - now < travel + KIT_WAIT && (!best || score < best.score)) {
-        best = { kit: candidate, travel: score, score };
+      if (
+        !Number.isFinite(travel) ||
+        travel >= home ||
+        beyond ||
+        exposure > KIT_DANGER ||
+        board.isDeadly(candidate) ||
+        board.kitClaimed(member, candidate, now + travel)
+      ) {
+        continue;
+      }
+
+      const wait = exposure > 0 ? 0 : KIT_WAIT;
+      const score = Math.max(travel, candidate.readyAt - now) + (candidate.size === 'small' ? SMALL_KIT_PENALTY : 0) + exposure * KIT_EXPOSURE;
+
+      if (candidate.readyAt - now < travel + wait && (!best || score < best.travel)) {
+        best = { kit: candidate, travel: score };
       }
     }
 
@@ -624,7 +834,7 @@ export function createBot(member: Member, context: BotContext) {
 
     switch (task.action) {
       case 'goToPoint': {
-        task.destination = escortSpot(position) ?? board.pointSpot(member);
+        task.destination = convoySpot(position) ?? escortSpot(position) ?? board.pointSpot(member);
         task.route = 'normal';
         return distance(position, map.point) < map.point.radius - 20 ? 'done' : 'running';
       }
@@ -635,7 +845,7 @@ export function createBot(member: Member, context: BotContext) {
         task.arrive = 30;
         board.stage(member, distance(position, task.destination) < STAGED_RADIUS);
 
-        if (board.phase === 'go') {
+        if (board.phase === 'go' && !board.mustWait(member)) {
           return 'done';
         }
 
@@ -654,9 +864,59 @@ export function createBot(member: Member, context: BotContext) {
       }
 
       case 'guardPoint': {
-        task.destination = wander(task, board.pointSpot(member), now);
-        task.arrive = 20;
+        // The bot keeping the point stands still on its chosen spot; others shift about on theirs.
+        const keeping = board.keepsPoint(member);
+        task.destination = keeping ? board.pointSpot(member) : wander(task, board.pointSpot(member), now);
+        task.arrive = keeping ? 10 : 20;
         return context.capture().owner === member.team ? 'running' : 'failed';
+      }
+
+      case 'openWay': {
+        // The bot drives to the nearer side of the wall, then for the other side through the wall:
+        // its breacher breaks the wall open on the way.
+        const shortcut = board.breachOf(member);
+
+        if (!shortcut) {
+          return 'failed';
+        }
+
+        if (task.wall !== shortcut) {
+          // The near side is the one the bot can drive to the quicker, the wall still standing.
+          const costs = floodCosts(grid, position);
+          const [one, other] = shortcut.sides;
+          const near = costs[cellAt(grid, one)] <= costs[cellAt(grid, other)] ? one : other;
+          task.wall = shortcut;
+          task.crossFrom = near;
+          task.crossTo = near === one ? other : one;
+          task.crossing = false;
+        }
+
+        task.crossing ||= distance(position, task.crossFrom!) < CROSS_START;
+
+        // Through to the other side, the bot has opened the way, if only as wide as its hull.
+        if (isOpened(grid, shortcut) || (task.crossing && distance(position, task.crossTo!) < CROSS_START)) {
+          board.finishBreach(member);
+          return 'done';
+        }
+
+        task.destination = task.crossing ? task.crossTo : task.crossFrom;
+        task.arrive = task.crossing ? 10 : 30;
+        return 'running';
+      }
+
+      case 'holdPost': {
+        // At its post the bot stands in cover beside the way and watches it; the point under attack calls it back.
+        const post = board.postOf(member);
+
+        if (!post || context.capture().owner !== member.team || rivalsOnPoint() > 0) {
+          return 'failed';
+        }
+
+        task.destination = post.at;
+        task.route = 'safe';
+        task.arrive = 20;
+        task.hold = distance(position, post.at) < POSTED;
+        return 'running';
       }
 
       case 'approach': {
@@ -676,6 +936,13 @@ export function createBot(member: Member, context: BotContext) {
 
         if (lost(task, task.target, now, LOSE_SIGHT)) {
           return 'failed';
+        }
+
+        // A sniper fights from where it stands, its perch if it is on it; the others circle toward the target's rear.
+        if (member.role === 'sniper') {
+          task.destination = position;
+          task.hold = true;
+          return 'running';
         }
 
         task.destination = circleAround(task, position, task.target, now);
@@ -794,6 +1061,18 @@ export function createBot(member: Member, context: BotContext) {
           return combat.armorLeft(tank) > task.kit.armor + 0.005 ? 'done' : 'failed';
         }
 
+        // A kit not back yet is waited for only while no enemy sees it, and never where an ally just died.
+        const waiting = task.kit.kit.readyAt > now;
+
+        // A teammate that gets there first has it: one kit is no use to two tanks.
+        const eta = now + distance(position, task.kit.kit) / (member.tankClass.speed * TRAVEL_SHARE);
+
+        if (board.isDeadly(task.kit.kit) || (waiting && board.danger(cellAt(grid, task.kit.kit)) > 0) || board.kitClaimed(member, task.kit.kit, eta)) {
+          return 'failed';
+        }
+
+        board.claimKit(member, task.kit.kit, eta);
+
         task.destination = task.kit.kit;
         task.route = 'safe';
         task.arrive = 4;
@@ -822,7 +1101,7 @@ export function createBot(member: Member, context: BotContext) {
         task.arrive = 30;
         const gathered = context.allies.filter((ally) => ally.tank && distance(ally.tank.hull.translation(), rally) < 180).length;
         const waited = now - task.startedAt > REGROUP_TIME;
-        return board.intent !== 'regroup' || waited || gathered >= 3 ? 'done' : 'running';
+        return (board.intent !== 'regroup' && board.intent !== 'fallBack') || waited || gathered >= 3 ? 'done' : 'running';
       }
     }
   }
@@ -854,15 +1133,27 @@ export function createBot(member: Member, context: BotContext) {
     const at = target.hull.translation();
     const offset = { x: position.x - at.x, y: position.y - at.y };
     const duel = TACTICS[member.tankClass.id].duel;
-    const range = Math.min(Math.max(Math.hypot(offset.x, offset.y), duel.min), duel.max);
-    const angle = Math.atan2(offset.y, offset.x) + (task.side ?? 1) * ORBIT_STEP;
-    let spot = { x: at.x + Math.cos(angle) * range, y: at.y + Math.sin(angle) * range };
-
-    if (!isOpenAt(grid, spot) || !board.canSee(spot, at)) {
-      spot = position;
-      task.side = -(task.side ?? 1);
-    }
-
+    const lead = member.role === 'lead';
+    const current = Math.hypot(offset.x, offset.y);
+    // The lead presses in, nose and front plates to the target, rather than circling.
+    const range = Math.min(Math.max(lead ? current * LEAD_PRESS : current, duel.min), duel.max);
+    const step = lead ? LEAD_ORBIT_STEP : ORBIT_STEP;
+    const usable = (spot: Point) => isOpenAt(grid, spot) && board.canSee(spot, at);
+    const spotAt = (side: number, distance: number) => {
+      const angle = Math.atan2(offset.y, offset.x) + side * step;
+      return { x: at.x + Math.cos(angle) * distance, y: at.y + Math.sin(angle) * distance };
+    };
+    // Blocked one way, the bot circles the other way, then closer in; it stops only when boxed in, as a still tank is easy to hit.
+    const side = task.side ?? 1;
+    const options = [
+      { side, spot: spotAt(side, range) },
+      { side: -side, spot: spotAt(-side, range) },
+      { side, spot: spotAt(side, Math.max(range * 0.7, duel.min)) },
+      { side: -side, spot: spotAt(-side, Math.max(range * 0.7, duel.min)) }
+    ];
+    const choice = options.find((option) => usable(option.spot));
+    task.side = choice?.side ?? -side;
+    const spot = choice?.spot ?? position;
     task.orbit = { spot, until: now + ORBIT_INTERVAL };
     return spot;
   }
@@ -906,6 +1197,26 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     return supportSpot(ally);
+  }
+
+  /**
+   * In a coordinated push, a bot behind the lead stays behind it rather than overtaking it, so the
+   * lead's armor meets the fire first and the team arrives together: a spot `CONVOY_GAP` px behind
+   * the lead toward the base, to one side of its track. `undefined` when the bot leads, flanks or
+   * snipes, there is no push under way or no lead, or the lead is near the point or far away.
+   */
+  function convoySpot(position: Point) {
+    const lead = board.phase === 'go' && (member.role === 'assault' || member.role === 'support') ? board.spearhead() : undefined;
+    const at = lead?.tank?.hull.translation();
+
+    if (!at || distance(at, map.point) < map.point.radius + CONVOY_RELEASE || distance(position, at) > CONVOY_REACH) {
+      return undefined;
+    }
+
+    const ahead = normalize({ x: map.point.x - at.x, y: map.point.y - at.y });
+    const side = member.index % 2 === 0 ? 1 : -1;
+    const spot = { x: at.x - ahead.x * CONVOY_GAP - ahead.y * side * CONVOY_SIDE, y: at.y - ahead.y * CONVOY_GAP + ahead.x * side * CONVOY_SIDE };
+    return isOpenAt(grid, spot) ? spot : undefined;
   }
 
   function supportSpot(ally: Member) {
@@ -1049,8 +1360,9 @@ export function createBot(member: Member, context: BotContext) {
         return charge(tank, goal, { reacted, aligned, clear, inReach, worth, range });
 
       default:
-        // Held while the shot is worth it: the gun fires as its cadence allows, and a gatling keeps spinning.
-        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear });
+        // Held while the shot is worth it: the gun fires as its cadence allows. A gatling revs as
+        // soon as a target in sight comes near its reach, so it fires the moment it is on target.
+        context.trigger(member, { fire: reacted && aligned && worth && inReach && clear, rev: weaponSpec.kind === 'spin' && range < tactics.reach * REV_REACH });
         return {};
     }
   }
@@ -1068,8 +1380,16 @@ export function createBot(member: Member, context: BotContext) {
       .sort((a, b) => distance(position, a.position) - distance(position, b.position))[0];
     let goal: number;
 
+    const post = task?.action === 'holdPost' ? board.postOf(member) : undefined;
+    const perch = member.role === 'sniper' || board.coversRetreat(member) ? board.perchSpot(member) : undefined;
+
+    // At its post or perch, the gun watches the way the enemy comes by, so a Sniper's scope sees them come out.
     if (threat) {
       goal = Math.atan2(threat.position.y - position.y, threat.position.x - position.x);
+    } else if (post && distance(position, post.at) < POSTED * 2) {
+      goal = Math.atan2(post.watch.y - position.y, post.watch.x - position.x);
+    } else if (perch && distance(position, perch) < PERCHED * 2) {
+      goal = Math.atan2(perch.watch.y - position.y, perch.watch.x - position.x);
     } else if (Math.hypot(move.x, move.y) > 0.2) {
       goal = Math.atan2(move.y, move.x);
     } else {
@@ -1077,9 +1397,11 @@ export function createBot(member: Member, context: BotContext) {
     }
 
     turnTurret(tank, goal, dt * IDLE_TURN, member.tankClass.turretSpeed);
-    // A charge is held a moment for a target that slipped out of sight, then dropped unfired.
+    // A charge is held a moment for a target that slipped out of sight, then dropped unfired; a
+    // gatling keeps revving for an enemy known to be just out of sight within its reach.
     const holding = member.weapon?.charge !== undefined && context.clock() - gun.seenAt < KEEP_CHARGE;
-    context.trigger(member, { fire: holding, cancel: !holding });
+    const rev = member.tankClass.weapon.kind === 'spin' && threat !== undefined && distance(position, threat.position) < TACTICS[member.tankClass.id].reach;
+    context.trigger(member, { fire: holding, cancel: !holding, rev });
     const mount = member.tankClass.mount;
 
     // A casemate gun on watch turns its hull toward what it watches, once it looks well away; on the move its hull leads the way.
@@ -1138,11 +1460,19 @@ export function createBot(member: Member, context: BotContext) {
   /**
    * Works a charged shot: turns the hull toward a target outside the gun's arc, then charges
    * standing still, fully unless the target is close or the bot is under fire, and lets go once
-   * charged and on target. A charge for a target it can no longer shoot at is dropped.
+   * charged and on target. A charge for a target it can no longer shoot at is dropped. On its way
+   * to a perch, cover or a repair, the bot keeps driving and shoots only a target closer than
+   * `CLOSE_SHOT`, so it gets where it is going.
    */
   function charge(tank: Tank, goal: number, shot: { reacted: boolean; aligned: boolean; clear: boolean; inReach: boolean; worth: boolean; range: number }) {
     const mount = member.tankClass.mount;
     const charging = member.weapon?.charge;
+
+    if (task && PASSING.has(task.action) && shot.range > CLOSE_SHOT) {
+      context.trigger(member, { fire: false, cancel: true });
+      return {};
+    }
+
     const outside = mount.kind === 'casemate' && !inArc(tank, goal, mount.arc - ARC_MARGIN);
     const wanted = shot.range < CLOSE_SHOT || context.clock() - member.shotAt < UNDER_FIRE ? HASTY_CHARGE : 1;
     const shootable = shot.reacted && shot.clear && shot.inReach && shot.worth;
@@ -1189,8 +1519,11 @@ export type Bot = ReturnType<typeof createBot>;
 /** How a route weighs the danger of being seen by known enemies. */
 type Route = 'normal' | 'sneaky' | 'safe';
 
+/** Actions on the way somewhere a casemate gun does not stop for a distant shot. */
+const PASSING = new Set<BotAction>(['goToPerch', 'retreat', 'repair', 'pickUpKit', 'takeCover', 'regroup', 'stage']);
+
 /** Actions on the way somewhere, during which a bot may break through a wall that is in the way. */
-const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport']);
+const BREACH_ACTIONS = new Set<BotAction>(['goToPoint', 'stage', 'flank', 'retreat', 'repair', 'pickUpKit', 'regroup', 'moveToSupport', 'openWay']);
 
 const STOP = { x: 0, y: 0 };
 /** Pixels past the hull's front at which the driver checks for a wall ahead. */
@@ -1236,6 +1569,11 @@ type Task = {
   arrivedAt?: number;
   orbit?: { spot: Point; until: number };
   wander?: { spot: Point; until: number };
+  /** The shortcut the team asked the bot to break open, the place beyond it to cross to, and whether it set out across. */
+  wall?: Shortcut;
+  crossFrom?: Point;
+  crossTo?: Point;
+  crossing?: boolean;
   /** The repair kit driven to, when it was due back as the bot set out, and the bot's armor then. */
   kit?: { kit: Readonly<Kit>; readyAt: number; armor: number };
 };
@@ -1253,6 +1591,10 @@ const REPLAN_JITTER = 1;
 const SCOPE_RANGE = 900;
 const SCOPE_ARC = 0.45;
 const PERCHED = 30;
+/** How close to its side of a shortcut's wall a bot must come before it drives across, through the wall. */
+const CROSS_START = 60;
+/** How close to its post a bot must be to stand still there. */
+const POSTED = 25;
 /** Enemies this close to the point are a threat to it. */
 const NEAR_POINT = 320;
 /** Seconds after a hit or near miss that the bot still feels under fire. */
@@ -1265,6 +1607,9 @@ const REPAIRED = 0.96;
  */
 const SMALL_KIT_PENALTY = 1.5;
 const KIT_WAIT = 2;
+/** Seconds a kit counts as farther per known enemy that sees it, and how many enemies may see a kit a bot still drives to. */
+const KIT_EXPOSURE = 3;
+const KIT_DANGER = 1.2;
 const KIT_TIMEOUT = 12;
 /** Share of its top speed a tank keeps on average along a path, slowing for turns, for travel estimates. */
 const TRAVEL_SHARE = 0.85;
@@ -1282,7 +1627,29 @@ const FLANK_TIMEOUT = 12;
 const REGROUP_TIME = 8;
 /** How far around the target the bot shifts every `ORBIT_INTERVAL` s in a head-on duel, at its class's range. */
 const ORBIT_STEP = 0.35;
+const LEAD_ORBIT_STEP = 0.2;
+/** Share of its range the lead closes in by at each step of a duel, down to its class's closest duel range. */
+const LEAD_PRESS = 0.85;
 const ORBIT_INTERVAL = 0.8;
+/**
+ * A flanker hunts enemies the team knows within `PREY_RANGE` px, counting a Sniper `PREY_SNIPER`
+ * px nearer than it is, one with its core open `PREY_OPEN` px, one wholly broken `PREY_HURT` px
+ * and one with no other enemy within `PREY_ESCORT` px `PREY_ALONE` px.
+ */
+const PREY_RANGE = 1000;
+const PREY_SNIPER = 450;
+const PREY_OPEN = 300;
+const PREY_HURT = 250;
+const PREY_ESCORT = 300;
+const PREY_ALONE = 200;
+/**
+ * In a push a bot trails the lead `CONVOY_GAP` px behind and `CONVOY_SIDE` px aside, while it is
+ * within `CONVOY_REACH` px of it, until the lead is within `CONVOY_RELEASE` px of the point's edge.
+ */
+const CONVOY_GAP = 90;
+const CONVOY_SIDE = 45;
+const CONVOY_REACH = 450;
+const CONVOY_RELEASE = 120;
 /** Angles off the target's tail and distances tried for a flanking spot. */
 const FLANK_OFFSETS: [angle: number, radius: number][] = [
   [0.55, 190],
@@ -1318,12 +1685,17 @@ const GROUP_REACH = 1.2;
  * a target out of sight for `KEEP_CHARGE` s.
  */
 const ARC_MARGIN = 0.03;
+/** A casemate hull that turned on the spot less than `WEDGED_TURN` rad in `WEDGED_TIME` s is wedged. */
+const WEDGED_TIME = 0.5;
+const WEDGED_TURN = 0.08;
 /** A casemate gun on watch turns toward threats within `WATCH_RANGE` px, once its view is `WATCH_SLACK` rad past its arc. */
 const WATCH_RANGE = 650;
 const WATCH_SLACK = 0.25;
 const HASTY_CHARGE = 0.45;
 const CLOSE_SHOT = 300;
 const KEEP_CHARGE = 1.5;
+/** A gatling revs for a target in sight within this share of its class's reach. */
+const REV_REACH = 1.2;
 /**
  * A shell flying at the tank is dodged if it would pass within `DODGE_MISS` px and arrives
  * within `DODGE_LOOKAHEAD` s but no sooner than `DODGE_REACTION` s, at its class's chance to
@@ -1355,7 +1727,7 @@ function worthReplanning(before: Partial<Record<BotFact, boolean>>, after: Parti
 }
 
 /** Facts whose every change makes a bot plan again. */
-const EITHER_WAY: BotFact[] = ['pointOurs', 'enemyOnPoint', 'mustStage', 'staged', 'regroupCalled', 'pointLocked'];
+const EITHER_WAY: BotFact[] = ['pointOurs', 'enemyOnPoint', 'mustStage', 'staged', 'regroupCalled', 'pointLocked', 'fallBackCalled', 'coveringRetreat'];
 /** Facts that make a bot plan again when they become true. */
 const WHEN_RAISED: BotFact[] = ['hasTarget', 'targetVisible', 'coreOpen', 'armorLow', 'underFire', 'allyNeedsHelp'];
 
