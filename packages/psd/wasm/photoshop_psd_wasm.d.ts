@@ -1,11 +1,29 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
  * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
  * arrays, including a supplied uniform shadow scale for strike descent. This imports source
  * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
  */
 export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
+ */
+export function formatTypeEngineReal26(value: number): Uint8Array;
+/**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ */
+export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
@@ -21,44 +39,6 @@ export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
- */
-export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- */
-export function formatTypeEngineReal26(value: number): Uint8Array;
-/**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
-/**
- * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
- * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
- * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
- * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
- * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
- */
-export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
-/**
- * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
- * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
- * unsupported outline programs throw. Does not shape text or authorize a document save.
- */
-export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
-/**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
  * Size must be in 0.5..=32767 points.
@@ -73,6 +53,26 @@ export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: numb
  */
 export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
 /**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
+/**
+ * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
+ * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
+ * unsupported outline programs throw. Does not shape text or authorize a document save.
+ */
+export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], tx: number, ty: number): Float32Array;
+/**
+ * Accumulates nominal hmtx advances with explicit shaped design adjustments and point spacing.
+ * Supply glyph IDs, signed design-unit adjustments and point spacing with equal lengths, plus a
+ * size in 0.5..=32767 points. Returns one binary32 point pen per glyph and a terminal pen, starting
+ * at zero. Base and spacing sums accumulate separately. Invalid operands or font programs throw.
+ * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
+ */
+export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+/**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
 export function readPsd(bytes: Uint8Array): any;
@@ -85,12 +85,6 @@ export function readPsd(bytes: Uint8Array): any;
  * Returns coverage and document-space bounds only. This does not admit CFF2 to addTextFont or SetText.
  */
 export function rasterizeCff2Strong(font_bytes: Uint8Array, design_coordinates: readonly number[], character: string, size: number, origin_x: number, origin_y: number): PsdCff2Coverage;
-/**
- * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
- * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
- * refuses. This proves thumbnail generation only, never editor-save equivalence.
- */
-export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Write one saved-history event using explicit retained metadata state.
  * If retained_instance_id matches the final event's instanceID, updates only action,
@@ -108,6 +102,12 @@ export function writeSavedHistory(xmp: Uint8Array, context: PsdPhotoshop26SaveCo
  * Throws on unsupported metadata layouts. A false result grants no save certificate.
  */
 export function checkPhotoshop26Save(left: Uint8Array, right: Uint8Array): any;
+/**
+ * Generate an independent baseline JPEG in Photoshop 26's resource-1036 envelope.
+ * Complete sRGB8 RGBA canvas pixels and explicit resolution are required. Resizing
+ * refuses. This proves thumbnail generation only, never editor-save equivalence.
+ */
+export function generatePhotoshop26Thumbnail(width: number, height: number, resolution: number, rgba: Uint8Array): Uint8Array;
 /**
  * Reads persisted styles, vectors, locks, labels, metadata and XMP without renderer admission.
  * Vector frame queries are separate from stored values and report malformed-name/rectangle refusals.
@@ -452,6 +452,21 @@ export interface PsdAllocationError extends Error {
 
 
 
+/** Explicit final-save context plus optional runtime leaves for a first saved event. */
+export type PsdXmpSaveContext = PsdPhotoshop26SaveContext & {
+  /** Required exactly when initialized source history has no saved event. */
+  initialEvent?: {
+    /** Actual generated xmp.iid UUID for first preparation, independent of the final instanceId. */
+    instanceId: string;
+    /** Actual ISO8601 preparation time with seconds and timezone. */
+    when: string;
+    /** Actual software agent for the first preparation event. */
+    softwareAgent: string;
+  } | null;
+};
+
+
+
 /** Current-state writes. All failures preserve bytes and revision. Merged output is rebuilt strictly.
  * RGB8 primary layers up to 2000x1000 only. No timeline, color-dissolve or OCIO authoring admission. */
 export type PsdCarrierEdit =
@@ -735,8 +750,14 @@ export interface PsdPhotoshop26SaveContext {
 }
 export interface PsdEditorSession {
   /**
-   * Apply a bounded Photoshop 26 reopen-equivalent transaction with explicit host operands.
+   * Apply an explicitly versioned Photoshop 26 compatibility transaction.
+   * visual/v3 selects v5 first, otherwise carry-patch, with route and strictExact accounting.
+   * visual/v2-carry-patch independently patches Layers-panel records and returns carried,
+   * rewritten, rendered and approximation accounting. Unknown structural references refuse.
+   * Native same-edit canvas and panel-state audit remains required for the new producer.
    * v5-source-host accepts original bytes, clocks, random IDs, an honest agent and user choices.
+   * Explicit layers-exact/v1-source-host uses the same inputs and reports rendered merged
+   * products in saveNote. Only complete layered opening is admitted; no automatic fallback.
    * All v1-v5 contracts refuse Fill opacity on a hidden RGB8 target at
    * save.carriedUntouched.hiddenFillOpacity. Selected native setters fail, while unselected
    * DOM setters reveal the target. Neither hidden-target transition is qualified here.
@@ -993,7 +1014,9 @@ export interface PsdEditorSession {
 /** Versioned opt-in with explicit current-save and per-edit layerTime values. */
 /** Browser-only source-host contract. Native host facts are neither accepted nor guessed. */
 export interface PsdSourceHostSaveContext {
-  readonly contract: "photoshop26.reopen-equivalent/v5-source-host";
+  readonly contract: "photoshop26.reopen-equivalent/v5-source-host" | "photoshop26.layers-exact/v1-source-host" | "photoshop26.visual/v1-source-host" | "photoshop26.visual/v2-carry-patch" | "photoshop26.visual/v3";
+  /** Layers-exact, visual v2 or visual v3. Omission requests ordinary complete layers. Unknown routes refuse. */
+  readonly importPolicy?: "completeLayers" | "mergedOnly" | "partial" | "layerReadFallback" | "unknown";
   /** Exact original bytes belonging to this pristine editor session. */
   readonly sourceBytes: Uint8Array;
   /** Real clocks, fresh random UUIDs, honest agent, basename and explicit RGB blend choice. */
@@ -1004,7 +1027,8 @@ export interface PsdSourceHostSaveContext {
   readonly groupEndTime?: number;
   /** Fresh preparation clock/UUID only if imported initialized history has no saved event. */
   readonly initialEvent?: { readonly instanceId: string; readonly when: string };
-  /** Supply both choice objects together. Omit both for the inherited endpoint-only type contract. */
+  /** Supply both choice objects together. Omission keeps v5's inherited endpoint-only contract;
+   * layers-exact and visual instead use factory choices, including text gamma 1.45. */
   readonly typeRendering?: {
     /** Explicit save choice. null disables; 1.45 is the Photoshop factory value. Enabled values are hundredths in [1,3]. */
     readonly textGamma: number | null;
@@ -1147,7 +1171,46 @@ export interface PsdReopenSaveWriters {
   readonly initialEvent?: { readonly instanceId: string; readonly when: string; readonly softwareAgent: string } | null;
 }
 /** IDs correspond to insertions in batch order; refusals leave all state unchanged. */
-export interface M01EditOutcome { readonly revision: bigint; readonly created: readonly number[]; readonly diagnostics: readonly never[]; }
+export interface M01EditOutcome { readonly revision: bigint; readonly created: readonly number[]; readonly diagnostics: readonly never[]; readonly saveNote?: PsdLayersExactNote | PsdVisualSaveNote | PsdVisualPatchNote | PsdVisualUnionNote; }
+/** Visual tier accounting. Native threshold qualification requires a separate compatibility audit. */
+export interface PsdVisualSaveNote {
+  /** Explicitly requested contract, never selected as a fallback. */
+  readonly contract: "photoshop26.visual/v1-source-host";
+  /** Empty for no-ops and source-composite-preserving renames. */
+  readonly renderedProducts: readonly ("mergedProcessPlanes" | "canvasTransparency" | "resource1036")[];
+  /** Host-recomputed products allowed to differ, subject to the visual threshold. */
+  readonly declaredDivergences: readonly ("storedComposite" | "textGammaFontCaches")[];
+  /** Original stricter refusal, or null for inherited v5 admissions. */
+  readonly v5Refusal: string | null;
+}
+/** V5-first union. Refusal fields describe the alternative writer without changing selected bytes. */
+export interface PsdVisualUnionNote extends Omit<PsdVisualPatchNote, "contract"> {
+  readonly contract: "photoshop26.visual/v3";
+  /** Selected writer. */ readonly route: "v5" | "carryPatch";
+  /** True exactly for v5 output. */ readonly strictExact: boolean;
+  /** Null when v5 admitted. */ readonly v5Refusal: string | null;
+  /** Null when patch admitted. */ readonly patchRefusal: string | null;
+}
+/** Independent carry-and-patch accounting; no native threshold measurement is implied. */
+export interface PsdVisualPatchNote {
+  /** Explicit requested writer contract. */
+  readonly contract: "photoshop26.visual/v2-carry-patch";
+  /** Original source products carried without fresh generation. */
+  readonly carried: readonly string[];
+  /** Requested properties and dependent structures rewritten. */
+  readonly rewritten: readonly string[];
+  /** Products rendered by PSD Viewer. */
+  readonly rendered: readonly string[];
+  /** Stored-product approximations, including unconverted source preview samples. */
+  readonly approximations: readonly string[];
+}
+/** Enumerates only products actually rendered; native distance is null without a native reference. */
+export interface PsdLayersExactNote {
+  readonly contract: "photoshop26.layers-exact/v1-source-host";
+  readonly renderedProducts: readonly ("mergedProcessPlanes" | "canvasTransparency" | "resource1036")[];
+  readonly v5Refusal: string | null;
+  readonly nativeCompositeDifference: null;
+}
 /** Absolute raster source mask; defaultColor is 0 or 255. Extents/samples remain untrimmed. */
 export interface RasterMask { left: number; top: number; width: number; height: number; samples: Uint8Array; defaultColor: number; disabled: boolean; }
 /** Read-only CFF1 layout result. No complete ink descriptor or saved text transaction is supplied. */
@@ -1306,21 +1369,6 @@ export type PsdSourceEdit = PsdSourceEditTarget & (
       /** Raw copy-on-sheet byte, 0 through 255. */ copyOnSheet: number;
     }
 );
-
-
-
-/** Explicit final-save context plus optional runtime leaves for a first saved event. */
-export type PsdXmpSaveContext = PsdPhotoshop26SaveContext & {
-  /** Required exactly when initialized source history has no saved event. */
-  initialEvent?: {
-    /** Actual generated xmp.iid UUID for first preparation, independent of the final instanceId. */
-    instanceId: string;
-    /** Actual ISO8601 preparation time with seconds and timezone. */
-    when: string;
-    /** Actual software agent for the first preparation event. */
-    softwareAgent: string;
-  } | null;
-};
 
 
 
