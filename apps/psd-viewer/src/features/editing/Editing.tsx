@@ -41,6 +41,8 @@ export function Editing(props: {
   /** Public monotonic editor revision, independent of replay's native revision. */
   onRevision: (revision: number, display?: EditingState['display']) => void;
 }) {
+  const [tier, setTier] = createSignal<'visual' | 'strict'>('visual');
+  const [savedNotes, setSavedNotes] = createSignal<EditingState['saveNotes']>();
   const [linearBlending, setLinearBlending] = createSignal(false);
   const [textGammaEnabled, setTextGammaEnabled] = createSignal(true);
   const [textGammaValue, setTextGammaValue] = createSignal('1.45');
@@ -81,7 +83,7 @@ export function Editing(props: {
     return sourceLayers(state()?.display?.layers ?? props.document.layers, ids);
   });
   const selected = () => layers().find((layer) => layer.id === target());
-  const contract = () => preferredContract;
+  const contract = () => (tier() === 'strict' ? 'photoshop26.reopen-equivalent/v5-source-host' : preferredContract);
   createEffect(
     () => selected(),
     (layer) => {
@@ -135,6 +137,7 @@ export function Editing(props: {
       command,
       options: {
         mode: 'source',
+        tier: tier(),
         linearBlending: linearBlending(),
         textGamma: textGammaEnabled() ? Number(textGammaValue()) : null
       }
@@ -148,6 +151,7 @@ export function Editing(props: {
       command: { kind: 'tree', edit },
       options: {
         mode: 'source',
+        tier: tier(),
         linearBlending: linearBlending(),
         textGamma: textGammaEnabled() ? Number(textGammaValue()) : null
       }
@@ -214,6 +218,7 @@ export function Editing(props: {
       return;
     }
     const revision = state()!.revision;
+    const notes = state()!.saveNotes;
     const controller = new AbortController();
     saveController = controller;
     setSaving(true);
@@ -238,6 +243,7 @@ export function Editing(props: {
         }
       );
       if (active) {
+        setSavedNotes(notes);
         setSaveStatus(
           `Saved revision ${revision}: ${bytes.toLocaleString()} bytes${state()?.revision !== revision ? '. Later edits are not included' : ''}.`
         );
@@ -279,8 +285,13 @@ export function Editing(props: {
           <p role="note">Edit mode · eye changes are saved. Each accepted action creates one revision.</p>
           <label>
             How to save
-            <select aria-label="How to save" value="source">
-              <option value="source">Keep the source's settings</option>
+            <select
+              aria-label="How to save"
+              value={tier()}
+              onChange={(event) => setTier(event.currentTarget.value === 'strict' ? 'strict' : 'visual')}
+            >
+              <option value="visual">Visually as in Photoshop</option>
+              <option value="strict">Strictly exact only</option>
             </select>
           </label>
           <label>
@@ -318,7 +329,7 @@ export function Editing(props: {
               Leave untagged
             </p>
           </div>
-          <p>Exact for Photoshop with the same settings. Defaults match Photoshop 26 factory settings.</p>
+          <p>Defaults match Photoshop 26 factory settings. Native visual compatibility audit is pending.</p>
           <details>
             <summary>About save settings</summary>
             <p>
@@ -364,11 +375,57 @@ export function Editing(props: {
             {saveStatus()}
           </p>
         </div>
+        <Show when={savedNotes()}>
+          {(notes) => (
+            <section aria-label="Save report">
+              <Show when={notes().length}>
+                <p>
+                  Also strictly exact:{' '}
+                  {notes().every((note) =>
+                    note.contract === 'photoshop26.visual/v3'
+                      ? note.strictExact
+                      : note.contract === 'photoshop26.reopen-equivalent/v5-source-host'
+                  )
+                    ? 'Yes'
+                    : 'No'}
+                  .
+                </p>
+                <p>Transactions included in this saved revision:</p>
+              </Show>
+              <For each={notes()}>
+                {(note) => (
+                  <Show when={note.contract === 'photoshop26.visual/v3' ? note : undefined}>
+                    {(visual) => (
+                      <>
+                        <p>
+                          Writer: {visual().route}. Strictly exact transaction: {visual().strictExact ? 'Yes' : 'No'}.
+                        </p>
+                        <p>
+                          PSD Viewer rendered {visual().rendered.join('; ') || 'nothing'}; carried{' '}
+                          {visual().carried.join('; ') || 'nothing'}; rewrote{' '}
+                          {visual().rewritten.join('; ') || 'nothing'}.
+                        </p>
+                        <p>Carried metadata is source-owned.</p>
+                        <p>Approximations: {visual().approximations.join('; ') || 'None'}.</p>
+                      </>
+                    )}
+                  </Show>
+                )}
+              </For>
+              <Show when={!notes().length}>
+                <p>No visual transaction. Source bytes preserved or bounded metadata saved.</p>
+              </Show>
+              <Show when={notes().some((note) => note.contract !== 'photoshop26.visual/v3')}>
+                <p>Strict v5 does not expose product accounting. No visual approximations for its transactions.</p>
+              </Show>
+            </section>
+          )}
+        </Show>
         <Show when={state()}>
           <details>
             <summary>Capabilities and host operands</summary>
             <p>
-              Preferred contract: <code>{contract()}</code>. No retry with a weaker contract.
+              Preferred contract: <code>{contract()}</code>. Visual saving tries strict v5 first, then carry-and-patch.
             </p>
             <p>
               Saving agent: {viewerAgent}. File stem: {props.name.replace(/\.(psd|psb)$/i, '')}.

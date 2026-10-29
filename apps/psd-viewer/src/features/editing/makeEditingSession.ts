@@ -13,7 +13,7 @@ import {
 
 /**
  * Owns independently saved source-relative revisions beside the renderer, strictly reopened before publication.
- * Replay keeps exact operands, admits no weaker contract and bounds history to 64 operations. Prepared saves
+ * Replay retains each selected contract and its operands and bounds history to 64 operations. Prepared saves
  * own independent bytes until release/disposal. publish receives whether the changed action affects the tree,
  * so metadata after a tree edit still retains resident pixels. The caller serializes requests and disposes on close.
  */
@@ -47,6 +47,7 @@ export async function makeEditingSession(
   let revision = 0;
   let disposed = false;
   let cost = { milliseconds: 0, replayed: 0, sourceBytes: source.byteLength };
+  let saveNotes: EditingState['saveNotes'] = [];
   const saves = new Map<string, PsdPreparedSave>();
 
   const state = (): EditingState => ({
@@ -56,7 +57,8 @@ export async function makeEditingSession(
     tree: wireResult(session.inspect()),
     source: wireResult(session.inspectSource()),
     process: wireResult(session.inspectProcess()),
-    cost
+    cost,
+    saveNotes
   });
   const current = (): EditingResult<EditingResponse> => ({ ok: true, value: { kind: 'state', state: state() } });
 
@@ -71,12 +73,22 @@ export async function makeEditingSession(
     let accepted = false;
     let staged = candidate.value;
     let bytes = source;
+    const stagedNotes: NonNullable<EditingState['saveNotes']> = [];
     try {
       for (const action of commands.slice(0, nextPosition)) {
         for (const step of action.steps) {
           const applied = apply(staged, step.command, step.operands, bytes);
           if (!applied.ok) {
             return applied;
+          }
+
+          if (applied.value.saveNote) {
+            stagedNotes.push(applied.value.saveNote);
+          } else if (
+            step.command.kind === 'tree' &&
+            step.operands.contract === 'photoshop26.reopen-equivalent/v5-source-host'
+          ) {
+            stagedNotes.push({ contract: step.operands.contract });
           }
 
           const frozen = wireResult(staged.prepareSave());
@@ -114,6 +126,7 @@ export async function makeEditingSession(
       session.dispose();
       session = staged;
       history = commands;
+      saveNotes = stagedNotes;
       position = nextPosition;
       revision++;
       cost = { milliseconds: performance.now() - started, replayed: nextPosition, sourceBytes: source.byteLength };
@@ -289,7 +302,7 @@ export async function makeEditingSession(
   };
 }
 
-/** V5 gets only browser operands; bounded metadata keeps its separate source-preserving contract. */
+/** Visual and strict writers receive only browser operands; bounded metadata keeps its separate source-preserving contract. */
 function apply(
   session: PsdEditorSession,
   command: Exclude<EditingCommand, { kind: 'treeBatch' }>,
@@ -311,7 +324,9 @@ function apply(
     if (
       !result.ok &&
       result.error.code === 'Dependency' &&
-      result.error.propertyPath.includes('save.xmp.initial-event')
+      (result.error.propertyPath.includes('save.xmp.initial-event') ||
+        (result.error.v5Refusal?.code === 'Dependency' &&
+          result.error.v5Refusal.propertyPath.includes('save.xmp.initial-event')))
     ) {
       // Only the named missing-event route permits a genuine preparation event, never a host-fact retry.
       const initialEvent = operands.initialEvent ?? {
@@ -344,7 +359,7 @@ function apply(
 function collectForDisplay(save: PsdPreparedSave) {
   try {
     const chunks: Uint8Array<ArrayBuffer>[] = [];
-    for (let chunk; (chunk = save.nextChunk(1024 * 1024));) {
+    for (let chunk; (chunk = save.nextChunk(1024 * 1024)); ) {
       chunks.push(new Uint8Array(chunk));
     }
 

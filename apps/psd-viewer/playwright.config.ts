@@ -8,6 +8,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   use: {
+    channel: 'chrome',
     baseURL: `http://127.0.0.1:${port}`,
     viewport: { width: 1440, height: 900 },
     launchOptions: {

@@ -166,6 +166,7 @@ test('a refused eye edit restores its checkbox and displays a readable reason wi
 }) => {
   await picker(page);
   await open(page, null);
+  await page.getByLabel('How to save').selectOption('strict');
   const eye = page.getByRole('tree').getByRole('checkbox');
   await eye.click();
   await expect(page.locator('[data-refusal-code]')).toContainText(/file|document|requires/i);
@@ -241,6 +242,7 @@ test('context menu groups and ungroups; Fill and blend edit; a multi-layer opaci
   await revision(page, 3);
   await page.getByLabel('Layer blend mode').selectOption('multiply');
   await revision(page, 4);
+  await page.getByLabel('How to save').selectOption('strict');
   await row(page, 3).click();
   await row(page, 2).click({ modifiers: ['Meta'] });
   await page.getByLabel('Layer opacity percent').fill('50');

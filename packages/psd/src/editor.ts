@@ -1,4 +1,9 @@
-import type { PsdEditorSession as EditorHandle, PsdReopenSaveOperands } from '../wasm/photoshop_psd_wasm.js';
+import type {
+  PsdSourceHostSaveContext as BrowserSaveContext,
+  PsdEditorSession as EditorHandle,
+  PsdReopenSaveOperands,
+  PsdVisualUnionNote as VisualUnionNote
+} from '../wasm/photoshop_psd_wasm.js';
 import { loadPsd } from './index';
 
 /**
@@ -81,7 +86,7 @@ export interface PsdEditorSession {
    * Edited subtrees, ancestors and clipping chains remain dependent. It requires writers, the full active-font
    * inventory and a localized Background name. Single top-layer structural edits keep existing clipping runs;
    * hidden RGB8 pixels and selected-hidden opacity retain named refusals. Visible same-bounds opaque RGB16
-   * process replacement retains admitted metadata. No contract falls back to another after refusal.
+   * process replacement retains admitted metadata. Legacy contracts never fall back after refusal.
    * v2 also admits bounded Background lifecycles, including opacity promotion with the actual localized name
    * and the resulting ID's explicit time. Lock-protected operations, hidden unselected targets, Background moves/grouping,
    * unsupported histories/profiles, mixed-target/structural batches and active OCIO return named atomic refusals.
@@ -91,6 +96,9 @@ export interface PsdEditorSession {
    * v5-source-host accepts one command on pristine source bytes, real clocks/crypto.randomUUID identities,
    * the honest agent and user choices only. The library derives affected identities and layerTimes internally.
    * Host facts come from the source; missing source witnesses refuse. Legacy v1-v3 retain native attribution requirements.
+   * visual/v3 evaluates v5 first, then carry-patch on independent sources. Its saveNote reports the selected
+   * route, strictExact status, rendered/carried/rewritten products and approximations. Only completeLayers
+   * import is admitted. A successful carry-patch save does not certify the pending native visual audit.
    * Each accepted v5 product may be opened as a new source, not treated as a pending multi-command batch.
    * This contract excludes Adobe JPEG entropy and container byte equivalence. No timestamps or save identities are generated.
    */
@@ -160,10 +168,10 @@ export interface PsdEditorSession {
 /** Raster/tree and native process-plane commands; unsupported variants return atomic dependency refusals. */
 export type PsdExactRasterTreeEdit = Parameters<EditorHandle['editRasterTreeExact']>[0][number];
 
-/** Generated v1-v5 save contexts. Legacy host operands and browser source-host operands remain distinct. */
+/** Generated legacy and visual save contexts. Legacy host operands and browser source-host operands remain distinct. */
 export type PsdReopenSaveContext = NonNullable<Parameters<EditorHandle['editRasterTreeExact']>[1]>;
 
-/** v1 native, v2 carried type, v3 carried untouched, v4 honest agent or v5 source host. No implicit fallback. */
+/** Explicit legacy and visual contracts. Only visual/v3 selects between independent writers. */
 export type PsdReopenSaveContract = PsdReopenSaveContext['contract'];
 
 /**
@@ -182,10 +190,15 @@ export type PsdReopenSaveWriters = NonNullable<PsdReopenSaveOperands['writers']>
  * The library derives layer times and source host facts. No profiles, fonts or current-host writers are accepted.
  * Supply initialEvent only after a named missing-preparation-event refusal on initialized source history.
  */
-export type PsdSourceHostSaveContext = Extract<
-  PsdReopenSaveContext,
-  { contract: 'photoshop26.reopen-equivalent/v5-source-host' }
->;
+export type PsdSourceHostSaveContext = BrowserSaveContext & {
+  readonly contract: 'photoshop26.reopen-equivalent/v5-source-host';
+};
+
+/** V5-first visual save with complete-layer reopening and explicit source bytes, clocks and save choices. */
+export type PsdVisualSaveContext = BrowserSaveContext & { readonly contract: 'photoshop26.visual/v3' };
+
+/** Selected writer accounting. Carried metadata remains source-owned; strictExact is true only for v5. */
+export type PsdVisualUnionNote = VisualUnionNote;
 
 /** Text blending choice, paired with colorPolicy. Null disables gamma; enabled values must be exact hundredths
  * from 1.00 through 3.00. Photoshop 26's factory value is 1.45. This does not certify font/layout eligibility.
@@ -278,6 +291,8 @@ export type PsdEditorFailure = (
 ) & {
   /** Original binding exception. RenderRequired retains the renderer's reason in its message. */
   readonly cause?: unknown;
+  /** Original strict-writer refusal when both visual/v3 writers refuse. */
+  readonly v5Refusal?: PsdEditorFailure;
 };
 
 /** Keeps the prepared resource independent of the session and releases its WASM handle with its bytes. */
@@ -314,7 +329,13 @@ function attempt<T>(operation: () => T): PsdEditorResult<T> {
 }
 
 function toFailure(error: unknown): PsdEditorFailure {
-  return { ...classifyFailure(error), cause: error };
+  return {
+    ...classifyFailure(error),
+    cause: error,
+    ...(error instanceof Error && 'v5Refusal' in error && error.v5Refusal
+      ? { v5Refusal: toFailure(error.v5Refusal) }
+      : {})
+  };
 }
 
 /** Keeps binding codes, dependency paths and resource limits without parsing human-readable messages. */

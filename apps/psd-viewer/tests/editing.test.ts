@@ -93,6 +93,7 @@ it('keeps refusal and failed strict publication atomic, preserving frozen bytes 
       await host.receive({
         kind: 'edit',
         revision: 0,
+        options: { mode: 'source', tier: 'strict', linearBlending: false },
         command: { kind: 'tree', edit: { kind: 'rename', layerId: 2, name: 'new' } }
       })
     ).toMatchObject({ ok: false, error: { code: 'Dependency' } });
@@ -597,6 +598,7 @@ it.each([
   const operands = sourceSaveOperands('source-host-rgb8.psd', {
     mode: 'source',
     linearBlending: false,
+    tier: 'strict',
     colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', ...choice }
   });
   const edit = { kind: 'rename' as const, layerId: 3, name: 'Choice retry' };
@@ -619,7 +621,12 @@ it.each([0.99, 3.01, 1.451])('rejects unsupported text gamma %s without committi
   );
   const session = value(await openPsdEditor(original));
   try {
-    const operands = sourceSaveOperands('source-host-rgb8.psd', { mode: 'source', linearBlending: false, textGamma });
+    const operands = sourceSaveOperands('source-host-rgb8.psd', {
+      mode: 'source',
+      tier: 'strict',
+      linearBlending: false,
+      textGamma
+    });
     expect(
       session.editRasterTreeExact([{ kind: 'rename', layerId: 3, name: 'Invalid gamma' }], {
         ...operands,
@@ -629,5 +636,91 @@ it.each([0.99, 3.01, 1.451])('rejects unsupported text gamma %s without committi
     expect(value(session.sourceSnapshot()).revision).toBe(0n);
   } finally {
     session.dispose();
+  }
+});
+
+it('defaults to visual and retains strict mode as an explicit choice', () => {
+  expect(sourceSaveOperands('visual.psd', { mode: 'source', linearBlending: false }).contract).toBe(
+    'photoshop26.visual/v3'
+  );
+  expect(sourceSaveOperands('strict.psd', { mode: 'source', tier: 'strict', linearBlending: false }).contract).toBe(
+    'photoshop26.reopen-equivalent/v5-source-host'
+  );
+});
+
+it('retains visual accounting through undo and redo and keeps the backend refusal message', async () => {
+  const original = new Uint8Array(
+    await readFile(new URL('../../../packages/psd/test/editor/source-host-rgb8.psd', import.meta.url))
+  );
+  const host = value(await makeEditingSession(original, async () => ({ ok: true, value: undefined })));
+  try {
+    const edited = value(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: { kind: 'tree', edit: { kind: 'rename', layerId: 3, name: 'Visual' } }
+      })
+    );
+    expect(edited).toMatchObject({
+      kind: 'state',
+      state: { saveNotes: [{ contract: 'photoshop26.visual/v3', strictExact: true }] }
+    });
+    expect(value(await host.receive({ kind: 'undo', revision: 1 }))).toMatchObject({
+      kind: 'state',
+      state: { saveNotes: [] }
+    });
+    expect(value(await host.receive({ kind: 'redo', revision: 2 }))).toMatchObject({
+      kind: 'state',
+      state: { saveNotes: [{ strictExact: true }] }
+    });
+    expect(
+      readableRefusal({
+        code: 'Dependency',
+        propertyPath: 'save.visualPatch.typeGraph',
+        capability: 'fonts',
+        message: 'Actual supplied refusal'
+      })
+    ).toBe('Actual supplied refusal');
+  } finally {
+    host.dispose();
+  }
+});
+
+it('admits a carry-patch action with accounting when the strict writer refuses', async () => {
+  const original = await source();
+  const displayed: Uint8Array[] = [];
+  const host = value(
+    await makeEditingSession(original, async (bytes) => {
+      displayed.push(bytes);
+      return { ok: true, value: undefined };
+    })
+  );
+  try {
+    const committed = value(
+      await host.receive({
+        kind: 'edit',
+        revision: 0,
+        command: { kind: 'tree', edit: { kind: 'rename', layerId: 2, name: 'Carry-patch rename' } }
+      })
+    );
+    expect(committed).toMatchObject({
+      kind: 'state',
+      state: {
+        saveNotes: [
+          {
+            contract: 'photoshop26.visual/v3',
+            route: 'carryPatch',
+            strictExact: false,
+            carried: expect.any(Array),
+            rewritten: expect.any(Array),
+            rendered: expect.any(Array),
+            approximations: expect.any(Array)
+          }
+        ]
+      }
+    });
+    expect((await readPsd(displayed[0]!)).layers.some((layer) => layer.name === 'Carry-patch rename')).toBe(true);
+  } finally {
+    host.dispose();
   }
 });

@@ -2,12 +2,14 @@ import type {
   PsdEditorFailure,
   PsdEditorResult,
   PsdEditorSession,
+  PsdEditOutcome,
   PsdExactRasterTreeEdit,
   PsdReopenSaveContract,
   PsdSourceHostColorPolicy,
   PsdSourceHostSaveContext,
   PsdSourceHostTypeRendering,
-  PsdStateMetadataEdit
+  PsdStateMetadataEdit,
+  PsdVisualSaveContext
 } from '@app-game/psd/editor';
 import { photoshop26DefaultSaveChoices } from '@app-game/psd/editor';
 import type { PsdInfo, PsdLayerNode, PsdStates } from '@app-game/psd/viewer';
@@ -40,6 +42,11 @@ export type EditingState = {
   process: ReturnType<PsdEditorSession['inspectProcess']>;
   /** Renderer metadata after a visual transaction; absent for pixel-preserving metadata changes. */
   display?: { info: PsdInfo; layers: PsdLayerNode[]; states: PsdStates };
+  /** Accounting for each tree transaction in this revision, retained across undo/redo. */
+  saveNotes?: (
+    | NonNullable<PsdEditOutcome['saveNote']>
+    | { contract: 'photoshop26.reopen-equivalent/v5-source-host' }
+  )[];
   cost: { milliseconds: number; replayed: number; sourceBytes: number };
 };
 
@@ -68,6 +75,8 @@ export const historyLimit = 64;
 /** Browser save choice. Strict current-host saving is unavailable without a real host integration. */
 export type EditingSaveOptions = {
   mode: 'source';
+  /** Defaults to visual. Strict requests only the v5 exact writer. */
+  tier?: 'visual' | 'strict';
   /** Explicit RGB blend gamma choice, independent of carried source host facts. */
   linearBlending: boolean;
   /** Text gamma defaults to 1.45; null disables it. Captured independently of display settings. */
@@ -76,8 +85,8 @@ export type EditingSaveOptions = {
   colorPolicy?: PsdSourceHostColorPolicy;
 };
 
-/** Each tree action saves one pristine source under v5; refusal never selects a weaker contract. */
-export const preferredContract = 'photoshop26.reopen-equivalent/v5-source-host' satisfies PsdReopenSaveContract;
+/** Default save contract selects v5 first, otherwise carry-patch. */
+export const preferredContract = 'photoshop26.visual/v3' satisfies PsdReopenSaveContract;
 
 /**
  * Captures genuine runtime operands once per action, then retains them unchanged for undo/redo replay.
@@ -86,11 +95,11 @@ export const preferredContract = 'photoshop26.reopen-equivalent/v5-source-host' 
 export function sourceSaveOperands(
   basename: string,
   options: EditingSaveOptions
-): Omit<PsdSourceHostSaveContext, 'sourceBytes'> {
+): Omit<PsdSourceHostSaveContext | PsdVisualSaveContext, 'sourceBytes'> {
   const now = new Date();
   const pad = (value: number) => String(value).padStart(2, '0');
   return {
-    contract: preferredContract,
+    contract: options.tier === 'strict' ? 'photoshop26.reopen-equivalent/v5-source-host' : preferredContract,
     save: {
       basename: basename.replace(/\.(psd|psb)$/i, ''),
       saveTime: now.toISOString().slice(0, 19) + '+00:00',
@@ -129,6 +138,10 @@ export function localIsoTime(instant: Date): string {
 /** Concise explanations retain the backend's named dependency separately for diagnosis. */
 export function readableRefusal(error: EditingFailure): string {
   const path = 'propertyPath' in error ? error.propertyPath : '';
+  if (('v5Refusal' in error && error.v5Refusal) || path.startsWith('save.visual')) {
+    return error.message;
+  }
+
   if (path === 'save.sourceHost.colorPolicy.missingProfile') {
     return 'Assigning a working profile is not qualified for exact saves. Choose Leave untagged.';
   }
@@ -171,6 +184,11 @@ export function wireResult<T>(result: PsdEditorResult<T>): PsdEditorResult<T> {
     return result;
   }
 
-  const { cause: _cause, ...error } = result.error;
-  return { ok: false, error };
+  return { ok: false, error: wireFailure(result.error) };
+}
+
+/** Removes binding exceptions from both refusal causes before transferring a result to the UI. */
+function wireFailure(failure: PsdEditorFailure): PsdEditorFailure {
+  const { cause: _cause, v5Refusal, ...error } = failure;
+  return { ...error, ...(v5Refusal ? { v5Refusal: wireFailure(v5Refusal) } : {}) };
 }

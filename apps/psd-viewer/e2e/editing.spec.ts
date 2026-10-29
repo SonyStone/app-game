@@ -75,8 +75,11 @@ test('v5 rename and opacity refresh pixels and layers; undo/redo restore the exa
   await page.getByRole('button', { name: 'Rename layer', exact: true }).click();
   await expect(canvas).toHaveAttribute('data-editor-revision', '1');
   await expect(canvas).not.toHaveAttribute('data-render-id', render!);
-  await expect(page.getByLabel('How to save')).toHaveValue('source');
-  await expect(page.getByLabel('How to save').locator('option')).toHaveText(["Keep the source's settings"]);
+  await expect(page.getByLabel('How to save')).toHaveValue('visual');
+  await expect(page.getByLabel('How to save').locator('option')).toHaveText([
+    'Visually as in Photoshop',
+    'Strictly exact only'
+  ]);
   await expect(page.getByLabel('Blend RGB colors using gamma 1', { exact: true })).not.toBeChecked();
   await expect(page.getByLabel('Edit layer', { exact: true }).locator('option:checked')).toContainText('Honest rename');
   await expect(page.getByLabel('Blend text colors using gamma', { exact: true })).toBeChecked();
@@ -163,6 +166,7 @@ test('an uninitialized source refusal keeps revision, pixels and saved bytes unc
 }) => {
   await picker(page);
   const original = await open(page);
+  await page.getByLabel('How to save').selectOption('strict');
   const canvas = page.locator('[data-busy]');
   const render = await canvas.getAttribute('data-render-id');
   await page.getByLabel('Edit layer', { exact: true }).selectOption({ index: 1 });
@@ -271,6 +275,18 @@ for (const textGamma of [1.45, null]) {
       opened.value.dispose();
     }
     expect((await readPsd(bytes)).layers.some((layer) => layer.name === 'Untagged save')).toBe(true);
+    await expect(page.getByLabel('Save report')).toContainText('Also strictly exact:');
+    await expect(page.getByLabel('Save report')).toContainText('PSD Viewer rendered');
+    await page.getByLabel('Save report').screenshot({ path: '/tmp/psd-visual-save-report.png' });
+    await page.locator('input[accept=".psd,.psb"]').setInputFiles({
+      name: 'reopened.psd',
+      mimeType: 'image/vnd.adobe.photoshop',
+      buffer: Buffer.from(bytes)
+    });
+    await page.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
+    await page.getByText('Advanced', { exact: true }).click();
+    await expect(page.getByLabel('Edit layer', { exact: true })).toContainText('Untagged save');
     const document = await import('@app-game/psd/viewer').then((module) => module.openPsd(bytes));
     expect(document.ok).toBe(true);
     if (document.ok) {
@@ -298,6 +314,7 @@ test('enabled text gamma refusal explains font and layout eligibility', async ({
   await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
   await page.getByText('Advanced', { exact: true }).click();
   await page.getByLabel('Edit layer', { exact: true }).selectOption('2');
+  await page.getByLabel('How to save').selectOption('strict');
   await page.getByLabel('Layer name', { exact: true }).fill('Refused text');
   await page.getByRole('button', { name: 'Rename layer', exact: true }).click();
   await expect(page.locator('[data-refusal-code]')).toContainText('font and layout eligibility');
@@ -306,4 +323,15 @@ test('enabled text gamma refusal explains font and layout eligibility', async ({
     .locator('[data-refusal-code]')
     .screenshot({ path: '/tmp/psd-viewer-save-choices-screens/text-refusal.png' });
   await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
+});
+
+test('default visual tier refuses ungrouping a raster and shows the supplied message inline', async ({ page }) => {
+  await open(page, 'source-host-rgb8');
+  await expect(page.getByLabel('How to save')).toHaveValue('visual');
+  await page.getByLabel('Edit layer', { exact: true }).selectOption('3');
+  await page.getByRole('button', { name: 'Ungroup layer', exact: true }).click();
+  await expect(page.locator('[data-refusal-code]')).toBeVisible();
+  await expect(page.locator('[data-refusal-code]')).toContainText(/group/i);
+  await expect(page.getByLabel('Editor status')).toContainText('Revision 0.');
+  await page.locator('[data-refusal-code]').screenshot({ path: '/tmp/psd-visual-save-refusal.png' });
 });

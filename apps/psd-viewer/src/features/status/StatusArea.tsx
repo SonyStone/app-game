@@ -12,6 +12,8 @@ export function StatusArea(props: {
   render: PsdResultOf<RenderedPixels> | undefined;
   layerNotes: LayerNote[];
   documentNotes: string[];
+  /** Cached type composition can differ at glyph edges on initial Photoshop opening. Informational only. */
+  cachedType?: boolean;
   onSelect: (index: number) => void;
   /** Identifies windowed rendering for provenance and unsupported-operation guidance. */
   windowed?: boolean;
@@ -47,6 +49,11 @@ export function StatusArea(props: {
                   : 'exact'
       }
     >
+      <Show when={props.cachedType}>
+        <p role="note" aria-label="Cached text notice" data-condition="initial-type-composition-dispatch-unknown">
+          Photoshop may blend the edges of some text slightly differently on open.
+        </p>
+      </Show>
       <Show when={gpuPreview()}>
         <p role="status" aria-label="GPU fidelity">
           GPU interactive preview · strict verification pending for this exact tile/settings/visibility identity.

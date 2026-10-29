@@ -764,6 +764,7 @@ export function App() {
                       sourceBacked={current().sourceBacked}
                       layerNotes={layerNotes()}
                       documentNotes={current().info.notes}
+                      cachedType={Boolean(documentFonts()?.layers.length)}
                       onSelect={selectLayer}
                     />
                   </details>

@@ -569,3 +569,50 @@ function collect(save: PsdPreparedSave): Uint8Array {
 function sha256(bytes: Uint8Array) {
   return createHash('sha256').update(bytes).digest('hex');
 }
+
+it('exposes visual/v3 accounting, strict priority, no-op identity and structured dual refusal', async () => {
+  const bytes = new Uint8Array(await fixture('source-host-rgb8'));
+  const session = value(await openPsdEditor(bytes));
+  const context = {
+    contract: 'photoshop26.visual/v3',
+    sourceBytes: bytes,
+    editTime: Date.now() / 1000,
+    save: {
+      basename: 'visual',
+      saveTime: new Date().toISOString().slice(0, 19) + '+00:00',
+      exifTime: '2026:10:29 12:00:00',
+      instanceId: `xmp.iid:${crypto.randomUUID()}`,
+      documentId: `adobe:docid:photoshop:${crypto.randomUUID()}`,
+      softwareAgent: 'PSD Viewer',
+      linearBlending: false
+    },
+    typeRendering: { textGamma: 1.45 },
+    colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', missingProfile: 'leaveUntagged' }
+  } satisfies import('./editor').PsdVisualSaveContext;
+  try {
+    value(session.editRasterTreeExact([], context));
+    expect(collect(value(session.prepareSave()))).toEqual(bytes);
+    const edit = { kind: 'rename', layerId: 3, name: 'Visual save' } as const;
+    const refused = session.editRasterTreeExact([edit], {
+      ...context,
+      colorPolicy: { ...context.colorPolicy, rgb: 'convert' }
+    });
+    expect(refused).toMatchObject({ ok: false, error: { code: 'Dependency', v5Refusal: { code: 'Dependency' } } });
+    expect(collect(value(session.prepareSave()))).toEqual(bytes);
+    expect(session.editRasterTreeExact([edit], { ...context, importPolicy: 'partial' })).toMatchObject({
+      ok: false,
+      error: { propertyPath: 'save.visualUnion.importPolicy' }
+    });
+    expect(value(session.editRasterTreeExact([edit], context)).saveNote).toMatchObject({
+      contract: 'photoshop26.visual/v3',
+      route: 'v5',
+      strictExact: true,
+      carried: expect.any(Array),
+      rewritten: expect.any(Array),
+      rendered: expect.any(Array),
+      approximations: []
+    });
+  } finally {
+    session.dispose();
+  }
+});
