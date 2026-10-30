@@ -1,8 +1,6 @@
 import { abrViewerRoutes } from '@app-game/abr-viewer/routes';
 import { Thumbnail, type Routes } from '@app-game/app-router';
 import { browserAtlasRoutes } from '@app-game/browser-atlas/routes';
-import { cspClipViewerRoutes } from '@app-game/csp-clip-viewer/routes';
-import { cspSutViewerRoutes } from '@app-game/csp-sut-viewer/routes';
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { filmAnnotationPlayerRoutes } from '@app-game/film-annotation-player/routes';
 import { cardStackRoutes, notebookRoute } from '@app-game/folder-tabs/routes';
@@ -15,7 +13,6 @@ import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { pixijsRoutes } from '@app-game/pixijs-examples/routes';
-import { psdViewerRoutes } from '@app-game/psd-viewer/routes';
 import { routes as solidDndPlaygroundRoutes } from '@app-game/solid-dnd-playground/routes';
 import { routes as solidSvgEditorRoutes } from '@app-game/solid-svg-editor/routes';
 import { solidVirtualRoutes } from '@app-game/solid-virtual/routes';
@@ -69,9 +66,6 @@ export const routes: Routes[] = [
   cardStackRoutes,
   notebookRoute,
   abrViewerRoutes,
-  cspSutViewerRoutes,
-  cspClipViewerRoutes,
-  psdViewerRoutes,
   nightDefenseRoutes,
   {
     path: '/dnd-playground',

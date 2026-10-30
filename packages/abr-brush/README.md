@@ -24,4 +24,4 @@ Run the Paint and ABR Viewer tests and typechecks from the workspace. These cove
 
 Complete Photoshop equivalence has not been established. Physical tips, Mixer Brush, and several filter behaviors remain approximations. Browser input support also limits pen axes.
 
-Photoshop captures, executable analysis, comparison suites, and the detailed compatibility record live in the sibling [photoshop-analysis project](../../../photoshop-analysis/integration/README.md). The product has no runtime, build, or test dependency on that project.
+Photoshop captures, executable analysis, comparison suites, and the detailed compatibility record live in the private research repository `photoshop-analysis` (`integration/README.md`). The product has no runtime, build, or test dependency on that repository.

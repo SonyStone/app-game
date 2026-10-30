@@ -388,7 +388,7 @@ it('lists typed saved path carriers and refuses path queries after close', async
   const fs = await import('node:fs/promises');
   const result = await openPsd(
     await fs.readFile(
-      new URL('../../../apps/psd-viewer/src/features/examples/assets/rotated-smart-object.psd', import.meta.url)
+      new URL('../test/examples/rotated-smart-object.psd', import.meta.url)
     )
   );
   if (!result.ok) {

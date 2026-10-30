@@ -3,7 +3,7 @@
 Two independent ABR codecs with one TypeScript interface:
 
 - **JavaScript** is the default. Its binary reader, writer, field projection and image decoders run without WASM.
-- **Rust/WASM** implements the same operations in `photoshop-analysis/abr-rs`.
+- **Rust/WASM** implements the same operations in `abr-rs` of this repository.
 
 Both load lazily. Importing the entry point loads only the small facade and branded-number helpers. `loadAbr` imports and initializes the selected implementation; concurrent calls share initialization, and a failed attempt can retry.
 
@@ -69,8 +69,8 @@ pnpm exec tsx packages/abr-parser/scripts/parity.ts
 pnpm exec tsx packages/abr-brush/tests/rust-parity.ts
 ```
 
-Build `photoshop-analysis/abr-wasm` before syncing. The sync script copies the WASM artifact, regenerates the JS field dictionary from the same schema, and copies the small researched fixtures. Manifests record their hashes. Package tests do not require the research checkout.
+Build `abr-wasm` (`python3 abr-wasm/scripts/build.py`) before syncing. The sync script copies the WASM artifact, regenerates the JS field dictionary from the same schema, and copies the small researched fixtures. Manifests record their hashes. Package tests do not require a Rust build.
 
 `src/js/` is the independent modern codec. `tests/reference/` retains the old implementation only as a test oracle. Differential tests cover portable objects, cross-backend writes, authored fields, composition, images, budgets, corruptions and ownership. Browser tests verify actual lazy network loading and JS operation without a WASM request.
 
-Research: [Rust crate](../../../photoshop-analysis/abr-rs/README.md), [WASM API](../../../photoshop-analysis/abr-wasm/README.md). Target: Photoshop 26.
+Rust: [crate](../../abr-rs/README.md), [WASM API](../../abr-wasm/README.md). Target: Photoshop 26.

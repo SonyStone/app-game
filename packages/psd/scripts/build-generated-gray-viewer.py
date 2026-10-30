@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Build the pinned viewer with original generated Dot Gain profiles admitted to the measured Gray route.
 
-Usage: python3 scripts/build-generated-gray-viewer.py /path/to/photoshop-analysis
-The research checkout is read only. All patched source and Cargo output live in a temporary directory.
+Usage: python3 scripts/build-generated-gray-viewer.py [REPOSITORY]
+REPOSITORY defaults to this photoshop-formats checkout and is read only. All patched source and Cargo output live in a temporary directory.
 """
 import io
 from pathlib import Path
@@ -15,14 +15,15 @@ import tempfile
 
 def build(source: str) -> None:
     """Apply the finite operand admission to a temporary source snapshot and update the committed viewer."""
-    revision = '9f9f73e9d75679a35228b00468cc54aa0bc4d5d6'
+    # photoshop-formats 7771b25 = photoshop-analysis 9f9f73e9d7 (research batch 20).
+    revision = '7771b2528d3e8efa08f9cf28511c802889bcf20f'
     original = '36e45d8233e46507c30d93d594d3a1310cc9438cd5bb2b86ffea8a52e5dd9d18'
     generated = 'f45efa5dcc28302290d20e00e54867b150a9f58761ba33edaa2d0da07850f5c8'
     package = Path(__file__).resolve().parent.parent
     with tempfile.TemporaryDirectory(prefix='psd-generated-gray-') as temporary:
         root = Path(temporary)
         paths = [f'{crate}/{part}' for crate in ('psd-rs', 'abr-rs', 'psd-wasm') for part in ('src', 'Cargo.toml', 'Cargo.lock')]
-        # Only tracked sources are read; no build writes reach the research checkout.
+        # Only tracked sources are read; no build writes reach the checkout.
         archive = subprocess.check_output(['git', '-C', source, 'archive', revision, '--', *paths])
         with tarfile.open(fileobj=io.BytesIO(archive)) as snapshot:
             snapshot.extractall(root, filter='data')
@@ -44,4 +45,4 @@ def build(source: str) -> None:
 
 
 if __name__ == '__main__':
-    build(sys.argv[1])
+    build(sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[3]))

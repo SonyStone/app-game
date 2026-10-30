@@ -1,8 +1,8 @@
 #!/bin/sh
-# Copies the Rust/WASM codec built by photoshop-analysis/psd-wasm/scripts/build.sh into wasm/ and records hashes.
+# Copies the Rust/WASM codec built by psd-wasm/scripts/build.sh into wasm/ and records hashes.
 set -e
 cd "$(dirname "$0")/.."
-source=../../../photoshop-analysis/psd-wasm/pkg
+source=../../psd-wasm/pkg
 for file in photoshop_psd_wasm.js photoshop_psd_wasm.d.ts photoshop_psd_wasm_bg.wasm photoshop_psd_wasm_bg.wasm.d.ts; do
   cp "$source/$file" wasm/
 done

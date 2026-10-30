@@ -11,6 +11,10 @@ Several agent sessions work in this repository at once. Each session works in it
 - Use the one worktree your session started in. Do not create more (subagents with worktree isolation, scratch checkouts for verification) unless the task cannot be done otherwise; remove any you create with `git worktree remove` before finishing.
 - Build Rust only when you change Rust: the WASM modules are committed. In worktrees, Cargo keeps intermediates in the main checkout's `apps/gpu-text-rendering/rust/document-format/target` (`.cargo/config.toml` from the setup), so a build recompiles only the crate itself. Use `cargo +1.92.0`, as the package scripts do: older Cargo ignores the shared directory and rebuilds everything in the worktree. Do not delete the main checkout's `target`.
 
+## Synced Format Packages
+
+`packages/psd`, `packages/abr-parser`, `packages/abr-brush` and `packages/abr-paint` are synced copies of the local repository `~/1D/git/photoshop-formats`, which owns them with their Rust crates; each carries a `formats-sync.json`. Make changes to them there, commit, then run `pnpm sync:formats` here and commit the copies. The script refuses to overwrite copies edited here. The PSD Viewer lives in photoshop-formats, and the Clip Studio packages and viewers in `~/1D/git/clip-formats`.
+
 ## Coding Style & Conventions
 
 ### SolidJS skills

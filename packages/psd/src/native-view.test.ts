@@ -4,7 +4,7 @@ import { openPsd, openPsdSource, photoshopDefaultSettings } from './viewer';
 
 it('keeps native regions, typed preflight and bounded source reads consistent with the saved planes', async () => {
   const bytes = await readFile(
-    new URL('../../../apps/psd-viewer/src/features/examples/assets/layer-comps.psd', import.meta.url)
+    new URL('../test/examples/layer-comps.psd', import.meta.url)
   );
   const opened = await openPsd(bytes);
   if (!opened.ok) {

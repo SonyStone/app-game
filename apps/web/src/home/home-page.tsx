@@ -228,7 +228,6 @@ const accent = 255;
 
 const sizes: Record<string, TileSize> = {
   Paint: 'hero',
-  'PSD Viewer': 'wide',
   'Solid SVG Editor': 'wide',
   'GPU Text Rendering': 'wide',
   'ABR Viewer': 'medium',

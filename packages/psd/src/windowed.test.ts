@@ -12,7 +12,7 @@ it.each([
   'layer-comps.psd'
 ])('assembles regions and overview samples identical to the whole render: %s', async (name) => {
   const bytes = await readFile(
-    new URL(`../../../apps/psd-viewer/src/features/examples/assets/${name}`, import.meta.url)
+    new URL(`../test/examples/${name}`, import.meta.url)
   );
   const document = value(await openPsd(bytes));
   try {
@@ -133,7 +133,7 @@ it('bounds batch work and restores visibility after a failed batch', async () =>
   const document = value(
     await openPsd(
       await readFile(
-        new URL('../../../apps/psd-viewer/src/features/examples/assets/adjustment-stack.psd', import.meta.url)
+        new URL('../test/examples/adjustment-stack.psd', import.meta.url)
       )
     )
   );

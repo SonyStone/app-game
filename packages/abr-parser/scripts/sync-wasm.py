@@ -2,7 +2,7 @@
 from pathlib import Path
 import shutil,json,hashlib
 root=Path(__file__).resolve().parents[1]
-source=root.parents[2]/'photoshop-analysis/abr-wasm'
+source=root.parents[1]/'abr-wasm'
 # An explicit owned output directory; never copy research fixtures or legacy compatibility code.
 for name in ['dist','pkg']:
  target=root/'wasm'/name
@@ -20,11 +20,11 @@ export interface FieldRule {key:string;name:string;types:readonly string[];units
 export const schema: Readonly<Record<string,Readonly<Record<string,FieldRule>>>> = '''+json.dumps(schema['contexts'],separators=(',',':'))+''';
 export const classNames: Readonly<Record<string,string>> = '''+json.dumps(schema['classes'],separators=(',',':'))+';\n')
 
-# Keep the differential suite runnable without a sibling research checkout.
+# Keep the differential suite runnable without building the Rust crates.
 fixtures=source.parent/'abr-rs/tests/fixtures'
 target=root/'tests/fixtures/researched'
 for name in ['containers','descriptors']:
  (target/name).mkdir(parents=True,exist_ok=True)
  for p in sorted((fixtures/name).iterdir()):
   if p.suffix=='.abr' or p.name.endswith('.input.bin'):shutil.copy2(p,target/name/p.name)
-(target/'manifest.json').write_text(json.dumps({'source':'photoshop-analysis/abr-rs/tests/fixtures','schemaSourceSha256':schema['sourceSha256'],'files':{str(p.relative_to(target)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(target.rglob('*')) if p.is_file() and p.name!='manifest.json'}},indent=2)+'\n')
+(target/'manifest.json').write_text(json.dumps({'source':'abr-rs/tests/fixtures','schemaSourceSha256':schema['sourceSha256'],'files':{str(p.relative_to(target)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(target.rglob('*')) if p.is_file() and p.name!='manifest.json'}},indent=2)+'\n')

@@ -5,7 +5,7 @@ import { loadPsdViewer } from './viewer';
 
 it('exposes imported comp flags and metadata defaults identically in both WASM packages', async () => {
   const bytes = await readFile(
-    new URL('../../../apps/psd-viewer/src/features/examples/assets/layer-comps.psd', import.meta.url)
+    new URL('../test/examples/layer-comps.psd', import.meta.url)
   );
   const metadata = await readPsdMetadataQueries(bytes);
   expect(metadata).toMatchObject({ globalAngle: 30, pixelScaleFactor: 1, fileInfo: {}, refusals: {} });

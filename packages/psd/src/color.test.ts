@@ -168,7 +168,7 @@ async function profile(name: 'srgb' | 'cmyk'): Promise<Uint8Array> {
 }
 
 async function example(name: string): Promise<Uint8Array> {
-  return readFile(new URL(`../../../apps/psd-viewer/src/features/examples/assets/${name}`, import.meta.url));
+  return readFile(new URL(`../test/examples/${name}`, import.meta.url));
 }
 
 function value<T>(result: PsdResult<T>): T {

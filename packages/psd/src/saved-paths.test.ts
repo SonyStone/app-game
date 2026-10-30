@@ -4,7 +4,7 @@ import { openPsd } from './viewer';
 
 it('converts signed Q24 Y/X knots to fractional document pixels without rounding or edge clipping', async () => {
   const original = await readFile(
-    new URL('../../../apps/psd-viewer/src/features/examples/assets/layer-comps.psd', import.meta.url)
+    new URL('../test/examples/layer-comps.psd', import.meta.url)
   );
   const width = original.readUInt32BE(18);
   const height = original.readUInt32BE(14);

@@ -10,6 +10,7 @@
     "check:styles": "node scripts/check-styles.mjs",
     "stop:all": "node ./scripts/stop-all.mjs all",
     "worktree:setup": "node ./scripts/worktree-setup.mjs",
+    "sync:formats": "node ./scripts/sync-formats.mjs",
     "wasm": "wasm-pack build ./wasm_game_of_life --target web",
     "start": "pnpm --filter @app-game/web dev",
     "test": "pnpm run test:solid",

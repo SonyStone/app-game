@@ -37,7 +37,6 @@ import schemaIcon from '@tabler/icons/outline/schema.svg?url';
 import scribbleIcon from '@tabler/icons/outline/scribble.svg?url';
 import sitemapIcon from '@tabler/icons/outline/sitemap.svg?url';
 import sparklesIcon from '@tabler/icons/outline/sparkles.svg?url';
-import stackIcon from '@tabler/icons/outline/stack-2.svg?url';
 import swordIcon from '@tabler/icons/outline/sword.svg?url';
 import tankIcon from '@tabler/icons/outline/tank.svg?url';
 import topologyIcon from '@tabler/icons/outline/topology-star-3.svg?url';
@@ -58,8 +57,6 @@ import paintDialPreview from '../previews/paint-dial.webp?url';
 import paintGlassPreview from '../previews/paint-glass.webp?url';
 import paintHudPreview from '../previews/paint-hud.webp?url';
 import paintPiePreview from '../previews/paint-pie.webp?url';
-import psdAdjustmentPreview from '../previews/psd-adjustment.webp?url';
-import psdStyledPreview from '../previews/psd-styled.webp?url';
 import spectorPreview from '../previews/spector.webp?url';
 import threeRpgPreview from '../previews/three-rpg.webp?url';
 import threeSmaaPreview from '../previews/three-smaa.webp?url';
@@ -141,14 +138,6 @@ export const catalog: ProjectGroup[] = [
         folderGroups: paintFolderGroups
       },
       {
-        href: '/psd-viewer',
-        name: 'PSD Viewer',
-        sources: ['apps/psd-viewer', 'packages/psd'],
-        icon: stackIcon,
-        art: psdStyledPreview,
-        previews: [psdAdjustmentPreview]
-      },
-      {
         href: '/solid-svg-editor',
         name: 'Solid SVG Editor',
         sources: ['apps/solid-svg-editor'],
@@ -161,18 +150,6 @@ export const catalog: ProjectGroup[] = [
         sources: ['apps/gpu-text-rendering'],
         icon: typographyIcon,
         art: gpuTextPreview
-      },
-      {
-        href: '/csp-clip-viewer',
-        name: 'CSP Document Viewer',
-        sources: ['apps/csp-clip-viewer', 'packages/csp-clip'],
-        icon: stackIcon
-      },
-      {
-        href: '/csp-sut-viewer',
-        name: 'CSP Sub Tool Viewer',
-        sources: ['apps/csp-sut-viewer', 'packages/csp-sut'],
-        icon: brushIcon
       },
       {
         href: '/abr-viewer',
