@@ -1,0 +1,78 @@
+/** Gives itemized save resources readable names while preserving IDs, actions and unknown entries. */
+export function readableSaveItem(item: string): string {
+  return item.replace(/resource (\d+)/g, (original, id: string) => {
+    const number = Number(id);
+    const name =
+      resourceNames[number] ??
+      (number >= 2000 && number <= 2997 ? 'Saved path' : number >= 4000 && number <= 4999 ? 'Plug-in data' : undefined);
+    return name ? `${name} [${original}]` : original;
+  });
+}
+
+const resourceNames: Record<number, string> = {
+  1000: 'Channels, rows, columns, depth, mode (obsolete)',
+  1005: 'Resolution',
+  1006: 'Alpha channel names',
+  1007: 'Display info (obsolete)',
+  1008: 'Caption',
+  1010: 'Background color',
+  1011: 'Print flags',
+  1013: 'Color halftoning',
+  1016: 'Color transfer functions',
+  1024: 'Target layer',
+  1025: 'Working path',
+  1026: 'Layer group IDs',
+  1028: 'IPTC-NAA record',
+  1032: 'Grid and guides',
+  1033: 'Thumbnail',
+  1036: 'Thumbnail',
+  1034: 'Copyright flag',
+  1035: 'URL',
+  1037: 'Global light angle',
+  1039: 'ICC profile',
+  1041: 'ICC untagged',
+  1044: 'Document ID seed',
+  1045: 'Unicode alpha names',
+  1049: 'Global light altitude',
+  1050: 'Slices',
+  1053: 'Alpha identifiers',
+  1054: 'URL list',
+  1057: 'Version info',
+  1058: 'EXIF data 1',
+  1059: 'EXIF data 3',
+  1060: 'XMP metadata',
+  1061: 'Caption digest',
+  1062: 'Print scale',
+  1064: 'Pixel aspect ratio',
+  1065: 'Layer comps',
+  1067: 'Alternate spot colors',
+  1069: 'Layer selection IDs',
+  1072: 'Layer groups enabled',
+  1073: 'Color samplers',
+  1074: 'Measurement scale',
+  1075: 'Timeline',
+  1076: 'Sheet disclosure',
+  1077: 'Display info',
+  1078: 'Onion skins',
+  1080: 'Count information',
+  1082: 'Print information',
+  1083: 'Print style',
+  1084: 'Macintosh NSPrintInfo',
+  1085: 'Windows DEVMODE',
+  1086: 'Auto save file path',
+  1087: 'Auto save format',
+  1088: 'Path selection state',
+  2997: 'Saved path',
+  2999: 'Clipping path name',
+  3000: 'Origin path info',
+  4999: 'Plug-in data',
+  7000: 'Image Ready variables',
+  7001: 'Image Ready data sets',
+  7002: 'Image Ready default selected state',
+  7003: 'Image Ready 7 rollover expanded state',
+  7004: 'Image Ready rollover expanded state',
+  7005: 'Image Ready save layer settings',
+  7006: 'Image Ready version',
+  8000: 'Lightroom workflow',
+  10000: 'Print flags info'
+};

@@ -23,6 +23,7 @@ import {
 } from '@app-game/psd/viewer';
 import { makeEditingSession } from '../editing/makeEditingSession';
 import { addFontFile, type SessionFont } from '../fonts/addFontFile';
+import { displayColor, usesConfiguredDisplay } from '../render-settings/displayColor';
 import { makePerformanceRecorder } from '../telemetry/performance';
 import { inspectionRect, wireDisplay, wireSample } from './nativePixels';
 import {
@@ -101,6 +102,8 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   let wholeCache: { key: string; image: Omit<PsdRender, 'dispose'> } | undefined;
   const wholeCosts = new Map<string, number>();
   const windowCosts = new Map<string, number>();
+  let displayProfiles: import('@app-game/psd/viewer').PsdColorSettings | undefined;
+  let displayProfileRevision: number | undefined;
   let nextDocument = 0;
   let nextRender = 0;
   let queue = Promise.resolve();
@@ -123,8 +126,19 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
   }
 
   async function handle(request: PsdRequest) {
+    if (
+      'settings' in request &&
+      document &&
+      usesConfiguredDisplay(document.info.mode) &&
+      displayProfileRevision !== (request.settings.displayProfileRevision ?? 0)
+    ) {
+      displayProfiles = await displayColor();
+      displayProfileRevision = request.settings.displayProfileRevision ?? 0;
+    }
+
     if (request.type === 'open') {
       close();
+      displayProfileRevision = undefined;
       // Recovery opening decodes whole channels. Inspect only the fixed header before choosing that path.
       const blob = request.bytes instanceof Blob ? request.bytes : undefined;
       const reader = blob ? new FileReaderSync() : undefined;
@@ -136,6 +150,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       const loading = performance.now();
       const codec = await loadPsdViewer();
       wasmMemory = (await codec.default()).memory;
+      displayProfiles = usesConfiguredDisplay(header.getUint16(24)) ? await displayColor() : undefined;
       telemetry.record('wasm.load', loading);
       if (
         blob &&
@@ -418,7 +433,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
-        if (window.kind !== 'saved' && !document.windowed && request.liveBytes === undefined) {
+        if (
+          window.kind !== 'saved' &&
+          (usesConfiguredDisplay(viewer.info.mode) || (!document.windowed && request.liveBytes === undefined))
+        ) {
           const key = renderKey(request.settings, request.visibility);
           if (wholeCache?.key !== key) {
             const rendered = composite(viewer, request.settings, request.visibility);
@@ -586,6 +604,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
           return;
         }
 
+        if (reused) {
+          convertDisplay(viewer, reused, request.settings, request.visibility);
+        }
+
         // A transferred render detaches its display buffer. Retain an independent cut source only on demand.
         wholeCache = undefined;
         const id = ++nextRender;
@@ -714,6 +736,10 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
       }
 
       case 'gpuLayers': {
+        if (usesConfiguredDisplay(viewer.info.mode)) {
+          post(failed(request, { kind: 'unsupported', message: 'Color conversion uses CPU sRGB tiles.' }), []);
+          return;
+        }
         const hasText = (nodes: readonly PsdLayerNode[]): boolean =>
           nodes.some((node) => node.kind === 'text' || hasText(node.children ?? []));
         if (fonts && hasText(viewer.layers)) {
@@ -960,7 +986,7 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     let approximate = settings.approximate;
     const differing = (patch: Partial<PsdRenderSettings>) => {
       const tried = { ...settings, ...patch, approximate };
-      const rendered = composite(viewer, tried, visibility);
+      const rendered = composite(viewer, tried, visibility, false);
       if (!rendered.ok) {
         return null;
       }
@@ -990,9 +1016,26 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     return { linearBlending, textGamma, differing: { encoded, linear, otherTextGamma } };
   }
 
-  function composite(viewer: PsdViewerDocument, settings: PsdRenderSettings, visibility: [number, boolean][]) {
+  function composite(
+    viewer: PsdViewerDocument,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][],
+    convert = true
+  ) {
     const start = performance.now();
+    if (usesConfiguredDisplay(viewer.info.mode) && viewer.info.width * viewer.info.height > windowWorkPixels) {
+      return {
+        ok: false as const,
+        error: {
+          kind: 'unsupported' as const,
+          message: 'Configured sRGB presentation exceeds the full-canvas conversion budget.'
+        }
+      };
+    }
     const result = viewer.render(settings, visibility, fonts);
+    if (result.ok && convert) {
+      convertDisplay(viewer, result.value, settings, visibility);
+    }
     if (wholeCosts.size >= 16) {
       wholeCosts.delete(wholeCosts.keys().next().value!);
     }
@@ -1003,6 +1046,45 @@ export function makePsdWorkerHost(send: (reply: PsdReply, transfer: Transferable
     }
 
     return result;
+  }
+
+  /** Detection compares native process samples; defer display-only conversion until pixels are published. */
+  function convertDisplay(
+    viewer: PsdViewerDocument,
+    render: PsdRender,
+    settings: PsdRenderSettings,
+    visibility: [number, boolean][]
+  ) {
+    if (
+      viewer.info.mode === 4 &&
+      !viewer.info.resources.some((resource) => resource.id === 1039 && resource.size > 0) &&
+      !displayProfiles?.workingCmyk
+    ) {
+      render.approximations.push(
+        'This CMYK file has no color profile. Colors are approximate. Choose a CMYK profile in Display settings for accurate colors.'
+      );
+      return;
+    }
+
+    if (usesConfiguredDisplay(viewer.info.mode) && displayProfiles) {
+      const converted = viewer.renderSrgb(settings, displayProfiles, visibility, fonts);
+      if (converted.ok) {
+        render.pixels = converted.value.rgba8;
+        render.approximations = [
+          ...new Set([
+            ...render.approximations.filter((notice) => !notice.includes('composited exactly in its')),
+            ...converted.value.approximations
+          ]),
+          converted.value.approximations.some((notice) => notice.includes('configured preview unavailable'))
+            ? 'Configured color conversion is unavailable for this layer stack. Showing the legacy color preview.'
+            : 'Converted to sRGB for display using the document profile or working color settings, with dither off.'
+        ];
+      } else {
+        render.approximations.push(
+          `Color conversion could not be applied: ${converted.error.message}. Showing the legacy color preview.`
+        );
+      }
+    }
   }
 
   function releasePrepared() {
@@ -1040,11 +1122,13 @@ function failed(request: PsdRequest, error: PsdFailure): PsdReply {
 /** Identifies a render request by its settings and visibility overrides, whatever the order of the settings' fields. */
 function renderKey(settings: PsdRenderSettings, visibility: [number, boolean][]): string {
   const normalized = {
+    displayProfileRevision: settings.displayProfileRevision ?? 0,
     linearBlending: settings.linearBlending ?? photoshopDefaultSettings.linearBlending,
     textGamma: settings.textGamma === undefined ? photoshopDefaultSettings.textGamma : settings.textGamma,
     vectorPaths: settings.vectorPaths ?? photoshopDefaultSettings.vectorPaths,
     smartObjects: settings.smartObjects ?? null,
     approximate: settings.approximate ?? photoshopDefaultSettings.approximate,
+    approximateOneSidedStrokes: settings.approximateOneSidedStrokes ?? false,
     typeLayers: settings.typeLayers ?? photoshopDefaultSettings.typeLayers,
     state: settings.state ?? null,
     availableFonts: settings.availableFonts ? [...new Set(settings.availableFonts)].sort() : null,

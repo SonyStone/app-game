@@ -53,7 +53,7 @@ for (let round = 1; round <= 3; round++) {
           const processInfo = editor.inspectProcess();
           const layer = processInfo.layers.find(layer => layer.layerId !== null && layer.right > layer.left && layer.bottom > layer.top && layer.channelIds.includes(0));
           const context = {
-            contract: ${JSON.stringify(variant === 'current' ? 'photoshop26.visual/v3' : 'photoshop26.reopen-equivalent/v5-source-host')}, sourceBytes: bytes,
+            contract: ${JSON.stringify(variant !== 'currentStrict' ? 'photoshop26.visual/v3' : 'photoshop26.reopen-equivalent/v5-source-host')}, sourceBytes: bytes,
             editTime: Date.now()/1000,
             save: { basename: 'benchmark', saveTime: new Date().toISOString().slice(0,19)+'+00:00', exifTime: '2026:10:29 12:00:00', instanceId: 'xmp.iid:'+crypto.randomUUID(), documentId: 'adobe:docid:photoshop:'+crypto.randomUUID(), softwareAgent: 'PSD Viewer', linearBlending: false },
             typeRendering: { textGamma: 1.45 }, colorPolicy: { workingRGB: 'sRGB IEC61966-2.1', rgb: 'preserve', missingProfile: 'leaveUntagged' }

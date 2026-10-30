@@ -1,6 +1,7 @@
 import type { PsdInterpolation, PsdRenderSettings } from '@app-game/psd/viewer';
-import { For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import styles from './RenderSettingsPanel.module.css';
+import { loadWorkingCmyk, saveWorkingCmyk } from './workingCmyk';
 
 /**
  * Photoshop's rendering preferences as controls. Changes go to `onChange` as patches; the panel shows `settings`,
@@ -13,14 +14,69 @@ export function RenderSettingsPanel(props: {
   onChange: (patch: Partial<PsdRenderSettings>) => void;
   onReset: () => void;
 }) {
+  const [profileBusy, setProfileBusy] = createSignal(true);
+  const [profileName, setProfileName] = createSignal('None');
+  const [profileError, setProfileError] = createSignal('');
+  createEffect(
+    () => undefined,
+    () => {
+      void loadWorkingCmyk()
+        .then((profile) => setProfileName(profile?.name ?? 'None'))
+        .catch(() => setProfileError('Could not read the saved CMYK profile.'))
+        .finally(() => setProfileBusy(false));
+    }
+  );
+
+  /** Commit local profile bytes before invalidating every rendering worker's presentation cache. */
+  async function chooseProfile(file?: File) {
+    setProfileBusy(true);
+    try {
+      await saveWorkingCmyk(file ? { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) } : undefined);
+      setProfileName(file?.name ?? 'None');
+      setProfileError('');
+      props.onChange({ displayProfileRevision: Date.now() });
+    } catch (error) {
+      setProfileError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProfileBusy(false);
+    }
+  }
+
   return (
     <section class={styles.panel} aria-label="Render settings">
       <header>
-        <h2>Render settings</h2>
+        <h2>Display settings</h2>
         <button type="button" onClick={() => props.onReset()} title="Photoshop's default Color Settings">
           Defaults
         </button>
       </header>
+      <label>
+        Working CMYK profile
+        <input
+          type="file"
+          accept=".icc,.icm"
+          disabled={profileBusy()}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            if (file) {
+              void chooseProfile(file);
+            }
+          }}
+        />
+      </label>
+      <p class={styles.note}>{profileName()} · Stored only on this device</p>
+      <button
+        disabled={profileBusy()}
+        type="button"
+        onClick={() => {
+          void chooseProfile();
+        }}
+      >
+        Clear CMYK profile
+      </button>
+      <Show when={profileError()}>
+        <p role="alert">{profileError()}</p>
+      </Show>
       <label>
         <input
           type="checkbox"

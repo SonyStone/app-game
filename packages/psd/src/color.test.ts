@@ -100,7 +100,9 @@ it('keeps CMYK process channels and saved planes separate from display-conversio
 
 it('refuses configured conversions with missing profiles or unsupported presentation', async () => {
   const srgb = await profile('srgb');
-  const document = value(await openPsd(await writePsd({ width: 1, height: 1, layers: [] }, Uint8Array.of(1, 2, 3, 255))));
+  const document = value(
+    await openPsd(await writePsd({ width: 1, height: 1, layers: [] }, Uint8Array.of(1, 2, 3, 255)))
+  );
   const settings = { ...photoshopDefaultSettings, approximate: false as const };
   try {
     expect(document.renderColor(settings, { srgb })).toMatchObject({ ok: false, error: { kind: 'unsupported' } });
@@ -176,3 +178,21 @@ function value<T>(result: PsdResult<T>): T {
 
   return result.value;
 }
+
+it('exposes configured display conversion with independent storage and closed-document refusal', async () => {
+  const srgb = await profile('srgb');
+  const workingCmyk = await profile('cmyk');
+  const document = value(await openPsd(await example('cmyk-levels.psd')));
+  const settings = { ...photoshopDefaultSettings, approximate: true, approximateOneSidedStrokes: true };
+  const color = { srgb, workingCmyk, dither: false };
+  const first = value(document.renderSrgb(settings, color));
+  expect(first.rgba8).toEqual(value(document.renderColor({ ...settings, approximate: false }, color)).rgba8);
+  first.rgba8.fill(0);
+  expect(value(document.renderSrgb(settings, color)).rgba8.some((sample) => sample !== 0)).toBe(true);
+  expect(document.renderSrgb(settings, { srgb: new Uint8Array() })).toMatchObject({ ok: false });
+  document.close();
+  expect(document.renderSrgb(settings, color)).toMatchObject({
+    ok: false,
+    error: { message: 'the document is closed' }
+  });
+});

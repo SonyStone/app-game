@@ -6,17 +6,17 @@ import type {
   PsdBudgetError as BudgetError,
   PsdBudgetOptions as BudgetOptions,
   PsdFontLibrary as FontLibraryHandle,
-  PsdDocumentHandle,
-  PsdSourceHandle,
+  PsdNativeRenderOptions as NativeOptions,
   PsdNativeRect as NativeRect,
   PsdNativeRegion as NativeRegion,
   PsdNativeRender as NativeRender,
-  PsdNativeRenderOptions as NativeOptions,
+  PsdDocumentHandle,
+  PsdSourceHandle,
   PsdRegionCapability as RegionCapability,
-  PsdSavedPath as SavedPath,
   PsdRegionPixels as RegionPixels,
   PsdRegionRect as RegionRect,
-  RenderedImage
+  RenderedImage,
+  PsdSavedPath as SavedPath
 } from '../wasm-viewer/photoshop_psd_viewer.js';
 
 /**
@@ -235,11 +235,18 @@ export type PsdViewerDocument = {
     fonts?: PsdFontLibrary
   ): PsdResult<PsdRender>;
   /**
-   * Composites exact process channels, then converts them separately to caller-configured display sRGB.
-   * Requires `approximate: false`; display conversion can still report approximations without changing process
+   * Composites process channels, then converts them to caller-configured display sRGB.
+   * Accepts approximate process compositing; display conversion can still report approximations without changing process
    * samples. Profiles come only from the document and `color`, never from installed profiles. Returned arrays own
    * their storage and need no disposal. This result cannot be passed to `difference`.
    */
+  renderSrgb(
+    settings: PsdRenderSettings,
+    color: PsdColorSettings,
+    visibility?: Iterable<readonly [number, boolean]>,
+    fonts?: PsdFontLibrary
+  ): PsdResult<PsdSrgbRender>;
+  /** Composites exact process samples and separately converts them using explicit profiles. */
   renderColor(
     settings: PsdRenderSettings & { approximate: false },
     color: PsdColorSettings,
@@ -347,7 +354,7 @@ export type PsdRegionCapability = Omit<RegionCapability, 'refusal'> & { refusal:
 
 /** Native render options preserve the window compositor's depth, state, fonts and per-call budget. */
 export type PsdNativeRenderOptions = Omit<NativeOptions, 'grayProfile' | 'smartObjects' | 'availableFonts'> &
-  Partial<Pick<PsdRenderSettings, 'grayProfile' | 'smartObjects' | 'availableFonts'>>;
+  Partial<Pick<PsdRenderSettings, 'grayProfile' | 'smartObjects' | 'availableFonts' | 'approximateOneSidedStrokes'>>;
 
 /** Saved resource identity and Q24 geometry, or a typed refusal for that individual path. */
 export type PsdSavedPath = Omit<SavedPath, 'outcome' | 'error' | 'components'> &
@@ -515,6 +522,8 @@ export async function openPsdSource(
  * older viewer modules ignore.
  */
 export type PsdRenderSettings = {
+  /** Viewer-local display preference revision. Invalidates presentation caches after a working-profile change. */
+  displayProfileRevision?: number;
   /**
    * Caller-owned working-Gray ICC bytes. Modern transparent rectangle gradients require the admitted
    * Dot Gain 20% profile. Omission keeps their existing refusal/cache policy; no installed profile is read.
@@ -545,6 +554,8 @@ export type PsdRenderSettings = {
    * default.
    */
   approximate: boolean;
+  /** Opt into the reported clipped-outline fallback for eligible closed one-sided strokes. Default false. */
+  approximateOneSidedStrokes?: boolean;
   /**
    * Re-render type layers from their text with the render's fonts instead of the rasters Photoshop cached in them, for
    * documents whose text was edited. Exact where the crate's research verifies Photoshop's text rendering; a type layer
@@ -603,12 +614,7 @@ export type PsdStates = {
 
 /** Photoshop's "Image Interpolation" preferences. */
 export type PsdInterpolation =
-  | 'nearestNeighbor'
-  | 'bilinear'
-  | 'bicubic'
-  | 'bicubicSmoother'
-  | 'bicubicSharper'
-  | 'bicubicAutomatic';
+  'nearestNeighbor' | 'bilinear' | 'bicubic' | 'bicubicSmoother' | 'bicubicSharper' | 'bicubicAutomatic';
 
 /**
  * Photoshop 26's defaults: gamma 1.0 blending off, text gamma 1.45 on, cached vector and smart-object rasters; exact
@@ -1208,6 +1214,14 @@ function makeViewerDocument(
       images.set(render, image);
       return { ok: true, value: render };
     },
+    renderSrgb(settings, color, visibility = [], fonts) {
+      return open
+        ? attempt(
+            () =>
+              handle.renderSrgb({ ...settings, visibility: [...visibility] }, color, libraryOf(fonts)) as PsdSrgbRender
+          )
+        : closed();
+    },
     renderColor(settings, color, visibility = [], fonts) {
       return open
         ? attempt(
@@ -1277,8 +1291,8 @@ function makeViewerDocument(
         ? attempt(() =>
             handle
               .savedPaths(budget)
-              .map(
-                (path): PsdSavedPath => (path.outcome === 'refused' ? { ...path, error: toFailure(path.error) } : path)
+              .map((path): PsdSavedPath =>
+                path.outcome === 'refused' ? { ...path, error: toFailure(path.error) } : path
               )
           )
         : closed();
@@ -1311,14 +1325,12 @@ function makeViewerDocument(
       return attempt(() => {
         const resources = (handle.info() as PsdInfo).resources
           .filter((resource) => resource.id >= 2000 && resource.id <= 2997)
-          .map(
-            (resource): PsdPathSummary => ({
-              name: resource.name || `Path ${resource.id}`,
-              source: 'resource',
-              resourceId: resource.id,
-              geometry: 'unavailable'
-            })
-          );
+          .map((resource): PsdPathSummary => ({
+            name: resource.name || `Path ${resource.id}`,
+            source: 'resource',
+            resourceId: resource.id,
+            geometry: 'unavailable'
+          }));
         const masks = (nodes: readonly PsdLayerNode[]): PsdPathSummary[] =>
           nodes.flatMap((node) => [
             ...(node.vectorMask
@@ -1443,3 +1455,12 @@ async function nodeModuleBytes(): Promise<Uint8Array | undefined> {
   const { readFile } = (await import(/* @vite-ignore */ fs)) as { readFile: (url: URL) => Promise<Uint8Array> };
   return readFile(new URL(path, import.meta.url));
 }
+
+/** Browser-sRGB presentation after process compositing. Arrays own storage; no disposal is required. */
+export type PsdSrgbRender = {
+  width: number;
+  height: number;
+  rgba8: Uint8Array;
+  /** Includes process approximations and display conversion qualifications. */
+  approximations: string[];
+};

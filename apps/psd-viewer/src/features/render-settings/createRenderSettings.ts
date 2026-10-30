@@ -11,8 +11,14 @@ export function createRenderSettings() {
   const [settings, setSettings] = createSignal<PsdRenderSettings>(viewerDefaultSettings);
   const update = (patch: Partial<PsdRenderSettings>) => setSettings((current) => ({ ...current, ...patch }));
   const replace = (next: PsdRenderSettings) =>
-    setSettings((current) => ({ ...next, approximate: current.approximate }));
-  const reset = () => setSettings(viewerDefaultSettings);
+    setSettings((current) => ({
+      ...next,
+      displayProfileRevision: current.displayProfileRevision,
+      approximate: current.approximate,
+      approximateOneSidedStrokes: true
+    }));
+  const reset = () =>
+    setSettings((current) => ({ ...viewerDefaultSettings, displayProfileRevision: current.displayProfileRevision }));
 
   return { settings, update, replace, reset };
 }
@@ -21,4 +27,8 @@ export function createRenderSettings() {
  * Photoshop's defaults, approximating what the exact path refuses. Documents the exact path renders render identically
  * either way.
  */
-const viewerDefaultSettings: PsdRenderSettings = { ...photoshopDefaultSettings, approximate: true };
+const viewerDefaultSettings: PsdRenderSettings = {
+  ...photoshopDefaultSettings,
+  approximate: true,
+  approximateOneSidedStrokes: true
+};

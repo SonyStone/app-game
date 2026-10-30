@@ -120,7 +120,7 @@ test('a dropped CMYK document composites exactly in its CMYK channels', async ({
   const status = page.getByRole('region', { name: 'Renderer status' });
   await expect(status).toHaveAttribute('data-render-state', 'approximate');
   await expect(status.getByRole('list', { name: 'Approximations' })).toContainText(
-    '8-bit CMYK: composited exactly in its CMYK channels'
+    'This CMYK file has no color profile.'
   );
   await expect(page.getByRole('img', { name: 'Our render' })).toBeVisible();
 

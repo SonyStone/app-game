@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import {
+  loadPsd,
   openPsdEditor,
   readPsd,
   type PsdExactRasterTreeEdit,
@@ -555,7 +556,7 @@ function value<T>(result: { ok: true; value: T } | { ok: false; error: unknown }
 function collect(save: PsdPreparedSave): Uint8Array {
   try {
     const chunks: Uint8Array[] = [];
-    for (let chunk; (chunk = save.nextChunk(4096)); ) {
+    for (let chunk; (chunk = save.nextChunk(4096));) {
       chunks.push(chunk);
     }
 
@@ -613,6 +614,38 @@ it('exposes visual/v3 accounting, strict priority, no-op identity and structured
       approximations: []
     });
   } finally {
+    session.dispose();
+  }
+});
+
+it('retains visual composite refusal reasons and the strict alternative refusal', async () => {
+  const codec = await loadPsd();
+  const session = value(await openPsdEditor(await fixture('flat-rgb8')));
+  const refusal = Object.assign(new Error('Visual composite refused'), {
+    code: 'Dependency',
+    propertyPath: 'save.visual.compositeApproximation',
+    reasons: ['Unverified stroke'],
+    v5Refusal: Object.assign(new Error('Strict refused'), {
+      code: 'Dependency',
+      propertyPath: 'save.native',
+      capability: 'native save required'
+    })
+  });
+  const edit = vi.spyOn(codec.PsdEditorSession.prototype, 'editRasterTreeExact').mockImplementation(() => {
+    throw refusal;
+  });
+  try {
+    expect(session.editRasterTreeExact([], context('flat-rgb8', 4, 1792812792.068197))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'Dependency',
+        propertyPath: 'save.visual.compositeApproximation',
+        reasons: ['Unverified stroke'],
+        v5Refusal: { code: 'Dependency', propertyPath: 'save.native', capability: 'native save required' }
+      }
+    });
+  } finally {
+    edit.mockRestore();
     session.dispose();
   }
 });

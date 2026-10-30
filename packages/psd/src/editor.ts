@@ -197,7 +197,10 @@ export type PsdSourceHostSaveContext = BrowserSaveContext & {
 /** V5-first visual save with complete-layer reopening and explicit source bytes, clocks and save choices. */
 export type PsdVisualSaveContext = BrowserSaveContext & { readonly contract: 'photoshop26.visual/v3' };
 
-/** Selected writer accounting. Carried metadata remains source-owned; strictExact is true only for v5. */
+/** Selected writer accounting. Carried metadata remains source-owned; strictExact is true only for v5.
+ * Rewritten entries inventory actual changed resource IDs, document/layer tagged blocks and metadata tails,
+ * including additions, removals, duplicates and order. patchRefusal is null when v5 succeeded without trying patch.
+ * Refusals retain Dependency propertyPath/capability names and the original v5Refusal when both writers refuse. */
 export type PsdVisualUnionNote = VisualUnionNote;
 
 /** Text blending choice, paired with colorPolicy. Null disables gamma; enabled values must be exact hundredths
@@ -272,6 +275,12 @@ export type PsdEditorResult<T> = { ok: true; value: T } | { ok: false; error: Ps
 /** Named editor refusals. A refused operation never falls back to a less strict edit or save. */
 export type PsdEditorFailure = (
   | { code: 'Dependency'; message: string; propertyPath: string; capability: string }
+  | {
+      code: 'Dependency';
+      message: string;
+      propertyPath: 'save.visual.compositeApproximation';
+      /** Renderer reasons preventing a visual save. */ reasons: readonly string[];
+    }
   | { code: 'ResourceBudget'; message: string; resource: string; requested: bigint; limit: bigint }
   | { code: 'Allocation'; message: string; requested: bigint }
   | {
@@ -355,6 +364,17 @@ function classifyFailure(error: unknown): PsdEditorFailure {
       typeof error.capability === 'string'
     ) {
       return { code, message, propertyPath: error.propertyPath, capability: error.capability };
+    }
+
+    if (
+      code === 'Dependency' &&
+      'propertyPath' in error &&
+      error.propertyPath === 'save.visual.compositeApproximation' &&
+      'reasons' in error &&
+      Array.isArray(error.reasons) &&
+      error.reasons.every((reason) => typeof reason === 'string')
+    ) {
+      return { code, message, propertyPath: error.propertyPath, reasons: error.reasons };
     }
 
     switch (code) {

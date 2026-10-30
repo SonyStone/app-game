@@ -11,6 +11,7 @@ import { withDifferentFontVersion } from '../../../packages/psd/test/fontRelease
 import { makePsdClient, type PsdResultOf, type PsdWorkerPort } from '../src/features/psd-worker';
 import type { PsdReply, PsdRequest } from '../src/features/psd-worker/protocol';
 import { makePsdWorkerHost } from '../src/features/psd-worker/workerHost';
+import * as workingCmyk from '../src/features/render-settings/workingCmyk';
 import { truncated, withChannelCompression } from './damagedPsd';
 import { withTopBlendKey } from './patchedPsd';
 
@@ -212,7 +213,7 @@ it('reports unreadable files, unsupported settings and approximations as typed f
     error: { kind: 'unsupported', message: 'adjustment layers with a blend mode, Fill or effects in 8-bit CMYK' }
   });
   const approximate = value(await client.render(multiply.document, { ...settings, approximate: true }, []));
-  expect(approximate.approximations).toHaveLength(1);
+  expect(approximate.approximations).toContainEqual(expect.stringContaining('This CMYK file has no color profile.'));
   expect(approximate.approximations[0]).toMatch(/^8-bit CMYK: layers converted to 8-bit sRGB/);
   expect(value(await client.difference(multiply.document, approximate.render)).unit).toBe('sRGB level');
 
@@ -228,9 +229,10 @@ it('composites CMYK exactly in its channels without the approximate option', asy
   const render = value(await client.render(cmyk.document, settings, []));
   expect(render.depth).toBe(8);
   // Only the display conversion to sRGB is approximate.
-  expect(render.approximations).toHaveLength(1);
-  expect(render.approximations[0]).toMatch(/^8-bit CMYK: composited exactly in its CMYK channels; only the display/);
-  expect(render.pixels).toEqual(value(await client.merged(cmyk.document)).pixels);
+  expect(render.approximations).toContainEqual(expect.stringContaining('This CMYK file has no color profile.'));
+  const document = value(await (await import('@app-game/psd/viewer')).openPsd(await example('cmyk-levels.psd')));
+  expect(render.pixels).toEqual(value(document.render(settings)).pixels);
+  document.close();
   expect(value(await client.difference(cmyk.document, render.render))).toMatchObject({
     unit: 'CMYK level',
     samples: 96 * 96 * 4,
@@ -773,6 +775,76 @@ it('invalidates cached pixels after a v5 edit while preserving original download
     const undone = value(await client.render(opened.document, settings, []));
     expect(undone.pixels).toEqual(before.pixels);
   } finally {
+    client.dispose();
+  }
+});
+
+it('uses the same converted sRGB pixels for whole, strict-budget tiles and overview renders', async () => {
+  for (const mode of [4, 9]) {
+    const channels = mode === 4 ? [255, 100, 0, 255] : [128, 180, 100];
+    const bytes = new Uint8Array(40 + channels.length * 4);
+    bytes.set([56, 66, 80, 83]);
+    const header = new DataView(bytes.buffer);
+    header.setUint16(4, 1);
+    header.setUint16(12, channels.length);
+    header.setUint32(14, 2);
+    header.setUint32(18, 2);
+    header.setUint16(22, 8);
+    header.setUint16(24, mode);
+    channels.forEach((sample, i) => bytes.fill(sample, 40 + i * 4, 44 + i * 4));
+    const { client } = connect();
+    try {
+      const opened = value(await client.open(bytes.buffer));
+      const render = value(await client.render(opened.document, settings, []));
+      const signal = new AbortController().signal;
+      const tiles = value(
+        await client.renderWindow(
+          opened.document,
+          settings,
+          [],
+          {
+            kind: 'regions',
+            rectangles: [{ left: 0, top: 0, width: 2, height: 2 }]
+          },
+          signal,
+          512 * 1024 ** 2
+        )
+      );
+      expect(tiles.images[0]!.pixels).toEqual(render.pixels);
+      expect(tiles.images[0]!.approximations).toEqual(render.approximations);
+      const overview = value(
+        await client.renderWindow(opened.document, settings, [], { kind: 'overview', step: 2 }, signal)
+      );
+      expect(overview.images[0]!.pixels).toEqual(render.pixels.slice(0, 4));
+      expect(overview.images[0]!.approximations).toEqual(render.approximations);
+    } finally {
+      client.dispose();
+    }
+  }
+});
+
+it('defers configured color conversion until a detected render is published', async () => {
+  const { client } = connect();
+  const codec = await loadPsdViewer();
+  const convert = vi.spyOn(codec.PsdDocumentHandle.prototype, 'renderSrgb');
+  const profile = vi.spyOn(workingCmyk, 'loadWorkingCmyk').mockResolvedValue({
+    name: 'CC0 CMYK',
+    bytes: await readFile(new URL('../../../packages/psd/test/cmyk.icc', import.meta.url))
+  });
+  try {
+    const opened = value(await client.open(await example('cmyk-levels.psd')));
+    value(await client.detectBlending(opened.document, settings, []));
+    expect(convert).not.toHaveBeenCalled();
+    value(await client.render(opened.document, settings, []));
+    expect(convert).toHaveBeenCalledTimes(1);
+    const profiled = value(await client.render(opened.document, settings, []));
+    expect(profiled.approximations).toContainEqual(expect.stringContaining('Converted to sRGB'));
+    profile.mockResolvedValue(undefined);
+    const cleared = value(await client.render(opened.document, { ...settings, displayProfileRevision: 1 }, []));
+    expect(cleared.approximations).toContainEqual(expect.stringContaining('This CMYK file has no color profile.'));
+  } finally {
+    profile.mockRestore();
+    convert.mockRestore();
     client.dispose();
   }
 });

@@ -13,6 +13,7 @@ import {
 } from './contracts';
 import styles from './editing.module.css';
 import { browserDestination, streamSave } from './save';
+import { readableSaveItem } from './saveNote';
 
 /** Shared commands keep tree gestures and the advanced form on the same revision and save contract. */
 export type LayerEditing = {
@@ -400,11 +401,11 @@ export function Editing(props: {
                               Writer: {visual().route}. Exact transaction: {visual().strictExact ? 'Yes' : 'No'}.
                             </p>
                             <p>
-                              PSD Viewer rendered {visual().rendered.join('; ') || 'nothing'}; carried{' '}
-                              {visual().carried.join('; ') || 'nothing'} from the original file; rewrote{' '}
-                              {visual().rewritten.join('; ') || 'nothing'}.
+                              PSD Viewer rendered {visual().rendered.map(readableSaveItem).join('; ') || 'nothing'};
+                              carried {visual().carried.map(readableSaveItem).join('; ') || 'nothing'} from the original
+                              file; rewrote {visual().rewritten.map(readableSaveItem).join('; ') || 'nothing'}.
                             </p>
-                            <p>Approximations: {visual().approximations.join('; ') || 'None'}.</p>
+                            <p>Approximations: {visual().approximations.map(readableSaveItem).join('; ') || 'None'}.</p>
                           </>
                         )}
                       </Show>

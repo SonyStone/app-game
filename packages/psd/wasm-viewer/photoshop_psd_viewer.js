@@ -120,25 +120,6 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 /**
- * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
- * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
- * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
- * @param {Uint8Array} bytes
- * @returns {Uint8Array}
- */
-export function writeTypeEngineValues26(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeEngineValues26(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
  * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
@@ -152,6 +133,60 @@ export function projectTypeEngineLayoutCache26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.projectTypeEngineLayoutCache26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
+ * @param {number} value
+ * @returns {Uint8Array}
+ */
+export function formatTypeEngineReal26(value) {
+    const ret = wasm.formatTypeEngineReal26(value);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v1;
+}
+
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineSelection26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineSelection26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
+ * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
+ * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
+ * @param {Uint8Array} bytes
+ * @returns {Uint8Array}
+ */
+export function writeTypeEngineValues26(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writeTypeEngineValues26(ptr0, len0);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -183,26 +218,6 @@ export function projectTypeEngineSave26(bytes, fonts) {
 }
 
 /**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
- * @returns {Uint8Array}
- */
-export function projectTypeEngineSelection26(bytes, fonts) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSelection26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
  * Converts modern horizontal cache origins through the native visual-origin addition before
  * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
  * import/layout dependencies still require comparison; no editor admission changes.
@@ -214,43 +229,6 @@ export function projectTypeEngineGeometry26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- * @param {number} value
- * @returns {Uint8Array}
- */
-export function formatTypeEngineReal26(value) {
-    const ret = wasm.formatTypeEngineReal26(value);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v1;
-}
-
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- * @param {Uint8Array} bytes
- * @param {TypeGlyphFont26[]} fonts
- * @param {TypePositionedGlyph26[]} glyphs
- * @param {number} units_per_pixel
- * @returns {Uint8Array}
- */
-export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -272,43 +250,6 @@ function getArrayF32FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
 }
-/**
- * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
- * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
- * unsupported outline programs throw. Does not shape text or authorize a document save.
- * @param {TypeGlyphFont26[]} fonts
- * @param {TypePositionedGlyph26[]} glyphs
- * @param {number} tx
- * @param {number} ty
- * @returns {Float32Array}
- */
-export function computeTypeGlyphInk26(fonts, glyphs, tx, ty) {
-    const ret = wasm.computeTypeGlyphInk26(fonts, glyphs, tx, ty);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v1;
-}
-
-/**
- * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
- * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
- * @param {Uint8Array} bytes
- * @param {number} face_index
- * @returns {any}
- */
-export function readTypeFontMetrics26(bytes, face_index) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readTypeFontMetrics26(ptr0, len0, face_index);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
 /**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
@@ -404,6 +345,65 @@ export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adj
     var v5 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v5;
+}
+
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ * @param {Uint8Array} bytes
+ * @param {TypeGlyphFont26[]} fonts
+ * @param {TypePositionedGlyph26[]} glyphs
+ * @param {number} units_per_pixel
+ * @returns {Uint8Array}
+ */
+export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
+ * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
+ * @param {Uint8Array} bytes
+ * @param {number} face_index
+ * @returns {any}
+ */
+export function readTypeFontMetrics26(bytes, face_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readTypeFontMetrics26(ptr0, len0, face_index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
+ * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
+ * unsupported outline programs throw. Does not shape text or authorize a document save.
+ * @param {TypeGlyphFont26[]} fonts
+ * @param {TypePositionedGlyph26[]} glyphs
+ * @param {number} tx
+ * @param {number} ty
+ * @returns {Float32Array}
+ */
+export function computeTypeGlyphInk26(fonts, glyphs, tx, ty) {
+    const ret = wasm.computeTypeGlyphInk26(fonts, glyphs, tx, ty);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v1 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v1;
 }
 
 /**

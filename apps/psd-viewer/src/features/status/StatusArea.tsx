@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import type { LayerNote } from '../layers';
 import type { PsdResultOf, RenderedPixels } from '../psd-worker';
+import { presentationNotice } from './presentationNotice';
 import styles from './StatusArea.module.css';
 
 /**
@@ -128,7 +129,7 @@ export function StatusArea(props: {
           <For each={approximations()}>
             {(text) => (
               <li>
-                <strong>Approximated:</strong> {text}
+                <strong>Approximated:</strong> {presentationNotice(text)}
               </li>
             )}
           </For>
