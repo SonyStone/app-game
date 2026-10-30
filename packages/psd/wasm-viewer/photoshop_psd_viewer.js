@@ -102,6 +102,13 @@ function passStringToWasm0(arg, malloc, realloc) {
     return ptr;
 }
 
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_export_2.get(idx);
     wasm.__externref_table_dealloc(idx);
@@ -111,27 +118,6 @@ function takeFromExternrefTable0(idx) {
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
-}
-/**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- * @param {number} value
- * @returns {Uint8Array}
- */
-export function formatTypeEngineReal26(value) {
-    const ret = wasm.formatTypeEngineReal26(value);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v1;
-}
-
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
 }
 /**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
@@ -144,26 +130,6 @@ export function writeTypeEngineValues26(bytes) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.writeTypeEngineValues26(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
- * @returns {Uint8Array}
- */
-export function projectTypeEngineSelection26(bytes, fonts) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSelection26(ptr0, len0, fonts);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -195,6 +161,48 @@ export function projectTypeEngineLayoutCache26(bytes, fonts) {
 }
 
 /**
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineSave26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineSelection26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineSelection26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Converts modern horizontal cache origins through the native visual-origin addition before
  * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
  * import/layout dependencies still require comparison; no editor admission changes.
@@ -215,19 +223,34 @@ export function projectTypeEngineGeometry26(bytes, fonts) {
 }
 
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
+ * @param {number} value
  * @returns {Uint8Array}
  */
-export function projectTypeEngineSave26(bytes, fonts) {
+export function formatTypeEngineReal26(value) {
+    const ret = wasm.formatTypeEngineReal26(value);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v1 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v1;
+}
+
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ * @param {Uint8Array} bytes
+ * @param {TypeGlyphFont26[]} fonts
+ * @param {TypePositionedGlyph26[]} glyphs
+ * @param {number} units_per_pixel
+ * @returns {Uint8Array}
+ */
+export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -284,28 +307,6 @@ export function readTypeFontMetrics26(bytes, face_index) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- * @param {Uint8Array} bytes
- * @param {TypeGlyphFont26[]} fonts
- * @param {TypePositionedGlyph26[]} glyphs
- * @param {number} units_per_pixel
- * @returns {Uint8Array}
- */
-export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
 }
 
 /**
@@ -406,6 +407,21 @@ export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adj
 }
 
 /**
+ * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
+ * @param {Uint8Array} bytes
+ * @returns {any}
+ */
+export function readPsd(bytes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readPsd(ptr0, len0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
  * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
  * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
@@ -425,21 +441,6 @@ export function writePsd(document, composite, context) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
-}
-
-/**
- * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
- * @param {Uint8Array} bytes
- * @returns {any}
- */
-export function readPsd(bytes) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readPsd(ptr0, len0);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
 }
 
 /**
@@ -553,6 +554,29 @@ export class PsdDocumentHandle {
     difference(image) {
         _assertClass(image, RenderedImage);
         const ret = wasm.psddocumenthandle_difference(this.__wbg_ptr, image.__wbg_ptr);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
+    }
+    /**
+     * Render browser sRGB with supplied ICC working spaces and explicit approximation notices.
+     * Accepts render's fonts, state, visibility and gamma options plus renderColor's color settings.
+     * Uses recovered integer conversion and Duotone inks where supported. With approximate=true,
+     * unsupported process constructs retain the named legacy preview fallback. Missing or invalid
+     * profiles refuse. Dither is reported as omitted because native runtime state is unavailable.
+     * RGB16 non-identity profile conversion refuses; low-level renderColor remains explicitly approximate.
+     * Factory 32-bit HDR conversion refuses because its toning/profile dispatch remains unqualified.
+     * Pixel aspect correction is refused; use renderColor for continuous aspect-corrected bounds.
+     * Returns width, height, rgba8, encoding="srgb" and approximations. Legacy render is unchanged.
+     * @param {any} options
+     * @param {any} color
+     * @param {PsdFontLibrary} fonts
+     * @returns {any}
+     */
+    renderSrgb(options, color, fonts) {
+        _assertClass(fonts, PsdFontLibrary);
+        const ret = wasm.psddocumenthandle_renderSrgb(this.__wbg_ptr, options, color, fonts.__wbg_ptr);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -974,6 +998,8 @@ export class PsdDocumentHandle {
      * Reconstructs layers for the Photoshop 26 target with caller-supplied settings. Historical authoring state
      * is not reconstructed, and a successful render can differ from the saved snapshot even when Photoshop 26
      * wrote it. Use `merged()` for saved pixels. Empty approximations describe this render policy only.
+     * Legacy RGB16 reduction, Gray profile omission and 32-bit factory toning/dither limits
+     * remain named even when process compositing succeeds exactly.
      * Composites the document with `options` (see [`RenderSettings::read`]): 8-bit RGB and Grayscale with
      * `composite_with_report`, 16- and 32-bit with `composite_deep`, CMYK and Lab of 8 and 16 bits in their own
      * channels with `composite_channels` whether or not `approximate` is set (shown through the approximate
@@ -1000,6 +1026,9 @@ export class PsdDocumentHandle {
      * `grayProfile` optionally supplies caller-owned working-Gray ICC bytes as a `Uint8Array`.
      * Modern transparent rectangle gradients require the admitted Dot Gain 20% profile explicitly;
      * omitting it preserves their existing refusal/cache policy. No installed profile is read.
+     * `approximateOneSidedStrokes` additionally opts into a reported clipped centered-outline fallback for
+     * unsupported one-sided closed strokes. It requires `approximate` and defaults off, preserving legacy
+     * cached pixels and reports when omitted. Strict rendering and editor admission remain unchanged.
      * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
      * first setting the compositor does not reproduce.
      * @param {any} options

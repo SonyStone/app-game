@@ -32,6 +32,7 @@ export const psddocumenthandle_renderNativeRegion: (a: number, b: any, c: any, d
 export const psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
 export const psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
 export const psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
+export const psddocumenthandle_renderSrgb: (a: number, b: any, c: any, d: number) => [number, number, number];
 export const psddocumenthandle_renderWithBudget: (a: number, b: any, c: number, d: any) => [number, number, number];
 export const psddocumenthandle_savedOverview: (a: number, b: number, c: number, d: number) => [number, number, number];
 export const psddocumenthandle_savedPaths: (a: number, b: any) => [number, number, number];

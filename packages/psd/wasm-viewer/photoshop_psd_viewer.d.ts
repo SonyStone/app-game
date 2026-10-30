@@ -1,21 +1,11 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
- */
-export function formatTypeEngineReal26(value: number): Uint8Array;
-/**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
  * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
  */
 export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
-/**
- * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
- * arrays, including a supplied uniform shadow scale for strike descent. This imports source
- * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
- */
-export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Converts measured modern major-axis caches and segment indices into schema 7.
  * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
@@ -25,12 +15,6 @@ export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngin
  */
 export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
- */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
-/**
  * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
  * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
  * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
@@ -38,6 +22,28 @@ export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngine
  * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
  */
 export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
+ * arrays, including a supplied uniform shadow scale for strike descent. This imports source
+ * caches. It does not shape text, reconstruct missing font context, or authorize edited saves.
+ */
+export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
+ */
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Formats one finite binary32 engine real. Values beyond the measured native magnitude throw.
+ */
+export function formatTypeEngineReal26(value: number): Uint8Array;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
@@ -49,12 +55,6 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
  */
 export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
@@ -836,6 +836,18 @@ export class PsdDocumentHandle {
    */
   difference(image: RenderedImage): any;
   /**
+   * Render browser sRGB with supplied ICC working spaces and explicit approximation notices.
+   * Accepts render's fonts, state, visibility and gamma options plus renderColor's color settings.
+   * Uses recovered integer conversion and Duotone inks where supported. With approximate=true,
+   * unsupported process constructs retain the named legacy preview fallback. Missing or invalid
+   * profiles refuse. Dither is reported as omitted because native runtime state is unavailable.
+   * RGB16 non-identity profile conversion refuses; low-level renderColor remains explicitly approximate.
+   * Factory 32-bit HDR conversion refuses because its toning/profile dispatch remains unqualified.
+   * Pixel aspect correction is refused; use renderColor for continuous aspect-corrected bounds.
+   * Returns width, height, rgba8, encoding="srgb" and approximations. Legacy render is unchanged.
+   */
+  renderSrgb(options: any, color: any, fonts: PsdFontLibrary): any;
+  /**
    * Lists saved and work paths after companion overrides, with original Q24 knots and pixel geometry.
    * Malformed paths remain listed with typed per-path errors; duplicate identities refuse the query.
    */
@@ -1030,6 +1042,8 @@ export class PsdDocumentHandle {
    * Reconstructs layers for the Photoshop 26 target with caller-supplied settings. Historical authoring state
    * is not reconstructed, and a successful render can differ from the saved snapshot even when Photoshop 26
    * wrote it. Use `merged()` for saved pixels. Empty approximations describe this render policy only.
+   * Legacy RGB16 reduction, Gray profile omission and 32-bit factory toning/dither limits
+   * remain named even when process compositing succeeds exactly.
    * Composites the document with `options` (see [`RenderSettings::read`]): 8-bit RGB and Grayscale with
    * `composite_with_report`, 16- and 32-bit with `composite_deep`, CMYK and Lab of 8 and 16 bits in their own
    * channels with `composite_channels` whether or not `approximate` is set (shown through the approximate
@@ -1056,6 +1070,9 @@ export class PsdDocumentHandle {
    * `grayProfile` optionally supplies caller-owned working-Gray ICC bytes as a `Uint8Array`.
    * Modern transparent rectangle gradients require the admitted Dot Gain 20% profile explicitly;
    * omitting it preserves their existing refusal/cache policy. No installed profile is read.
+   * `approximateOneSidedStrokes` additionally opts into a reported clipped centered-outline fallback for
+   * unsupported one-sided closed strokes. It requires `approximate` and defaults off, preserving legacy
+   * cached pixels and reports when omitted. Strict rendering and editor admission remain unchanged.
    * Visibility overrides apply to this render only. Throws `PsdUnsupportedError` naming the
    * first setting the compositor does not reproduce.
    */
@@ -1241,6 +1258,7 @@ export interface InitOutput {
   readonly psddocumenthandle_renderOverview: (a: number, b: number, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderRegion: (a: number, b: number, c: number, d: number, e: number, f: any, g: number) => [number, number, number];
   readonly psddocumenthandle_renderRegions: (a: number, b: any, c: any, d: number) => [number, number, number];
+  readonly psddocumenthandle_renderSrgb: (a: number, b: any, c: any, d: number) => [number, number, number];
   readonly psddocumenthandle_renderWithBudget: (a: number, b: any, c: number, d: any) => [number, number, number];
   readonly psddocumenthandle_savedOverview: (a: number, b: number, c: number, d: number) => [number, number, number];
   readonly psddocumenthandle_savedPaths: (a: number, b: any) => [number, number, number];

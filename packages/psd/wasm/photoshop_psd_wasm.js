@@ -120,17 +120,41 @@ function getArrayU8FromWasm0(ptr, len) {
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
 }
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
  * @param {Uint8Array} bytes
  * @param {TypeEngineFontVersion[]} fonts
  * @returns {Uint8Array}
  */
-export function projectTypeEngineGeometry26(bytes, fonts) {
+export function projectTypeEngineSave26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
+    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Converts measured modern major-axis caches and segment indices into schema 7.
+ * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
+ * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
+ * Supply actual face versions as for `projectTypeEngineSave26`. Returns a diagnostic engine packet;
+ * it does not shape text, compute vertical font geometry or authorize edited saves.
+ * @param {Uint8Array} bytes
+ * @param {TypeEngineFontVersion[]} fonts
+ * @returns {Uint8Array}
+ */
+export function projectTypeEngineLayoutCache26(bytes, fonts) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.projectTypeEngineLayoutCache26(ptr0, len0, fonts);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -175,19 +199,17 @@ export function formatTypeEngineReal26(value) {
 }
 
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
  * @param {Uint8Array} bytes
  * @param {TypeEngineFontVersion[]} fonts
  * @returns {Uint8Array}
  */
-export function projectTypeEngineSave26(bytes, fonts) {
+export function projectTypeEngineGeometry26(bytes, fonts) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineSave26(ptr0, len0, fonts);
+    const ret = wasm.projectTypeEngineGeometry26(ptr0, len0, fonts);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -207,28 +229,6 @@ export function writeTypeEngineValues26(bytes) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.writeTypeEngineValues26(ptr0, len0);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
-    return v2;
-}
-
-/**
- * Converts measured modern major-axis caches and segment indices into schema 7.
- * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
- * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
- * Supply actual face versions as for `projectTypeEngineSave26`. Returns a diagnostic engine packet;
- * it does not shape text, compute vertical font geometry or authorize edited saves.
- * @param {Uint8Array} bytes
- * @param {TypeEngineFontVersion[]} fonts
- * @returns {Uint8Array}
- */
-export function projectTypeEngineLayoutCache26(bytes, fonts) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.projectTypeEngineLayoutCache26(ptr0, len0, fonts);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -274,45 +274,6 @@ export function computeTypeManualBaselines26(bytes, face_index, size, leading, c
     }
     var v2 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
-    return v2;
-}
-
-/**
- * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
- * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
- * @param {Uint8Array} bytes
- * @param {number} face_index
- * @returns {any}
- */
-export function readTypeFontMetrics26(bytes, face_index) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.readTypeFontMetrics26(ptr0, len0, face_index);
-    if (ret[2]) {
-        throw takeFromExternrefTable0(ret[1]);
-    }
-    return takeFromExternrefTable0(ret[0]);
-}
-
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- * @param {Uint8Array} bytes
- * @param {TypeGlyphFont26[]} fonts
- * @param {TypePositionedGlyph26[]} glyphs
- * @param {number} units_per_pixel
- * @returns {Uint8Array}
- */
-export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
-    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
-    const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
-    if (ret[3]) {
-        throw takeFromExternrefTable0(ret[2]);
-    }
-    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
-    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
 }
 
@@ -407,19 +368,36 @@ export function computeTypeHorizontalPens26(bytes, face_index, glyphs, size, adj
 }
 
 /**
- * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
- * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
- * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
- * Resource 1044 carries the largest allocated ID. Inputs and existing preservation saves remain unchanged.
- * @param {any} document
- * @param {Uint8Array} composite
- * @param {any} context
+ * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
+ * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
+ * @param {Uint8Array} bytes
+ * @param {number} face_index
+ * @returns {any}
+ */
+export function readTypeFontMetrics26(bytes, face_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.readTypeFontMetrics26(ptr0, len0, face_index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ * @param {Uint8Array} bytes
+ * @param {TypeGlyphFont26[]} fonts
+ * @param {TypePositionedGlyph26[]} glyphs
+ * @param {number} units_per_pixel
  * @returns {Uint8Array}
  */
-export function writePsd(document, composite, context) {
-    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
+export function writeTypeLayerGlyphs26(bytes, fonts, glyphs, units_per_pixel) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
-    const ret = wasm.writePsd(document, ptr0, len0, context);
+    const ret = wasm.writeTypeLayerGlyphs26(ptr0, len0, fonts, glyphs, units_per_pixel);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -441,6 +419,28 @@ export function readPsd(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Writes an 8-bit RGB document of `document.layers` and the straight RGBA `composite`; PSB above 30000
+ * pixels on a side. Without context, records carry bottom-to-top IDs beginning at 2.
+ * Explicit context supplies IDs/clocks and initializes root XMP/history, host resources and document state.
+ * Resource 1044 carries the largest allocated ID. Inputs and existing preservation saves remain unchanged.
+ * @param {any} document
+ * @param {Uint8Array} composite
+ * @param {any} context
+ * @returns {Uint8Array}
+ */
+export function writePsd(document, composite, context) {
+    const ptr0 = passArray8ToWasm0(composite, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.writePsd(document, ptr0, len0, context);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**

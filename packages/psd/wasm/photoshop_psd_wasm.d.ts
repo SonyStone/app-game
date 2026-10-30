@@ -1,11 +1,21 @@
 /* tslint:disable */
 /* eslint-disable */
 /**
- * Converts modern horizontal cache origins through the native visual-origin addition before
- * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
- * import/layout dependencies still require comparison; no editor admission changes.
+ * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
+ * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
+ * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
+ * document identities. Supply actual face versions, never guesses based only on PostScript names.
+ * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
  */
-export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+/**
+ * Converts measured modern major-axis caches and segment indices into schema 7.
+ * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
+ * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
+ * Supply actual face versions as for `projectTypeEngineSave26`. Returns a diagnostic engine packet;
+ * it does not shape text, compute vertical font geometry or authorize edited saves.
+ */
+export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Converts measured horizontal SelectionPoints and positioned origins into legacy pen and mark
  * arrays, including a supplied uniform shadow scale for strike descent. This imports source
@@ -17,27 +27,17 @@ export function projectTypeEngineSelection26(bytes: Uint8Array, fonts: TypeEngin
  */
 export function formatTypeEngineReal26(value: number): Uint8Array;
 /**
- * Projects measured schema-13/14 horizontal cached engine data into save schema 7 for compatibility
- * comparison. This is a diagnostic candidate. It does not produce local TySh descriptors, validate
- * import/layout state, shape glyphs or authorize editor saves. Missing face-context entries retain
- * document identities. Supply actual face versions, never guesses based only on PostScript names.
- * Unsupported versions, duplicate identities and nonhorizontal cached data throw.
+ * Converts modern horizontal cache origins through the native visual-origin addition before
+ * projecting schema 13/14. This converts stored coordinates, never shapes glyphs. Remaining
+ * import/layout dependencies still require comparison; no editor admission changes.
  */
-export function projectTypeEngineSave26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
+export function projectTypeEngineGeometry26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Writes current engine values using Photoshop 26's binary32 decimals and canonical whitespace.
  * Does not import a layout, resolve fonts or authorize an edited PSD/PSB save. The original bytes
  * remain unchanged. Malformed packets and unsupported scalar/array encodings throw.
  */
 export function writeTypeEngineValues26(bytes: Uint8Array): Uint8Array;
-/**
- * Converts measured modern major-axis caches and segment indices into schema 7.
- * Vertical caches require zero major origins and retain source layout and glyph IDs. Metric-box
- * rotation uses binary32 arithmetic. Malformed packets, unsupported layouts or font contexts throw.
- * Supply actual face versions as for `projectTypeEngineSave26`. Returns a diagnostic engine packet;
- * it does not shape text, compute vertical font geometry or authorize edited saves.
- */
-export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEngineFontVersion[]): Uint8Array;
 /**
  * Computes ordinary TrueType box/point baselines from supplied bytes and explicit manual leading.
  * The caller establishes line breaks; `count` is at most 1,000,000 and `leading` is finite/positive.
@@ -47,17 +47,6 @@ export function projectTypeEngineLayoutCache26(bytes: Uint8Array, fonts: TypeEng
  * Does not choose automatic leading, shape text, query host fonts or authorize edited saves.
  */
 export function computeTypeManualBaselines26(bytes: Uint8Array, face_index: number, size: number, leading: number, count: number, boxed: boolean): Float32Array;
-/**
- * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
- * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
- */
-export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
-/**
- * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
- * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
- * source-dependent; a returned packet is not an editor admission certificate.
- */
-export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Computes local y-down ink from exact supplied font bytes and already positioned glyph IDs.
  * Standard TrueType hinting only. Missing fonts, variable/CFF faces, nonfinite values and
@@ -72,6 +61,17 @@ export function computeTypeGlyphInk26(fonts: TypeGlyphFont26[], glyphs: TypePosi
  * Does not perform shaping, kerning, host font lookup or choose terminal tracking or save admission.
  */
 export function computeTypeHorizontalPens26(bytes: Uint8Array, face_index: number, glyphs: Uint16Array, size: number, adjustments: Int32Array, spacing: Float32Array): Float32Array;
+/**
+ * Reads native-normalized OS/2 metric words from explicit static TrueType bytes.
+ * Returns typo ascent/descent/gap, cap and x-height, with absent fields represented as null.
+ */
+export function readTypeFontMetrics26(bytes: Uint8Array, face_index: number): any;
+/**
+ * Computes supplied-font ink and returns a complete diagnostic TySh candidate in explicit
+ * points units. Supply `unitsPerPixel = 72 / resolution`. Other import/layout properties remain
+ * source-dependent; a returned packet is not an editor admission certificate.
+ */
+export function writeTypeLayerGlyphs26(bytes: Uint8Array, fonts: TypeGlyphFont26[], glyphs: TypePositionedGlyph26[], units_per_pixel: number): Uint8Array;
 /**
  * Reads the raster layers of an RGB, Grayscale or Bitmap PSD or PSB at any depth, groups flattened.
  */
@@ -1189,7 +1189,7 @@ export interface PsdVisualUnionNote extends Omit<PsdVisualPatchNote, "contract">
   /** Selected writer. */ readonly route: "v5" | "carryPatch";
   /** True exactly for v5 output. */ readonly strictExact: boolean;
   /** Null when v5 admitted. */ readonly v5Refusal: string | null;
-  /** Null when patch admitted. */ readonly patchRefusal: string | null;
+  /** Null when patch admitted or v5 succeeded without running patch. */ readonly patchRefusal: string | null;
 }
 /** Independent carry-and-patch accounting; no native threshold measurement is implied. */
 export interface PsdVisualPatchNote {
