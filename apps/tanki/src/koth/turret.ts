@@ -1,6 +1,7 @@
 import type { Tank } from '../arena/bodies';
 import type { Combat, ShellSpec } from '../damage/combat';
 import { TURRET_GATLING } from '../damage/renderer';
+import { atan2, hypot } from '../physics/math';
 import { angleBetween } from './classes/casemate';
 import type { KothMap } from './map';
 import type { TeamId } from './rules';
@@ -29,7 +30,7 @@ export function createBaseTurrets(combat: Combat, map: KothMap, colors: Record<T
 
     const inward = -Math.sign(zone.x);
     const door = { x: zone.x + inward * zone.halfWidth, y: zone.y };
-    const rest = Math.atan2(door.y - at.y, door.x - at.x);
+    const rest = atan2(door.y - at.y, door.x - at.x);
     const gun = combat.mountGun({ ...at, angle: rest, team, color: colors[team], look: TURRET_LOOK });
     return [{ team, at, zone, rest, gun, cooldown: 0 }];
   });
@@ -78,7 +79,10 @@ export function createBaseTurrets(combat: Combat, map: KothMap, colors: Record<T
       return false;
     }
 
-    const clear = { x: at.x + ((point.x - at.x) / range) * WALL_CLEAR, y: at.y + ((point.y - at.y) / range) * WALL_CLEAR };
+    const clear = {
+      x: at.x + ((point.x - at.x) / range) * WALL_CLEAR,
+      y: at.y + ((point.y - at.y) / range) * WALL_CLEAR
+    };
     return combat.lineOfSight(clear, point);
   }
 
@@ -87,7 +91,7 @@ export function createBaseTurrets(combat: Combat, map: KothMap, colors: Record<T
     const core = combat.coreOf(target) ?? target.hull.translation();
     const velocity = target.hull.linvel();
     const time = distance(at, core) / TURRET_SHELL.speed;
-    return Math.atan2(core.y + velocity.y * time - at.y, core.x + velocity.x * time - at.x);
+    return atan2(core.y + velocity.y * time - at.y, core.x + velocity.x * time - at.x);
   }
 }
 
@@ -113,9 +117,11 @@ const WALL_CLEAR = 30;
 
 /** Whether `point` lies in a base's `zone` or its doorways, `DOORWAY` px round it. */
 function inGuarded(zone: { x: number; y: number; halfWidth: number; halfHeight: number }, point: Point) {
-  return Math.abs(point.x - zone.x) <= zone.halfWidth + DOORWAY && Math.abs(point.y - zone.y) <= zone.halfHeight + DOORWAY;
+  return (
+    Math.abs(point.x - zone.x) <= zone.halfWidth + DOORWAY && Math.abs(point.y - zone.y) <= zone.halfHeight + DOORWAY
+  );
 }
 
 function distance(a: Point, b: Point) {
-  return Math.hypot(a.x - b.x, a.y - b.y);
+  return hypot(a.x - b.x, a.y - b.y);
 }
