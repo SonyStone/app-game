@@ -179,12 +179,28 @@ describe('brush editor schema', () => {
         { value: 'stabilizer', label: 'Stabilizer (Paint Tool SAI)' }
       ]
     });
+    expect(brushCategories.find((category) => category.id === 'stroke-correction')!.about).toBeUndefined();
     expect(getBrushSetting('color-mixing')).toMatchObject({
       options: [
         { value: 'linear', label: 'Smooth color' },
         { value: 'classic', label: 'Classic' }
       ]
     });
+  });
+
+  it('describes each smoothing mode with its own note, one shared by both Leonardo modes', () => {
+    const smoothing = getBrushSetting('smoothing');
+    if (smoothing?.kind !== 'choice') {
+      throw new Error('Expected the smoothing choice');
+    }
+
+    const description = (value: string) => smoothing.options.find((option) => option.value === value)!.description;
+    expect(description('none')).toMatch(/^No path smoothing/);
+    expect(description('studio')).toBeUndefined();
+    expect(description('normal')).toMatch(/^Higher stabilization/);
+    expect(description('smooth')).toBe(description('normal'));
+    expect(description('stabilizer')).toMatch(/^As in Paint Tool SAI/);
+    expect(getBrushSetting('color-mixing')).toMatchObject({ options: [{}, {}] });
   });
 
   it('summarizes painting, tips, pressure, and correction modes', () => {

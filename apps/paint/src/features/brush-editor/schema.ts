@@ -50,11 +50,21 @@ export type ToggleSetting = SettingBase & {
 export type ChoiceSetting = SettingBase & {
   kind: 'choice';
   /** Options in display order; values are the accepted write inputs. */
-  options: readonly { value: string; label: string }[];
+  options: readonly ChoiceOption[];
   /** Current option value. */
   read: (brush: Brush) => string;
   /** Returns a shallow-merge patch; throws RangeError for an unknown option. */
   write: (brush: Brush, value: string) => Partial<Brush>;
+};
+
+/** One option of a choice setting. */
+export type ChoiceOption = {
+  /** The value `read` returns and `write` accepts. */
+  value: string;
+  /** Visible option name. */
+  label: string;
+  /** What choosing this option does, shown while it is chosen; options may share one text. */
+  description?: string;
 };
 
 /** Discriminated control definition for generated editors and standalone controls. */
@@ -79,6 +89,10 @@ export type BrushCategory = {
   /** Explanation for an applicable category with no editable rows, when needed. */
   note?: (brush: Brush) => string | undefined;
 };
+
+/** Shared by both Leonardo smoothing modes; declared before the categories, which read it while they are built. */
+const leonardoDescription =
+  'Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only.';
 
 /** Editor navigation and rows in display order. Callbacks are pure; writes return shallow-merge patches. */
 export const brushCategories: readonly BrushCategory[] = [
@@ -170,18 +184,25 @@ export const brushCategories: readonly BrushCategory[] = [
           ? `${label} · ${mode === 'smooth' ? b.stroke.smooth : b.stroke.normal}`
           : label;
     },
-    about:
-      'No path smoothing or stabilization. Brush stamps connect input points directly. Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only. As in Paint Tool SAI: levels 0 to 15 average the latest 1 to 16 pen samples, S-1 to S-7 steady the hand more and trail further. Strokes ease in and taper out where the pen lifts.',
     settings: [
       choice(
         'smoothing',
         'Smoothing',
         [
-          { value: 'none', label: 'None (raw input)' },
+          {
+            value: 'none',
+            label: 'None (raw input)',
+            description: 'No path smoothing or stabilization. Brush stamps connect input points directly.'
+          },
           { value: 'studio', label: 'Studio' },
-          { value: 'normal', label: 'Leonardo normal' },
-          { value: 'smooth', label: 'Leonardo smooth' },
-          { value: 'stabilizer', label: 'Stabilizer (Paint Tool SAI)' }
+          { value: 'normal', label: 'Leonardo normal', description: leonardoDescription },
+          { value: 'smooth', label: 'Leonardo smooth', description: leonardoDescription },
+          {
+            value: 'stabilizer',
+            label: 'Stabilizer (Paint Tool SAI)',
+            description:
+              'As in Paint Tool SAI: levels 0 to 15 average the latest 1 to 16 pen samples, S-1 to S-7 steady the hand more and trail further. Strokes ease in and taper out where the pen lifts.'
+          }
         ],
         (b) => b.stroke.mode,
         (b, value) => strokePatch(b, { mode: value as StrokeSettings['mode'] })
@@ -283,15 +304,22 @@ export function brushSettingsDiffer(brush: Brush, snapshot: BrushSettingsSnapsho
 function always() {
   return true;
 }
+
+/** ABR presets carry their own pressure dynamics, so the pressure toggles do not apply to them. */
 function supportsPressure(b: Brush) {
   return b.engine?.id !== 'abr';
 }
+
 function isLeonardo(b: Brush) {
   return b.stroke.mode === 'normal' || b.stroke.mode === 'smooth';
 }
+
+/** The modes in which the pen pressure range and firmness apply: the Leonardo modes and the stabilizer. */
 function calibratesPressure(b: Brush) {
   return isLeonardo(b) || b.stroke.mode === 'stabilizer';
 }
+
+/** Merges `patch` into the brush's stroke settings and normalizes the result, as every stroke write must. */
 function strokePatch(b: Brush, patch: Partial<StrokeSettings>): Partial<Brush> {
   return { stroke: normalizeStrokeSettings({ ...b.stroke, ...patch }) };
 }
@@ -318,6 +346,8 @@ function number(
       )
   };
 }
+
+/** A number setting stored as a 0–1 fraction of the brush and shown in percent. */
 function percent(
   field: 'opacity' | 'flow' | 'hardness' | 'spacing',
   label: string,
@@ -334,6 +364,7 @@ function percent(
     write: (_b, value) => ({ [field]: value / 100 })
   });
 }
+
 function toggle(
   id: string,
   label: string,
@@ -343,6 +374,8 @@ function toggle(
 ): ToggleSetting {
   return { id, label, kind: 'toggle', applies, enabled: always, read, write };
 }
+
+/** A choice setting whose write rejects values that are not among `options`. */
 function choice(
   id: string,
   label: string,
@@ -367,6 +400,8 @@ function choice(
     }
   };
 }
+
+/** A percent setting of the pen pressure range, enabled only in the modes that calibrate pressure. */
 function strokePercent(
   id: string,
   label: string,
@@ -389,6 +424,7 @@ function strokePercent(
 }
 
 const tipLabels: Record<string, string> = { round: 'Soft round', textured: 'Textured tip', abr: 'ABR brush' };
+
 const modeLabels: Record<StrokeSettings['mode'], string> = {
   none: 'None',
   studio: 'Studio',
