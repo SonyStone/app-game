@@ -95,6 +95,12 @@ export const featureDemos: PaintVariant[] = [
     load: () => import('./demos').then(({ SymmetryDemo }) => SymmetryDemo)
   },
   {
+    id: 'demo-brush-editor',
+    name: 'Brush editor',
+    description: 'The brush editor beside a drawing: change a setting and draw with it.',
+    load: () => import('./demos').then(({ BrushEditorDemo }) => BrushEditorDemo)
+  },
+  {
     id: 'demo-gradient',
     name: 'Gradient',
     description: 'Only the gradient tool.',

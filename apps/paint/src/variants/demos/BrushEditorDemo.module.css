@@ -1,0 +1,118 @@
+/* The Classic studio's theme properties, which the brush editor reads; the drawing keeps its own paper colour. */
+.demo {
+  --ink: #444;
+  --muted: #777;
+  --line: #dedede;
+  --accent: #237aab;
+  --surface: #f8f8f8;
+
+  background: #faf8f4;
+  color: var(--ink);
+  font:
+    13px/1.45 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+
+/* The drawing fills what the panel leaves; outranks the stage's own inset. */
+.demo .stage {
+  right: var(--panel-width);
+}
+
+.ui {
+  position: absolute;
+  inset: 0 var(--panel-width) 0 0;
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.bar {
+  position: absolute;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  display: flex;
+  gap: 6px;
+
+  a,
+  button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-width: 44px;
+    height: 44px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+}
+
+.reopen {
+  padding: 0 14px;
+  font-weight: 600;
+}
+
+.panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--panel-width);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: -4px 0 20px #00000012;
+}
+
+/* Wider than it looks, for a finger. */
+.handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -12px;
+  z-index: 1;
+  width: 24px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.widths {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+
+  button {
+    flex: 1;
+    height: 44px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+
+    &[aria-pressed='true'] {
+      background: color-mix(in srgb, var(--accent) 13%, transparent);
+      color: var(--ink);
+      font-weight: 600;
+    }
+  }
+}
+
+.editor {
+  min-height: 0;
+}
