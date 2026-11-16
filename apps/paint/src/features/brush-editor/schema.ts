@@ -194,7 +194,11 @@ export const brushCategories: readonly BrushCategory[] = [
             label: 'None (raw input)',
             description: 'No path smoothing or stabilization. Brush stamps connect input points directly.'
           },
-          { value: 'studio', label: 'Studio' },
+          {
+            value: 'studio',
+            label: 'Studio',
+            description: "Paint's original smoothing: brush stamps follow quadratic curves through the input points."
+          },
           { value: 'normal', label: 'Leonardo normal', description: leonardoDescription },
           { value: 'smooth', label: 'Leonardo smooth', description: leonardoDescription },
           {

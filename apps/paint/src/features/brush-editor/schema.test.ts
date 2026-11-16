@@ -188,7 +188,7 @@ describe('brush editor schema', () => {
     });
   });
 
-  it('describes each smoothing mode with its own note, one shared by both Leonardo modes', () => {
+  it('describes each smoothing mode, with one note shared by both Leonardo modes', () => {
     const smoothing = getBrushSetting('smoothing');
     if (smoothing?.kind !== 'choice') {
       throw new Error('Expected the smoothing choice');
@@ -196,7 +196,7 @@ describe('brush editor schema', () => {
 
     const description = (value: string) => smoothing.options.find((option) => option.value === value)!.description;
     expect(description('none')).toMatch(/^No path smoothing/);
-    expect(description('studio')).toBeUndefined();
+    expect(description('studio')).toMatch(/^Paint's original smoothing/);
     expect(description('normal')).toMatch(/^Higher stabilization/);
     expect(description('smooth')).toBe(description('normal'));
     expect(description('stabilizer')).toMatch(/^As in Paint Tool SAI/);

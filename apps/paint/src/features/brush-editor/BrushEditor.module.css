@@ -1,0 +1,480 @@
+/*
+ * Rules for the editor's buttons start with .frame, so that a host's reset such as `.studio button` cannot undo them.
+ * The brush editor takes its colours from the host's theme properties (--ink, --muted, --line, --accent, --surface),
+ * falling back to the Classic studio's. Layouts follow the editor's own width through the brush-editor container:
+ * wide from 600 px, medium (icon column) from 400 px, narrow (list, then rows) below. Every press target is at
+ * least 44 px high, for fingers and the pen.
+ */
+.editor {
+  container: brush-editor / inline-size;
+  height: 100%;
+  min-height: 0;
+}
+
+.frame {
+  --target: 44px;
+  --ink-color: var(--ink, #444);
+  --muted-color: var(--muted, #777);
+  --line-color: var(--line, #dedede);
+  --accent-color: var(--accent, #237aab);
+  --surface-color: var(--surface, #f8f8f8);
+  --selected: color-mix(in srgb, var(--accent-color) 13%, transparent);
+  --raised: color-mix(in srgb, var(--ink-color) 5%, transparent);
+
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100%;
+  background: var(--surface-color);
+  color: var(--ink-color);
+  font-size: 13px;
+  line-height: 1.35;
+
+  /* Zero specificity, so that the editor's own button rules win over this reset. */
+  :where(button) {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible,
+  [role='slider']:focus-visible {
+    outline: 2px solid var(--accent-color);
+    outline-offset: -2px;
+  }
+}
+
+.preview {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line-color);
+
+  &:empty {
+    display: none;
+  }
+}
+
+.body {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* The column and the rows scroll each on their own, and a scroll never carries over to the page. */
+.nav,
+.pane {
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px;
+  border-right: 1px solid var(--line-color);
+}
+
+.group {
+  margin: 8px 4px 4px;
+  color: var(--muted-color);
+  font-size: 11px;
+  font-weight: 600;
+
+  &:first-child {
+    margin-top: 2px;
+  }
+}
+
+.frame .category {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--raised);
+
+  &[aria-current='true'] {
+    background: var(--selected);
+    box-shadow: inset 3px 0 0 var(--accent-color);
+  }
+}
+
+.categoryIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+}
+
+.categoryText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.categoryName,
+.categoryStatus {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.categoryName {
+  font-weight: 600;
+}
+
+.categoryStatus {
+  color: var(--muted-color);
+  font-size: 11px;
+}
+
+.chevron {
+  display: none;
+  color: var(--muted-color);
+}
+
+.pane {
+  padding: 4px 16px 16px;
+}
+
+.frame .back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--target);
+  margin-left: -8px;
+  padding: 0 10px 0 6px;
+  border-radius: 6px;
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.title {
+  margin: 10px 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* The chosen category's status, shown where the column has no room for it. */
+.paneStatus {
+  display: none;
+  margin: 0 0 4px;
+  color: var(--muted-color);
+  font-size: 11px;
+}
+
+.frame .about {
+  button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-height: var(--target);
+    color: var(--muted-color);
+  }
+
+  p {
+    margin: 0 0 8px;
+    color: var(--muted-color);
+  }
+}
+
+.rows {
+  display: grid;
+  gap: 2px;
+  margin-top: 6px;
+}
+
+.note {
+  margin: 4px 0;
+  color: var(--muted-color);
+}
+
+.label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* label, slider, number, unit */
+.row {
+  display: grid;
+  grid-template-columns: minmax(72px, 28%) minmax(80px, 1fr) 64px 22px;
+  align-items: center;
+  gap: 0 10px;
+  min-height: var(--target);
+  width: 100%;
+
+  --scrub-width: 64px;
+  --scrub-height: var(--target);
+  --scrub-radius: 6px;
+  --scrub-track: var(--surface-color);
+  --scrub-fill: var(--surface-color);
+  --scrub-focus: var(--accent-color);
+
+  &[data-disabled] .label,
+  &[data-disabled] .unit,
+  &:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+
+  &[data-disabled] .slider,
+  &[data-disabled] .formatted {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+.frame .row[data-kind='toggle'] {
+  display: flex;
+  gap: 10px;
+  margin: 2px 0;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--raised);
+}
+
+.box {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--muted-color);
+  border-radius: 4px;
+
+  [aria-checked='true'] > & {
+    border-color: var(--accent-color);
+    background: var(--accent-color);
+    color: var(--surface-color);
+  }
+}
+
+.unit {
+  color: var(--muted-color);
+  font-size: 11px;
+}
+
+.formatted {
+  display: grid;
+  place-items: center start;
+  height: var(--target);
+  padding-left: 9px;
+  border: 1px solid var(--line-color);
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The whole row height takes presses; the rail and the thumb are drawn in its middle. */
+.slider {
+  display: flex;
+  align-items: center;
+  height: var(--target);
+  padding: 0 10px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.rail {
+  position: relative;
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--accent-color) var(--position), var(--line-color) var(--position));
+}
+
+.thumb {
+  position: absolute;
+  top: 50%;
+  left: var(--position);
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--accent-color);
+  border-radius: 50%;
+  background: var(--surface-color);
+  transform: translate(-50%, -50%);
+  box-sizing: border-box;
+}
+
+.choice {
+  display: grid;
+  gap: 2px;
+  margin: 2px 0 6px;
+
+  > .label {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+  }
+
+  &[data-disabled] {
+    opacity: 0.45;
+  }
+}
+
+.frame .option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--target);
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--raised);
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--muted-color);
+  border-radius: 50%;
+  box-sizing: border-box;
+
+  [aria-checked='true'] > & {
+    border: 5px solid var(--accent-color);
+  }
+}
+
+/* Every description in one cell, so the tallest sets the height and choosing another option moves nothing. */
+.descriptions {
+  display: grid;
+  margin-top: 4px;
+
+  p {
+    grid-area: 1 / 1;
+    margin: 0;
+    padding: 2px 2px 0;
+    color: var(--muted-color);
+    font-size: 12px;
+    visibility: hidden;
+
+    &[data-shown] {
+      visibility: visible;
+    }
+  }
+}
+
+.frame .footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line-color);
+
+  button {
+    min-height: var(--target);
+    padding: 0 16px;
+    border: 1px solid var(--line-color);
+    border-radius: 6px;
+    background: var(--surface-color);
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: default;
+    }
+  }
+}
+
+.frame .footer .done {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+  color: var(--surface-color);
+  font-weight: 600;
+}
+
+@container brush-editor (width < 600px) {
+  .body {
+    grid-template-columns: 64px minmax(0, 1fr);
+  }
+
+  .frame .category {
+    justify-content: center;
+    padding: 4px;
+  }
+
+  .group {
+    margin-inline: 0;
+    font-size: 10px;
+    text-align: center;
+  }
+
+  /* Names and statuses stay readable to assistive technology. */
+  .categoryText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .paneStatus {
+    display: block;
+  }
+}
+
+@container brush-editor (width < 400px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .nav {
+    border-right: 0;
+  }
+
+  .group {
+    margin-inline: 4px;
+    font-size: 11px;
+    text-align: left;
+  }
+
+  .frame .category {
+    justify-content: flex-start;
+    padding: 4px 8px;
+  }
+
+  .categoryText {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+  }
+
+  .chevron {
+    display: block;
+  }
+
+  .paneStatus {
+    display: none;
+  }
+
+  .frame .back {
+    display: flex;
+  }
+
+  .row {
+    grid-template-columns: minmax(64px, 30%) minmax(64px, 1fr) 56px 18px;
+    gap: 0 6px;
+
+    --scrub-width: 56px;
+  }
+
+  .frame[data-view='list'] .pane,
+  .frame[data-view='detail'] .nav {
+    display: none;
+  }
+}
