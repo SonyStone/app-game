@@ -18,7 +18,10 @@ textures again. Without a `preset`, `brush` draws any brush, with `resources` ho
 its own and draw its current brush as its canvas does. `mapPressure` maps raw pen pressure before the brush.
 With `redraw`, the widget keeps its strokes with raw pressure and draws them all again on a fresh layer whenever the
 mapping, brush or color changes, filling it at zero opacity before swapping it in, so the canvas does not flicker;
-Undo, Redo and Clear then edit the kept strokes. Paint's pressure calibration uses it.
+Undo, Redo and Clear then edit the kept strokes. Paint's pressure calibration uses it. With `restyle={false}` the kept
+strokes stay as drawn: a new brush draws only later strokes, and Undo, Redo and Clear redraw each kept stroke with
+its own brush, as Paint's brush studio pad does. `controls={false}` leaves out the buttons and the status line, and
+`actions` hands the host the canvas's Undo, Redo and Clear for buttons of its own.
 
 The widget retains raw/coalesced pointer input, pressure and tablet axes from Studio's input adapter.
 It uses the same brush sampler, GPU operations and adaptive LOD policy. This first embed runs the runtime

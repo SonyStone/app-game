@@ -5,7 +5,7 @@ import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { initAbr } from '@app-game/abr-parser';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
-import { BrushPreview } from './BrushPreview';
+import { BrushPreview, type BrushPreviewActions } from './BrushPreview';
 
 await initAbr();
 
@@ -149,6 +149,46 @@ it('keeps raw strokes and draws them again on a fresh layer whenever the pressur
     expect(sent().find((command) => command.type === 'samples')).toMatchObject({ samples: [{ pressure: 0.4 }] });
     expect(sent().filter((command) => command.type === 'layer' && command.action.type === 'add')).toHaveLength(1);
   } finally { dispose(); }
+});
+
+it('keeps each stroke as drawn without restyling, and redraws them with their own brushes on Undo and Clear only', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  let setSize!: (value: number) => void;
+  let actions: BrushPreviewActions | undefined;
+  const dispose = render(() => {
+    const [size, set] = createSignal(10, { ownedWrite: true }); setSize = set;
+    return <BrushPreview brush={{ ...defaultBrush(), size: size() }} redraw restyle={false} controls={false}
+      actions={(given) => { actions = given; }} />;
+  }, host);
+  try {
+    expect(host.querySelector('button')).toBeNull();
+    await vi.waitFor(() => { flush(); expect(sent().some((command) => command.type === 'layer')).toBe(true); });
+    state('background', 1); state('strokes', 2);
+    await vi.waitFor(() => { flush(); expect(mock.input?.ready()).toBe(true); });
+    const stroke = (pressure: number) => {
+      mock.input!.send({ type: 'begin', brush: mock.input!.brush(), samples: [pen(pressure)] });
+      mock.input!.send({ type: 'end' });
+    };
+    stroke(0.5);
+    setSize(40); flush();
+    await vi.waitFor(() => { flush(); expect(mock.input?.brush().size).toBe(40); });
+    stroke(0.7);
+    // A new brush draws later strokes only.
+    expect(sent().filter((command) => command.type === 'layer' && command.action.type === 'add')).toHaveLength(1);
+
+    mock.send.mockClear();
+    actions!.undo(); flush();
+    expect(sent()).toEqual([{ type: 'layer', action: { type: 'add' } }]);
+    state('strokes', 2); state('staged', 3);
+    expect(sent().filter((command) => command.type === 'begin')).toMatchObject([{ brush: { size: 10 } }]);
+
+    mock.send.mockClear();
+    actions!.clear(); flush();
+    state('staged', 3); state('cleared', 3);
+    expect(sent().filter((command) => command.type === 'begin')).toEqual([]);
+    expect(sent().at(-1)).toEqual({ type: 'layer', action: { type: 'delete', id: 'staged' } });
+  } finally { dispose(); }
+  expect(actions).toBeUndefined();
 });
 
 function sent(): PaintRuntimeCommand[] {

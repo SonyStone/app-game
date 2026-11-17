@@ -48,6 +48,19 @@ export function BrushPreview(props: {
    * and Clear then act on the kept strokes. Fixed at mount.
    */
   redraw?: boolean;
+  /**
+   * With `redraw`, whether a change of `brush`, `preset`, `color` or `mapPressure` draws the kept strokes again with
+   * it; on by default. Off, each kept stroke keeps the brush it was drawn with: a change affects only later strokes,
+   * and only Undo, Redo and Clear draw the strokes again, each with its own brush. Fixed at mount.
+   */
+  restyle?: boolean;
+  /** Shows the Undo, Redo and Clear buttons and the status line under the canvas; on by default. */
+  controls?: boolean;
+  /**
+   * Receives the canvas's commands once it is mounted, for a host that shows its own buttons, and `undefined` when it
+   * is disposed. `clear` acts only with `redraw`.
+   */
+  actions?: (actions: BrushPreviewActions | undefined) => void;
   /** Logical document dimensions, fixed at mount. Defaults to 1024 × 768 pixels. */
   width?: number;
   height?: number;
@@ -63,6 +76,7 @@ export function BrushPreview(props: {
   if (![width, height].every(n => Number.isInteger(n) && n > 0 && n <= 8192))
     throw new Error('Preview dimensions must be integers between 1 and 8192.');
   const redrawing = untrack(() => !!props.redraw);
+  const restyling = untrack(() => props.restyle ?? true);
   const recipe = untrack(() => props.recipe) ?? defaultRecipe;
   let canvas!: HTMLCanvasElement;
   let runtime: ReturnType<typeof createPaintApplication> | undefined;
@@ -150,7 +164,7 @@ export function BrushPreview(props: {
     for (const stroke of strokes.kept()) {
       const [first, ...rest] = stroke.samples;
       if (!first) continue;
-      runtime.send({ ...stroke.begin, brush: current(), samples: mapped([first]) });
+      runtime.send({ ...stroke.begin, brush: restyling ? current() : stroke.begin.brush, samples: mapped([first]) });
       if (rest.length) runtime.send({ type: 'samples', samples: mapped(rest) });
       runtime.send({ type: 'end' });
     }
@@ -214,17 +228,18 @@ export function BrushPreview(props: {
             spacing: next.spacing, color: next.color ?? '#202020', backgroundColor: next.backgroundColor,
             flow: next.flow ?? 1, opacity: next.opacity ?? 1 };
           report('Ready');
-          if (redrawing) redraw();
+          if (redrawing && (restyling || strokes.flushPending())) redraw();
         } catch (error) {
           if (version === generation) report(error instanceof Error ? error.message : String(error));
         }
       });
     });
   // Strokes are drawn again for each new pressure mapping and color.
-  createEffect(() => (redrawing ? [props.mapPressure, props.color, props.mixing] : undefined), (watched) => {
+  createEffect(() => (redrawing && restyling ? [props.mapPressure, props.color, props.mixing] : undefined), (watched) => {
     if (watched) redraw();
   });
   onCleanup(() => {
+    props.actions?.(undefined);
     stopped = true;
     generation++;
     for (const request of pending.values()) request.reject(new Error('Preview disposed.'));
@@ -235,17 +250,28 @@ export function BrushPreview(props: {
     if (!redrawing) return runtime?.send({ type: change === 'redo' ? 'redo' : 'undo' });
     if (strokes[change]()) { setKept(strokes.count()); redraw(); }
   };
+  untrack(() => props.actions?.({ undo: () => edit('undo'), redo: () => edit('redo'), clear: () => edit('clear') }));
   return <div style={{ width: '100%' }}>
     <canvas ref={canvas} aria-label="Brush preview canvas" tabindex="0"
       style={{ width: '100%', display: 'block', 'aspect-ratio': `${width} / ${height}`, 'touch-action': 'none', background: '#faf8f5' }} />
-    <div style={{ display: 'flex', gap: '12px', padding: '8px 0', 'align-items': 'center' }}>
+    {untrack(() => props.controls ?? true) && <div style={{ display: 'flex', gap: '12px', padding: '8px 0', 'align-items': 'center' }}>
       <button type="button" disabled={!ready()} onClick={() => edit('undo')}>Undo</button>
       <button type="button" disabled={!ready()} onClick={() => edit('redo')}>Redo</button>
       {redrawing && <button type="button" disabled={!ready() || !kept()} onClick={() => edit('clear')}>Clear</button>}
       <span role="status">{status()}</span>
-    </div>
+    </div>}
   </div>;
 }
+
+/** Commands of a mounted {@link BrushPreview}, as its own buttons run them. */
+export type BrushPreviewActions = {
+  /** Removes the last stroke: a kept one with `redraw`, otherwise through the engine's history. */
+  undo(): void;
+  /** Puts back the last removed stroke. */
+  redo(): void;
+  /** Removes every kept stroke, with `redraw`; Undo puts them back. */
+  clear(): void;
+};
 
 /** Raw processing and the round brush, or the ABR engine and its smoothing for ABR brushes. */
 const defaultRecipe: NonNullable<Parameters<typeof BrushPreview>[0]['recipe']> = {
