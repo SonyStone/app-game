@@ -1,11 +1,11 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryList, CategoryPane, createCategoryChoice } from './BrushCategories';
 import styles from './BrushEditor.module.css';
-import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } from './schema';
+import { brushSettingsDiffer, type BrushCategory, type BrushPins, type BrushSettingsSnapshot } from './schema';
 
 /**
  * The brush studio: the brush editor's settings over the whole screen, for building a brush, laid out as Procreate's
@@ -31,6 +31,11 @@ export function BrushStudio(props: {
   /** The name of the edited brush, shown as the studio's title; "Brush studio" without it. */
   name?: string;
   onChange: (patch: Partial<Brush>) => void;
+  /**
+   * The host board's pins: when given, each number row ends with a button that pins the setting to the board or
+   * unpins it, and a pinned row is marked.
+   */
+  pins?: BrushPins;
   /** Leaves the studio: called by Done, and by Cancel once it has sent the baseline. */
   onDone: () => void;
   /** The stroke preview under the title, made by the caller, which owns the painting it needs. */
@@ -65,6 +70,7 @@ export function BrushStudio(props: {
         </div>
         <CategoryPane
           category={chosen()}
+          pins={props.pins}
           brush={props.brush}
           onChange={props.onChange}
           onBack={() => setView('list')}

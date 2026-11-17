@@ -2,7 +2,8 @@ import type { Brush } from '@app-game/paint-core/brush';
 import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import { brushCategories, type BrushCategory, type BrushSetting } from './schema';
+import { brushSettingName } from './brushSettingName';
+import { brushCategories, type BrushCategory, type BrushPins, type BrushSetting } from './schema';
 import { SettingRow } from './SettingRow';
 
 /**
@@ -132,6 +133,8 @@ const categoryIcons: Record<string, SketchIconName> = {
  */
 export function CategoryPane(props: {
   category: BrushCategory;
+  /** When given, each number row has a pin button that puts the setting on the host's board or takes it off. */
+  pins?: BrushPins;
   brush: Brush;
   onChange: (patch: Partial<Brush>) => void;
   /** Called by the way back to the category list. */
@@ -154,7 +157,7 @@ export function CategoryPane(props: {
       <Show when={props.category.about} keyed>
         {(about) => <About title={props.category.label} text={about} />}
       </Show>
-      <CategoryRows category={props.category} brush={props.brush} onChange={props.onChange} />
+      <CategoryRows pins={props.pins} category={props.category} brush={props.brush} onChange={props.onChange} />
     </section>
   );
 }
@@ -187,7 +190,12 @@ function About(props: { title: string; text: string }) {
  * section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
  * once per heading, so values change in place and no row appears, disappears or moves while one is used.
  */
-function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+function CategoryRows(props: {
+  pins?: BrushPins;
+  category: BrushCategory;
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
   const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
   const runs = createMemo(() => sectionRuns(rows()));
   const note = createMemo(() => (rows().length === 0 ? props.category.note?.(props.brush) : undefined));
@@ -200,11 +208,28 @@ function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: 
             when={run().title}
             fallback={
               <For each={run().rows}>
-                {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+                {(setting) => (
+                  <SettingRow
+                    pins={props.pins}
+                    pinName={brushSettingName(props.category, setting)}
+                    setting={setting}
+                    brush={props.brush}
+                    onChange={props.onChange}
+                  />
+                )}
               </For>
             }
           >
-            {(title) => <Section title={title()} rows={run().rows} brush={props.brush} onChange={props.onChange} />}
+            {(title) => (
+              <Section
+                pins={props.pins}
+                category={props.category}
+                title={title()}
+                rows={run().rows}
+                brush={props.brush}
+                onChange={props.onChange}
+              />
+            )}
           </Show>
         )}
       </For>
@@ -234,6 +259,8 @@ function sectionRuns(rows: readonly BrushSetting[]) {
 
 /** A framed group of rows under a short heading, announced as a group named by it. */
 function Section(props: {
+  pins?: BrushPins;
+  category: BrushCategory;
   title: string;
   rows: readonly BrushSetting[];
   brush: Brush;
@@ -247,7 +274,15 @@ function Section(props: {
         {props.title}
       </h3>
       <For each={props.rows}>
-        {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+        {(setting) => (
+          <SettingRow
+            pins={props.pins}
+            pinName={brushSettingName(props.category, setting)}
+            setting={setting}
+            brush={props.brush}
+            onChange={props.onChange}
+          />
+        )}
       </For>
     </div>
   );

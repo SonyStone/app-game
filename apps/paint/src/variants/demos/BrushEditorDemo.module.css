@@ -21,12 +21,11 @@
 }
 
 /*
- * The controls over the drawing, the panel and the studio lie above the navigation puck's full-window dismiss layer (z-index 70
+ * The controls over the drawing and the panel lie above the navigation puck's full-window dismiss layer (z-index 70
  * in the puck's package), so that a press on them while the puck is open reaches them; the demo closes the puck on it.
  */
 .ui,
-.panel,
-.studio {
+.panel {
   z-index: 71;
 }
 
@@ -160,33 +159,4 @@
 
 .editor {
   min-height: 0;
-}
-
-/* The brush studio over the whole demo: an open, non-modal dialog without the browser's own box. */
-.studio {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  max-width: none;
-  height: 100%;
-  max-height: none;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: var(--surface);
-  color: var(--ink);
-
-  /* The studio has no height of its own (it is a size container), so it takes what the error line leaves. */
-  > :last-child {
-    flex: 1;
-    min-height: 0;
-  }
-
-  > p {
-    margin: 0;
-    padding: 8px 12px;
-    color: #b3261e;
-  }
 }

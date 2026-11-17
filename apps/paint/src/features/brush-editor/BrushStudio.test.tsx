@@ -8,7 +8,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { abrCategories } from './abrSchema';
 import { BrushEditor } from './BrushEditor';
 import { BrushStudio } from './BrushStudio';
-import { snapshotBrushSettings, type BrushCategory } from './schema';
+import { snapshotBrushSettings, type BrushCategory, type BrushPins } from './schema';
 
 let disposers: (() => void)[] = [];
 afterEach(() => {
@@ -108,6 +108,35 @@ it('switches between the categories, a category and the pad in the narrow layout
   expect(frame.getAttribute('data-view')).toBe('list');
 });
 
+it('pins number rows in the panel and the studio alike, and marks a pinned row in both', () => {
+  const [pinned, setPinned] = createSignal<readonly string[]>([]);
+  const pins: BrushPins = {
+    pinned: (id) => pinned().includes(id),
+    toggle: (id) => setPinned((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]))
+  };
+  const panel = mount('panel', defaultBrush(), undefined, () => {}, undefined, pins);
+  const studio = mount('studio', defaultBrush(), undefined, () => {}, undefined, pins);
+  for (const editor of [panel, studio]) {
+    editor.click(editor.category('Painting'));
+    const rows = [...editor.root().querySelectorAll('[data-kind="number"]')];
+    expect(rows.length).toBeGreaterThan(1);
+    expect(rows.every((row) => row.querySelector('button[aria-pressed]'))).toBe(true);
+  }
+
+  studio.click(studio.root().querySelector('button[aria-label="Pin Flow to the board"]')!);
+  expect(pinned()).toEqual(['flow']);
+  for (const editor of [panel, studio]) {
+    const pin = editor.root().querySelector('button[aria-label="Unpin Flow"]')!;
+    expect(pin.getAttribute('aria-pressed')).toBe('true');
+    expect(pin.closest('[data-kind="number"]')!.hasAttribute('data-pinned')).toBe(true);
+    expect(editor.root().querySelectorAll('[data-pinned]')).toHaveLength(1);
+  }
+
+  panel.click(panel.root().querySelector('button[aria-label="Unpin Flow"]')!);
+  expect(pinned()).toEqual([]);
+  expect(studio.root().querySelector('[data-pinned]')).toBeNull();
+});
+
 /**
  * Renders the panel or the studio over a brush kept by a controlled parent, inside a host element of its own, and
  * reads it as the tests compare it.
@@ -117,7 +146,8 @@ function mount(
   initial: Brush,
   categories?: readonly BrushCategory[],
   onDone: () => void = () => {},
-  name?: string
+  name?: string,
+  pins?: BrushPins
 ) {
   const [brush, setBrush] = createSignal(initial);
   const baseline = snapshotBrushSettings(initial);
@@ -136,6 +166,7 @@ function mount(
             brush={brush()}
             baseline={baseline}
             categories={categories}
+            pins={pins}
             onChange={onChange}
             onDone={onDone}
           />
@@ -145,6 +176,7 @@ function mount(
             baseline={baseline}
             categories={categories}
             name={name}
+            pins={pins}
             onChange={onChange}
             onDone={onDone}
             pad={<div data-pad />}

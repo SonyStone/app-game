@@ -7,7 +7,7 @@ import { createColorWheelSettings, hexToWheel, wheelToHex } from '../../features
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv } from '../../features/color/hsv';
 import { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
-import type { LegoServices } from './LegoServices';
+import { createChannelBrush, type LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
 
 /** Fake narrow capabilities for frame/definition tests. No PaintSession mock or GPU engine is required. */
@@ -18,6 +18,17 @@ export function createTestServices() {
   const setColor = vi.fn((color: string) => setBrush((current) => ({ ...current, color })));
   const errors = vi.fn();
   const services: LegoServices = {
+    brushEditor: {
+      channelBrush: createChannelBrush(brush),
+      open: () => {},
+      edited: createMemo(() => brush()),
+      categories: createMemo(() => undefined),
+      editError: createMemo(() => ''),
+      resources: () => [],
+      update: async (patch) => {
+        setBrush((current) => ({ ...current, ...patch }));
+      }
+    },
     brush: {
       size: createMemo(() => brush().size),
       opacity: createMemo(() => brush().opacity),

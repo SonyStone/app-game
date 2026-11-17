@@ -1,4 +1,4 @@
-import { createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { wheelToHex } from '../../../features/color-wheel';
 import { hsvToHex, luminance, type Hsv } from '../../../features/color/hsv';
 import { pressHandlers, type Press } from '../../../shared/ui/pressHandlers';
@@ -7,10 +7,11 @@ import { geometricFraction, geometricValue } from '../../procreate/sliderScale';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
+import { brushChannels } from './brushChannels';
 import { definePart, type PartBinding } from './definition';
 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
-export type ValueKind = (typeof channels)[number]['id'];
+export type ValueKind = (typeof channels)[number]['id'] | `brush:${string}`;
 
 /** Shared looks resolved by looks.ts, independently of the channel's app binding. */
 const looks: readonly LookSpec[] = [
@@ -26,6 +27,14 @@ export type ValueChannel = {
   short: string;
   unit: string;
   min: number;
+  /** Live lower bound for schema channels; static channels keep min. */
+  minimum?: (services: LegoServices) => number;
+  /** Numeric input step, supplied by the brush schema. */
+  step?: number;
+  /** Unavailable channels stay mounted but cannot receive edits. */
+  active?: (services: LegoServices) => boolean;
+  /** Enters the board through the editor rather than the box. */
+  pinOnly?: boolean;
   max: (services: LegoServices) => number;
   read: (services: LegoServices) => number;
   write: (services: LegoServices, value: number, hsv: Hsv) => void;
@@ -38,9 +47,9 @@ export type ValueChannel = {
   scale?: 'log';
   wrap?: boolean;
   /** Defaults to linear interpolation between min and max. */
-  toFraction?: (value: number, max: number) => number;
+  toFraction?: (value: number, max: number, services: LegoServices) => number;
   /** Maps a normalized gesture to the channel value; defaults to linear min/max interpolation. */
-  fromFraction?: (fraction: number, max: number) => number;
+  fromFraction?: (fraction: number, max: number, services: LegoServices) => number;
   track?: (services: LegoServices) => string;
   format?: (value: number) => string;
   /** Restores channel-specific intent before the original color is restored without tool policy. */
@@ -151,6 +160,9 @@ const channels = [
 /** Static definitions and their full-slider popups are generated from the same channel specs. */
 export const valueParts = channels.map(defineValuePart);
 
+/** Pin-only definitions follow the ordinary catalogue so existing specimen positions stay stable. */
+export const brushValueParts = brushChannels.map(defineValuePart);
+
 /** Defines a value part from one complete channel spec. Missing writers fail immediately, including untyped input. */
 export function defineValuePart(channel: ValueChannel) {
   if (typeof channel.write !== 'function') {
@@ -161,6 +173,7 @@ export function defineValuePart(channel: ValueChannel) {
     kind: `value:${channel.id}`,
     family: 'value',
     section: channel.section ?? 'Values',
+    pinOnly: channel.pinOnly,
     label: channel.label,
     looks: { looks, auto: (span) => (span.columns === 1 && span.rows === 1 ? 'knob' : 'slider') },
     needs: (services, frame) => valueNeeds(services, frame, channel),
@@ -179,13 +192,25 @@ export function defineValuePart(channel: ValueChannel) {
 /** The LEGO look translates cells into the controlled input's orientation and captions. */
 function ValuePart(props: ReturnType<typeof valueNeeds>) {
   return (
-    <ValueControl
-      {...props}
-      vertical={props.span.rows > props.span.columns}
-      caption={props.span.columns >= 2 ? (props.span.columns >= 3 ? props.label : props.short) : undefined}
-      unit={props.span.columns >= 2 ? props.unit : undefined}
-      named={(props.span.rows > props.span.columns ? props.span.rows : props.span.columns) >= 3}
-    />
+    <div
+      class={styles.valueState}
+      aria-disabled={props.active ? 'false' : 'true'}
+      data-inactive={!props.active ? '' : undefined}
+      onPointerDown={(event) => {
+        if (!props.active) {
+          event.stopPropagation();
+          event.preventDefault();
+        }
+      }}
+    >
+      <ValueControl
+        {...props}
+        vertical={props.span.rows > props.span.columns}
+        caption={props.span.columns >= 2 ? (props.span.columns >= 3 ? props.label : props.short) : undefined}
+        unit={props.span.columns >= 2 ? props.unit : undefined}
+        named={(props.span.rows > props.span.columns ? props.span.rows : props.span.columns) >= 3}
+      />
+    </div>
   );
 }
 
@@ -208,7 +233,12 @@ function ValueControl(
   };
   const set = (value: number) => props.onInput(Math.max(0, Math.min(1, value)));
   const scrub = pressHandlers({
-    start: begin,
+    start: () => {
+      if (!props.active) {
+        return false;
+      }
+      begin();
+    },
     move: (press) => set(start + (press.point.x - press.start.x - (press.point.y - press.start.y)) / 300),
     end: props.onCommit,
     cancel: props.onCancel,
@@ -216,6 +246,9 @@ function ValueControl(
   });
   const slide = pressHandlers({
     start: (press) => {
+      if (!props.active) {
+        return false;
+      }
       begin();
       set(trackFraction(press));
     },
@@ -240,19 +273,23 @@ function ValueControl(
           <Show when={props.caption}>
             <span class={styles.numberCaption}>{props.caption}</span>
           </Show>
-          <ScrubNumber
-            label={props.label}
-            value={props.number}
-            min={props.min}
-            max={props.max}
-            unit={props.unit}
-            scale={props.scale}
-            wrap={props.wrap}
-            onStart={props.onStart}
-            onCancel={props.onCancel}
-            onInput={props.onNumberInput}
-            onChange={props.onNumberCommit}
-          />
+          <Show when={props.active} fallback={<span>—</span>}>
+            <ScrubNumber
+              label={props.label}
+              disabled={!props.active}
+              step={props.step}
+              value={props.number}
+              min={props.min}
+              max={props.max}
+              unit={props.unit}
+              scale={props.scale}
+              wrap={props.wrap}
+              onStart={props.onStart}
+              onCancel={props.onCancel}
+              onInput={props.onNumberInput}
+              onChange={props.onNumberCommit}
+            />
+          </Show>
         </div>
       }
     >
@@ -306,12 +343,19 @@ function ValueControl(
 function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueChannel) {
   const { color } = services;
   const [draft, setDraft] = createSignal<number>();
-  const value = () => draft() ?? channel.read(services);
-  const max = () => channel.max(services);
-  const fraction = () => channel.toFraction?.(value(), max()) ?? (value() - channel.min) / (max() - channel.min);
+  const active = createMemo(() => channel.active?.(services) ?? true);
+  const min = createMemo(() => channel.minimum?.(services) ?? channel.min);
+  const observed = createMemo(() => channel.read(services));
+  const value = () => draft() ?? observed();
+  const max = createMemo(() => channel.max(services));
+  const fraction = () => channel.toFraction?.(value(), max(), services) ?? (value() - min()) / (max() - min());
   let start: { value: number; hsv: Hsv; color: string };
   let captured: ReturnType<NonNullable<ValueChannel['capture']>> | undefined;
   const write = (next: number, hsv: Hsv) => {
+    if (!active()) {
+      return;
+    }
+
     if (channel.deferred) {
       setDraft(next);
     } else {
@@ -341,7 +385,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       return frame.look;
     },
     get number() {
-      return Math.round(value());
+      return roundedValue(value(), channel.step);
     },
     get fraction() {
       return fraction();
@@ -349,11 +393,20 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     get max() {
       return max();
     },
-    min: channel.min,
+    get min() {
+      return min();
+    },
+    get active() {
+      return active();
+    },
+    step: channel.step,
     scale: channel.scale,
     wrap: channel.wrap,
     get text() {
-      return channel.format?.(value()) ?? `${Math.round(value())}${channel.unit}`;
+      return active()
+        ? (channel.format?.(roundedValue(value(), channel.step)) ??
+            `${roundedValue(value(), channel.step)}${channel.unit}`)
+        : '—';
     },
     get color() {
       return channel.colored ? color.value() : undefined;
@@ -367,7 +420,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       start = { value: value(), hsv: color.hsv(), color: color.value() };
     }),
     onInput: frame.command((next: number) =>
-      write(channel.fromFraction?.(next, max()) ?? channel.min + next * (max() - channel.min), start.hsv)
+      write(channel.fromFraction?.(next, max(), services) ?? min() + next * (max() - min()), start.hsv)
     ),
     onNumberInput: frame.command((next: number) => write(next, start.hsv)),
     onNumberCommit: frame.command((next: number) => {
@@ -392,4 +445,10 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
 
 function gradient(stops: readonly string[]) {
   return `linear-gradient(to var(--track-to), ${stops.join(', ')})`;
+}
+
+/** Removes binary multiplication noise from stepped UI values. */
+export function roundedValue(value: number, step = 1) {
+  const decimals = (String(step).split('.')[1] ?? '').length;
+  return Number((Math.round(value / step) * step).toFixed(decimals));
 }

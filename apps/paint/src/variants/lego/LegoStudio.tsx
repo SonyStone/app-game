@@ -2,6 +2,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
+import { BrushStudioDialog } from '../../features/brush/BrushStudioDialog';
 import {
   createPaintSession,
   PaintEditor,
@@ -13,6 +14,7 @@ import {
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
+import { brushPinned, toggleBrushPin } from './brushPins';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
 import { createKits } from './kits';
@@ -52,10 +54,18 @@ export function LegoStudio(props: PaintVariantProps) {
       return open?.kind === 'part' ? open.partKind : open?.kind;
     }
   });
-  const services = createLegoServices(session);
+  /** Whether the brush studio, opened by the "Brush settings" part, covers the screen. */
+  const [studioOpen, setStudioOpen] = createSignal(false);
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
+  const services = createLegoServices(
+    session,
+    () => setStudioOpen(true),
+    () =>
+      studioOpen() ||
+      board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-')))
+  );
   const kits = createKits(reportSavingError);
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);
@@ -76,6 +86,12 @@ export function LegoStudio(props: PaintVariantProps) {
 
   session.createShortcuts({
     closePanel() {
+      // Escape and the Android back gesture close the studio first, keeping its changes, as Done does.
+      if (studioOpen()) {
+        setStudioOpen(false);
+        return true;
+      }
+
       if (popup()) {
         setPopup(undefined);
         return true;
@@ -231,6 +247,18 @@ export function LegoStudio(props: PaintVariantProps) {
               {editing() ? 'Done' : 'Edit'}
             </button>
           </div>
+          <Show when={studioOpen()}>
+            <BrushStudioDialog
+              class={styles.brushStudio}
+              session={session}
+              editor={services.brushEditor}
+              pins={{
+                pinned: (id) => brushPinned(board.board(), id),
+                toggle: (id) => board.set(toggleBrushPin(board.latest(), id, session.size()))
+              }}
+              onClose={() => setStudioOpen(false)}
+            />
+          </Show>
           <SessionNotices session={session} />
         </div>
       </PaintEditor>

@@ -1031,3 +1031,49 @@
   color: var(--muted-color, #777);
   font-size: 13px;
 }
+
+/*
+ * Pins (rows given `pins`): a 44 px pin button ends every number row, in the panel as a fifth column and in the studio
+ * in the column kept for it after the value pill. A pinned row is tinted with the accent and marked by a bar along its
+ * leading edge, and its button is filled, so pinned rows stand out in a list at a glance; every pinnable row keeps the
+ * same padding, so pinning moves nothing.
+ */
+.row[data-pinnable] {
+  grid-template-columns: minmax(72px, 28%) minmax(56px, 1fr) 64px 34px var(--target);
+  padding-inline: 6px 0;
+  border-radius: 8px;
+
+  &[data-pinned] {
+    background: var(--selected);
+    box-shadow: inset 4px 0 0 var(--accent-color);
+  }
+}
+
+.frame .pin {
+  display: grid;
+  place-items: center;
+  width: var(--target);
+  height: var(--target);
+  border-radius: 50%;
+  color: var(--muted-color);
+
+  &[aria-pressed='true'] {
+    background: var(--accent-color);
+    color: var(--surface-color);
+  }
+}
+
+@container brush-editor (width < 400px) {
+  .row[data-pinnable] {
+    grid-template-columns: minmax(50px, 25%) minmax(30px, 1fr) 48px 20px var(--target);
+    column-gap: 4px;
+  }
+}
+
+.studio .row[data-pinnable] {
+  padding-inline: 8px 0;
+
+  > .pin {
+    grid-area: 1 / 3;
+  }
+}

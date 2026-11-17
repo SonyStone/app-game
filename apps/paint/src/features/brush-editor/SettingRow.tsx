@@ -4,7 +4,7 @@ import { createMemo, createSignal, createUniqueId, For, onSettled, Show } from '
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import type { BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
+import type { BrushPins, BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
 import { Slider } from './Slider';
 
 /**
@@ -13,13 +13,28 @@ import { Slider } from './Slider';
  * at once as the patch the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
  * all; a longer one shows the chosen option in a single row that opens the list.
  */
-export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+export function SettingRow(props: {
+  /** The host board's pins; a number row then ends with a pin button. Other kinds of row cannot be pinned. */
+  pins?: BrushPins;
+  /** The name the setting has as a part on the board, which the pin button's label speaks. */
+  pinName?: string;
+  setting: BrushSetting;
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
   // A row is made once per setting, so its kind never changes under it.
   const setting = props.setting;
   const enabled = createMemo(() => setting.enabled(props.brush));
 
   return setting.kind === 'number' ? (
-    <NumberRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
+    <NumberRow
+      pins={props.pins}
+      pinName={props.pinName}
+      setting={setting}
+      brush={props.brush}
+      enabled={enabled()}
+      onChange={props.onChange}
+    />
   ) : setting.kind === 'toggle' ? (
     <ToggleRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.options.length > inlineChoiceLimit ? (
@@ -53,10 +68,14 @@ function spokenLabel(setting: BrushSetting) {
   return setting.section ? `${setting.section} ${setting.label.toLowerCase()}` : setting.label;
 }
 
-/** Label, slider, number field and unit. The slider and the field change the value live. */
-function NumberRow(props: RowProps & { setting: NumberSetting }) {
+/**
+ * Label, slider, number field and unit, and with `pins` a pin button last. The slider and the field change the value
+ * live. A pinned row is tinted and marked along its leading edge, and its pin button is filled.
+ */
+function NumberRow(props: RowProps & { pins?: BrushPins; pinName?: string; setting: NumberSetting }) {
   const setting = props.setting;
   const labelId = createUniqueId();
+  const pinned = createMemo(() => props.pins?.pinned(setting.id) ?? false);
   const value = createMemo(() => setting.read(props.brush));
   const min = createMemo(() => setting.min(props.brush));
   const max = createMemo(() => setting.max(props.brush));
@@ -77,7 +96,13 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
   };
 
   return (
-    <div class={styles.row} data-kind="number" data-disabled={props.enabled ? undefined : ''}>
+    <div
+      class={styles.row}
+      data-pinnable={props.pins ? '' : undefined}
+      data-pinned={pinned() ? '' : undefined}
+      data-kind="number"
+      data-disabled={props.enabled ? undefined : ''}
+    >
       <Label setting={setting} id={labelId} />
       <Slider
         labelledBy={labelId}
@@ -111,6 +136,19 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
         />
       </Show>
       <span class={styles.unit}>{setting.unit}</span>
+      <Show when={props.pins}>
+        {(pins) => (
+          <button
+            type="button"
+            class={styles.pin}
+            aria-pressed={pinned() ? 'true' : 'false'}
+            aria-label={pinned() ? `Unpin ${props.pinName}` : `Pin ${props.pinName} to the board`}
+            onClick={() => pins().toggle(setting.id)}
+          >
+            <SketchIcon name="pin" size={18} />
+          </button>
+        )}
+      </Show>
     </div>
   );
 }

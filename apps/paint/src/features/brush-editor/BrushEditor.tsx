@@ -4,7 +4,7 @@ import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryList, CategoryPane, createCategoryChoice } from './BrushCategories';
 import styles from './BrushEditor.module.css';
-import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } from './schema';
+import { brushSettingsDiffer, type BrushCategory, type BrushPins, type BrushSettingsSnapshot } from './schema';
 
 /**
  * The brush editor: the brush's name and a stroke preview across the top, the categories (Paint's `brushCategories`)
@@ -32,6 +32,11 @@ export function BrushEditor(props: {
   /** The name of the edited brush, such as its preset's, shown above the preview; nothing is shown without it. */
   name?: string;
   onChange: (patch: Partial<Brush>) => void;
+  /**
+   * The host board's pins: when given, each number row ends with a button that pins the setting to the board or
+   * unpins it, and a pinned row is marked.
+   */
+  pins?: BrushPins;
   onDone: () => void;
   /** The stroke preview, made by the caller, which owns the painting it needs. */
   preview?: JSX.Element;
@@ -62,6 +67,7 @@ export function BrushEditor(props: {
           />
           <CategoryPane
             category={chosen()}
+            pins={props.pins}
             brush={props.brush}
             onChange={props.onChange}
             onBack={() => setView('list')}
