@@ -1,0 +1,254 @@
+import type { Brush } from '@app-game/paint-core/brush';
+import { createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
+import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
+import styles from './BrushEditor.module.css';
+import { brushCategories, type BrushCategory, type BrushSetting } from './schema';
+import { SettingRow } from './SettingRow';
+
+/**
+ * The categories a brush editor offers for `props.brush` and the one it shows: `props.categories` (Paint's by
+ * default) that apply to the brush, and the chosen one, or the first while the brush has no chosen one, as after
+ * another brush replaced it. Shared by the side panel (`BrushEditor`) and the full-screen `BrushStudio`.
+ */
+export function createCategoryChoice(props: { brush: Brush; categories?: readonly BrushCategory[] | undefined }) {
+  const categories = createMemo(() =>
+    (props.categories ?? brushCategories).filter((category) => category.applies(props.brush))
+  );
+  const [chosenId, setChosenId] = createSignal(brushCategories[0]!.id);
+  const chosen = createMemo(() => categories().find((category) => category.id === chosenId()) ?? categories()[0]!);
+
+  return {
+    categories,
+    chosen,
+    choose: (category: BrushCategory) => setChosenId(category.id)
+  };
+}
+
+/**
+ * The column of categories, under the headings of their groups: a button per category with its icon, name and status
+ * line. `onChoose` receives the pressed category; the chosen one is marked as current.
+ */
+export function CategoryList(props: {
+  categories: readonly BrushCategory[];
+  chosen: BrushCategory;
+  brush: Brush;
+  onChoose: (category: BrushCategory) => void;
+  /** Added to the column's own class, for a presentation's layout. */
+  class?: string;
+}) {
+  return (
+    <nav class={[styles.nav, props.class]} aria-label="Brush setting categories">
+      <For each={groups}>
+        {(group) => (
+          <Show when={props.categories.some((category) => category.group === group.id)}>
+            <h3 class={styles.group}>{group.label}</h3>
+            <For each={props.categories.filter((category) => category.group === group.id)}>
+              {(category) => (
+                <CategoryButton
+                  category={category}
+                  brush={props.brush}
+                  chosen={props.chosen === category}
+                  onChoose={() => props.onChoose(category)}
+                />
+              )}
+            </For>
+          </Show>
+        )}
+      </For>
+    </nav>
+  );
+}
+
+/** The two groups of the category column, in order. */
+const groups = [
+  { id: 'basics', label: 'Basics' },
+  { id: 'advanced', label: 'Advanced' }
+] as const satisfies readonly { id: BrushCategory['group']; label: string }[];
+
+/**
+ * A category in the column: its icon, name and status line; the whole row chooses it. The chosen category is marked
+ * as selected; whether the category does anything is told by its status alone. The button is named by the category's
+ * name and described by its status, also in the medium layout, where both are hidden and only the icon shows.
+ */
+function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: boolean; onChoose: () => void }) {
+  const status = createMemo(() => props.category.status(props.brush));
+  const nameId = createUniqueId();
+  const statusId = createUniqueId();
+
+  return (
+    <button
+      type="button"
+      class={styles.category}
+      aria-current={props.chosen ? 'true' : undefined}
+      aria-labelledby={nameId}
+      aria-describedby={statusId}
+      onClick={() => props.onChoose()}
+    >
+      <span class={styles.categoryIcon}>
+        <SketchIcon name={categoryIcons[props.category.id] ?? 'brush'} size={20} />
+      </span>
+      <span class={styles.categoryText}>
+        <span id={nameId} class={styles.categoryName}>
+          {props.category.label}
+        </span>
+        <span id={statusId} class={styles.categoryStatus}>
+          {status()}
+        </span>
+      </span>
+      <span class={styles.chevron}>
+        <SketchIcon name="right" size={16} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Icons of the categories by ID, Paint's and ABR's; others show a brush. Each has a different outline, since the
+ * medium layout shows the icons alone.
+ */
+const categoryIcons: Record<string, SketchIconName> = {
+  painting: 'sliders',
+  tool: 'sliders',
+  'brush-tip': 'selectEllipse',
+  dynamics: 'proportions',
+  shapeDynamics: 'sizes',
+  transfer: 'bars',
+  scattering: 'scatter',
+  texture: 'texture',
+  dualBrush: 'dualTip',
+  colorDynamics: 'hue',
+  brushPose: 'tilt',
+  'stroke-correction': 'lasso',
+  smoothing: 'lasso',
+  'pressure-curve': 'pressure',
+  bristle: 'bristles',
+  erodible: 'pencil'
+};
+
+/**
+ * The chosen category's settings: a way back to the category list (shown only where the layout shows one at a time),
+ * its name as the heading, its status (shown where the column has no room for it), its "About" disclosure and its
+ * rows.
+ */
+export function CategoryPane(props: {
+  category: BrushCategory;
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+  /** Called by the way back to the category list. */
+  onBack: () => void;
+  /** Added to the pane's own class, for a presentation's layout. */
+  class?: string;
+}) {
+  const titleId = createUniqueId();
+
+  return (
+    <section class={[styles.pane, props.class]} aria-labelledby={titleId}>
+      <button type="button" class={styles.back} onClick={() => props.onBack()}>
+        <SketchIcon name="left" size={18} />
+        All categories
+      </button>
+      <h2 id={titleId} class={styles.title}>
+        {props.category.label}
+      </h2>
+      <p class={styles.paneStatus}>{props.category.status(props.brush)}</p>
+      <Show when={props.category.about} keyed>
+        {(about) => <About title={props.category.label} text={about} />}
+      </Show>
+      <CategoryRows category={props.category} brush={props.brush} onChange={props.onChange} />
+    </section>
+  );
+}
+
+/** A collapsed block that explains the category, opened and closed by its heading. */
+function About(props: { title: string; text: string }) {
+  const [open, setOpen] = createSignal(false);
+  const textId = createUniqueId();
+
+  return (
+    <div class={styles.about}>
+      <button
+        type="button"
+        aria-expanded={open() ? 'true' : 'false'}
+        aria-controls={textId}
+        onClick={() => setOpen(!open())}
+      >
+        <SketchIcon name={open() ? 'down' : 'right'} size={14} />
+        About {props.title.toLowerCase()}
+      </button>
+      <p id={textId} hidden={!open()}>
+        {props.text}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * The rows of a category whose settings apply to the brush, in schema order, or its note when none does. Rows of a
+ * section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
+ * once per heading, so values change in place and no row appears, disappears or moves while one is used.
+ */
+function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+  const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
+  const runs = createMemo(() => sectionRuns(rows()));
+  const note = createMemo(() => (rows().length === 0 ? props.category.note?.(props.brush) : undefined));
+
+  return (
+    <div class={styles.rows}>
+      <For each={runs()} keyed={(run) => run.key}>
+        {(run) => (
+          <Show
+            when={run().title}
+            fallback={
+              <For each={run().rows}>
+                {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+              </For>
+            }
+          >
+            {(title) => <Section title={title()} rows={run().rows} brush={props.brush} onChange={props.onChange} />}
+          </Show>
+        )}
+      </For>
+      <Show when={note()}>{(text) => <p class={styles.note}>{text()}</p>}</Show>
+    </div>
+  );
+}
+
+/**
+ * Splits `rows` into runs of consecutive rows that share a section or have none. A section's run is keyed by its
+ * title, a run of rows without one by its place among such runs.
+ */
+function sectionRuns(rows: readonly BrushSetting[]) {
+  const runs: { key: string; title?: string; rows: BrushSetting[] }[] = [];
+  let loose = 0;
+  for (const row of rows) {
+    const last = runs.at(-1);
+    if (last && last.title === row.section) {
+      last.rows.push(row);
+    } else {
+      runs.push({ key: row.section ?? `#${loose++}`, title: row.section, rows: [row] });
+    }
+  }
+
+  return runs;
+}
+
+/** A framed group of rows under a short heading, announced as a group named by it. */
+function Section(props: {
+  title: string;
+  rows: readonly BrushSetting[];
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
+  const titleId = createUniqueId();
+
+  return (
+    <div class={styles.section} role="group" aria-labelledby={titleId}>
+      <h3 id={titleId} class={styles.sectionTitle}>
+        {props.title}
+      </h3>
+      <For each={props.rows}>
+        {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+      </For>
+    </div>
+  );
+}
