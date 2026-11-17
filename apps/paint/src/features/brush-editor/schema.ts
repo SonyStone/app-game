@@ -8,11 +8,16 @@ import { maxBrushSize } from '../brush/createBrushTools';
 export type SettingBase = {
   /** Stable, schema-wide kebab-case identifier for standalone lookup. */
   id: string;
-  /** Visible control label. */
+  /** Visible control label; inside a section, short and without the section's name, such as `Jitter`. */
   label: string;
+  /**
+   * Short heading of the sub-group the row belongs to, such as `Opacity`; rows without one stand alone. The rows of a
+   * section are consecutive in their category.
+   */
+  section?: string;
   /** False removes this row because its brush engine cannot use it. */
   applies: (brush: Brush) => boolean;
-  /** False keeps the row visible but disables interaction. */
+  /** False keeps the row visible but greyed and disables interaction: whenever its value has no effect now. */
   enabled: (brush: Brush) => boolean;
 };
 

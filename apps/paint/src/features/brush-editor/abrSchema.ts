@@ -4,9 +4,239 @@ import { brushPreviewResources } from '@app-game/abr-brush/resources';
 import { featureFields, settingGroups, type SettingField } from '@app-game/abr-brush/settings-fields';
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { Brush } from '@app-game/paint-core/brush';
-import { brushCategories, type BrushCategory, type BrushSetting } from './schema';
+import { stabilizerLabel } from '@app-game/paint-core/stabilizerStroke';
+import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { brushCategories, getBrushSetting, type BrushCategory, type BrushSetting } from './schema';
 
-/** Generates ABR rows from the shared descriptor bindings. Paint-only stroke controls remain last. */
+// The tables below are declared before the categories, which read them while they are built.
+
+/** Where a generated row goes: its field, its short label, its section, and a unit the descriptor lacks. */
+type Placement = { key: string; label: string; section?: string; unit?: string };
+
+/** Rows that stand alone, in order. */
+function loose(...rows: [key: string, label: string, unit?: string][]): Placement[] {
+  return rows.map(([key, label, unit]) => ({ key, label, unit }));
+}
+
+/** Rows under the heading `section`, in order. */
+function section(section: string, ...rows: [key: string, label: string, unit?: string][]): Placement[] {
+  return rows.map(([key, label, unit]) => ({ key, label, section, unit }));
+}
+
+/**
+ * The rows of every generated group, in display order, with labels that do not repeat their section's heading. Each
+ * dynamic reads Jitter, Control, Minimum, Fade length, as Photoshop's Brush Settings and the reference editor do.
+ * Fields absent here are not shown: text and color fields, resource IDs, values stored only, and the tool's class.
+ */
+const layouts: Record<Exclude<Group, 'smoothing'>, readonly Placement[]> = {
+  tool: [
+    ...loose(['mode', 'Mode'], ['opacity', 'Opacity'], ['flow', 'Flow']),
+    ...section(
+      'Pen pressure',
+      ['pressureOverridesOpacity', 'Always sets opacity'],
+      ['pressureOverridesSize', 'Always sets size']
+    ),
+    ...section(
+      'Tool options',
+      ['strength', 'Strength'],
+      ['fingerPainting', 'Finger painting'],
+      ['smudgeAllLayers', 'Sample all layers'],
+      ['wetness', 'Wet'],
+      ['load', 'Load'],
+      ['mix', 'Mix'],
+      ['autoFill', 'Load after each stroke'],
+      ['autoClean', 'Clean after each stroke'],
+      ['sampleAllLayers', 'Sample all layers'],
+      ['autoErase', 'Auto erase'],
+      ['eraseToHistory', 'Erase to history'],
+      ['eraserMode', 'Eraser mode'],
+      ['sharpenAllLayers', 'Sample all layers'],
+      ['protectDetail', 'Protect detail']
+    )
+  ],
+  shapeDynamics: [
+    ...section(
+      'Size',
+      ['sizeJitter', 'Jitter'],
+      ['sizeControl', 'Control'],
+      ['minimumDiameter', 'Minimum'],
+      ['sizeFade', 'Fade length', 'marks'],
+      ['tiltScale', 'Tilt scale'],
+      ['sizeMinimum', 'Control minimum']
+    ),
+    ...section('Angle', ['angleJitter', 'Jitter'], ['angleControl', 'Control'], ['angleFade', 'Fade length', 'marks']),
+    ...section(
+      'Roundness',
+      ['roundnessJitter', 'Jitter'],
+      ['roundnessControl', 'Control'],
+      ['roundnessMinimum', 'Minimum'],
+      ['roundnessFade', 'Fade length', 'marks'],
+      ['roundnessControlMinimum', 'Control minimum']
+    ),
+    ...section('Flip', ['flipXJitter', 'Random horizontal'], ['flipYJitter', 'Random vertical']),
+    ...loose(['brushProjection', 'Brush projection'])
+  ],
+  transfer: (['opacity', 'flow', 'wetness', 'mix'] as const).flatMap((name) =>
+    section(
+      `${name[0]!.toUpperCase()}${name.slice(1)}`,
+      [`${name}Jitter`, 'Jitter'],
+      [`${name}Control`, 'Control'],
+      [`${name}Minimum`, 'Minimum'],
+      [`${name}Fade`, 'Fade length', 'marks']
+    )
+  ),
+  scattering: [
+    ...section(
+      'Scatter',
+      ['scatter', 'Amount'],
+      ['bothAxes', 'Both axes'],
+      ['control', 'Control'],
+      ['fade', 'Fade length', 'marks']
+    ),
+    ...section(
+      'Count',
+      ['count', 'Tips'],
+      ['countJitter', 'Jitter'],
+      ['countControl', 'Control'],
+      ['countFade', 'Fade length', 'marks']
+    )
+  ],
+  texture: [
+    ...section(
+      'Pattern',
+      ['scale', 'Scale'],
+      ['brightness', 'Brightness'],
+      ['contrast', 'Contrast'],
+      ['invert', 'Invert']
+    ),
+    ...section(
+      'Depth',
+      ['mode', 'Mode'],
+      ['depth', 'Depth'],
+      ['eachTip', 'Vary per tip'],
+      ['depthJitter', 'Jitter'],
+      ['depthControl', 'Control'],
+      ['minimumDepth', 'Minimum'],
+      ['depthFade', 'Fade length', 'marks']
+    )
+  ],
+  dualBrush: [
+    ...loose(['mode', 'Mode'], ['flip', 'Random flip']),
+    ...section(
+      'Second tip',
+      ['diameter', 'Size', 'px'],
+      ['hardness', 'Hardness'],
+      ['spacing', 'Spacing'],
+      ['angle', 'Angle'],
+      ['roundness', 'Roundness'],
+      ['flipX', 'Flip horizontally'],
+      ['flipY', 'Flip vertically']
+    ),
+    ...section('Scatter', ['scatter', 'Amount'], ['bothAxes', 'Both axes'], ['count', 'Tips'])
+  ],
+  colorDynamics: [
+    ...loose(
+      ['hueJitter', 'Hue jitter'],
+      ['saturationJitter', 'Saturation jitter'],
+      ['brightnessJitter', 'Brightness jitter'],
+      ['purity', 'Purity'],
+      ['applyPerTip', 'Apply per tip']
+    ),
+    ...section(
+      'Foreground/background',
+      ['foregroundBackgroundJitter', 'Jitter'],
+      ['control', 'Control'],
+      ['fade', 'Fade length', 'marks']
+    )
+  ],
+  brushPose: [
+    ...section(
+      'Tilt',
+      ['tiltX', 'X'],
+      ['tiltY', 'Y'],
+      ['overrideTiltX', 'Override pen X'],
+      ['overrideTiltY', 'Override pen Y']
+    ),
+    ...section('Rotation', ['rotation', 'Angle', '°'], ['overrideRotation', 'Override pen']),
+    ...section('Pressure', ['pressure', 'Amount'], ['overridePressure', 'Override pen'])
+  ],
+  bristle: loose(
+    ['shape', 'Shape'],
+    ['density', 'Bristles'],
+    ['length', 'Length'],
+    ['thickness', 'Thickness'],
+    ['stiffness', 'Stiffness'],
+    ['clumping', 'Clumping'],
+    ['physics', 'Simulate bristle physics']
+  ),
+  erodible: loose(
+    ['shape', 'Shape'],
+    ['softness', 'Softness'],
+    ['length', 'Length'],
+    ['cutoff', 'Cutoff angle', '°'],
+    ['granularity', 'Granularity'],
+    ['streakiness', 'Spatter jitter'],
+    ['splatSize', 'Spatter size'],
+    ['splatCount', 'Spatter count']
+  )
+};
+
+/**
+ * When a row's value changes the stroke, beyond its group being on; rows absent here always do. Each rule follows
+ * what `@app-game/abr-brush/stroke` reads: a Fade length only under Fade, a control's minimum only under a control
+ * that has a range (Pen Tilt ignores the size control minimum, and only the sampled paintbrush tip reads it), Tilt
+ * scale only under Pen Tilt, and per-tip texture depth only with Vary per tip. "Always use pressure" replaces the
+ * size control and the whole opacity dynamic.
+ */
+const rules: Partial<Record<Exclude<Group, 'smoothing'>, Record<string, (v: BrushFormValues, b: Brush) => boolean>>> = {
+  shapeDynamics: {
+    sizeControl: (v) => !v.tool.pressureOverridesSize,
+    sizeFade: (v) => sizeControl(v) === 1,
+    minimumDiameter: (v) => sizeControl(v) !== 0 || v.shapeDynamics.sizeJitter > 0,
+    tiltScale: (v) => sizeControl(v) === 3,
+    sizeMinimum: (v) => sampledPaintbrush(v) && ranged(sizeControl(v)) && sizeControl(v) !== 3,
+    angleFade: (v) => v.shapeDynamics.angleControl === 1,
+    roundnessMinimum: (v) => ranged(v.shapeDynamics.roundnessControl) || v.shapeDynamics.roundnessJitter > 0,
+    roundnessFade: (v) => v.shapeDynamics.roundnessControl === 1,
+    roundnessControlMinimum: (v) => sampledPaintbrush(v) && ranged(v.shapeDynamics.roundnessControl)
+  },
+  transfer: Object.fromEntries(
+    (['opacity', 'flow', 'wetness', 'mix'] as const).flatMap((name) => {
+      const replaced = (v: BrushFormValues) => name === 'opacity' && v.tool.pressureOverridesOpacity;
+      const control = (v: BrushFormValues) => v.transfer[`${name}Control`];
+      return [
+        [`${name}Jitter`, (v: BrushFormValues) => !replaced(v)],
+        [`${name}Control`, (v: BrushFormValues) => !replaced(v)],
+        [`${name}Minimum`, (v: BrushFormValues) => !replaced(v) && ranged(control(v))],
+        [`${name}Fade`, (v: BrushFormValues) => !replaced(v) && control(v) === 1]
+      ];
+    })
+  ),
+  scattering: {
+    control: (v) => v.scattering.scatter > 0,
+    fade: (v) => v.scattering.scatter > 0 && v.scattering.control === 1,
+    countFade: (v) => v.scattering.countControl === 1
+  },
+  texture: {
+    depthJitter: (v) => v.texture.eachTip,
+    depthControl: (v) => v.texture.eachTip,
+    minimumDepth: (v) => v.texture.eachTip && (v.texture.depthControl !== 0 || v.texture.depthJitter > 0),
+    depthFade: (v) => v.texture.eachTip && v.texture.depthControl === 1
+  },
+  colorDynamics: {
+    fade: (v) => v.colorDynamics.control === 1
+  }
+};
+
+/** Display units of the descriptor's unit IDs. */
+const units: Record<string, string> = { '#Prc': '%', '#Ang': '°', '#Pxl': 'px' };
+
+/**
+ * The editor's categories for an ABR (Photoshop) brush, generated from the shared descriptor bindings in
+ * `settingGroups`. Rows are grouped and labelled by {@link layouts}; a row is greyed while its value has no effect,
+ * as the engine reads it (see {@link rules}). Smoothing joins the preset's own smoothing with Paint's stabilizer,
+ * the only two that change an ABR stroke, and the pressure curve follows.
+ */
 export const abrCategories: readonly BrushCategory[] = [
   category('tool', 'Painting', 'basics'),
   {
@@ -14,7 +244,7 @@ export const abrCategories: readonly BrushCategory[] = [
     label: 'Brush tip',
     group: 'basics',
     applies: always,
-    status: (b) => `${values(b).tipKind === 'sampledBrush' ? 'Sampled' : 'Generated'} · ${Math.round(b.size)} px`,
+    status: (b) => `${tipKinds[values(b).tipKind] ?? 'Tip'} · ${Math.round(b.size)} px`,
     settings: [
       rootNumber('diameter', 'Size', 1, 5000, 'px'),
       rootNumber('spacing', 'Spacing', 1, 1000, '%'),
@@ -26,35 +256,27 @@ export const abrCategories: readonly BrushCategory[] = [
   category('shapeDynamics', 'Shape dynamics', 'basics', 'useShapeDynamics'),
   category('transfer', 'Transfer', 'basics', 'useTransfer'),
   category('scattering', 'Scattering', 'advanced', 'useScattering'),
-  category('texture', 'Texture', 'advanced', 'useTexture'),
+  category('texture', 'Texture', 'advanced', 'useTexture', (b) => !!settings(b).patternId),
   category('dualBrush', 'Dual brush', 'advanced', 'useDualBrush'),
-  category('colorDynamics', 'Colour dynamics', 'advanced', 'useColorDynamics'),
+  category('colorDynamics', 'Color dynamics', 'advanced', 'useColorDynamics'),
   category('brushPose', 'Brush pose', 'advanced', 'useBrushPose'),
-  category('smoothing', 'Smoothing', 'advanced', 'useSmoothing'),
+  smoothingCategory(),
   category('bristle', 'Bristle', 'advanced'),
   category('erodible', 'Erodible', 'advanced'),
-  ...brushCategories.filter((c) => c.id === 'stroke-correction' || c.id === 'pressure-curve')
+  pressureCurveCategory()
 ];
 
 /** Keeps texture availability tied to the source resource, even while the runtime texture is off. */
 export function abrCategoriesFor(source: BrushAsset): readonly BrushCategory[] {
   const form = brushToFormValues(source);
   const hasPattern = !!brushPreviewResources(formValuesToBrush(source, { ...form, useTexture: true })).pattern;
+  const texture = category('texture', 'Texture', 'advanced', 'useTexture', () => hasPattern);
   return abrCategories.map((category) =>
     category.id !== 'texture'
       ? category
       : {
-          ...category,
-          status: (b) =>
-            !values(b).useTexture
-              ? 'Off'
-              : hasPattern
-                ? `Depth ${values(b).texture.depth}% · ${values(b).texture.scale}% scale`
-                : 'No embedded pattern',
-          settings: category.settings.map((setting) => ({
-            ...setting,
-            enabled: (b: Brush) => hasPattern && (setting.id === 'abr-texture-useTexture' || values(b).useTexture)
-          }))
+          ...texture,
+          status: (b) => (!values(b).useTexture ? 'Off' : hasPattern ? textureStatus(values(b)) : 'No embedded pattern')
         }
   );
 }
@@ -72,27 +294,72 @@ function values(brush: Brush): BrushFormValues {
 type Group = keyof typeof settingGroups;
 type Feature = keyof typeof featureFields;
 
-function category(id: Group, label: string, group: BrushCategory['group'], feature?: Feature): BrushCategory {
-  const fields = Object.entries(settingGroups[id]).filter(([key, field]) => supported(id, key, field));
+/**
+ * A generated category of the descriptor group `id`. With a `feature`, its switch comes first and every other row
+ * is greyed while it is off; `gate` greys every row, the switch too, such as texture rows without a pattern.
+ */
+function category(
+  id: Exclude<Group, 'smoothing'>,
+  label: string,
+  group: BrushCategory['group'],
+  feature?: Feature,
+  gate: (b: Brush) => boolean = always
+): BrushCategory {
   return {
     id,
     label,
     group,
     applies: (b) =>
       id === 'bristle' ? values(b).tipKind === 'dBrush' : id === 'erodible' ? values(b).tipKind === 'dTips' : true,
-    status: (b) => (feature && !values(b)[feature] ? 'Off' : status(id, b)),
+    status: (b) =>
+      feature && !values(b)[feature]
+        ? 'Off'
+        : id === 'texture' && !settings(b).patternId
+          ? 'No embedded pattern'
+          : statuses[id](values(b), b),
     about:
       id === 'bristle' || id === 'erodible'
         ? 'Paint uses a generated 2D tip approximation, without physical wear simulation.'
         : undefined,
     settings: [
-      ...(feature ? [row(id, feature, featureFields[feature], undefined, true)] : []),
-      ...fields.map(([key, field]) => row(id, key, field, feature))
+      ...(feature
+        ? [
+            {
+              ...row(id, feature, featureFields[feature], { label: `Use ${label.toLowerCase()}` }, true),
+              enabled: gate
+            }
+          ]
+        : []),
+      ...layouts[id].map((placement) => {
+        const field = (settingGroups[id] as Record<string, SettingField>)[placement.key]!;
+        const generated = row(id, placement.key, field, placement);
+        const rule = rules[id]?.[placement.key] ?? always;
+        return {
+          ...generated,
+          enabled: (b: Brush) => gate(b) && (!feature || values(b)[feature]) && rule(values(b), b)
+        };
+      })
     ]
   };
 }
 
-function row(group: Group, key: string, field: SettingField, feature?: Feature, root = false): BrushSetting {
+/** The size control the engine uses: "Always use pressure for size" replaces the preset's with Pen Pressure. */
+function sizeControl(v: BrushFormValues) {
+  return v.tool.pressureOverridesSize ? 2 : v.shapeDynamics.sizeControl;
+}
+
+/** Controls that map an input onto a range from a minimum: Fade, Pen Pressure, Pen Tilt, Stylus Wheel and Dial. */
+function ranged(control: number) {
+  return [1, 2, 3, 4, 8].includes(control);
+}
+
+/** The paintbrush with a sampled tip, the only primary that reads the size and roundness control minimums. */
+function sampledPaintbrush(v: BrushFormValues) {
+  return v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
+}
+
+/** A generated row for `key` of `group`, or of the brush's root when `root`, placed and labelled by `placement`. */
+function row(group: Group, key: string, field: SettingField, placement: Omit<Placement, 'key'>, root = false) {
   const read = (b: Brush): unknown =>
     root ? values(b)[key as Feature] : (values(b)[group] as Record<string, unknown>)[key];
   const write = (b: Brush, value: unknown): Partial<Brush> => {
@@ -102,19 +369,20 @@ function row(group: Group, key: string, field: SettingField, feature?: Feature, 
   };
   const base = {
     id: `abr-${group}-${key}`,
-    label: field.label,
+    label: placement.label,
+    section: placement.section,
     applies: (b: Brush) => root || applicable(group, key, b),
-    enabled: (b: Brush) => (!feature || values(b)[feature]) && (group !== 'texture' || !!settings(b).patternId)
+    enabled: always
   };
   if (field.kind === 'boolean') {
-    return { ...base, kind: 'toggle', read: (b) => Boolean(read(b)), write };
+    return { ...base, kind: 'toggle', read: (b) => Boolean(read(b)), write } satisfies BrushSetting;
   }
 
   if (field.options) {
     return {
       ...base,
       kind: 'choice',
-      options: field.options.map((o) => ({ ...o, value: String(o.value) })),
+      options: field.options.map((o) => ({ label: sentenceCase(o.label), value: String(o.value) })),
       read: (b) => String(read(b)),
       write: (b, value) => {
         const option = field.options!.find((o) => String(o.value) === value);
@@ -123,13 +391,13 @@ function row(group: Group, key: string, field: SettingField, feature?: Feature, 
         }
         return write(b, option.value);
       }
-    };
+    } satisfies BrushSetting;
   }
 
   return {
     ...base,
     kind: 'number',
-    unit: field.unit === '#Prc' ? '%' : field.unit === '#Ang' ? '°' : '',
+    unit: placement.unit ?? units[field.unit ?? ''] ?? '',
     min: () => field.min ?? 0,
     max: () => field.max ?? 100,
     step: 1,
@@ -139,7 +407,12 @@ function row(group: Group, key: string, field: SettingField, feature?: Feature, 
         b,
         Math.max(field.min ?? 0, Math.min(field.max ?? 100, Math.round(Number.isNaN(value) ? Number(read(b)) : value)))
       )
-  };
+  } satisfies BrushSetting;
+}
+
+/** Photoshop's option names, such as `Pen Pressure`, in the editor's sentence case: `Pen pressure`. */
+function sentenceCase(label: string) {
+  return label.charAt(0) + label.slice(1).toLowerCase();
 }
 
 function rootNumber(
@@ -175,17 +448,7 @@ function rootNumber(
   };
 }
 
-/** Fields absent from renderer/sampler reads, and resource selectors without a resource picker. */
-function supported(group: Group, key: string, field: SettingField) {
-  return (
-    field.kind !== 'text' &&
-    field.kind !== 'color' &&
-    !field.label.includes('stored only') &&
-    !(group === 'tool' && ['type', 'loadSolidColorOnly'].includes(key)) &&
-    !(group === 'erodible' && key === 'physics')
-  );
-}
-
+/** Rows that apply to one tool class or tip variant only; other rows always apply. */
 function applicable(group: Group, key: string, b: Brush) {
   const v = values(b);
   if (group === 'erodible') {
@@ -237,48 +500,257 @@ function applicable(group: Group, key: string, b: Brush) {
   return !tools[key] || tools[key].includes(v.tool.type);
 }
 
-function status(group: Group, b: Brush): string {
-  const v = values(b);
-  switch (group) {
-    case 'tool':
-      return `${Math.round(b.opacity * 100)}% opacity · ${Math.round(b.flow * 100)}% flow`;
-    case 'scattering':
-      return `Spread ${v.scattering.scatter}% · ×${v.scattering.count}`;
-    case 'texture':
-      return settings(b).patternId ? `Depth ${v.texture.depth}% · ${v.texture.scale}% scale` : 'No embedded pattern';
-    case 'dualBrush':
-      return `${v.dualBrush.diameter} px · ×${v.dualBrush.count}`;
-    case 'colorDynamics':
-      return `Hue ${v.colorDynamics.hueJitter}% · Saturation ${v.colorDynamics.saturationJitter}%`;
-    case 'shapeDynamics':
-      return dynamics(v.shapeDynamics, 'Size');
-    case 'transfer':
-      return dynamics(v.transfer, 'Flow');
-    case 'brushPose':
-      return v.brushPose.overridePressure ? `Pressure ${v.brushPose.pressure}%` : 'Tablet pose';
-    case 'smoothing':
-      return `${v.smoothing.amount}% · ${v.smoothing.pulledString ? 'Pulled string' : 'Catch-up'}`;
-    case 'bristle':
-      return `${v.bristle.density}% bristles`;
-    case 'erodible':
-      return v.tipVariant === 0 ? `${v.erodible.softness}% softness` : `${v.erodible.splatCount} spatters`;
-  }
+/**
+ * One-line statuses of the generated groups while they are on. Each says what the group does now in at most about
+ * 24 characters, so it fits the wide layout's column: the controls in use, or else the values that matter most.
+ */
+const statuses: Record<Exclude<Group, 'smoothing'>, (v: BrushFormValues, b: Brush) => string> = {
+  tool: (v) => {
+    const mode = settingGroups.tool.mode.options?.find((o) => o.value === v.tool.mode)?.label ?? 'Normal';
+    return v.tool.mode === 'Nrml'
+      ? `${v.tool.opacity}% · flow ${v.tool.flow}%`
+      : `${sentenceCase(mode)} · ${v.tool.opacity}%`;
+  },
+  shapeDynamics: (v) =>
+    dynamicsStatus(
+      [
+        ['Size', sizeControl(v), v.shapeDynamics.sizeJitter],
+        ['Angle', v.shapeDynamics.angleControl, v.shapeDynamics.angleJitter],
+        ['Roundness', v.shapeDynamics.roundnessControl, v.shapeDynamics.roundnessJitter]
+      ],
+      v.shapeDynamics.flipXJitter || v.shapeDynamics.flipYJitter ? 'Random flip' : 'No variation'
+    ),
+  transfer: (v) =>
+    dynamicsStatus(
+      [
+        ['Opacity', v.tool.pressureOverridesOpacity ? 2 : v.transfer.opacityControl, v.transfer.opacityJitter],
+        ['Flow', v.transfer.flowControl, v.transfer.flowJitter],
+        ...(v.tool.type === 'MixB'
+          ? ([
+              ['Wetness', v.transfer.wetnessControl, v.transfer.wetnessJitter],
+              ['Mix', v.transfer.mixControl, v.transfer.mixJitter]
+            ] as const)
+          : [])
+      ],
+      'No variation'
+    ),
+  scattering: (v) => `Spread ${v.scattering.scatter}% · ×${v.scattering.count}`,
+  texture: textureStatus,
+  dualBrush: (v) =>
+    `${v.dualBrush.diameter} px · ${sentenceCase(settingGroups.dualBrush.mode.options?.find((o) => o.value === v.dualBrush.mode)?.label ?? '')}`,
+  colorDynamics: (v) => {
+    const c = v.colorDynamics;
+    const parts = [
+      c.control !== 0
+        ? `FG/BG ${controlNames[c.control]}`
+        : c.foregroundBackgroundJitter > 0
+          ? `FG/BG ${c.foregroundBackgroundJitter}%`
+          : '',
+      c.hueJitter > 0 ? `Hue ${c.hueJitter}%` : '',
+      c.saturationJitter > 0 ? `Sat. ${c.saturationJitter}%` : '',
+      c.brightnessJitter > 0 ? `Bright. ${c.brightnessJitter}%` : '',
+      c.purity !== 0 ? `Purity ${c.purity}%` : ''
+    ].filter(Boolean);
+    return firstTwo(parts, ' · ') || 'No variation';
+  },
+  brushPose: (v) => {
+    const p = v.brushPose;
+    const fixed = [
+      p.overrideTiltX || p.overrideTiltY ? 'tilt' : '',
+      p.overrideRotation ? 'rotation' : '',
+      p.overridePressure ? 'pressure' : ''
+    ].filter(Boolean);
+    return fixed.length ? `Fixed ${firstTwo(fixed, ' + ')}` : "Pen's own pose";
+  },
+  bristle: (v) => `${v.bristle.density}% bristles`,
+  erodible: (v) => (v.tipVariant === 0 ? `${v.erodible.softness}% softness` : `${v.erodible.splatCount} spatters`)
+};
+
+/** The texture's status: its depth and scale. */
+function textureStatus(v: BrushFormValues) {
+  return `Depth ${v.texture.depth}% · scale ${v.texture.scale}%`;
 }
 
-function dynamics(fields: object, label: string) {
-  const entries = Object.entries(fields);
+/**
+ * A dynamic group's status: the controls in use, as "Pressure + Tilt"; without any, the jittered properties, as
+ * "Size jitter 20%"; without either, `none`.
+ */
+function dynamicsStatus(entries: readonly (readonly [name: string, control: number, jitter: number])[], none: string) {
   const controls = [
-    ...new Set(
-      entries
-        .filter(([key, value]) => key.endsWith('Control') && value !== 0)
-        .map(([, value]) =>
-          settingGroups.shapeDynamics.angleControl.options?.find((o) => o.value === value)?.label.replace('Pen ', '')
-        )
-    )
+    ...new Set(entries.filter(([, control]) => control !== 0).map(([, control]) => controlNames[control]))
   ];
-  return controls.length
-    ? controls.join(' + ')
-    : `${label} jitter ${entries.find(([key]) => key === `${label.toLowerCase()}Jitter`)?.[1] ?? 0}%`;
+  if (controls.length) {
+    return firstTwo(controls as string[], ' + ');
+  }
+
+  const jittered = entries.filter(([, , jitter]) => jitter > 0);
+  return jittered.length === 1
+    ? `${jittered[0]![0]} jitter ${jittered[0]![2]}%`
+    : jittered.length
+      ? `Jitter: ${firstTwo(
+          jittered.map(([name]) => name.toLowerCase()),
+          ', '
+        )}`
+      : none;
+}
+
+/**
+ * The first two of `parts`, joined, and how many more there are, as "Pressure + Tilt +1"; only the first when the
+ * two would pass {@link statusLength}, as "Pressure +1".
+ */
+function firstTwo(parts: readonly string[], separator: string) {
+  const two = parts.slice(0, 2).join(separator);
+  const shown = parts.length > 1 && two.length > statusLength ? 1 : Math.min(2, parts.length);
+  return parts.slice(0, shown).join(separator) + (parts.length > shown ? ` +${parts.length - shown}` : '');
+}
+
+/** The most characters of a status line that fit the wide layout's column at its font size. */
+const statusLength = 22;
+
+/** Short names of Photoshop's dynamics controls for statuses, by their descriptor values. */
+const controlNames: Record<number, string> = {
+  1: 'Fade',
+  2: 'Pressure',
+  3: 'Tilt',
+  4: 'Wheel',
+  5: 'Initial direction',
+  6: 'Direction',
+  7: 'Rotation',
+  8: 'Dial'
+};
+
+const tipKinds: Record<string, string> = {
+  sampledBrush: 'Sampled',
+  computedBrush: 'Generated',
+  dBrush: 'Bristle',
+  dTips: 'Erodible'
+};
+
+/**
+ * Smoothing of an ABR stroke, under one name. Paint's stroke processor decides it (see `studioBrushRecipe`): None
+ * paints the raw input, the stabilizer replaces the preset's smoothing with Paint Tool SAI's, and every other mode
+ * (Studio and both Leonardo modes) smooths as the preset's Photoshop smoothing says. Paint's own Studio and Leonardo
+ * smoothing, its stabilization level and catch-up therefore never change an ABR stroke and are not shown.
+ */
+function smoothingCategory(): BrushCategory {
+  const method = (b: Brush) =>
+    b.stroke.mode === 'none' ? 'none' : b.stroke.mode === 'stabilizer' ? 'stabilizer' : 'preset';
+  const amount = (b: Brush) => (values(b).useSmoothing ? values(b).smoothing.amount : 0);
+  const smoothing = (b: Brush) => method(b) === 'preset' && amount(b) > 0;
+  const preset = (key: keyof BrushFormValues['smoothing'], label: string, catchUp = false): BrushSetting => ({
+    ...row('smoothing', key, settingGroups.smoothing[key], { label, section: 'Photoshop smoothing' }),
+    enabled: (b) => smoothing(b) && !(catchUp && values(b).smoothing.pulledString)
+  });
+  const level = getBrushSetting('stabilizer-level')!;
+
+  return {
+    id: 'smoothing',
+    label: 'Smoothing',
+    group: 'advanced',
+    applies: always,
+    about:
+      "An ABR brush smooths as its preset does in Photoshop. The stabilizer replaces that with Paint Tool SAI's; Off paints the pen's input as it is.",
+    status: (b) =>
+      method(b) === 'stabilizer'
+        ? `Stabilizer ${stabilizerLabel(b.stroke.stabilizer)}`
+        : smoothing(b)
+          ? `${amount(b)}%${values(b).smoothing.pulledString ? ' · pulled string' : ''}`
+          : 'Off',
+    settings: [
+      {
+        id: 'abr-smoothing-method',
+        label: 'Method',
+        kind: 'choice',
+        applies: always,
+        enabled: always,
+        options: [
+          { value: 'none', label: 'Off', description: 'Strokes follow the pen exactly, with no smoothing.' },
+          {
+            value: 'preset',
+            label: 'Photoshop smoothing',
+            description: "The preset's own smoothing, set below, as in Photoshop."
+          },
+          {
+            value: 'stabilizer',
+            label: 'Stabilizer',
+            description: 'As in Paint Tool SAI: the stroke trails the pen and eases in and out, more at higher levels.'
+          }
+        ],
+        read: method,
+        write: (b, value) => {
+          const mode: StrokeSettings['mode'] | undefined =
+            value === 'none'
+              ? 'none'
+              : value === 'stabilizer'
+                ? 'stabilizer'
+                : value === 'preset'
+                  ? method(b) === 'preset'
+                    ? b.stroke.mode
+                    : 'studio'
+                  : undefined;
+          if (!mode) {
+            throw new RangeError(`Unknown smoothing method: ${value}`);
+          }
+
+          return { stroke: normalizeStrokeSettings({ ...b.stroke, mode }) };
+        }
+      },
+      {
+        id: 'abr-smoothing-amount',
+        label: 'Amount',
+        section: 'Photoshop smoothing',
+        kind: 'number',
+        unit: '%',
+        min: () => 0,
+        max: () => 100,
+        step: 1,
+        applies: always,
+        enabled: (b) => method(b) === 'preset',
+        read: amount,
+        // Zero switches the preset's smoothing off and keeps its last amount, as Photoshop's own switch does.
+        write: (b, value) => {
+          const next = Math.max(0, Math.min(100, Math.round(Number.isNaN(value) ? amount(b) : value)));
+          const current = values(b);
+          return {
+            engine: {
+              ...b.engine!,
+              settings: {
+                ...settings(b),
+                values: {
+                  ...current,
+                  useSmoothing: next > 0,
+                  smoothing: { ...current.smoothing, amount: next > 0 ? next : current.smoothing.amount }
+                }
+              }
+            }
+          };
+        }
+      },
+      preset('pulledString', 'Pulled string'),
+      preset('catchUp', 'Catch up', true),
+      preset('catchUpAtEnd', 'Catch up at stroke end', true),
+      preset('adjustForZoom', 'Adjust for zoom'),
+      { ...level, label: 'Level', section: 'Stabilizer' }
+    ]
+  };
+}
+
+/**
+ * Paint's pressure curve, which shapes an ABR brush's pen pressure only under the stabilizer: the preset's smoothing
+ * and raw input pass the pen's pressure on unchanged, so the rows are greyed then.
+ */
+function pressureCurveCategory(): BrushCategory {
+  const curve = brushCategories.find((c) => c.id === 'pressure-curve')!;
+  const stabilized = (b: Brush) => b.stroke.mode === 'stabilizer';
+  return {
+    ...curve,
+    status: (b) => (stabilized(b) ? curve.status(b) : 'Off'),
+    about: `${curve.about} For an ABR brush it applies with the stabilizer, chosen under Smoothing.`,
+    settings: curve.settings.map((setting) => ({
+      ...setting,
+      enabled: (b: Brush) => stabilized(b) && setting.enabled(b)
+    }))
+  };
 }
 
 function always() {

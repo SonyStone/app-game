@@ -1,6 +1,6 @@
 /*
  * Rules for the editor's buttons start with .frame, so that a host's reset such as `.studio button` cannot undo them.
- * The brush editor takes its colours from the host's theme properties (--ink, --muted, --line, --accent, --surface),
+ * The brush editor takes its colors from the host's theme properties (--ink, --muted, --line, --accent, --surface),
  * falling back to the Classic studio's. Layouts follow the editor's own width through the brush-editor container:
  * wide from 600 px, medium (icon column) from 400 px, narrow (list, then rows) below. Every press target is at
  * least 44 px high, for fingers and the pen.
@@ -21,6 +21,8 @@
   --selected: color-mix(in srgb, var(--accent-color) 13%, transparent);
   --raised: color-mix(in srgb, var(--ink-color) 5%, transparent);
 
+  /* The offset parent of an open choice menu, which no scrolling pane may clip. */
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   height: 100%;
@@ -76,9 +78,21 @@
   }
 }
 
+/* The preview size under a scaled stroke preview; its line stays while hidden, so nothing below it moves. */
+.previewSize {
+  margin: 4px 0 0;
+  color: var(--muted-color);
+  font-size: 11px;
+  visibility: hidden;
+
+  &[data-shown] {
+    visibility: visible;
+  }
+}
+
 .body {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: 212px minmax(0, 1fr);
   min-height: 0;
 }
 
@@ -220,10 +234,36 @@
   overflow-wrap: anywhere;
 }
 
-/* label, slider, number, unit */
+/* Hides text that assistive technology still reads. */
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* A framed sub-group of a category's rows under its heading. */
+.section {
+  display: grid;
+  gap: 2px;
+  margin: 6px 0 4px;
+  padding: 2px 10px 6px;
+  border: 1px solid var(--line-color);
+  border-radius: 8px;
+}
+
+.sectionTitle {
+  margin: 8px 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* label, slider, number, unit; a menu's button spans the last three */
 .row {
   display: grid;
-  grid-template-columns: minmax(72px, 28%) minmax(80px, 1fr) 64px 22px;
+  grid-template-columns: minmax(72px, 28%) minmax(80px, 1fr) 64px 34px;
   align-items: center;
   gap: 0 10px;
   min-height: var(--target);
@@ -366,6 +406,79 @@
   }
 }
 
+/* A choice with many options: a row whose button opens them; greyed whole while it has no effect. */
+.menuChoice[data-disabled] {
+  opacity: 0.45;
+}
+
+.frame .menuButton {
+  display: flex;
+  grid-column: 2 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--target);
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--line-color);
+  border-radius: 6px;
+  background: var(--surface-color);
+
+  &[aria-expanded='true'] {
+    border-color: var(--accent-color);
+  }
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.menuValue {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Placed by script against its button; hidden until then, so it never shows at a wrong place. */
+.menu {
+  position: absolute;
+  z-index: 10;
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+  visibility: hidden;
+  box-sizing: border-box;
+}
+
+.frame .menuOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--target);
+  padding: 0 10px 0 6px;
+  border-radius: 6px;
+
+  &[aria-selected='true'] {
+    background: var(--selected);
+    font-weight: 600;
+  }
+}
+
+.menuCheck {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  color: var(--accent-color);
+}
+
 /* Every description in one cell, so the tallest sets the height and choosing another option moves nothing. */
 .descriptions {
   display: grid;
@@ -485,7 +598,7 @@
   }
 
   .row {
-    grid-template-columns: minmax(64px, 30%) minmax(64px, 1fr) 56px 18px;
+    grid-template-columns: minmax(64px, 30%) minmax(56px, 1fr) 56px 34px;
     gap: 0 6px;
 
     --scrub-width: 56px;

@@ -1,5 +1,6 @@
-import { brushToFormValues, formValuesToBrush } from '@app-game/abr-brush/form';
+import { brushToFormValues, formValuesToBrush, type BrushFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
+import { settingGroups } from '@app-game/abr-brush/settings-fields';
 import { initAbr } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +18,28 @@ function brush(): Brush {
   return { ...defaultBrush(), engine: { id: 'abr', settings: { values: brushToFormValues(source), tipId: 'tip' } } };
 }
 
+/** `b` with the fields of `patch` written into its engine values, at their root or in `group`. */
+function edit(b: Brush, group: keyof BrushFormValues | undefined, patch: Record<string, unknown>): Brush {
+  const values = abrValues(b);
+  const next = group ? { ...values, [group]: { ...(values[group] as object), ...patch } } : { ...values, ...patch };
+  return { ...b, engine: { ...b.engine!, settings: { ...(b.engine!.settings as object), values: next } } };
+}
+
+/** The setting `id` of the ABR category `category`. */
+function setting(category: string, id: string) {
+  const found = abrCategories.find((c) => c.id === category)!.settings.find((r) => r.id === id);
+  if (!found) {
+    throw new Error(`No setting ${id}`);
+  }
+
+  return found;
+}
+
+/** The status of the ABR category `id` for `b`. */
+function status(id: string, b: Brush) {
+  return abrCategories.find((c) => c.id === id)!.status(b);
+}
+
 describe('generated ABR settings', () => {
   it('generates rows for every engine group, in reference order', () => {
     expect(abrCategories.map((c) => c.id)).toEqual([
@@ -32,7 +55,6 @@ describe('generated ABR settings', () => {
       'smoothing',
       'bristle',
       'erodible',
-      'stroke-correction',
       'pressure-curve'
     ]);
     expect(abrCategories.every((c) => c.settings.length > 0)).toBe(true);
@@ -63,7 +85,7 @@ describe('generated ABR settings', () => {
 
   it('keeps switched-off rows visible and disabled, and enables them with the group', () => {
     for (const category of abrCategories.filter((c) =>
-      ['shapeDynamics', 'scattering', 'dualBrush', 'colorDynamics', 'transfer', 'brushPose', 'smoothing'].includes(c.id)
+      ['shapeDynamics', 'scattering', 'dualBrush', 'colorDynamics', 'transfer', 'brushPose'].includes(c.id)
     )) {
       const toggle = category.settings[0]!;
       expect(toggle.kind).toBe('toggle');
@@ -74,7 +96,8 @@ describe('generated ABR settings', () => {
       expect(category.status(off)).toBe('Off');
       expect(category.settings.slice(1).every((r) => !r.enabled(off))).toBe(true);
       const on = { ...off, ...toggle.write(off, true) };
-      expect(category.settings.slice(1).every((r) => r.enabled(on))).toBe(true);
+      // Rows that depend on another row's value, such as a Fade length on its control, stay greyed until it is set.
+      expect(category.settings.slice(1).some((r) => r.enabled(on))).toBe(true);
       expect(
         category.settings
           .slice(1)
@@ -117,7 +140,10 @@ describe('generated ABR settings', () => {
       throw new Error('Expected texture switch');
     }
     const on = { ...b, ...toggle.write(b, true) };
-    expect(category.settings.every((r) => r.enabled(on))).toBe(true);
+    const perTip = ['depthJitter', 'depthControl', 'minimumDepth', 'depthFade'].map((key) => `abr-texture-${key}`);
+    expect(category.settings.filter((r) => !r.enabled(on)).map((r) => r.id)).toEqual(perTip);
+    const varied = edit(on, 'texture', { eachTip: true, depthControl: 1 });
+    expect(category.settings.every((r) => r.enabled(varied))).toBe(true);
   });
 
   it('requires a texture resource and only shows physical groups for physical tips', () => {
@@ -126,5 +152,145 @@ describe('generated ABR settings', () => {
     expect(texture.settings.every((r) => !r.enabled(b))).toBe(true);
     expect(abrCategories.find((c) => c.id === 'bristle')!.applies(b)).toBe(false);
     expect(abrCategories.find((c) => c.id === 'erodible')!.applies(b)).toBe(false);
+  });
+
+  it('groups each category under short headings and places every engine field once', () => {
+    const transfer = abrCategories.find((c) => c.id === 'transfer')!.settings.filter((r) => r.applies(brush()));
+    expect(transfer.map((r) => [r.section, r.label])).toEqual([
+      [undefined, 'Use transfer'],
+      ...['Opacity', 'Flow'].flatMap((section) =>
+        ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => [section, label])
+      )
+    ]);
+    const shape = abrCategories.find((c) => c.id === 'shapeDynamics')!.settings;
+    expect([...new Set(shape.flatMap((r) => r.section ?? []))]).toEqual(['Size', 'Angle', 'Roundness', 'Flip']);
+
+    const hidden: Record<string, string[]> = {
+      tool: ['type', 'foreground', 'background', 'pressureSmoothing', 'legacy', 'loadSolidColorOnly'],
+      texture: ['patternId', 'patternName'],
+      dualBrush: ['tipId'],
+      erodible: ['physics'],
+      // Smoothing has its own category: see the Smoothing test.
+      smoothing: Object.keys(settingGroups.smoothing)
+    };
+    for (const [group, fields] of Object.entries(settingGroups)) {
+      const placed = abrCategories
+        .flatMap((c) => c.settings)
+        .filter((r) => r.id.startsWith(`abr-${group}-`))
+        .map((r) => r.id.slice(`abr-${group}-`.length))
+        .filter((key) => !key.startsWith('use'));
+      expect(placed.length, group).toBe(new Set(placed).size);
+      expect(new Set([...placed, ...(hidden[group] ?? [])]), group).toEqual(
+        new Set([...Object.keys(fields), ...(group === 'smoothing' ? ['method', 'amount'] : [])])
+      );
+    }
+
+    // A section's rows are consecutive, so it shows as one group.
+    for (const category of abrCategories) {
+      const runs = category.settings.map((r) => r.section).filter((name, i, all) => name && name !== all[i - 1]);
+      expect(runs, category.id).toEqual([...new Set(runs)]);
+    }
+  });
+
+  it('greys a row whose value has no effect under the current control, as the engine reads it', () => {
+    const shape = edit(brush(), undefined, { useShapeDynamics: true, tipKind: 'sampledBrush' });
+    const enabled = (category: string, id: string, b: Brush) => setting(category, id).enabled(b);
+    const sizeRows = ['sizeFade', 'minimumDiameter', 'tiltScale', 'sizeMinimum'].map((k) => `abr-shapeDynamics-${k}`);
+    const sizeState = (b: Brush) => sizeRows.map((id) => enabled('shapeDynamics', id, b));
+    const sizeControl = (control: number, jitter = 0) =>
+      edit(shape, 'shapeDynamics', { sizeControl: control, sizeJitter: jitter });
+    // Off: fade, tilt scale and both minimums have no effect; a jitter makes the minimum diameter its floor.
+    expect(sizeState(sizeControl(0))).toEqual([false, false, false, false]);
+    expect(sizeState(sizeControl(0, 20))).toEqual([false, true, false, false]);
+    expect(sizeState(sizeControl(1))).toEqual([true, true, false, true]);
+    expect(sizeState(sizeControl(2))).toEqual([false, true, false, true]);
+    // Pen Tilt stretches by Tilt scale and ignores the control minimum.
+    expect(sizeState(sizeControl(3))).toEqual([false, true, true, false]);
+    // A generated tip reads the minimum diameter, never the size control minimum.
+    expect(
+      enabled(
+        'shapeDynamics',
+        'abr-shapeDynamics-sizeMinimum',
+        edit(sizeControl(2), undefined, { tipKind: 'computedBrush' })
+      )
+    ).toBe(false);
+    // "Always use pressure for size" replaces the control.
+    const forced = edit(sizeControl(1), 'tool', { pressureOverridesSize: true });
+    expect(enabled('shapeDynamics', 'abr-shapeDynamics-sizeControl', forced)).toBe(false);
+    expect(enabled('shapeDynamics', 'abr-shapeDynamics-sizeFade', forced)).toBe(false);
+
+    const transfer = edit(brush(), undefined, { useTransfer: true });
+    const opacity = (control: number) => edit(transfer, 'transfer', { opacityControl: control });
+    const opacityState = (b: Brush) =>
+      ['Jitter', 'Control', 'Minimum', 'Fade'].map((k) => enabled('transfer', `abr-transfer-opacity${k}`, b));
+    expect(opacityState(opacity(0))).toEqual([true, true, false, false]);
+    expect(opacityState(opacity(2))).toEqual([true, true, true, false]);
+    expect(opacityState(opacity(1))).toEqual([true, true, true, true]);
+    expect(opacityState(edit(opacity(1), 'tool', { pressureOverridesOpacity: true }))).toEqual([
+      false,
+      false,
+      false,
+      false
+    ]);
+
+    const scattering = edit(brush(), undefined, { useScattering: true });
+    expect(enabled('scattering', 'abr-scattering-control', scattering)).toBe(false);
+    const scattered = edit(scattering, 'scattering', { scatter: 50, control: 1 });
+    expect(enabled('scattering', 'abr-scattering-control', scattered)).toBe(true);
+    expect(enabled('scattering', 'abr-scattering-fade', scattered)).toBe(true);
+    expect(enabled('scattering', 'abr-scattering-countFade', scattered)).toBe(false);
+
+    const color = edit(brush(), undefined, { useColorDynamics: true });
+    expect(enabled('colorDynamics', 'abr-colorDynamics-fade', color)).toBe(false);
+    expect(enabled('colorDynamics', 'abr-colorDynamics-fade', edit(color, 'colorDynamics', { control: 1 }))).toBe(true);
+  });
+
+  it('says in each status which controls a dynamic uses, or what it varies, in a line that fits the column', () => {
+    const shape = edit(brush(), undefined, { useShapeDynamics: true });
+    expect(status('shapeDynamics', shape)).toBe('No variation');
+    expect(status('shapeDynamics', edit(shape, 'shapeDynamics', { sizeJitter: 20 }))).toBe('Size jitter 20%');
+    expect(status('shapeDynamics', edit(shape, 'shapeDynamics', { sizeControl: 2, angleControl: 6 }))).toBe(
+      'Pressure + Direction'
+    );
+    const transfer = edit(brush(), undefined, { useTransfer: true });
+    expect(status('transfer', edit(transfer, 'transfer', { flowControl: 2 }))).toBe('Pressure');
+    const color = edit(brush(), undefined, { useColorDynamics: true });
+    expect(status('colorDynamics', edit(color, 'colorDynamics', { hueJitter: 27, saturationJitter: 25 }))).toBe(
+      'Hue 27% · Sat. 25%'
+    );
+    expect(status('scattering', edit(brush(), undefined, { useScattering: true }))).toMatch(/^Spread \d+% · ×\d+$/);
+    expect(abrCategories.find((c) => c.id === 'colorDynamics')!.label).toBe('Color dynamics');
+  });
+
+  it('shows the smoothing that changes an ABR stroke under one name: off, the preset’s own, or the stabilizer', () => {
+    expect(abrCategories.filter((c) => /smooth|correction/i.test(`${c.id} ${c.label}`)).map((c) => c.label)).toEqual([
+      'Smoothing'
+    ]);
+    const method = setting('smoothing', 'abr-smoothing-method');
+    const amount = setting('smoothing', 'abr-smoothing-amount');
+    const level = setting('smoothing', 'stabilizer-level');
+    if (method.kind !== 'choice' || amount.kind !== 'number') {
+      throw new Error('Expected a method choice and an amount');
+    }
+
+    const b = brush();
+    expect(method.read(b)).toBe('preset');
+    expect(level.enabled(b)).toBe(false);
+    const stabilized = { ...b, ...method.write(b, 'stabilizer') };
+    expect(stabilized.stroke.mode).toBe('stabilizer');
+    expect(level.enabled(stabilized)).toBe(true);
+    expect(amount.enabled(stabilized)).toBe(false);
+    expect(setting('pressure-curve', 'pressure-minimum').enabled(stabilized)).toBe(true);
+    expect(setting('pressure-curve', 'pressure-minimum').enabled(b)).toBe(false);
+    expect({ ...b, ...method.write(b, 'none') }.stroke.mode).toBe('none');
+
+    const smoothed = { ...b, ...amount.write(b, 30) };
+    expect(abrValues(smoothed).useSmoothing).toBe(true);
+    expect(abrValues(smoothed).smoothing.amount).toBe(30);
+    expect(status('smoothing', smoothed)).toBe('30%');
+    const off = { ...smoothed, ...amount.write(smoothed, 0) };
+    expect(abrValues(off).useSmoothing).toBe(false);
+    expect(amount.read(off)).toBe(0);
+    expect(setting('smoothing', 'abr-smoothing-pulledString').enabled(off)).toBe(false);
   });
 });

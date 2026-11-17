@@ -4,7 +4,13 @@ import { createEffect, createMemo, createSignal, createUniqueId, For, Show } fro
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import styles from './BrushEditor.module.css';
-import { brushCategories, brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } from './schema';
+import {
+  brushCategories,
+  brushSettingsDiffer,
+  type BrushCategory,
+  type BrushSetting,
+  type BrushSettingsSnapshot
+} from './schema';
 import { SettingRow } from './SettingRow';
 
 /**
@@ -152,15 +158,26 @@ function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: 
 }
 
 /**
- * Icons of the categories by ID; others show a brush. Each has a different outline, since the medium layout shows the
- * icons alone: a pencil, a round tip, arrows growing outwards, a looped stroke and a response curve.
+ * Icons of the categories by ID, Paint's and ABR's; others show a brush. Each has a different outline, since the
+ * medium layout shows the icons alone.
  */
 const categoryIcons: Record<string, SketchIconName> = {
-  painting: 'brush',
+  painting: 'sliders',
+  tool: 'sliders',
   'brush-tip': 'selectEllipse',
   dynamics: 'proportions',
+  shapeDynamics: 'sizes',
+  transfer: 'bars',
+  scattering: 'scatter',
+  texture: 'texture',
+  dualBrush: 'dualTip',
+  colorDynamics: 'hue',
+  brushPose: 'tilt',
   'stroke-correction': 'lasso',
-  'pressure-curve': 'pressure'
+  smoothing: 'lasso',
+  'pressure-curve': 'pressure',
+  bristle: 'bristles',
+  erodible: 'pencil'
 };
 
 /** A collapsed block that explains the category, opened and closed by its heading. */
@@ -187,19 +204,72 @@ function About(props: { title: string; text: string }) {
 }
 
 /**
- * The rows of a category whose settings apply to the brush, in schema order, or its note when none does. Rows are
- * made once per setting, so values change in place and no row appears, disappears or moves while one is used.
+ * The rows of a category whose settings apply to the brush, in schema order, or its note when none does. Rows of a
+ * section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
+ * once per heading, so values change in place and no row appears, disappears or moves while one is used.
  */
 function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
   const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
+  const runs = createMemo(() => sectionRuns(rows()));
   const note = createMemo(() => (rows().length === 0 ? props.category.note?.(props.brush) : undefined));
 
   return (
     <div class={styles.rows}>
-      <For each={rows()}>
-        {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+      <For each={runs()} keyed={(run) => run.key}>
+        {(run) => (
+          <Show
+            when={run().title}
+            fallback={
+              <For each={run().rows}>
+                {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+              </For>
+            }
+          >
+            {(title) => <Section title={title()} rows={run().rows} brush={props.brush} onChange={props.onChange} />}
+          </Show>
+        )}
       </For>
       <Show when={note()}>{(text) => <p class={styles.note}>{text()}</p>}</Show>
+    </div>
+  );
+}
+
+/**
+ * Splits `rows` into runs of consecutive rows that share a section or have none. A section's run is keyed by its
+ * title, a run of rows without one by its place among such runs.
+ */
+function sectionRuns(rows: readonly BrushSetting[]) {
+  const runs: { key: string; title?: string; rows: BrushSetting[] }[] = [];
+  let loose = 0;
+  for (const row of rows) {
+    const last = runs.at(-1);
+    if (last && last.title === row.section) {
+      last.rows.push(row);
+    } else {
+      runs.push({ key: row.section ?? `#${loose++}`, title: row.section, rows: [row] });
+    }
+  }
+
+  return runs;
+}
+
+/** A framed group of rows under a short heading, announced as a group named by it. */
+function Section(props: {
+  title: string;
+  rows: readonly BrushSetting[];
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
+  const titleId = createUniqueId();
+
+  return (
+    <div class={styles.section} role="group" aria-labelledby={titleId}>
+      <h3 id={titleId} class={styles.sectionTitle}>
+        {props.title}
+      </h3>
+      <For each={props.rows}>
+        {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+      </For>
     </div>
   );
 }

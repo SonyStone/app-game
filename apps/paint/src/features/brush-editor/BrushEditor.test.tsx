@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { brushToFormValues } from '@app-game/abr-brush/form';
+import type { BrushAsset } from '@app-game/abr-brush/library';
 import { brushSizeCurve, curveValue } from '@app-game/abr-brush/sliderCurves';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
@@ -7,7 +9,16 @@ import { join } from 'node:path';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BrushEditor } from './BrushEditor';
-import { snapshotBrushSettings, type BrushSettingsSnapshot } from './schema';
+import { abrCategories, abrValues } from './abrSchema';
+import { snapshotBrushSettings, type BrushCategory, type BrushSettingsSnapshot } from './schema';
+
+/** A computed-tip ABR preset whose engine values the ABR tests edit. */
+const abrSource = {
+  id: 'test',
+  name: 'Test',
+  preset: { tip: { kind: 'computed', diameter: 30 } },
+  resources: []
+} as unknown as BrushAsset;
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -62,17 +73,26 @@ it('steps a slider with the keys', () => {
 });
 
 it('takes the whole row of a switch, a choice option and a category as its press target', () => {
-  const { brush, editor, category, status, click } = mount();
+  const { brush, editor, category, status, click, menu } = mount();
+  click(status('Painting'));
+  const radio = [...editor().querySelectorAll('[role="radio"]')].find((element) =>
+    element.textContent?.includes('Classic')
+  )!;
+  click(radio.lastElementChild!);
+  expect(brush().mixing).toBe('classic');
+  expect(radio.getAttribute('aria-checked')).toBe('true');
+
   click(status('Stroke correction'));
   expect(category('Stroke correction').getAttribute('aria-current')).toBe('true');
 
-  const option = [...editor().querySelectorAll('[role="radio"]')].find((radio) =>
-    radio.textContent?.includes('Leonardo smooth')
+  click(menu('Smoothing').firstElementChild!);
+  const option = [...editor().querySelectorAll('[role="option"]')].find((element) =>
+    element.textContent?.includes('Leonardo smooth')
   )!;
-  expect(option.getAttribute('aria-checked')).toBe('false');
-  click(option.lastElementChild!);
+  expect(option.getAttribute('aria-selected')).toBe('false');
+  click(option.firstElementChild!);
   expect(brush().stroke.mode).toBe('smooth');
-  expect(option.getAttribute('aria-checked')).toBe('true');
+  expect(menu('Smoothing').textContent).toBe('Leonardo smooth');
   expect(editor().textContent).toContain('Higher stabilization smooths more');
 
   const toggle = editor().querySelector<HTMLElement>('[role="switch"]')!;
@@ -103,7 +123,7 @@ it('shows a greyed row with its value, announces it disabled and ignores presses
 });
 
 it('keeps every row in place while a slider drags and after a switch or a choice changes', () => {
-  const { editor, category, click, slider, pointer } = mount();
+  const { editor, category, click, slider, pointer, menu } = mount();
   const rows = () => [...editor().querySelectorAll('section[aria-labelledby] > div:last-child > *')];
 
   const painting = rows();
@@ -122,9 +142,130 @@ it('keeps every row in place while a slider drags and after a switch or a choice
 
   click(category('Stroke correction'));
   const correction = rows();
-  for (const radio of editor().querySelectorAll<HTMLElement>('[role="radio"]')) {
-    click(radio);
+  for (const name of ['None (raw input)', 'Leonardo normal', 'Stabilizer (Paint Tool SAI)', 'Studio']) {
+    click(menu('Smoothing'));
     expect(rows()).toEqual(correction);
+    click([...editor().querySelectorAll('[role="option"]')].find((option) => option.textContent === name)!);
+    expect(menu('Smoothing').textContent).toBe(name);
+    expect(rows()).toEqual(correction);
+  }
+});
+
+it('shows a choice of more than three options as one row that opens them, and closes it on a choice, outside or Escape', () => {
+  const { brush, editor, category, click, menu, pointer } = mount();
+  click(category('Stroke correction'));
+  expect(editor().querySelectorAll('[role="radio"]')).toHaveLength(0);
+  const button = menu('Smoothing');
+  expect(button.getAttribute('aria-haspopup')).toBe('listbox');
+  expect(button.textContent).toBe('Studio');
+  const list = () => editor().querySelector('[role="listbox"]');
+  expect(list()).toBeNull();
+
+  click(button);
+  expect(button.getAttribute('aria-expanded')).toBe('true');
+  expect([...list()!.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
+    'None (raw input)',
+    'Studio',
+    'Leonardo normal',
+    'Leonardo smooth',
+    'Stabilizer (Paint Tool SAI)'
+  ]);
+  expect(list()!.querySelector('[aria-selected="true"]')!.textContent).toBe('Studio');
+  expect(document.activeElement).toBe(list()!.querySelector('[aria-selected="true"]'));
+
+  // Escape closes the list without a change and gives the focus back to the row's button.
+  const before = brush();
+  list()!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flush();
+  expect(list()).toBeNull();
+  expect(document.activeElement).toBe(button);
+  expect(brush()).toBe(before);
+
+  // A press outside the list closes it without a change; a press on the button itself does not count as outside.
+  click(button);
+  pointer(button, 'pointerdown', 0);
+  expect(list()).not.toBeNull();
+  pointer(editor().querySelector('h2')!, 'pointerdown', 0);
+  expect(list()).toBeNull();
+  expect(brush()).toBe(before);
+
+  // The button toggles the list.
+  click(button);
+  click(button);
+  expect(list()).toBeNull();
+});
+
+it('keeps a choice of up to three options as a list in place', () => {
+  const { editor } = mount();
+  expect([...editor().querySelectorAll('[role="radio"]')].map((radio) => radio.textContent)).toEqual([
+    'Smooth color',
+    'Classic'
+  ]);
+  expect(editor().querySelector('[aria-haspopup]')).toBeNull();
+});
+
+it('greys an ABR row while its control gives it no effect, ignores presses on it, and enables it once chosen', () => {
+  const values = brushToFormValues(abrSource);
+  const abr: Brush = {
+    ...defaultBrush(),
+    engine: { id: 'abr', settings: { values: { ...values, useTransfer: true }, tipId: 'tip' } }
+  };
+  const { brush, editor, category, click, menu, slider, pointer } = mount(abr, { categories: abrCategories });
+  click(category('Transfer'));
+  expect(
+    [...editor().querySelectorAll('[role="group"]')].map((group) => [
+      group.querySelector('h3')!.textContent,
+      // A label shows its short name; assistive technology hears the section's name before it.
+      [...group.querySelectorAll('[aria-labelledby]')]
+        .flatMap((control) => control.getAttribute('aria-labelledby')!.split(' ').slice(0, 1))
+        .map((id) => document.getElementById(id)!.textContent)
+        .filter((text, i, all) => all.indexOf(text) === i)
+    ])
+  ).toEqual(
+    ['Opacity', 'Flow'].map((name) => [
+      name,
+      ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => `${name} ${label}`)
+    ])
+  );
+  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map((control) =>
+    document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
+  );
+  const shown = [...new Set(labels)].map((label) =>
+    [...label.childNodes]
+      .filter((node) => !(node instanceof HTMLElement))
+      .map((node) => node.textContent)
+      .join('')
+  );
+  expect(shown.slice(0, 4)).toEqual(['Jitter', 'Control', 'Minimum', 'Fade length']);
+
+  const minimum = slider('Flow Minimum');
+  expect(minimum.getAttribute('aria-disabled')).toBe('true');
+  const before = brush();
+  pointer(minimum, 'pointerdown', 250);
+  pointer(minimum, 'pointerup', 250);
+  expect(brush()).toBe(before);
+
+  click(menu('Flow Control'));
+  click([...editor().querySelectorAll('[role="option"]')].find((option) => option.textContent === 'Pen pressure')!);
+  expect(abrValues(brush()).transfer.flowControl).toBe(2);
+  expect(minimum.getAttribute('aria-disabled')).toBe('false');
+  expect(slider('Flow Fade length').getAttribute('aria-disabled')).toBe('true');
+  pointer(minimum, 'pointerdown', 250);
+  pointer(minimum, 'pointerup', 250);
+  expect(abrValues(brush()).transfer.flowMinimum).toBe(75);
+  expect(category('Transfer').textContent).toContain('Pressure');
+});
+
+it('gives every ABR category its own icon and keeps its name for assistive technology', () => {
+  const values = brushToFormValues(abrSource);
+  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
+  const { editor, categories } = mount(abr, { categories: abrCategories });
+  const buttons = [...editor().querySelectorAll<HTMLElement>('nav button')];
+  expect(categories()).toContain('Color dynamics');
+  const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
+  expect(new Set(icons).size).toBe(icons.length);
+  for (const button of buttons) {
+    expect(document.getElementById(button.getAttribute('aria-labelledby')!)!.textContent).toBeTruthy();
   }
 });
 
@@ -282,7 +423,12 @@ it('shows a tapped category alone and goes back to the list in the narrow layout
  */
 function mount(
   initial: Brush = defaultBrush(),
-  options: { onDone?: () => void; baseline?: BrushSettingsSnapshot; name?: string } = {}
+  options: {
+    onDone?: () => void;
+    baseline?: BrushSettingsSnapshot;
+    name?: string;
+    categories?: readonly BrushCategory[];
+  } = {}
 ) {
   const [brush, setBrush] = createSignal(initial);
   const [baseline, setBaseline] = createSignal(options.baseline ?? snapshotBrushSettings(initial));
@@ -292,6 +438,7 @@ function mount(
         brush={brush()}
         baseline={baseline()}
         name={options.name}
+        categories={options.categories}
         onChange={(patch) => setBrush((current) => ({ ...current, ...patch }))}
         onDone={options.onDone ?? (() => {})}
         preview={<canvas />}
@@ -335,8 +482,20 @@ function mount(
     return event;
   };
 
+  /** The button of the choice labelled `label` that opens its options. */
+  const menu = (label: string) => {
+    const button = [...editor().querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].find(
+      (element) =>
+        document.getElementById(element.getAttribute('aria-labelledby')!.split(' ')[0]!)?.textContent === label
+    );
+    if (!button) {
+      throw new Error(`No menu ${label}`);
+    }
+
+    return button;
+  };
   const cancel = () =>
     [...editor().querySelectorAll('button')].find((button) => button.textContent === 'Cancel changes')!;
 
-  return { brush, setBrush, setBaseline, editor, slider, categories, category, status, click, pointer, cancel };
+  return { brush, setBrush, setBaseline, editor, slider, categories, category, status, click, pointer, cancel, menu };
 }
