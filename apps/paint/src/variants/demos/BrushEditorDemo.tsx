@@ -11,8 +11,8 @@ import { AbrViewerDialog } from '../../features/abr';
 import { BrushLibraryPanel } from '../../features/brush';
 import { BrushEditor, snapshotBrushSettings } from '../../features/brush-editor';
 import { abrCategoriesFor, abrValues } from '../../features/brush-editor/abrSchema';
+import { BrushStrokePreview } from '../../features/brush-editor/BrushStrokePreview';
 import type { BrushLibrary } from '../../features/brush-library';
-import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import {
   createPaintSession,
   PaintEditor,
@@ -245,8 +245,8 @@ export function BrushEditorDemo(props: PaintVariantProps) {
               onChange={(patch) => void updateEditor(patch)}
               onDone={() => setOpen(false)}
               preview={
-                <StrokePreview
-                  settings={brush()}
+                <BrushStrokePreview
+                  brush={brush()}
                   background={previewPaper}
                   height={84}
                   resources={async () => {
@@ -287,7 +287,7 @@ export function BrushEditorDemo(props: PaintVariantProps) {
   );
 }
 
-/** The preview's paper: white, as a new drawing's, whatever the UI's colours. */
+/** The preview's paper: white, as a new drawing's, whatever the UI's colors. */
 const previewPaper = '#ffffff';
 
 /** Panel widths that show the editor's wide, medium and narrow layouts. */

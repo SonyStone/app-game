@@ -122,6 +122,14 @@ function maskOf(resource: BrushResource) {
 /** The longest side of a tip mask, in pixels: enough for the strip's height at a device pixel ratio of 2. */
 const maskSize = 64;
 
+/**
+ * The thickness of the sample stroke of a brush `size` pixels wide in a strip `height` pixels high. Sizes map to the
+ * height geometrically, so that a 3 px liner and a 300 px airbrush both read and a larger brush still looks larger.
+ */
+export function sampleStrokeThickness(size: number, height: number) {
+  return Math.min(height * 0.7, 1.2 + Math.log2(1 + size) * height * 0.08);
+}
+
 /** Paints the sample stroke of `preset` into `canvas`, stamping `tip` when given and round dabs otherwise. */
 function paint(
   canvas: HTMLCanvasElement,
@@ -140,8 +148,7 @@ function paint(
 
   const brush: Brush = { ...defaultBrush(), ...preset.settings };
   const erase = brush.tool === 'eraser' || erasesInAbr(brush);
-  // Sizes map to the strip's height geometrically, so that a 3 px liner and a 300 px airbrush both read.
-  const thickness = Math.min(height * 0.7, 1.2 + Math.log2(1 + brush.size) * height * 0.08);
+  const thickness = sampleStrokeThickness(brush.size, height);
   const round = !tip;
   const taper = round && brush.pressureSize;
 
