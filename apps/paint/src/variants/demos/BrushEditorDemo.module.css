@@ -20,6 +20,15 @@
   right: var(--panel-width);
 }
 
+/*
+ * The controls over the drawing and the panel lie above the navigation puck's full-window dismiss layer (z-index 70
+ * in the puck's package), so that a press on them while the puck is open reaches them; the demo closes the puck on it.
+ */
+.ui,
+.panel {
+  z-index: 71;
+}
+
 .ui {
   position: absolute;
   inset: 0 var(--panel-width) 0 0;
@@ -50,6 +59,41 @@
     background: var(--surface);
     color: var(--ink);
     font: inherit;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+  }
+}
+
+/* The app's preset list under the top bar, styled as the Classic studio's panels it comes from. */
+.brushes {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 52px);
+  left: max(12px, env(safe-area-inset-left));
+  width: min(300px, calc(100% - 24px));
+  max-height: calc(100% - 88px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: #fafafaf7;
+  box-shadow: 0 4px 20px #00000017;
+
+  section {
+    padding: 16px;
+  }
+
+  button,
+  input,
+  select {
+    font: inherit;
+  }
+
+  button {
+    color: inherit;
     cursor: pointer;
 
     &:disabled {
