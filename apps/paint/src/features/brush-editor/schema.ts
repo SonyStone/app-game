@@ -148,11 +148,18 @@ export const brushCategories: readonly BrushCategory[] = [
     ]
   },
   {
-    id: 'pressure',
-    label: 'Pressure',
+    id: 'dynamics',
+    label: 'Dynamics',
     group: 'basics',
     applies: supportsPressure,
-    status: (b) => (b.pressureSize ? (b.pressureFlow ? 'Size + Flow' : 'Size') : b.pressureFlow ? 'Flow' : 'Off'),
+    status: (b) =>
+      b.pressureSize
+        ? b.pressureFlow
+          ? 'Pressure → Size + Flow'
+          : 'Pressure → Size'
+        : b.pressureFlow
+          ? 'Pressure → Flow'
+          : 'Off',
     settings: [
       toggle(
         'pressure-size',
@@ -244,8 +251,8 @@ export const brushCategories: readonly BrushCategory[] = [
     ]
   },
   {
-    id: 'pen-pressure',
-    label: 'Pen pressure',
+    id: 'pressure-curve',
+    label: 'Pressure curve',
     group: 'advanced',
     applies: always,
     status: (b) =>

@@ -1,25 +1,20 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal, createUniqueId, For, Show, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import styles from './BrushEditor.module.css';
-import {
-  brushCategories,
-  brushSettingsDiffer,
-  snapshotBrushSettings,
-  type BrushCategory,
-  type BrushSettingsSnapshot
-} from './schema';
+import { brushCategories, brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } from './schema';
 import { SettingRow } from './SettingRow';
 
 /**
- * The brush editor: a stroke preview across the top, the categories of {@link brushCategories} in a column with a
- * one-line status each, the chosen category's rows beside them, and Cancel changes and Done at the bottom.
+ * The brush editor: the brush's name and a stroke preview across the top, the categories of {@link brushCategories}
+ * in a column with a one-line status each, the chosen category's rows beside them, and Cancel changes and Done at the
+ * bottom.
  *
  * Controlled: every change, also while a control is dragged, is sent through `onChange` as a patch for the caller
- * to merge into the brush it passes back. Cancel changes sends the settings the brush had when the editor was
- * mounted, and is disabled while nothing differs from them.
+ * to merge into the brush it passes back. Cancel changes sends `baseline`, and is disabled while the brush does not
+ * differ from it; the editor keeps no settings of its own, so it may stay mounted while the brush is replaced.
  *
  * The layout follows the editor's own width, so the editor fits any panel: wide, the column shows names and
  * statuses; medium, icons only; narrow, the column alone, and a tap on a category shows its rows with a way back.
@@ -27,13 +22,20 @@ import { SettingRow } from './SettingRow';
  */
 export function BrushEditor(props: {
   brush: Brush;
+  /**
+   * The settings Cancel changes returns to, such as `snapshotBrushSettings` of the brush when it was chosen or when
+   * editing began. The caller takes a new one whenever another brush is chosen, so that Cancel changes never writes
+   * one brush's settings onto another.
+   */
+  baseline: BrushSettingsSnapshot;
+  /** The name of the edited brush, such as its preset's, shown above the preview; nothing is shown without it. */
+  name?: string;
   onChange: (patch: Partial<Brush>) => void;
   onDone: () => void;
   /** The stroke preview, made by the caller, which owns the painting it needs. */
   preview?: JSX.Element;
 }) {
-  const snapshot: BrushSettingsSnapshot = snapshotBrushSettings(untrack(() => props.brush));
-  const changed = createMemo(() => brushSettingsDiffer(props.brush, snapshot));
+  const changed = createMemo(() => brushSettingsDiffer(props.brush, props.baseline));
   const categories = createMemo(() => brushCategories.filter((category) => category.applies(props.brush)));
   const [chosenId, setChosenId] = createSignal(brushCategories[0]!.id);
   /** The chosen category, or the first one when the brush no longer has the chosen one. */
@@ -47,7 +49,10 @@ export function BrushEditor(props: {
   return (
     <section ref={setRoot} class={styles.editor} aria-label="Brush editor">
       <div class={styles.frame} data-view={view()}>
-        <div class={styles.preview}>{props.preview}</div>
+        <div class={styles.top}>
+          <Show when={props.name}>{(name) => <p class={styles.name}>{name()}</p>}</Show>
+          <div class={styles.preview}>{props.preview}</div>
+        </div>
         <div class={styles.body}>
           <nav class={styles.nav} aria-label="Brush setting categories">
             <For each={groups}>
@@ -87,7 +92,7 @@ export function BrushEditor(props: {
           </section>
         </div>
         <footer class={styles.footer}>
-          <button type="button" disabled={!changed()} onClick={() => props.onChange(structuredClone(snapshot))}>
+          <button type="button" disabled={!changed()} onClick={() => props.onChange(structuredClone(props.baseline))}>
             Cancel changes
           </button>
           <button type="button" class={styles.done} onClick={() => props.onDone()}>
@@ -107,24 +112,33 @@ const groups = [
 
 /**
  * A category in the column: its icon, name and status line; the whole row chooses it. The chosen category is marked
- * as selected; whether the category does anything is told by its status alone.
+ * as selected; whether the category does anything is told by its status alone. The button is named by the category's
+ * name and described by its status, also in the medium layout, where both are hidden and only the icon shows.
  */
 function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: boolean; onChoose: () => void }) {
   const status = createMemo(() => props.category.status(props.brush));
+  const nameId = createUniqueId();
+  const statusId = createUniqueId();
 
   return (
     <button
       type="button"
       class={styles.category}
       aria-current={props.chosen ? 'true' : undefined}
+      aria-labelledby={nameId}
+      aria-describedby={statusId}
       onClick={() => props.onChoose()}
     >
       <span class={styles.categoryIcon}>
         <SketchIcon name={categoryIcons[props.category.id] ?? 'brush'} size={20} />
       </span>
       <span class={styles.categoryText}>
-        <span class={styles.categoryName}>{props.category.label}</span>
-        <span class={styles.categoryStatus}>{status()}</span>
+        <span id={nameId} class={styles.categoryName}>
+          {props.category.label}
+        </span>
+        <span id={statusId} class={styles.categoryStatus}>
+          {status()}
+        </span>
       </span>
       <span class={styles.chevron}>
         <SketchIcon name="right" size={16} />
@@ -133,13 +147,16 @@ function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: 
   );
 }
 
-/** Icons of the categories by ID; others show a brush. */
+/**
+ * Icons of the categories by ID; others show a brush. Each has a different outline, since the medium layout shows the
+ * icons alone: a pencil, a round tip, arrows growing outwards, a looped stroke and a response curve.
+ */
 const categoryIcons: Record<string, SketchIconName> = {
   painting: 'brush',
   'brush-tip': 'selectEllipse',
-  pressure: 'draw',
-  'stroke-correction': 'feather',
-  'pen-pressure': 'pressure'
+  dynamics: 'proportions',
+  'stroke-correction': 'lasso',
+  'pressure-curve': 'pressure'
 };
 
 /** A collapsed block that explains the category, opened and closed by its heading. */

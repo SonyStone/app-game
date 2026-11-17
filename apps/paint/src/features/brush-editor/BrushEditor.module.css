@@ -49,9 +49,27 @@
   }
 }
 
+/* The brush's name over its stroke preview; gone when the caller gives neither. */
+.top {
+  border-bottom: 1px solid var(--line-color);
+
+  &:not(:has(.name)):has(> .preview:empty) {
+    display: none;
+  }
+}
+
+.name {
+  margin: 0;
+  padding: 10px 12px 0;
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .preview {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--line-color);
 
   &:empty {
     display: none;

@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { BrushEditor } from './BrushEditor';
+import { snapshotBrushSettings, type BrushSettingsSnapshot } from './schema';
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -111,7 +112,7 @@ it('keeps every row in place while a slider drags and after a switch or a choice
   expect(rows()).toEqual(painting);
   pointer(slider('Size'), 'pointerup', 290);
 
-  click(category('Pressure'));
+  click(category('Dynamics'));
   const pressure = rows();
   for (const toggle of editor().querySelectorAll<HTMLElement>('[role="switch"]')) {
     click(toggle);
@@ -130,17 +131,17 @@ it('keeps every row in place while a slider drags and after a switch or a choice
 it('marks the chosen category as selected and tells whether one is on by its status alone', () => {
   const { editor, category, click } = mount();
   expect(category('Painting').getAttribute('aria-current')).toBe('true');
-  expect(category('Pressure').getAttribute('aria-current')).toBeNull();
-  expect(category('Pressure').hasAttribute('aria-checked')).toBe(false);
-  expect(category('Pressure').textContent).toContain('Size');
+  expect(category('Dynamics').getAttribute('aria-current')).toBeNull();
+  expect(category('Dynamics').hasAttribute('aria-checked')).toBe(false);
+  expect(category('Dynamics').textContent).toContain('Pressure → Size');
 
-  click(category('Pressure'));
+  click(category('Dynamics'));
   for (const toggle of editor().querySelectorAll<HTMLElement>('[role="switch"][aria-checked="true"]')) {
     click(toggle);
   }
 
-  expect(category('Pressure').textContent).toContain('Off');
-  expect(category('Pressure').getAttribute('aria-current')).toBe('true');
+  expect(category('Dynamics').textContent).toContain('Off');
+  expect(category('Dynamics').getAttribute('aria-current')).toBe('true');
   expect(category('Painting').getAttribute('aria-current')).toBeNull();
 });
 
@@ -153,7 +154,7 @@ it('depends on no hover', () => {
 
 it("shows a category's note in place of rows when none of its settings apply", () => {
   const { editor, category, click, categories } = mount({ ...defaultBrush(), engine: { id: 'abr', settings: {} } });
-  expect(categories()).toEqual(['Painting', 'Brush tip', 'Stroke correction', 'Pen pressure']);
+  expect(categories()).toEqual(['Painting', 'Brush tip', 'Stroke correction', 'Pressure curve']);
   click(category('Brush tip'));
   expect(editor().textContent).toContain('ABR presets keep their own tip shape and pressure dynamics.');
   expect(editor().querySelector('[role="slider"]')).toBeNull();
@@ -183,44 +184,116 @@ it('updates only the moved row and the status lines it affects', () => {
   }
 });
 
-it('cancels to the settings at mount, disabled while nothing differs, and reports Done', () => {
+it('cancels to the given baseline, disabled while nothing differs from it, and reports Done', () => {
   const onDone = vi.fn();
-  const { brush, slider, pointer, editor, click } = mount(defaultBrush(), onDone);
-  const cancel = [...editor().querySelectorAll('button')].find((button) => button.textContent === 'Cancel changes')!;
-  expect(cancel.disabled).toBe(true);
+  const { brush, editor, slider, pointer, click, cancel } = mount(defaultBrush(), { onDone });
+  expect(cancel().disabled).toBe(true);
   pointer(slider('Flow'), 'pointerdown', 290);
   pointer(slider('Flow'), 'pointerup', 290);
   expect(brush().flow).toBeCloseTo(0.95);
-  expect(cancel.disabled).toBe(false);
-  click(cancel);
+  expect(cancel().disabled).toBe(false);
+  click(cancel());
   expect(brush().flow).toBe(defaultBrush().flow);
-  expect(cancel.disabled).toBe(true);
+  expect(cancel().disabled).toBe(true);
 
   click([...editor().querySelectorAll('button')].find((button) => button.textContent === 'Done')!);
   expect(onDone).toHaveBeenCalledOnce();
+});
+
+it('cancels to the baseline the caller gives, not to the brush the editor was mounted with', () => {
+  const given = snapshotBrushSettings({ ...defaultBrush(), size: 80, opacity: 0.5 });
+  const { brush, click, cancel } = mount(defaultBrush(), { baseline: given });
+  expect(cancel().disabled).toBe(false);
+  click(cancel());
+  expect(brush().size).toBe(80);
+  expect(brush().opacity).toBe(0.5);
+  expect(cancel().disabled).toBe(true);
+});
+
+it('disables Cancel changes when another brush and its baseline replace the edited one, until the next edit', () => {
+  const { brush, setBrush, setBaseline, slider, pointer, click, cancel } = mount();
+  pointer(slider('Flow'), 'pointerdown', 290);
+  pointer(slider('Flow'), 'pointerup', 290);
+  expect(cancel().disabled).toBe(false);
+
+  // Another preset is chosen: the caller replaces the brush and takes its baseline.
+  const textured: Brush = { ...defaultBrush(), size: 120, flow: 0.4, engine: { id: 'textured', settings: {} } };
+  setBrush(textured);
+  setBaseline(snapshotBrushSettings(textured));
+  flush();
+  expect(cancel().disabled).toBe(true);
+
+  pointer(slider('Opacity'), 'pointerdown', 200);
+  pointer(slider('Opacity'), 'pointerup', 200);
+  expect(cancel().disabled).toBe(false);
+  click(cancel());
+  expect(brush().flow).toBe(0.4);
+  expect(brush().size).toBe(120);
+  expect(brush().opacity).toBe(textured.opacity);
+});
+
+it("shows the brush's name above the preview, and nothing in its place without one", () => {
+  const { editor } = mount(defaultBrush(), { name: 'Soft round' });
+  const top = () => editor().querySelector('canvas')!.parentElement!.parentElement!;
+  expect(top().firstElementChild!.textContent).toBe('Soft round');
+  dispose?.();
+  document.body.replaceChildren();
+
+  mount();
+  expect(top().textContent).toBe('');
+});
+
+it('names each category button by its category and describes it by its status, as the icon-only layout needs', () => {
+  const { editor, categories } = mount();
+  const buttons = [...editor().querySelectorAll<HTMLElement>('nav button')];
+  const text = (ids: string | null) =>
+    ids!
+      .split(' ')
+      .map((id) => document.getElementById(id)!.textContent)
+      .join(' ');
+  expect(buttons.map((button) => text(button.getAttribute('aria-labelledby')))).toEqual(categories());
+  expect(buttons.map((button) => text(button.getAttribute('aria-describedby')))).toEqual([
+    '32 px · 100%',
+    'Soft round · 65%',
+    'Pressure → Size',
+    'Studio',
+    'Off'
+  ]);
+  const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
+  expect(new Set(icons).size).toBe(icons.length);
 });
 
 it('shows a tapped category alone and goes back to the list in the narrow layout', () => {
   const { editor, category, click } = mount();
   const frame = editor().firstElementChild!;
   expect(frame.getAttribute('data-view')).toBe('list');
-  click(category('Pen pressure'));
+  click(category('Pressure curve'));
   expect(frame.getAttribute('data-view')).toBe('detail');
-  expect(editor().querySelector('h2')!.textContent).toBe('Pen pressure');
+  expect(editor().querySelector('h2')!.textContent).toBe('Pressure curve');
   click([...editor().querySelectorAll('button')].find((button) => button.textContent === 'All categories')!);
   expect(frame.getAttribute('data-view')).toBe('list');
-  expect(editor().textContent).toContain('About pen pressure');
+  expect(editor().textContent).toContain('About pressure curve');
 });
 
-/** Renders the editor over a brush kept by a controlled parent, with each slider's rail spanning x 100 to 300. */
-function mount(initial: Brush = defaultBrush(), onDone: () => void = () => {}) {
+/**
+ * Renders the editor over a brush kept by a controlled parent, with each slider's rail spanning x 100 to 300. The
+ * baseline is the initial brush's settings unless one is given; both can be replaced, as a caller choosing another
+ * preset does.
+ */
+function mount(
+  initial: Brush = defaultBrush(),
+  options: { onDone?: () => void; baseline?: BrushSettingsSnapshot; name?: string } = {}
+) {
   const [brush, setBrush] = createSignal(initial);
+  const [baseline, setBaseline] = createSignal(options.baseline ?? snapshotBrushSettings(initial));
   dispose = render(
     () => (
       <BrushEditor
         brush={brush()}
+        baseline={baseline()}
+        name={options.name}
         onChange={(patch) => setBrush((current) => ({ ...current, ...patch }))}
-        onDone={onDone}
+        onDone={options.onDone ?? (() => {})}
         preview={<canvas />}
       />
     ),
@@ -262,5 +335,8 @@ function mount(initial: Brush = defaultBrush(), onDone: () => void = () => {}) {
     return event;
   };
 
-  return { brush, editor, slider, categories, category, status, click, pointer };
+  const cancel = () =>
+    [...editor().querySelectorAll('button')].find((button) => button.textContent === 'Cancel changes')!;
+
+  return { brush, setBrush, setBaseline, editor, slider, categories, category, status, click, pointer, cancel };
 }

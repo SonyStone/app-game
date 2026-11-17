@@ -41,8 +41,8 @@ describe('brush editor schema', () => {
         const brush = { ...original, stroke: { ...original.stroke, mode } };
         expect(brushCategories.filter((category) => category.applies(brush)).map((category) => category.id)).toEqual(
           engine === 'abr'
-            ? ['painting', 'brush-tip', 'stroke-correction', 'pen-pressure']
-            : ['painting', 'brush-tip', 'pressure', 'stroke-correction', 'pen-pressure']
+            ? ['painting', 'brush-tip', 'stroke-correction', 'pressure-curve']
+            : ['painting', 'brush-tip', 'dynamics', 'stroke-correction', 'pressure-curve']
         );
         const rows = brushCategories
           .flatMap((category) => category.settings)
@@ -214,18 +214,18 @@ describe('brush editor schema', () => {
       'ABR presets keep their own tip shape and pressure dynamics.'
     );
     for (const [pressureSize, pressureFlow, expected] of [
-      [true, true, 'Size + Flow'],
-      [true, false, 'Size'],
-      [false, true, 'Flow'],
+      [true, true, 'Pressure → Size + Flow'],
+      [true, false, 'Pressure → Size'],
+      [false, true, 'Pressure → Flow'],
       [false, false, 'Off']
     ] as const) {
-      expect(status('pressure', { ...brush, pressureSize, pressureFlow })).toBe(expected);
+      expect(status('dynamics', { ...brush, pressureSize, pressureFlow })).toBe(expected);
     }
     const expected = ['None', 'Studio', 'Leonardo normal · 1', 'Leonardo smooth · 10', 'Stabilizer · S-3'];
     modes.forEach((mode, index) => {
       const b = { ...brush, stroke: { ...brush.stroke, mode, stabilizer: 18 } };
       expect(status('stroke-correction', b)).toBe(expected[index]);
-      expect(status('pen-pressure', b)).toBe(['none', 'studio'].includes(mode) ? 'Off' : '5–80%');
+      expect(status('pressure-curve', b)).toBe(['none', 'studio'].includes(mode) ? 'Off' : '5–80%');
     });
   });
 
