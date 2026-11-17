@@ -21,6 +21,7 @@
     "@app-game/abr-paint": "workspace:*",
     "@app-game/abr-parser": "workspace:*",
     "@app-game/abr-viewer": "workspace:*",
+    "@app-game/brush-preview": "workspace:*",
     "@app-game/navigation-puck": "workspace:*",
     "@app-game/paint-core": "workspace:*",
     "@app-game/paint-live": "workspace:*",

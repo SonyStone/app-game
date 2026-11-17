@@ -1041,6 +1041,9 @@ importers:
       '@app-game/abr-viewer':
         specifier: workspace:*
         version: link:../abr-viewer
+      '@app-game/brush-preview':
+        specifier: workspace:*
+        version: link:../../packages/brush-preview
       '@app-game/navigation-puck':
         specifier: workspace:*
         version: link:../../packages/navigation-puck

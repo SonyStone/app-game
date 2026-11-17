@@ -609,3 +609,425 @@
     display: none;
   }
 }
+
+/*
+ * The brush studio (BrushStudio): the same parts over the whole screen, after Procreate's Brush Studio. Every rule is
+ * scoped to .studio, so the panel's rules above stay as they are. Sizes are taken from the reference at its own CSS
+ * pixels: columns of 19%, 31% and 50% in landscape, category rows 52 px high, a number row on two lines with its value
+ * in a pill. Its rows are 76 px apart rather than the reference's 66, since both the pill and the slider keep a 44 px
+ * press target: the slider's target reaches 12 px up under the label line, beside the pill. The layout follows the
+ * studio's own size through the brush-studio container: three columns, the pad across the top in portrait, and one
+ * part at a time below 700 px.
+ */
+.studioRoot {
+  container: brush-studio / size;
+  width: 100%;
+  height: 100%;
+}
+
+.frame.studio {
+  --side-color: color-mix(in srgb, var(--ink-color) 4%, var(--surface-color));
+  --pill-color: color-mix(in srgb, var(--ink-color) 9%, var(--surface-color));
+
+  grid-template: minmax(0, 1fr) / 19fr 31fr 50fr;
+  grid-template-areas: 'side pane pad';
+  font-size: 15px;
+}
+
+.studioSide {
+  display: grid;
+  grid-area: side;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background: var(--side-color);
+}
+
+.studioHead {
+  padding: 22px 20px 10px;
+}
+
+.studioName {
+  margin: 0;
+  overflow: hidden;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studioPreview {
+  margin: 8px -8px 0;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.studio .nav {
+  gap: 0;
+  padding: 4px 8px 16px;
+  border-right: 0;
+}
+
+.studio .group {
+  margin: 14px 12px 4px;
+  font-size: 12px;
+
+  &:first-child {
+    margin-top: 4px;
+  }
+}
+
+.studio .category {
+  gap: 14px;
+  min-height: 52px;
+  padding: 2px 12px 2px 14px;
+  border-radius: 8px;
+  background: transparent;
+
+  &[aria-current='true'] {
+    background: var(--accent-color);
+    box-shadow: none;
+    color: var(--surface-color);
+
+    .categoryStatus {
+      color: inherit;
+      opacity: 0.85;
+    }
+  }
+}
+
+.studio .categoryName {
+  font-weight: 500;
+}
+
+.studio .categoryStatus {
+  font-size: 12px;
+}
+
+.studio .pane {
+  grid-area: pane;
+  padding: 26px 24px 24px 20px;
+}
+
+.studio .title {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.studio .rows {
+  gap: 0;
+}
+
+/* Section headings stay; the reference frames no rows, so the box around a section goes. */
+.studio .section {
+  gap: 0;
+  margin: 10px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.studio .sectionTitle {
+  margin: 6px 0 0;
+  color: var(--muted-color);
+  font-size: 13px;
+}
+
+.studio .label {
+  font-size: 16px;
+}
+
+/*
+ * A number row on two lines: the label and the value pill, with room after the pill for one more 44 px control,
+ * which takes the third column when a row has one; then the slider across all of them.
+ */
+.studio .row[data-kind='number'] {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: var(--target) 32px;
+  gap: 0 4px;
+
+  > .label {
+    grid-area: 1 / 1;
+  }
+
+  > .slider {
+    grid-row: 2;
+    grid-column: 1 / -1;
+    margin-top: -12px;
+    padding: 0 6px;
+  }
+
+  /* The value: a field that drags and types (ScrubNumber), drawn as a pill in its 44 px press target. */
+  > [data-editing] {
+    --scrub-width: 84px;
+
+    grid-area: 1 / 2;
+    border: 0;
+    background: none;
+
+    &::before {
+      position: absolute;
+      inset: 8px 0;
+      border-radius: 14px;
+      background: var(--pill-color);
+      content: '';
+    }
+
+    input {
+      position: relative;
+      padding: 0 12px;
+      text-align: right;
+    }
+
+    &[data-editing='true'] {
+      outline: none;
+
+      &::before {
+        background: var(--surface-color);
+        box-shadow: inset 0 0 0 2px var(--accent-color);
+      }
+    }
+  }
+
+  &:has(> .unit:not(:empty)) > [data-editing] input {
+    padding-right: 30px;
+  }
+
+  > .unit {
+    position: relative;
+    grid-area: 1 / 2;
+    justify-self: end;
+    padding-right: 12px;
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  > .formatted {
+    grid-area: 1 / 2;
+    min-width: 84px;
+    height: 28px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--pill-color);
+    place-items: center end;
+  }
+}
+
+.studio .rail {
+  height: 3px;
+}
+
+.studio .thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--surface-color);
+  background: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color);
+}
+
+.studio .row[data-kind='menu'] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 58%);
+}
+
+.studio .menuButton {
+  border: 0;
+  border-radius: 8px;
+  background: var(--pill-color);
+}
+
+.studio .row[data-kind='toggle'] {
+  margin: 4px 0;
+}
+
+.studioPad {
+  position: relative;
+  grid-area: pad;
+  min-width: 0;
+  min-height: 0;
+}
+
+.studioActions {
+  z-index: 2;
+  display: flex;
+  grid-area: pad;
+  align-self: start;
+  justify-self: end;
+  gap: 8px;
+  margin: 24px 16px 0 0;
+}
+
+.frame .studioActions button {
+  min-height: var(--target);
+  padding: 0 16px;
+  border-radius: 8px;
+  background: var(--surface-color);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  font-size: 16px;
+}
+
+.frame .studioActions .done {
+  background: var(--accent-color);
+  color: var(--surface-color);
+  font-weight: 600;
+}
+
+.frame .studioActions .studioPadToggle {
+  display: none;
+  align-items: center;
+  gap: 6px;
+
+  &[aria-pressed='true'] {
+    box-shadow: inset 0 0 0 2px var(--accent-color);
+  }
+}
+
+@container brush-studio (orientation: portrait) and (width >= 700px) {
+  .frame.studio {
+    grid-template: minmax(0, 46fr) minmax(0, 54fr) / 36fr 64fr;
+    grid-template-areas:
+      'pad pad'
+      'side pane';
+  }
+}
+
+/* One part at a time under a bar with the pad switch, Cancel and Done; the pad stays laid out, so it keeps its strokes. */
+@container brush-studio (width < 700px) {
+  .frame.studio {
+    grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+    grid-template-areas:
+      'actions'
+      'main';
+  }
+
+  .studioSide,
+  .studio .pane,
+  .studioPad {
+    grid-area: main;
+  }
+
+  .studioActions {
+    grid-area: actions;
+    justify-self: stretch;
+    margin: 0;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-color);
+  }
+
+  .frame .studioActions .studioPadToggle {
+    display: flex;
+    margin-right: auto;
+  }
+
+  .studio .back {
+    display: flex;
+  }
+
+  .studio .chevron {
+    display: block;
+  }
+
+  .studio[data-view='list'] .pane,
+  .studio[data-view='detail'] .studioSide,
+  .studio[data-view='pad'] .studioSide,
+  .studio[data-view='pad'] .pane {
+    display: none;
+  }
+
+  .studio:not([data-view='pad']) .studioPad {
+    visibility: hidden;
+  }
+}
+
+/* The drawing pad (DrawingPad): paper over its whole area, its options at the top left. */
+.pad {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+
+  :where(button) {
+    font: inherit;
+    color: inherit;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* The paper of BrushPreview's canvas, so the pad shows no other color while its canvas starts. */
+.padSheet {
+  position: absolute;
+  inset: 0;
+  background: #faf8f5;
+
+  /* The canvas takes the focus with a stroke but has no keys, so a focus ring would only frame the paper. */
+  canvas {
+    outline: none;
+  }
+}
+
+.padOptions {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 1;
+}
+
+.pad .padButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--target, 44px);
+  padding: 0 16px 0 14px;
+  border-radius: 22px;
+  background: var(--surface-color, #f8f8f8);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
+  font-size: 16px;
+  font-weight: 600;
+
+  &[aria-expanded='true'] {
+    box-shadow: inset 0 0 0 2px var(--accent-color, #237aab);
+  }
+}
+
+.padMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--line-color, #dedede);
+  border-radius: 10px;
+  background: var(--surface-color, #f8f8f8);
+  box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
+
+  button {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: var(--target, 44px);
+    padding: 0 12px;
+    border-radius: 6px;
+  }
+}
+
+.padStatus {
+  position: absolute;
+  bottom: 16px;
+  left: 24px;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--surface-color, #f8f8f8);
+  color: var(--muted-color, #777);
+  font-size: 13px;
+}
