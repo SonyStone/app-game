@@ -1,5 +1,3 @@
-import { brushSettingName } from '../../features/brush-editor/brushSettingName';
-import { roundedValue } from './parts/values';
 // @vitest-environment jsdom
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
@@ -8,6 +6,7 @@ import { render } from '@solidjs/web';
 import { createRoot, flush } from 'solid-js';
 import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
+import { brushSettingName } from '../../features/brush-editor/brushSettingName';
 import { brushCategories } from '../../features/brush-editor/schema';
 import { removePart } from './board';
 import { brushPinKind, brushPinned, toggleBrushPin } from './brushPins';
@@ -16,6 +15,7 @@ import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { boxSections, partDefinition } from './parts';
 import { brushChannels } from './parts/brushChannels';
+import { roundedValue } from './parts/values';
 import { createTestServices } from './testServices';
 
 it('generates unique names across both schemas, counting shared IDs once', () => {
@@ -28,6 +28,11 @@ it('generates unique names across both schemas, counting shared IDs once', () =>
     ];
     const names = rows.map(({ c, s }) => brushSettingName(c, s));
     expect(new Set(names).size).toBe(names.length);
+    const named = (id: string) => names[rows.findIndex(({ s }) => s.id === id)];
+    expect(named('pressure-minimum')).toBe('Pressure minimum');
+    expect(named('abr-brushPose-tiltX')).toBe('Tilt X');
+    expect(named('abr-colorDynamics-fade')).toBe('FG/BG fade length');
+    expect(named('abr-shapeDynamics-sizeJitter')).toBe('Size jitter');
     for (const { s } of rows) {
       expect(partDefinition(brushPinKind(s.id))).toBeDefined();
       expect(boxSections.flatMap((s) => s.kinds)).not.toContain(`value:brush:${s.id}`);
