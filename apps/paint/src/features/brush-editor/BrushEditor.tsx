@@ -22,6 +22,8 @@ import { SettingRow } from './SettingRow';
  */
 export function BrushEditor(props: {
   brush: Brush;
+  /** Generated categories supplied by an engine adapter; defaults to Paint settings. */
+  categories?: readonly BrushCategory[];
   /**
    * The settings Cancel changes returns to, such as `snapshotBrushSettings` of the brush when it was chosen or when
    * editing began. The caller takes a new one whenever another brush is chosen, so that Cancel changes never writes
@@ -36,7 +38,9 @@ export function BrushEditor(props: {
   preview?: JSX.Element;
 }) {
   const changed = createMemo(() => brushSettingsDiffer(props.brush, props.baseline));
-  const categories = createMemo(() => brushCategories.filter((category) => category.applies(props.brush)));
+  const categories = createMemo(() =>
+    (props.categories ?? brushCategories).filter((category) => category.applies(props.brush))
+  );
   const [chosenId, setChosenId] = createSignal(brushCategories[0]!.id);
   /** The chosen category, or the first one when the brush no longer has the chosen one. */
   const chosen = createMemo(() => categories().find((category) => category.id === chosenId()) ?? categories()[0]!);

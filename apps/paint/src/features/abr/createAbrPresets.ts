@@ -30,14 +30,14 @@ export function createAbrPresets(options: {
     const prepared = Result.fromThrowable(prepareAbrBrush, (cause) =>
       brushError('invalid-preset', errorMessage(cause), cause)
     )(asset);
-    return prepared.isErr() ? err(prepared.error) : usePreset(prepared.value, `abr:${asset.id}`);
+    return prepared.isErr() ? err(prepared.error) : usePreset(prepared.value, `abr:${asset.id}`, asset);
   }
 
   /**
    * Imports a converted preset under `source`, which identifies its viewer brush, and applies it. Returns a retryable
    * `busy` error, importing nothing, while another preset, stroke, selection edit or brush command is running.
    */
-  async function usePreset(next: AbrPreset, source: string): Promise<Result<void, PaintError>> {
+  async function usePreset(next: AbrPreset, source: string, abrSource?: BrushAsset): Promise<Result<void, PaintError>> {
     if (!options.canChange()) {
       return err(engineError('busy', 'Wait for Paint to finish the current operation.'));
     }
@@ -47,7 +47,12 @@ export function createAbrPresets(options: {
     }
 
     const preset = await options.library.importPreset(
-      { name: next.name, source, settings: { engine: next.engine, tool: 'brush', ...abrSettings(next) } },
+      {
+        name: next.name,
+        source,
+        ...(abrSource ? { abrSource } : {}),
+        settings: { engine: next.engine, tool: 'brush', ...abrSettings(next) }
+      },
       next.resources
     );
     return options.choose(preset);

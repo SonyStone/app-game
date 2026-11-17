@@ -1,3 +1,4 @@
+import type { BrushAsset } from '@app-game/abr-brush/library';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 
 /**
@@ -14,6 +15,8 @@ export type BrushPreset = {
   resourceIds: readonly string[];
   /** Identifies an imported original, such as an ABR brush; importing the same original again replaces the preset. */
   source?: string;
+  /** Original descriptor and embedded resources, retained for generated ABR editing. */
+  abrSource?: BrushAsset;
   /** Ships with Paint: not stored, and cannot be renamed, overwritten or deleted. */
   builtIn?: boolean;
 };

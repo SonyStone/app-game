@@ -1,3 +1,4 @@
+import type { BrushAsset } from '@app-game/abr-brush/library';
 // @vitest-environment jsdom
 import { ok, type Result } from 'neverthrow';
 import { createRoot, flush } from 'solid-js';
@@ -41,6 +42,22 @@ it('imports a preset into the library once per viewer brush and chooses it', asy
       .filter((preset) => !preset.builtIn)
       .map(({ name }) => name)
   ).toEqual(['Edited ink']);
+});
+
+it('retains the source descriptor and resources on an editable import', async () => {
+  const choose = vi.fn<(preset: BrushPreset) => Promise<Result<void, PaintError>>>(async () => ok());
+  const { presets, library } = setup({ choose });
+  const asset = {
+    id: 'original',
+    name: 'Ink',
+    preset: { tip: { kind: 'computed', diameter: 40 } },
+    resources: [],
+    source: {}
+  } as unknown as BrushAsset;
+  expect((await presets.usePreset(abrPreset(), 'abr:original', asset)).isOk()).toBe(true);
+  const imported = choose.mock.calls[0];
+  expect(imported).toBeDefined();
+  expect(library.presets().find((p) => p.source === 'abr:original')?.abrSource).toEqual(asset);
 });
 
 it('refuses presets without a tip and imports nothing while Paint is busy', async () => {

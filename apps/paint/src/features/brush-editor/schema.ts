@@ -291,24 +291,37 @@ export function getBrushSetting(id: string): BrushSetting | undefined {
   return brushCategories.flatMap((category) => category.settings).find((setting) => setting.id === id);
 }
 
-/** Captures only editable fields, copying stroke state so later changes cannot mutate the saved values. */
-export function snapshotBrushSettings(brush: Brush) {
+/** Captures editable fields; opt into a detached ABR engine baseline for descriptor editing. */
+export function snapshotBrushSettings(brush: Brush, includeAbrEngine = false) {
   const { size, opacity, flow, mixing, hardness, spacing, pressureSize, pressureFlow, stroke } = brush;
-  return { size, opacity, flow, mixing, hardness, spacing, pressureSize, pressureFlow, stroke: { ...stroke } };
+  return {
+    size,
+    opacity,
+    flow,
+    mixing,
+    hardness,
+    spacing,
+    pressureSize,
+    pressureFlow,
+    stroke: { ...stroke },
+    ...(includeAbrEngine && brush.engine?.id === 'abr' ? { engine: structuredClone(brush.engine) } : {})
+  };
 }
 
-/** Shallow-merge this snapshot into a brush to cancel edits without restoring colors, tool, or engine. */
+/** Shallow-merge to cancel edits; colors and tool are excluded, ABR engine capture is opt-in. */
 export type BrushSettingsSnapshot = ReturnType<typeof snapshotBrushSettings>;
 
 /** Compares editable values, including inactive settings retained for other engines and modes. */
 export function brushSettingsDiffer(brush: Brush, snapshot: BrushSettingsSnapshot): boolean {
-  const current = snapshotBrushSettings(brush);
+  const current = snapshotBrushSettings(brush, snapshot.engine !== undefined);
   return (Object.keys(current) as (keyof BrushSettingsSnapshot)[]).some((key) =>
     key === 'stroke'
       ? (Object.keys(current.stroke) as (keyof StrokeSettings)[]).some(
           (field) => current.stroke[field] !== snapshot.stroke[field]
         )
-      : current[key] !== snapshot[key]
+      : key === 'engine'
+        ? JSON.stringify(current.engine) !== JSON.stringify(snapshot.engine)
+        : current[key] !== snapshot[key]
   );
 }
 
