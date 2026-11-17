@@ -11,6 +11,7 @@ import { definePart, type PartBinding } from './definition';
 
 /** Single-command definitions. Each binding reads only the capability needed by its button. */
 export const actionParts = [
+  action('brush-editor', 'Brush settings', 'sliders', (s, f) => ({ onPress: f.command(s.brushEditor.open) })),
   action('file', 'File', 'paper', () => ({}), {
     needs: (s, f) => ({
       get ready() {

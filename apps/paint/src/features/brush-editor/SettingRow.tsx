@@ -4,7 +4,7 @@ import { createMemo, createSignal, createUniqueId, For, onSettled, Show } from '
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import type { BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
+import type { BrushPins, BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
 import { Slider } from './Slider';
 
 /**
@@ -13,13 +13,26 @@ import { Slider } from './Slider';
  * at once as the patch the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
  * all; a longer one shows the chosen option in a single row that opens the list.
  */
-export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+export function SettingRow(props: {
+  pins?: BrushPins;
+  pinName?: string;
+  setting: BrushSetting;
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
   // A row is made once per setting, so its kind never changes under it.
   const setting = props.setting;
   const enabled = createMemo(() => setting.enabled(props.brush));
 
   return setting.kind === 'number' ? (
-    <NumberRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
+    <NumberRow
+      pins={props.pins}
+      pinName={props.pinName}
+      setting={setting}
+      brush={props.brush}
+      enabled={enabled()}
+      onChange={props.onChange}
+    />
   ) : setting.kind === 'toggle' ? (
     <ToggleRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.options.length > inlineChoiceLimit ? (
@@ -39,7 +52,7 @@ type RowProps = { brush: Brush; enabled: boolean; onChange: (patch: Partial<Brus
  * A row's visible label. Inside a section it is short, so assistive technology also hears the section's name, as in
  * "Opacity Jitter".
  */
-function Label(props: { setting: BrushSetting; id?: string }) {
+function Label(props: { pins?: BrushPins; pinName?: string; setting: BrushSetting; id?: string }) {
   return (
     <span id={props.id} class={styles.label}>
       <Show when={props.setting.section}>{(section) => <span class={styles.hidden}>{section()} </span>}</Show>
@@ -54,7 +67,7 @@ function spokenLabel(setting: BrushSetting) {
 }
 
 /** Label, slider, number field and unit. The slider and the field change the value live. */
-function NumberRow(props: RowProps & { setting: NumberSetting }) {
+function NumberRow(props: RowProps & { pins?: BrushPins; pinName?: string; setting: NumberSetting }) {
   const setting = props.setting;
   const labelId = createUniqueId();
   const value = createMemo(() => setting.read(props.brush));
@@ -77,7 +90,12 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
   };
 
   return (
-    <div class={styles.row} data-kind="number" data-disabled={props.enabled ? undefined : ''}>
+    <div
+      class={styles.row}
+      data-pinnable={props.pins ? '' : undefined}
+      data-kind="number"
+      data-disabled={props.enabled ? undefined : ''}
+    >
       <Label setting={setting} id={labelId} />
       <Slider
         labelledBy={labelId}
@@ -111,6 +129,19 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
         />
       </Show>
       <span class={styles.unit}>{setting.unit}</span>
+      <Show when={props.pins}>
+        {(pins) => (
+          <button
+            type="button"
+            class={styles.pin}
+            aria-pressed={pins().pinned(setting.id) ? 'true' : 'false'}
+            aria-label={pins().pinned(setting.id) ? `Unpin ${props.pinName}` : `Pin ${props.pinName} to the board`}
+            onClick={() => pins().toggle(setting.id)}
+          >
+            <SketchIcon name="pin" size={18} />
+          </button>
+        )}
+      </Show>
     </div>
   );
 }

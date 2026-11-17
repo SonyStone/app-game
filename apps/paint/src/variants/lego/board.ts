@@ -277,7 +277,7 @@ export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     ...board,
     panels: board.panels.flatMap((panel) =>
-      panel.id !== id ? [panel] : next.parts.length > 0 || next.floating ? [next] : []
+      panel.id !== id ? [panel] : next.parts.length > 0 || (next.floating && id !== 'brush-pins') ? [next] : []
     )
   };
 }
@@ -337,7 +337,7 @@ export function removePart(board: Board, id: string): Board {
     ...board,
     panels: board.panels.flatMap((panel) => {
       const parts = panel.parts.filter((part) => part.id !== id);
-      return parts.length === 0 && !panel.floating
+      return parts.length === 0 && (!panel.floating || panel.id === 'brush-pins')
         ? []
         : [parts.length === panel.parts.length ? panel : { ...panel, parts }];
     })

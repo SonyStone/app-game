@@ -1463,3 +1463,49 @@
   z-index: 2;
   box-shadow: var(--lego-shadow);
 }
+
+.valueState {
+  display: grid;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+.valueState > * {
+  min-width: 0;
+  min-height: 0;
+}
+[data-part-kind^='value:brush:'] .sliderLabel {
+  gap: 4px;
+  padding: 0 5px;
+  font-size: 12px;
+  line-height: 14px;
+}
+[data-part-kind^='value:brush:'] .sliderLabel span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-part-kind^='value:brush:'] .sliderLabel span:last-child {
+  flex-shrink: 0;
+}
+.valueState[data-inactive] {
+  opacity: 0.55;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.valueState[data-inactive]::after {
+  content: 'Inactive';
+  position: absolute;
+  right: 6px;
+  top: 1px;
+  font-size: 9px;
+}
+
+.brushEditorOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: auto;
+  background: #f4f1e9;
+}

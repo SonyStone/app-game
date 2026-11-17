@@ -1,5 +1,6 @@
 import { createContext, createMemo, createSignal } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
+import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wheel';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
@@ -9,7 +10,7 @@ import { runPartCommand } from './partCommand';
  * Creates the LEGO capability facade once under the studio owner. Scalar memos stop unrelated brush changes at
  * this boundary. Bindings select props from this facade; looks and controlled components never receive it.
  */
-export function createLegoServices(session: PaintSession) {
+export function createLegoServices(session: PaintSession, openBrushEditor: () => void = () => {}) {
   const color = createMemo(() => session.brush().color);
   const background = createMemo(() => session.brush().backgroundColor ?? '#ffffff');
   const size = createMemo(() => session.brush().size);
@@ -49,7 +50,10 @@ export function createLegoServices(session: PaintSession) {
 
   const windows: Pick<PaintSession['windows'], 'isOpen' | 'toggle'> = session.windows;
 
+  const settings = createBrushSettingsEditor(session);
+
   return {
+    brushEditor: { ...settings, channelBrush: createChannelBrush(settings.edited), open: openBrushEditor },
     brush: { size, opacity, maxSize, update: session.tools.updateBrush },
     color: {
       value: color,
@@ -139,3 +143,13 @@ export type LegoServices = ReturnType<typeof createLegoServices>;
 
 /** One studio scope. Only PartFrame and definition bindings read this context. */
 export const LegoServicesContext = createContext<LegoServices>();
+
+/** Numeric settings ignore foreground and background color changes at the facade boundary. */
+export function createChannelBrush(brush: PaintSession['brush']) {
+  return createMemo(brush, {
+    equals: (a, b) =>
+      (Object.keys({ ...a, ...b }) as (keyof typeof a)[]).every(
+        (key) => key === 'color' || key === 'backgroundColor' || a[key] === b[key]
+      )
+  });
+}

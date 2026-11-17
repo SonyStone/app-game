@@ -1,18 +1,13 @@
-import { formValuesToBrush } from '@app-game/abr-brush/form';
-import { prepareAbrBrush } from '@app-game/abr-paint/preset';
-import type { BrushResource } from '@app-game/abr-paint/resources';
-import { initAbr } from '@app-game/abr-parser';
 import { NavigationPuck } from '@app-game/navigation-puck';
-import type { Brush } from '@app-game/paint-core/brush';
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createMemo, createSignal, For, getOwner, isDisposed, onCleanup, Show, untrack } from 'solid-js';
+import { createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { BrushLibraryPanel } from '../../features/brush';
 import { BrushEditor, snapshotBrushSettings } from '../../features/brush-editor';
-import { abrCategoriesFor, abrValues } from '../../features/brush-editor/abrSchema';
 import { BrushStrokePreview } from '../../features/brush-editor/BrushStrokePreview';
 import type { BrushLibrary } from '../../features/brush-library';
+import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import {
   createPaintSession,
   PaintEditor,
@@ -59,69 +54,18 @@ export function BrushEditorDemo(props: PaintVariantProps) {
     preset();
     return snapshotBrushSettings(untrack(brush), true);
   });
-  const source = createMemo(() => library.find(preset())?.abrSource);
-  const [abrReady, setAbrReady] = createSignal(false);
-  const categories = createMemo(() => (source() && abrReady() ? abrCategoriesFor(source()!) : undefined));
-  const [edited, setEdited] = createSignal(() => brush());
-  const [editError, setEditError] = createSignal('');
-  const owner = getOwner()!;
-  // Reloaded library presets have a descriptor before the lazily mounted ABR viewer initializes its parser.
-  void initAbr()
-    .then(() => {
-      if (!isDisposed(owner)) {
-        setAbrReady(true);
-      }
-    })
-    .catch((error: unknown) => {
-      if (!isDisposed(owner)) {
-        setEditError(error instanceof Error ? error.message : String(error));
-      }
-    });
-  let revision = 0;
-  let previewResources: { preset: string; resources: readonly BrushResource[] } | undefined;
-  onCleanup(() => {
-    revision++;
-  });
-  /** Echo rows immediately; new masks must be resident before the next stroke uses their IDs. */
-  async function updateEditor(patch: Partial<Brush>) {
-    const id = preset();
-    const source = library.find(id)?.abrSource;
-    const next = { ...edited(), ...patch };
-    const version = ++revision;
-    setEditError('');
-    if (!source || next.engine?.id !== 'abr' || !patch.engine) {
-      tools.updateBrush(patch);
-      return;
-    }
-
-    setEdited(next);
-    try {
-      const prepared = prepareAbrBrush(formValuesToBrush(source, abrValues(next)));
-      const uploaded = await engine.putResources(prepared.resources);
-      if (version !== revision || preset() !== id) {
-        return;
-      }
-
-      if (uploaded.isErr()) {
-        throw new Error(uploaded.error.message);
-      }
-
-      previewResources = { preset: id, resources: prepared.resources };
-      tools.updateBrush({
-        ...patch,
-        engine: prepared.engine,
-        size: prepared.size,
-        spacing: prepared.spacing,
-        flow: prepared.flow ?? next.flow,
-        opacity: prepared.opacity ?? next.opacity
-      });
-    } catch (error) {
-      if (version === revision && preset() === id) {
-        setEdited(brush());
-        setEditError(error instanceof Error ? error.message : String(error));
-      }
-    }
-  }
+  const {
+    edited,
+    categories,
+    editError,
+    update: updateEditor,
+    resources: editorResources
+  } = createBrushSettingsEditor(session);
+  const [pinned, setPinned] = createSignal<readonly string[]>([]);
+  const pins = {
+    pinned: (id: string) => pinned().includes(id),
+    toggle: (id: string) => setPinned((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]))
+  };
   const [brushesOpen, setBrushesOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
   const [abrOpen, setAbrOpen] = createSignal(false);
@@ -238,6 +182,7 @@ export function BrushEditorDemo(props: PaintVariantProps) {
           <Show when={editError()}>{(message) => <p role="alert">{message()}</p>}</Show>
           <div class={styles.editor}>
             <BrushEditor
+              pins={pins}
               brush={edited()}
               categories={brush().engine?.id === 'abr' ? categories() : undefined}
               baseline={baseline()}
@@ -260,9 +205,7 @@ export function BrushEditorDemo(props: PaintVariantProps) {
                       throw result.error;
                     }
 
-                    return previewResources?.preset === tools.preset()
-                      ? [...result.value, ...previewResources.resources]
-                      : result.value;
+                    return [...result.value, ...editorResources()];
                   }}
                 />
               }

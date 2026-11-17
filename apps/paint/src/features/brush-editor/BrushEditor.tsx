@@ -6,8 +6,10 @@ import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import styles from './BrushEditor.module.css';
 import {
   brushCategories,
+  brushSettingName,
   brushSettingsDiffer,
   type BrushCategory,
+  type BrushPins,
   type BrushSetting,
   type BrushSettingsSnapshot
 } from './schema';
@@ -27,6 +29,8 @@ import { SettingRow } from './SettingRow';
  * The editor fills its parent's height; the column and the rows scroll on their own.
  */
 export function BrushEditor(props: {
+  /** When supplied, numeric rows can be pinned to the host board. */
+  pins?: BrushPins;
   brush: Brush;
   /** Generated categories supplied by an engine adapter; defaults to Paint settings. */
   categories?: readonly BrushCategory[];
@@ -98,7 +102,7 @@ export function BrushEditor(props: {
             <Show when={chosen().about} keyed>
               {(about) => <About title={chosen().label} text={about} />}
             </Show>
-            <CategoryRows category={chosen()} brush={props.brush} onChange={props.onChange} />
+            <CategoryRows pins={props.pins} category={chosen()} brush={props.brush} onChange={props.onChange} />
           </section>
         </div>
         <footer class={styles.footer}>
@@ -208,7 +212,12 @@ function About(props: { title: string; text: string }) {
  * section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
  * once per heading, so values change in place and no row appears, disappears or moves while one is used.
  */
-function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+function CategoryRows(props: {
+  pins?: BrushPins;
+  category: BrushCategory;
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
   const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
   const runs = createMemo(() => sectionRuns(rows()));
   const note = createMemo(() => (rows().length === 0 ? props.category.note?.(props.brush) : undefined));
@@ -221,11 +230,28 @@ function CategoryRows(props: { category: BrushCategory; brush: Brush; onChange: 
             when={run().title}
             fallback={
               <For each={run().rows}>
-                {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+                {(setting) => (
+                  <SettingRow
+                    pins={props.pins}
+                    pinName={brushSettingName(props.category, setting)}
+                    setting={setting}
+                    brush={props.brush}
+                    onChange={props.onChange}
+                  />
+                )}
               </For>
             }
           >
-            {(title) => <Section title={title()} rows={run().rows} brush={props.brush} onChange={props.onChange} />}
+            {(title) => (
+              <Section
+                pins={props.pins}
+                category={props.category}
+                title={title()}
+                rows={run().rows}
+                brush={props.brush}
+                onChange={props.onChange}
+              />
+            )}
           </Show>
         )}
       </For>
@@ -255,6 +281,8 @@ function sectionRuns(rows: readonly BrushSetting[]) {
 
 /** A framed group of rows under a short heading, announced as a group named by it. */
 function Section(props: {
+  pins?: BrushPins;
+  category: BrushCategory;
   title: string;
   rows: readonly BrushSetting[];
   brush: Brush;
@@ -268,7 +296,15 @@ function Section(props: {
         {props.title}
       </h3>
       <For each={props.rows}>
-        {(setting) => <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />}
+        {(setting) => (
+          <SettingRow
+            pins={props.pins}
+            pinName={brushSettingName(props.category, setting)}
+            setting={setting}
+            brush={props.brush}
+            onChange={props.onChange}
+          />
+        )}
       </For>
     </div>
   );

@@ -92,6 +92,7 @@ export const defaultBoard: Board = {
         { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 5 }, span: { columns: 1, rows: 1 } },
         { id: 'size-knob', kind: 'value:size', cell: { column: 2, row: 5 }, span: { columns: 1, rows: 1 } },
         { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
+        { id: 'brush-editor', kind: 'action:brush-editor', cell: { column: 0, row: 8 }, span: { columns: 3, rows: 1 } },
         { id: 'file', kind: 'action:file', cell: { column: 0, row: 7 }, span: { columns: 3, rows: 1 } }
       ]
     },

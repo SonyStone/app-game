@@ -6,9 +6,9 @@ import { colorParts } from './parts/colors';
 import type { PartDefinition } from './parts/definition';
 import { layerParts } from './parts/layers';
 import { presetPart } from './parts/presets';
-import { valueParts } from './parts/values';
+import { brushValueParts, valueParts } from './parts/values';
 
-/** The only catalogue of part kinds. Definitions are inert until a frame runs their bindings. */
+/** The box catalogue. Pin-only schema definitions resolve separately; all bindings remain inert until mounted. */
 export const partDefinitions: readonly PartDefinition[] = [
   ...actionParts,
   ...colorParts,
@@ -21,6 +21,7 @@ export const partDefinitions: readonly PartDefinition[] = [
 export function partDefinition(kind: string) {
   return (
     partDefinitions.find((definition) => definition.kind === kind) ??
+    brushValueParts.find((definition) => definition.kind === kind) ??
     (kind.startsWith('preset:') && kind.length > 'preset:'.length ? presetPart : undefined)
   );
 }
@@ -29,7 +30,9 @@ export function partDefinition(kind: string) {
 export const boxSections = ['Tools', 'Color', 'Values', 'Layers'].map((title) => ({
   id: title,
   title,
-  kinds: partDefinitions.filter((definition) => definition.section === title).map((definition) => definition.kind)
+  kinds: partDefinitions
+    .filter((definition) => definition.section === title && !definition.pinOnly)
+    .map((definition) => definition.kind)
 }));
 
 /** Resolves the part's chosen or automatic look using the shared look resolver. */

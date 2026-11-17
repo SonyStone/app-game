@@ -461,3 +461,11 @@ const modeLabels: Record<StrokeSettings['mode'], string> = {
   smooth: 'Leonardo smooth',
   stabilizer: 'Stabilizer'
 };
+
+/** Board caption, including the category and section so short editor labels stand alone. */
+export function brushSettingName(category: BrushCategory, setting: BrushSetting): string {
+  return [category.label, setting.section, setting.label].filter(Boolean).join(' · ');
+}
+
+/** Optional board integration; the host derives membership from its board. */
+export type BrushPins = { pinned(id: string): boolean; toggle(id: string): void };

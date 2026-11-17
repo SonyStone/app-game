@@ -7,7 +7,7 @@ import { hexToWheel, wheelToHex, type ColorWheelSettings } from '../../features/
 import { hexToHsv } from '../../features/color/hsv';
 import type { CoolorusSettings } from '../../features/coolorus-wheel';
 import type { PaintError } from '../../shared/errors';
-import type { LegoServices } from './LegoServices';
+import { createChannelBrush, type LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
 
 /** One in-memory catalogue scope, shared by all specimens. Uses real brush tools; never reads or writes user storage. */
@@ -54,6 +54,17 @@ export function createCatalogueFixture() {
     setRecent((colors) => [hex, ...colors.filter((color) => color !== hex)].slice(0, 12));
   };
   const services: LegoServices = {
+    brushEditor: {
+      channelBrush: createChannelBrush(tools.brush),
+      open: () => {},
+      edited: createMemo(() => tools.brush()),
+      categories: createMemo(() => undefined),
+      editError: createMemo(() => ''),
+      resources: () => [],
+      update: async (patch) => {
+        tools.updateBrush(patch);
+      }
+    },
     brush: {
       size: createMemo(() => tools.brush().size),
       opacity: createMemo(() => tools.brush().opacity),

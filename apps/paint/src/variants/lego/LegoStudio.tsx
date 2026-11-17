@@ -1,7 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createMemo, createSignal, Match, Show, Switch, untrack } from 'solid-js';
 import type { PaintVariantProps } from '..';
+import { BrushEditor, snapshotBrushSettings } from '../../features/brush-editor';
 import {
   createPaintSession,
   PaintEditor,
@@ -13,6 +14,7 @@ import {
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart } from './board';
 import { BoardView } from './BoardView';
+import { brushPinned, toggleBrushPin } from './brushPins';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
 import { createKits } from './kits';
@@ -52,7 +54,14 @@ export function LegoStudio(props: PaintVariantProps) {
       return open?.kind === 'part' ? open.partKind : open?.kind;
     }
   });
-  const services = createLegoServices(session);
+  const [brushEditorOpen, setBrushEditorOpen] = createSignal(false);
+  const services = createLegoServices(session, () => setBrushEditorOpen(true));
+  const presetId = createMemo(session.tools.preset);
+  const baseline = createMemo(() => {
+    brushEditorOpen();
+    presetId();
+    return snapshotBrushSettings(untrack(session.brush), true);
+  });
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
@@ -76,6 +85,10 @@ export function LegoStudio(props: PaintVariantProps) {
 
   session.createShortcuts({
     closePanel() {
+      if (brushEditorOpen()) {
+        setBrushEditorOpen(false);
+        return true;
+      }
       if (popup()) {
         setPopup(undefined);
         return true;
@@ -231,6 +244,29 @@ export function LegoStudio(props: PaintVariantProps) {
               {editing() ? 'Done' : 'Edit'}
             </button>
           </div>
+          <Show when={brushEditorOpen()}>
+            <div
+              class={styles.brushEditorOverlay}
+              role="dialog"
+              aria-modal="true"
+              aria-label="Brush settings"
+              data-keeps-panel
+            >
+              <BrushEditor
+                brush={services.brushEditor.edited()}
+                baseline={baseline()}
+                categories={session.brush().engine?.id === 'abr' ? services.brushEditor.categories() : undefined}
+                name={session.library.find(session.tools.preset())?.name}
+                onChange={(patch) => void services.brushEditor.update(patch)}
+                onDone={() => setBrushEditorOpen(false)}
+                pins={{
+                  pinned: (id) => brushPinned(board.board(), id),
+                  toggle: (id) => board.set(toggleBrushPin(board.latest(), id, session.size()))
+                }}
+              />
+              <Show when={services.brushEditor.editError()}>{(error) => <p role="alert">{error()}</p>}</Show>
+            </div>
+          </Show>
           <SessionNotices session={session} />
         </div>
       </PaintEditor>

@@ -609,3 +609,26 @@
     display: none;
   }
 }
+
+.row[data-pinnable] {
+  grid-template-columns: minmax(72px, 28%) minmax(56px, 1fr) 64px 34px 44px;
+}
+.pin {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.pin[aria-pressed='true'] {
+  background: var(--accent, #ded8c6);
+  border-radius: 8px;
+}
+
+@container brush-editor (width < 400px) {
+  .row[data-pinnable] {
+    grid-template-columns: minmax(50px, 25%) minmax(30px, 1fr) 48px 20px 44px;
+    column-gap: 4px;
+  }
+}

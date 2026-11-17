@@ -21,6 +21,7 @@ export function SketchIcon(props: { name: SketchIconName; size?: number }) {
 export type SketchIconName = keyof typeof paths;
 
 const paths = {
+  pin: 'm9 3 9 9-3 1-3 4-2-2-6 6 6-6-2-2 4-3Z',
   lasso: 'M7 17C2 15 2 9 6 5c4-3 13-2 15 3s-2 9-8 10M8 15c-4 0-5 4-2 5s6-2 4-4c-1-1-2-1-2-1Zm-2 5c-1 2-3 2-4 1',
   fullscreen: 'M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5',
   fullscreenExit: 'M3 8h5V3M16 3v5h5M21 16h-5v5M8 21v-5H3',
