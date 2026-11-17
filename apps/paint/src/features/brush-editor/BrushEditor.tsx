@@ -4,9 +4,9 @@ import { createEffect, createMemo, createSignal, createUniqueId, For, Show } fro
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import styles from './BrushEditor.module.css';
+import { brushSettingName } from './brushSettingName';
 import {
   brushCategories,
-  brushSettingName,
   brushSettingsDiffer,
   type BrushCategory,
   type BrushPins,

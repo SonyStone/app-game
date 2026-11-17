@@ -3,12 +3,15 @@ import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { initAbr } from '@app-game/abr-parser';
 import type { Brush } from '@app-game/paint-core/brush';
-import { createMemo, createSignal, getOwner, isDisposed, onCleanup } from 'solid-js';
+import { createEffect, createMemo, createSignal, getOwner, isDisposed, onCleanup } from 'solid-js';
 import { abrCategoriesFor, abrValues } from '../brush-editor/abrSchema';
 import type { PaintSession } from '../session';
 
-/** Shared live editor path: echo patches, prepare ABR masks, upload, then publish one coherent brush update. */
-export function createBrushSettingsEditor(session: PaintSession) {
+/**
+ * Echoes patches and uploads ABR masks before publishing a coherent brush update.
+ * Initializes the parser only for a selected ABR source while `needed` is true; defaults to an active editor.
+ */
+export function createBrushSettingsEditor(session: PaintSession, needed: () => boolean = () => true) {
   const { tools, brush, library, engine } = session;
   const preset = createMemo(() => tools.preset());
   const source = createMemo(() => library.find(preset())?.abrSource);
@@ -17,18 +20,29 @@ export function createBrushSettingsEditor(session: PaintSession) {
   const [edited, setEdited] = createSignal(() => brush());
   const [editError, setEditError] = createSignal('');
   const owner = getOwner()!;
-  // Reloaded library presets have a descriptor before the lazily mounted ABR viewer initializes its parser.
-  void initAbr()
-    .then(() => {
-      if (!isDisposed(owner)) {
-        setAbrReady(true);
+  let initializing = false;
+  createEffect(
+    () => Boolean(source()) && needed(),
+    (required) => {
+      if (!required || initializing) {
+        return;
       }
-    })
-    .catch((error: unknown) => {
-      if (!isDisposed(owner)) {
-        setEditError(error instanceof Error ? error.message : String(error));
-      }
-    });
+
+      initializing = true;
+      void initAbr()
+        .then(() => {
+          if (!isDisposed(owner)) {
+            setAbrReady(true);
+          }
+        })
+        .catch((error: unknown) => {
+          initializing = false;
+          if (!isDisposed(owner)) {
+            setEditError(error instanceof Error ? error.message : String(error));
+          }
+        });
+    }
+  );
   let revision = 0;
   let previewResources: { preset: string; resources: readonly BrushResource[] } | undefined;
   onCleanup(() => {

@@ -196,6 +196,12 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
       class={styles.valueState}
       aria-disabled={props.active ? 'false' : 'true'}
       data-inactive={!props.active ? '' : undefined}
+      onPointerDown={(event) => {
+        if (!props.active) {
+          event.stopPropagation();
+          event.preventDefault();
+        }
+      }}
     >
       <ValueControl
         {...props}
@@ -267,21 +273,23 @@ function ValueControl(
           <Show when={props.caption}>
             <span class={styles.numberCaption}>{props.caption}</span>
           </Show>
-          <ScrubNumber
-            label={props.label}
-            disabled={!props.active}
-            step={props.step}
-            value={props.number}
-            min={props.min}
-            max={props.max}
-            unit={props.unit}
-            scale={props.scale}
-            wrap={props.wrap}
-            onStart={props.onStart}
-            onCancel={props.onCancel}
-            onInput={props.onNumberInput}
-            onChange={props.onNumberCommit}
-          />
+          <Show when={props.active} fallback={<span>—</span>}>
+            <ScrubNumber
+              label={props.label}
+              disabled={!props.active}
+              step={props.step}
+              value={props.number}
+              min={props.min}
+              max={props.max}
+              unit={props.unit}
+              scale={props.scale}
+              wrap={props.wrap}
+              onStart={props.onStart}
+              onCancel={props.onCancel}
+              onInput={props.onNumberInput}
+              onChange={props.onNumberCommit}
+            />
+          </Show>
         </div>
       }
     >
@@ -377,7 +385,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       return frame.look;
     },
     get number() {
-      return channel.step ? Math.round(value() / channel.step) * channel.step : Math.round(value());
+      return roundedValue(value(), channel.step);
     },
     get fraction() {
       return fraction();
@@ -395,7 +403,10 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     scale: channel.scale,
     wrap: channel.wrap,
     get text() {
-      return channel.format?.(value()) ?? `${Math.round(value())}${channel.unit}`;
+      return active()
+        ? (channel.format?.(roundedValue(value(), channel.step)) ??
+            `${roundedValue(value(), channel.step)}${channel.unit}`)
+        : '—';
     },
     get color() {
       return channel.colored ? color.value() : undefined;
@@ -434,4 +445,10 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
 
 function gradient(stops: readonly string[]) {
   return `linear-gradient(to var(--track-to), ${stops.join(', ')})`;
+}
+
+/** Removes binary multiplication noise from stepped UI values. */
+export function roundedValue(value: number, step = 1) {
+  const decimals = (String(step).split('.')[1] ?? '').length;
+  return Number((Math.round(value / step) * step).toFixed(decimals));
 }

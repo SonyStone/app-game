@@ -21,8 +21,10 @@ export type Panel = {
   parts: Part[];
   /** The swatch whose transient folder this is. Floating panels are always free panels. */
   owner?: string;
-  /** A movable plate with a top grip. `at` stores its top-left; empty plates survive part removal. */
+  /** A movable plate with a top grip. `at` stores its top-left; empty plates survive unless `removeWhenEmpty` is set. */
   floating?: true;
+  /** Remove this plate when its last part leaves; absent preserves empty floating plates. */
+  removeWhenEmpty?: true;
   /**
    * Where an owned panel lies from its part: its cell (0, 0) this many cells from the part's top-left cell, which may
    * put it over the part. Without it the panel lies beside the part where there is room (see `ownedFrame`).
@@ -277,7 +279,7 @@ export function replacePanel(board: Board, id: string, next: Panel): Board {
   return {
     ...board,
     panels: board.panels.flatMap((panel) =>
-      panel.id !== id ? [panel] : next.parts.length > 0 || (next.floating && id !== 'brush-pins') ? [next] : []
+      panel.id !== id ? [panel] : next.parts.length > 0 || (next.floating && !next.removeWhenEmpty) ? [next] : []
     )
   };
 }
@@ -337,7 +339,7 @@ export function removePart(board: Board, id: string): Board {
     ...board,
     panels: board.panels.flatMap((panel) => {
       const parts = panel.parts.filter((part) => part.id !== id);
-      return parts.length === 0 && (!panel.floating || panel.id === 'brush-pins')
+      return parts.length === 0 && (!panel.floating || panel.removeWhenEmpty)
         ? []
         : [parts.length === panel.parts.length ? panel : { ...panel, parts }];
     })

@@ -55,7 +55,6 @@ export function LegoStudio(props: PaintVariantProps) {
     }
   });
   const [brushEditorOpen, setBrushEditorOpen] = createSignal(false);
-  const services = createLegoServices(session, () => setBrushEditorOpen(true));
   const presetId = createMemo(session.tools.preset);
   const baseline = createMemo(() => {
     brushEditorOpen();
@@ -65,6 +64,13 @@ export function LegoStudio(props: PaintVariantProps) {
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
+  const services = createLegoServices(
+    session,
+    () => setBrushEditorOpen(true),
+    () =>
+      brushEditorOpen() ||
+      board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-')))
+  );
   const kits = createKits(reportSavingError);
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);

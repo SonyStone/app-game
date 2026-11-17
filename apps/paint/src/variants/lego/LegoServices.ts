@@ -10,7 +10,11 @@ import { runPartCommand } from './partCommand';
  * Creates the LEGO capability facade once under the studio owner. Scalar memos stop unrelated brush changes at
  * this boundary. Bindings select props from this facade; looks and controlled components never receive it.
  */
-export function createLegoServices(session: PaintSession, openBrushEditor: () => void = () => {}) {
+export function createLegoServices(
+  session: PaintSession,
+  openBrushEditor: () => void = () => {},
+  brushSettingsNeeded: () => boolean = () => false
+) {
   const color = createMemo(() => session.brush().color);
   const background = createMemo(() => session.brush().backgroundColor ?? '#ffffff');
   const size = createMemo(() => session.brush().size);
@@ -50,7 +54,7 @@ export function createLegoServices(session: PaintSession, openBrushEditor: () =>
 
   const windows: Pick<PaintSession['windows'], 'isOpen' | 'toggle'> = session.windows;
 
-  const settings = createBrushSettingsEditor(session);
+  const settings = createBrushSettingsEditor(session, brushSettingsNeeded);
 
   return {
     brushEditor: { ...settings, channelBrush: createChannelBrush(settings.edited), open: openBrushEditor },

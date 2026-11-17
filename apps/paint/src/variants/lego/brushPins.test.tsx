@@ -1,3 +1,5 @@
+import { brushSettingName } from '../../features/brush-editor/brushSettingName';
+import { roundedValue } from './parts/values';
 // @vitest-environment jsdom
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
@@ -6,9 +8,9 @@ import { render } from '@solidjs/web';
 import { createRoot, flush } from 'solid-js';
 import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
-import { brushCategories, brushSettingName } from '../../features/brush-editor/schema';
+import { brushCategories } from '../../features/brush-editor/schema';
 import { removePart } from './board';
-import { brushPinned, toggleBrushPin } from './brushPins';
+import { brushPinKind, brushPinned, toggleBrushPin } from './brushPins';
 import { createBoard } from './createBoard';
 import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
@@ -16,13 +18,18 @@ import { boxSections, partDefinition } from './parts';
 import { brushChannels } from './parts/brushChannels';
 import { createTestServices } from './testServices';
 
-it('generates every numeric ID and unique standalone names in each schema', () => {
-  for (const categories of [brushCategories, abrCategories]) {
-    const rows = categories.flatMap((c) => c.settings.filter((s) => s.kind === 'number').map((s) => ({ c, s })));
+it('generates unique names across both schemas, counting shared IDs once', () => {
+  const categories = [...brushCategories, ...abrCategories];
+  {
+    const rows = [
+      ...new Map(
+        categories.flatMap((c) => c.settings.filter((s) => s.kind === 'number').map((s) => [s.id, { c, s }] as const))
+      ).values()
+    ];
     const names = rows.map(({ c, s }) => brushSettingName(c, s));
     expect(new Set(names).size).toBe(names.length);
     for (const { s } of rows) {
-      expect(partDefinition(`value:brush:${s.id}`)).toBeDefined();
+      expect(partDefinition(brushPinKind(s.id))).toBeDefined();
       expect(boxSections.flatMap((s) => s.kinds)).not.toContain(`value:brush:${s.id}`);
     }
   }
@@ -64,9 +71,6 @@ it('uses Paint and ABR range, units, curves and schema writes; unavailable chann
     await abr.write(services, 45, hsv);
     flush();
     expect(abr.read(services)).toBe(45);
-    const size = brushChannels.find((s) => s.id === 'brush:size')!;
-    const at = size.toFraction!(30, size.max(services), services);
-    expect(size.fromFraction!(at, size.max(services), services)).toBeCloseTo(30);
     const disabled = brushChannels.find((s) => s.id === 'brush:stabilization')!;
     expect(disabled.active!(services)).toBe(false);
   } finally {
@@ -116,6 +120,7 @@ it('keeps unavailable parts named and inert, and revives them when the brush sup
     return createTestServices();
   });
   const host = document.createElement('div');
+  document.body.append(host);
   const unmount = render(
     () => (
       <LegoServicesContext value={services}>
@@ -127,21 +132,46 @@ it('keeps unavailable parts named and inert, and revives them when the brush sup
   );
   try {
     flush();
-    expect(host.textContent).toContain('Brush tip · Angle');
+    expect(host.textContent).toContain('Angle');
     const hardness = host.querySelector('[data-part-kind="value:brush:hardness"]')!;
     expect(hardness.querySelector('[aria-disabled="false"]')).not.toBeNull();
     setBrush({ ...defaultBrush(), engine: { id: 'textured', settings: { tipId: 'test' } } });
     flush();
     expect(hardness.querySelector('[aria-disabled="true"]')).not.toBeNull();
-    expect(hardness.textContent).toContain('Brush tip · Hardness');
+    expect(hardness.textContent).toContain('Hardness—');
+    expect(hardness.textContent).not.toContain('Inactive');
     const input = hardness.querySelector('[role="slider"]')!;
-    input.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientX: 10 }));
+    const press = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 10 });
+    input.dispatchEvent(press);
     input.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 20 }));
+    expect(press.defaultPrevented).toBe(true);
     setBrush(defaultBrush());
     flush();
     expect(hardness.querySelector('[aria-disabled="false"]')).not.toBeNull();
   } finally {
     unmount();
+    host.remove();
     stop();
   }
+});
+
+it('reuses Size and Opacity kinds and removes all existing copies', () => {
+  const view = { width: 1646, height: 1029 };
+  for (const id of ['size', 'opacity']) {
+    expect(partDefinition(`value:brush:${id}`)).toBeUndefined();
+    const board = toggleBrushPin({ panels: [] }, id, view);
+    expect(board.panels[0]!.parts[0]!.kind).toBe(`value:${id}`);
+    expect(brushPinned(board, id)).toBe(true);
+    expect(toggleBrushPin(board, id, view).panels).toEqual([]);
+  }
+});
+
+it('uses a uniform four-cell span and removes floating point noise', () => {
+  let board = { panels: [] } as import('./board').Board;
+  for (const id of ['flow', 'hardness', 'stabilization']) {
+    board = toggleBrushPin(board, id, { width: 1646, height: 1029 });
+  }
+  expect(board.panels[0]!.parts.map((p) => p.span)).toEqual(Array(3).fill({ columns: 4, rows: 1 }));
+  expect(roundedValue(0.30000000000000004, 0.1)).toBe(0.3);
+  expect(roundedValue(1.234, 0.05)).toBe(1.25);
 });

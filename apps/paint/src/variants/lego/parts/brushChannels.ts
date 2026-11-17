@@ -1,6 +1,7 @@
 import { curvePosition, curveValue } from '@app-game/abr-brush/sliderCurves';
 import { abrCategories } from '../../../features/brush-editor/abrSchema';
-import { brushCategories, brushSettingName } from '../../../features/brush-editor/schema';
+import { brushSettingName } from '../../../features/brush-editor/brushSettingName';
+import { brushCategories } from '../../../features/brush-editor/schema';
 import type { LegoServices } from '../LegoServices';
 import type { ValueChannel } from './values';
 
@@ -8,7 +9,7 @@ import type { ValueChannel } from './values';
 export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCategories].flatMap((categories, schema) =>
   categories.flatMap((category) =>
     category.settings.flatMap((setting): ValueChannel[] => {
-      if (setting.kind !== 'number') {
+      if (setting.kind !== 'number' || setting.id === 'size' || setting.id === 'opacity') {
         return [];
       }
 

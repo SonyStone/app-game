@@ -39,6 +39,7 @@ const boardSchema = z.looseObject({
       parts: z.array(storedPart),
       owner: z.string().optional(),
       floating: z.literal(true).optional(),
+      removeWhenEmpty: z.literal(true).optional(),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional(),
       bench: z.literal(true).optional()
     })
@@ -52,7 +53,7 @@ function read(data: unknown, version: number): Board {
   const panels = board.panels.map((panel) => {
     const result = migrateParts(panel.parts, version);
     added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
-    return { ...panel, parts: result.parts };
+    return { ...panel, ...(panel.id === 'brush-pins' ? { removeWhenEmpty: true as const } : {}), parts: result.parts };
   });
 
   const missing = added.filter((entry) => !panels.some((panel) => panel.owner === entry.owner));

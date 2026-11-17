@@ -622,7 +622,8 @@
   cursor: pointer;
 }
 .pin[aria-pressed='true'] {
-  background: var(--accent, #ded8c6);
+  background: var(--accent-color);
+  color: var(--surface-color);
   border-radius: 8px;
 }
 

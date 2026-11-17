@@ -1,14 +1,13 @@
 import { panelFrame, partsBounds, placePart, putPanel, removePart, type Board, type Panel } from './board';
-import { partDefinition } from './parts';
 
 /** Membership is always derived from parts, including parts moved to other plates. */
 export function brushPinned(board: Board, id: string) {
-  return board.panels.some((panel) => panel.parts.some((part) => part.kind === `value:brush:${id}`));
+  return board.panels.some((panel) => panel.parts.some((part) => part.kind === brushPinKind(id)));
 }
 
 /** Adds to the collecting plate using ordinary board placement, or removes every matching part. */
 export function toggleBrushPin(board: Board, id: string, view: { width: number; height: number }): Board {
-  const kind = `value:brush:${id}`;
+  const kind = brushPinKind(id);
   if (brushPinned(board, id)) {
     let next = board;
     for (const part of board.panels.flatMap((panel) => panel.parts).filter((part) => part.kind === kind)) {
@@ -20,6 +19,7 @@ export function toggleBrushPin(board: Board, id: string, view: { width: number; 
   const plate: Panel = board.panels.find((panel) => panel.id === 'brush-pins') ?? {
     id: 'brush-pins',
     floating: true,
+    removeWhenEmpty: true,
     at: freeSpot(board, view),
     parts: []
   };
@@ -30,10 +30,7 @@ export function toggleBrushPin(board: Board, id: string, view: { width: number; 
       id: crypto.randomUUID(),
       kind,
       cell: { column: 0, row },
-      span: {
-        columns: Math.max(3, Math.min(6, Math.ceil(((partDefinition(kind)?.label.length ?? 30) * 3 + 60) / 48))),
-        rows: 1
-      }
+      span: { columns: 4, rows: 1 }
     })
   });
 }
@@ -55,4 +52,9 @@ function freeSpot(board: Board, view: { width: number; height: number }) {
     }
   }
   return { x: 0.7, y: 0.15 };
+}
+
+/** Reuses the original board controls for settings that already have one. */
+export function brushPinKind(id: string) {
+  return id === 'size' || id === 'opacity' ? `value:${id}` : `value:brush:${id}`;
 }
