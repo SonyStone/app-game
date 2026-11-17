@@ -15,8 +15,8 @@ import styles from './BrushEditor.module.css';
  * memory, exactly as large as the pad is shown, so it never touches the user's document, its layers or its history.
  *
  * Each stroke keeps the brush it was drawn with: a change of a setting affects the strokes drawn after it, so two
- * strokes side by side compare two settings. The "Drawing pad" button opens the pad's options: undo the last stroke
- * and clear the pad. A new size, as when the tablet turns, starts a new empty pad once the size has settled.
+ * strokes side by side compare two settings. Clear, beside the "Drawing pad" button, wipes the pad in one press; the
+ * "Drawing pad" button opens the pad's other options, such as undoing the last stroke. A new size, as when the tablet turns, starts a new empty pad once the size has settled.
  */
 export function DrawingPad(props: {
   /** The brush strokes on the pad use, as a stroke on the drawing would receive it. */
@@ -103,8 +103,9 @@ function createSettledSize(measure: () => { width: number; height: number }) {
 const settleDelay = 300;
 
 /**
- * The "Drawing pad" button at the pad's top left and the list of options it opens under it. A press on an option
- * runs it and closes the list; a press outside it or Escape closes it.
+ * The "Drawing pad" button at the pad's top left, the Clear button beside it for the pad's most frequent action, and
+ * the list of the other options the first opens under it. A press on an option runs it and closes the list; a press outside it
+ * or Escape closes it.
  */
 function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
   const [open, setOpen] = createSignal(false);
@@ -141,6 +142,10 @@ function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
         <SketchIcon name="pencil" size={18} />
         Drawing pad
       </button>
+      <button type="button" class={styles.padButton} onClick={() => props.onClear()}>
+        <SketchIcon name="trash" size={18} />
+        Clear
+      </button>
       <Show when={open()}>
         <div
           ref={setList}
@@ -159,10 +164,6 @@ function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
           <button type="button" role="menuitem" onClick={() => run(props.onUndo)}>
             <SketchIcon name="undo" size={18} />
             Undo last stroke
-          </button>
-          <button type="button" role="menuitem" onClick={() => run(props.onClear)}>
-            <SketchIcon name="trash" size={18} />
-            Clear pad
           </button>
         </div>
       </Show>

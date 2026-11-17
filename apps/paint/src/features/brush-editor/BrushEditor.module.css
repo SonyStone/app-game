@@ -978,6 +978,8 @@
   top: 24px;
   left: 24px;
   z-index: 1;
+  display: flex;
+  gap: 8px;
 }
 
 .pad .padButton {
