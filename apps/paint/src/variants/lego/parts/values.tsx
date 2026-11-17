@@ -281,7 +281,7 @@ function ValueControl(
               value={props.number}
               min={props.min}
               max={props.max}
-              unit={props.unit}
+              unit={props.unit && unitSuffix(props.unit)}
               scale={props.scale}
               wrap={props.wrap}
               onStart={props.onStart}
@@ -405,7 +405,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     get text() {
       return active()
         ? (channel.format?.(roundedValue(value(), channel.step)) ??
-            `${roundedValue(value(), channel.step)}${channel.unit}`)
+            `${roundedValue(value(), channel.step)}${unitSuffix(channel.unit)}`)
         : '—';
     },
     get color() {
@@ -451,4 +451,12 @@ function gradient(stops: readonly string[]) {
 export function roundedValue(value: number, step = 1) {
   const decimals = (String(step).split('.')[1] ?? '').length;
   return Number((Math.round(value / step) * step).toFixed(decimals));
+}
+
+/**
+ * `unit` as it follows a number: a word, such as "marks", after a no-break space ("80 marks"); a symbol or an
+ * abbreviation of up to two letters, such as %, ° or px, right after it ("80%").
+ */
+export function unitSuffix(unit: string) {
+  return /^\p{L}{3,}/u.test(unit) ? `\u00a0${unit}` : unit;
 }

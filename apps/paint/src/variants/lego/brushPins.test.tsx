@@ -15,7 +15,7 @@ import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { boxSections, partDefinition } from './parts';
 import { brushChannels } from './parts/brushChannels';
-import { roundedValue } from './parts/values';
+import { roundedValue, unitSuffix } from './parts/values';
 import { createTestServices } from './testServices';
 
 it('generates unique names across both schemas, counting shared IDs once', () => {
@@ -179,4 +179,15 @@ it('uses a uniform four-cell span and removes floating point noise', () => {
   expect(board.panels[0]!.parts.map((p) => p.span)).toEqual(Array(3).fill({ columns: 4, rows: 1 }));
   expect(roundedValue(0.30000000000000004, 0.1)).toBe(0.3);
   expect(roundedValue(1.234, 0.05)).toBe(1.25);
+});
+
+it('puts a space between a value and a unit that is a word, and none before a symbol', () => {
+  expect(unitSuffix('marks')).toBe('\u00a0marks');
+  for (const unit of ['%', '°', 'px', '']) {
+    expect(unitSuffix(unit)).toBe(unit);
+  }
+
+  const fade = brushChannels.find((channel) => channel.id === 'brush:abr-shapeDynamics-sizeFade')!;
+  expect(fade.format!(80)).toBe('80\u00a0marks');
+  expect(brushChannels.find((channel) => channel.id === 'brush:flow')!.format!(35)).toBe('35%');
 });

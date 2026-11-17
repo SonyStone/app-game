@@ -3,7 +3,7 @@ import { abrCategories } from '../../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../../features/brush-editor/brushSettingName';
 import { brushCategories } from '../../../features/brush-editor/schema';
 import type { LegoServices } from '../LegoServices';
-import type { ValueChannel } from './values';
+import { unitSuffix, type ValueChannel } from './values';
 
 /** Stable settings generate channels once; availability and bounds resolve against the live brush. */
 export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCategories].flatMap((categories, schema) =>
@@ -55,7 +55,7 @@ export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCateg
             const min = active(s) ? setting.min(brush(s)) : 0;
             return curve ? curveValue(curve, fraction) : min + fraction * (max - min);
           },
-          format: (value) => `${setting.format?.(value) ?? Number(value.toFixed(3))}${setting.unit}`
+          format: (value) => `${setting.format?.(value) ?? Number(value.toFixed(3))}${unitSuffix(setting.unit)}`
         }
       ];
     })
