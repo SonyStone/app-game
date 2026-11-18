@@ -46,6 +46,7 @@ export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCateg
           minimum: (s) => (active(s) ? setting.min(brush(s)) : 0),
           max: (s) => (active(s) ? setting.max(brush(s)) : 1),
           step: setting.step,
+          levels: setting.levels,
           active,
           read: (s) => (active(s) ? setting.read(brush(s)) : 0),
           write: (s, value) => {

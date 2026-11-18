@@ -288,6 +288,7 @@ export function LegoStudio(
                       .board()
                       .panels.some((panel) => !panel.bench && panel.parts.some((part) => part.kind === kind))}
                     onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
+                    onPlace={() => boardControls()?.place(kind, studioPartSpan)}
                   />
                 );
               }}

@@ -40,6 +40,11 @@ export type NumberSetting = SettingBase & {
   write: (brush: Brush, value: number) => Partial<Brush>;
   /** Optional display text for values such as S-3; unit is rendered separately. */
   format?: (value: number) => string;
+  /**
+   * The value's named levels in order, for a setting with a few discrete steps, such as the stabilizer's 0 to 15 and
+   * S-1 to S-7; a level's `zone` groups it with its neighbours of the same zone. Controls that know levels show them.
+   */
+  levels?: readonly { value: number; label: string; zone?: string }[];
 };
 
 /** Boolean brush control. Writes do not enforce applicability or enabled state. */
@@ -241,6 +246,11 @@ export const brushCategories: readonly BrushCategory[] = [
         max: () => maxStabilizerLevel,
         enabled: (b) => b.stroke.mode === 'stabilizer',
         format: stabilizerLabel,
+        levels: Array.from({ length: maxStabilizerLevel + 1 }, (_, level) => ({
+          value: level,
+          label: stabilizerLabel(level),
+          zone: level > 15 ? 'S' : undefined
+        })),
         read: (b) => b.stroke.stabilizer,
         write: (b, stabilizer) => strokePatch(b, { stabilizer })
       }),

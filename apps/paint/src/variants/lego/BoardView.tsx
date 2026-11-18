@@ -9,6 +9,7 @@ import {
   cellSize,
   findPart,
   frameAt,
+  freeSpot,
   nearestCell,
   newId,
   ownedFrame,
@@ -522,6 +523,16 @@ export function BoardView(props: {
   props.ref?.({
     lift: (event, kind, span) =>
       startPartDrag(event, { id: newId('part'), kind, span: span ?? { columns: 1, rows: 1 } }, { fromBox: true }),
+    place: (kind, span = { columns: 1, rows: 1 }) => {
+      const board = props.board.latest();
+      props.board.set(
+        putPanel(board, {
+          id: newId('panel'),
+          at: freeSpot(board, view(), span),
+          parts: [{ id: newId('part'), kind, cell: { column: 0, row: 0 }, span }]
+        })
+      );
+    },
     carrying: () => lifted()?.carried === true
   });
   onCleanup(() => props.ref?.(undefined));
@@ -1770,6 +1781,11 @@ export type BoardControls = {
    * `currentTarget` is where the part is held from. The caller keeps the pointer's events coming, as by capturing it.
    */
   lift: (event: PointerEvent, kind: string, span?: Span) => void;
+  /**
+   * Puts a new part of `kind` and `span` (one cell by default) on the board at once, on a plate of its own where it
+   * covers no other panel (see `freeSpot`), as the keyboard's way to do what `lift` does by dragging.
+   */
+  place: (kind: string, span?: Span) => void;
   /** Whether a lifted part is being carried, having moved off where it was pressed; reactive. */
   carrying: () => boolean;
 };

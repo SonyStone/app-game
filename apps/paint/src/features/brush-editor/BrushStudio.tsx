@@ -1,9 +1,9 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, For } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
-import { CategoryList, CategoryPane, createCategoryChoice } from './BrushCategories';
+import { CategoryPane, CategorySidebar, createCategoryChoice } from './BrushCategories';
 import styles from './BrushEditor.module.css';
 import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } from './schema';
 
@@ -53,38 +53,57 @@ export function BrushStudio(props: {
   const { categories, chosen, choose } = createCategoryChoice(props);
   /** Below 700 px wide, which part is shown: the category list, the chosen category's rows or the pad. */
   const [view, setView] = createSignal<'list' | 'detail' | 'pad'>('list');
+  const { sidebar, chooseSidebar } = createSidebarStyle();
   const [root, setRoot] = createSignal<HTMLElement>();
   createEffect(root, (element) => (element ? watchTapTargets(element) : undefined));
 
   return (
     <section ref={setRoot} class={styles.studioRoot} aria-label="Brush studio">
-      <div class={[styles.frame, styles.studio]} data-view={view()}>
-        <div class={styles.studioSide}>
-          <div class={styles.studioHead}>
-            <h1 class={styles.studioName}>{props.name ?? 'Brush studio'}</h1>
-            <div class={styles.studioPreview}>{props.preview}</div>
+      <div class={[styles.frame, styles.studio]} data-view={view()} data-sidebar={sidebar()}>
+        <div class={styles.studioSheet}>
+          <div class={styles.studioSide}>
+            <div class={styles.studioHead}>
+              <h1 class={styles.studioName}>{props.name ?? 'Brush studio'}</h1>
+              <div class={styles.studioPreview}>{props.preview}</div>
+            </div>
+            <CategorySidebar
+              class={styles.studioList}
+              categories={categories()}
+              chosen={chosen()}
+              brush={props.brush}
+              onChoose={(category) => {
+                choose(category);
+                setView('detail');
+              }}
+            />
           </div>
-          <CategoryList
-            categories={categories()}
-            chosen={chosen()}
+          <CategoryPane
+            category={chosen()}
+            numberRow={props.numberRow}
             brush={props.brush}
-            onChoose={(category) => {
-              choose(category);
-              setView('detail');
-            }}
+            onChange={props.onChange}
+            onBack={() => setView('list')}
           />
         </div>
-        <CategoryPane
-          category={chosen()}
-          numberRow={props.numberRow}
-          brush={props.brush}
-          onChange={props.onChange}
-          onBack={() => setView('list')}
-        />
         <div class={styles.studioPad} role="region" aria-label="Drawing pad">
           {props.pad}
         </div>
         <div class={styles.studioActions}>
+          <div class={styles.sidebarSwitch} role="radiogroup" aria-label="Sidebar style (trial)">
+            <For each={sidebarStyles}>
+              {(option) => (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={sidebar() === option.id ? 'true' : 'false'}
+                  title={option.title}
+                  onClick={() => chooseSidebar(option.id)}
+                >
+                  {option.label}
+                </button>
+              )}
+            </For>
+          </div>
           <button
             type="button"
             class={styles.studioPadToggle}
@@ -113,4 +132,46 @@ export function BrushStudio(props: {
       </div>
     </section>
   );
+}
+
+/**
+ * TEMPORARY, until the user picks one of the two sidebar styles while trying the studio; then the other style, this
+ * switch and its stored choice go. "sidebar": the categories and the settings lie on one plate, divided by a hairline,
+ * and the chosen category is an accent-filled pill, as in iPadOS and macOS Settings. "joined": the settings lie on a
+ * lighter raised surface, and the chosen category takes that surface's color and runs into it.
+ */
+function createSidebarStyle() {
+  const [sidebar, setSidebar] = createSignal<SidebarStyle>(storedSidebarStyle());
+
+  return {
+    sidebar,
+    chooseSidebar: (style: SidebarStyle) => {
+      setSidebar(style);
+      try {
+        localStorage.setItem(sidebarStyleKey, style);
+      } catch {
+        // Storage may be blocked or full; the choice then lasts while the studio is open.
+      }
+    }
+  };
+}
+
+/** The sidebar styles on trial; see `createSidebarStyle`. */
+const sidebarStyles = [
+  { id: 'sidebar', label: 'Sidebar', title: 'Sidebar style: one plate, chosen category as a pill' },
+  { id: 'joined', label: 'Joined', title: 'Sidebar style: chosen category joins the raised settings' }
+] as const;
+
+type SidebarStyle = (typeof sidebarStyles)[number]['id'];
+
+/** Where the trial's choice is kept, per device. */
+const sidebarStyleKey = 'paint.brushStudio.sidebar';
+
+/** The stored sidebar style, "sidebar" when none is stored or storage cannot be read. */
+function storedSidebarStyle(): SidebarStyle {
+  try {
+    return localStorage.getItem(sidebarStyleKey) === 'joined' ? 'joined' : 'sidebar';
+  } catch {
+    return 'sidebar';
+  }
 }

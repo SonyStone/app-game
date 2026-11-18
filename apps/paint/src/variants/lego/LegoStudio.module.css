@@ -1488,9 +1488,296 @@
 .sliderLabel span:last-child {
   flex-shrink: 0;
 }
+/*
+ * A value that does not apply now: an unlit tile, the plate showing through behind a hairline, its name and dash
+ * quiet, with no track, fill or thumb. Clearly off, without the murk of a faded, greyed control.
+ */
+.part:has(.valueState[data-inactive]),
+.studioTile:has(.valueState[data-inactive]) {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+}
+
 .valueState[data-inactive] {
-  opacity: 0.55;
-  filter: grayscale(1);
+  color: rgb(255 255 255 / 0.5);
+
+  .slider,
+  .knob,
+  .knob span {
+    background: transparent;
+    box-shadow: none;
+    cursor: default;
+  }
+
+  .fill,
+  .thumb,
+  .levelTicks {
+    display: none;
+  }
+
+  .sliderLabel {
+    color: inherit;
+
+    span,
+    .valueChip {
+      background: none;
+      box-shadow: none;
+    }
+  }
+}
+
+/*
+ * The value chip at a slider's end: a raised key, so it reads as something to tap, with a hit area reaching the
+ * slider's full height and past its sides for a pen.
+ */
+.sliderLabel .valueChip {
+  position: relative;
+  min-width: 30px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.14),
+    0 1px 2px rgb(0 0 0 / 0.2);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  pointer-events: auto;
+  cursor: pointer;
+
+  &::before {
+    position: absolute;
+    inset: -12px -8px;
+    content: '';
+  }
+}
+
+.slider[data-entry] .valueChip {
+  box-shadow: 0 0 0 2px var(--lego-accent);
+}
+
+/* A level slider: a tick per level; a zone after the first, as the stabilizer's S levels, hatched from a line. */
+.levelTicks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.levelTick {
+  position: absolute;
+  bottom: 4px;
+  width: 1px;
+  height: 7px;
+  margin-left: -0.5px;
+  background: rgb(0 0 0 / 0.3);
+
+  .vertical & {
+    bottom: auto;
+    left: 4px;
+    width: 7px;
+    height: 1px;
+    margin: 0 0 -0.5px;
+  }
+}
+
+.levelZoneMark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border-left: 2px solid rgb(36 38 44 / 0.45);
+  background: repeating-linear-gradient(135deg, rgb(0 0 0 / 0.07) 0 3px, transparent 3px 7px);
+
+  .vertical & {
+    top: 0;
+    left: 0;
+    border-top: 2px solid rgb(36 38 44 / 0.45);
+    border-left: 0;
+  }
+}
+
+/*
+ * Number entry over everything: a dark card as the board's popups, in the browser's top layer. The popover's own
+ * styles (centered, framed) give way to the card's.
+ */
+.entryCard {
+  position: fixed;
+  inset: auto;
+  z-index: 960;
+  margin: 0;
+  padding: 10px;
+  overflow: visible;
+  border: 0;
+  border-radius: 14px;
+  background: rgb(36 38 44);
+  box-shadow: var(--lego-shadow);
+  color: #ffffff;
+  font:
+    13px/1.3 -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  touch-action: manipulation;
+
+  &:focus {
+    outline: none;
+  }
+
+  button {
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 7px;
+    background: var(--lego-tile);
+    text-align: center;
+    color: var(--lego-ink);
+    font: inherit;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--lego-accent);
+    outline-offset: 1px;
+  }
+
+  button:active {
+    filter: brightness(0.92);
+  }
+}
+
+.keypad {
+  display: grid;
+  gap: 8px;
+  width: 232px;
+}
+
+.keypadHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  color: rgb(255 255 255 / 0.62);
+  font-size: 12px;
+  font-weight: 600;
+
+  span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span:last-child {
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* The value being typed, right-aligned as a calculator's; until the first key it is lit as replaceable. */
+.keypadValue {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 2px;
+  height: 48px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.08);
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 48px;
+
+  small {
+    color: rgb(255 255 255 / 0.62);
+    font-size: 15px;
+  }
+
+  &[data-fresh] span {
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--lego-accent) 45%, transparent);
+    padding: 0 3px;
+  }
+}
+
+.keypadKeys {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 44px;
+  gap: 4px;
+
+  .entryCard & button {
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .entryCard & [data-key='backspace'],
+  .entryCard & [data-key^='nudge'] {
+    display: grid;
+    place-items: center;
+    background: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+  }
+}
+
+.keypadActions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+
+  .entryCard & button {
+    height: 44px;
+    font-weight: 600;
+  }
+
+  .entryCard & button:first-child {
+    background: rgb(255 255 255 / 0.16);
+    color: #ffffff;
+  }
+
+  .entryCard & [data-ok] {
+    background: var(--lego-accent);
+    color: #ffffff;
+  }
+
+  .entryCard & [data-ok]:disabled {
+    opacity: 0.45;
+  }
+}
+
+/* The level picker: a grid of the levels; a zone after the first under a line, its keys hatched as on the slider. */
+.levelPicker {
+  display: grid;
+  gap: 8px;
+}
+
+.levelZone {
+  display: grid;
+  grid-template-columns: repeat(8, 40px);
+  grid-auto-rows: 40px;
+  gap: 4px;
+
+  .entryCard & button {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .entryCard & button[aria-selected='true'] {
+    background: var(--lego-accent);
+    color: #ffffff;
+  }
+
+  &[data-zone] {
+    padding-top: 8px;
+    border-top: 1px solid rgb(255 255 255 / 0.16);
+  }
+
+  .entryCard &[data-zone] button:not([aria-selected='true']) {
+    background:
+      repeating-linear-gradient(135deg, rgb(0 0 0 / 0.07) 0 3px, transparent 3px 7px),
+      var(--lego-tile);
+  }
 }
 
 /*
@@ -1509,8 +1796,14 @@
   --studio-column: var(--lego-plate);
   --studio-column-ink: #ffffff;
   --studio-column-quiet: rgb(255 255 255 / 0.62);
-  --studio-column-radius: 10px;
-  --studio-inset: 10px 6px;
+  --studio-column-radius: 12px;
+  --studio-raised: rgb(68 71 80);
+  --studio-divider: rgb(255 255 255 / 0.12);
+  --studio-icon: var(--lego-tile);
+  --studio-icon-ink: var(--lego-ink);
+  --studio-hover: rgb(255 255 255 / 0.07);
+  --studio-selected: var(--lego-accent);
+  --studio-selected-ink: #ffffff;
   --studio-plate: var(--lego-plate);
   --studio-tile: var(--lego-tile);
   --studio-tile-ink: var(--lego-ink);
@@ -1526,10 +1819,10 @@
   --studio-name: 18px;
 }
 
-/* A number setting in the studio: its grip, then its value part as a slider and as a number, one cell high. */
+/* A number setting in the studio: its grip, then its value part as a slider, one cell high. */
 .studioSetting {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 44px;
+  grid-template-columns: 32px minmax(0, 1fr);
   gap: 4px;
   height: 44px;
 }

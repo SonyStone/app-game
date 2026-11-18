@@ -612,13 +612,16 @@
 }
 
 /*
- * The brush studio (BrushStudio): the same parts over the whole screen, after Procreate's Brush Studio. Every rule is
- * scoped to .studio, so the panel's rules above stay as they are. Sizes are taken from the reference at its own CSS
- * pixels: columns of 19%, 31% and 50% in landscape, category rows 52 px high, a number row on two lines with its value
- * in a pill. Its rows are 76 px apart rather than the reference's 66, since both the pill and the slider keep a 44 px
- * press target: the slider's target reaches 12 px up under the label line, beside the pill. The layout follows the
- * studio's own size through the brush-studio container: three columns, the pad across the top in portrait, and one
- * part at a time below 700 px.
+ * The brush studio (BrushStudio): the same parts over the whole screen. Every rule is scoped to .studio, so the
+ * panel's rules above stay as they are. The categories and the chosen category's settings lie on one sheet, as a
+ * Settings app's sidebar and page: the categories in a list of one-line rows (`SettingsList`), the brush's name and
+ * stroke preview at the list's top, where Settings shows the account. The drawing pad takes the other half, with
+ * Cancel and Done at its top right, as in Procreate's Brush Studio. In portrait the pad lies across the top and the
+ * sheet under it; below 700 px one part shows at a time: the list, a category's settings, or the pad.
+ *
+ * Two sidebar styles are on trial (`data-sidebar`, see `createSidebarStyle`): "sidebar" divides list and settings by
+ * a hairline and fills the chosen row with the accent; "joined" raises the settings on a lighter surface and gives
+ * the chosen row that surface, so the row runs into the settings it shows.
  *
  * A host restyles the studio through the --studio-* properties that BrushStudio's JSDoc lists; each falls back to the
  * look described here.
@@ -636,35 +639,45 @@
   --column-quiet: var(--studio-column-quiet, var(--muted-color));
   --tile-radius: var(--studio-tile-radius, 8px);
   --tile-shadow: var(--studio-tile-shadow, 0 1px 4px rgb(0 0 0 / 12%));
+  --sheet-color: var(--studio-column, var(--side-color));
+  --raised-color: var(--studio-raised, var(--surface-color));
 
-  grid-template: minmax(0, 1fr) / 19fr 31fr 50fr;
-  grid-template-areas: 'side pane pad';
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas: 'sheet pad';
   gap: var(--studio-gap, 0);
   padding: var(--studio-gap, 0);
   background: var(--studio-ground, var(--surface-color));
   font-size: var(--studio-text, 15px);
 }
 
-.studioSide {
+/* The one plate under the categories and the settings. */
+.studioSheet {
   display: grid;
-  grid-area: side;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-area: sheet;
+  grid-template: minmax(0, 1fr) / minmax(200px, 36fr) minmax(0, 64fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   border-radius: var(--studio-column-radius, 0);
-  background: var(--studio-column, var(--side-color));
+  background: var(--sheet-color);
   color: var(--column-ink);
 }
 
+.studioSide {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
 .studioHead {
-  padding: var(--studio-inset, 22px 20px 10px);
+  padding: 14px 14px 6px;
 }
 
 .studioName {
   margin: 0;
   overflow: hidden;
-  font-size: var(--studio-name, 28px);
+  font-size: var(--studio-name, 22px);
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -682,56 +695,76 @@
   }
 }
 
-.studio .nav {
-  gap: var(--studio-row-gap, 0);
-  padding: 4px 8px 16px;
-  border-right: 0;
-}
+/* The categories, in the studio's colors; see `SettingsList` for the properties. */
+.studioList {
+  --settings-list-ink: var(--column-ink);
+  --settings-list-quiet: var(--column-quiet);
+  --settings-list-icon: var(--studio-icon, var(--pill-color));
+  --settings-list-icon-ink: var(--studio-icon-ink, var(--ink-color));
+  --settings-list-hover: var(--studio-hover, color-mix(in srgb, var(--column-ink) 8%, transparent));
+  --settings-list-selected: var(--studio-selected, var(--accent-color));
+  --settings-list-selected-ink: var(--studio-selected-ink, var(--surface-color));
+  --settings-list-text: var(--studio-text, 15px);
+  --settings-list-small: var(--studio-small, 12px);
 
-.studio .group {
-  margin: 14px 12px 4px;
-  color: var(--column-quiet);
-  font-size: var(--studio-small, 12px);
-
-  &:first-child {
-    margin-top: 4px;
-  }
-}
-
-.studio .category {
-  gap: 14px;
-  min-height: var(--studio-row, 52px);
-  padding: 2px 12px 2px 14px;
-  border-radius: var(--tile-radius);
-  background: var(--studio-tile, transparent);
-  color: var(--studio-tile-ink, inherit);
-
-  &[aria-current='true'] {
-    background: var(--studio-chosen, var(--accent-color));
-    box-shadow: inset 0 0 0 2px var(--studio-chosen-ring, transparent);
-    color: var(--studio-chosen-ink, var(--surface-color));
-
-    .categoryStatus {
-      color: inherit;
-      opacity: 0.85;
-    }
-  }
-}
-
-.studio .categoryName {
-  font-weight: 500;
-}
-
-.studio .categoryStatus {
-  font-size: var(--studio-small, 12px);
+  min-height: 0;
+  padding-block: 2px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 
 .studio .pane {
-  grid-area: pane;
-  padding: var(--studio-inset, 26px 24px 24px 20px);
-  border-radius: var(--studio-column-radius, 0);
-  background: var(--studio-column, transparent);
+  padding: 14px 16px 24px;
   color: var(--column-ink);
+}
+
+/* Sidebar: one plate, a hairline between list and settings. */
+.studio[data-sidebar='sidebar'] .studioSide {
+  border-right: 1px solid var(--studio-divider, var(--line-color));
+}
+
+/*
+ * Joined: the settings on a raised surface inset in the plate, and the chosen row in that surface's color, reaching
+ * the surface's edge, with concave corners where it meets it, as a folder's tab joins its folder.
+ */
+.studio[data-sidebar='joined'] {
+  .studioList {
+    --settings-list-selected: var(--raised-color);
+    --settings-list-selected-ink: var(--column-ink);
+    --settings-list-inset: 8px 0;
+
+    [aria-current] {
+      position: relative;
+      border-start-end-radius: 0;
+      border-end-end-radius: 0;
+    }
+
+    [aria-current]::before,
+    [aria-current]::after {
+      position: absolute;
+      right: 0;
+      width: 12px;
+      height: 12px;
+      content: '';
+      pointer-events: none;
+    }
+
+    [aria-current]::before {
+      bottom: 100%;
+      background: radial-gradient(circle at 0 0, transparent 11.5px, var(--raised-color) 12px);
+    }
+
+    [aria-current]::after {
+      top: 100%;
+      background: radial-gradient(circle at 0 100%, transparent 11.5px, var(--raised-color) 12px);
+    }
+  }
+
+  .pane {
+    margin: 6px 6px 6px 0;
+    border-radius: calc(var(--studio-column-radius, 10px) - 2px);
+    background: var(--raised-color);
+  }
 }
 
 .studio .back {
@@ -893,6 +926,36 @@
   margin: 4px 0;
 }
 
+/*
+ * A switch, option or menu that has no effect now: an unlit control, the column showing through behind a hairline,
+ * its text quiet and a switch's box an outline with a quiet check, instead of a faded, still-lit tile.
+ */
+.studio .row[data-kind='toggle']:disabled,
+.studio .option:disabled,
+.studio .menuButton:disabled {
+  --disabled-ink: var(--studio-disabled-ink, color-mix(in srgb, var(--column-ink) 50%, transparent));
+
+  opacity: 1;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--studio-disabled-line, color-mix(in srgb, var(--column-ink) 20%, transparent));
+  color: var(--disabled-ink);
+
+  .label {
+    opacity: 1;
+  }
+
+  .box {
+    border-color: currentColor;
+    background: transparent;
+    color: inherit;
+  }
+}
+
+.studio .row[data-kind='menu'][data-disabled] .label {
+  opacity: 1;
+  color: var(--studio-disabled-ink, color-mix(in srgb, var(--column-ink) 50%, transparent));
+}
+
 .studio .choice {
   gap: var(--studio-row-gap, 2px);
 }
@@ -944,16 +1007,45 @@
   }
 }
 
-@container brush-studio (orientation: portrait) and (width >= 700px) {
-  .frame.studio {
-    grid-template: minmax(0, 46fr) minmax(0, 54fr) / 36fr 64fr;
-    grid-template-areas:
-      'pad pad'
-      'side pane';
+/* TEMPORARY: the trial's switch between the two sidebar styles; see `createSidebarStyle`. */
+.sidebarSwitch {
+  display: flex;
+  align-self: center;
+  margin-right: 4px;
+  padding: 2px;
+  border-radius: calc(var(--tile-radius) + 2px);
+  background: color-mix(in srgb, var(--studio-tile, var(--surface-color)) 22%, transparent);
+
+  .frame & button {
+    min-height: 32px;
+    padding: 0 10px;
+    border-radius: var(--tile-radius);
+    background: transparent;
+    box-shadow: none;
+    color: var(--studio-column-ink, var(--ink-color));
+    font-size: var(--studio-small, 12px);
+  }
+
+  .frame & button[aria-checked='true'] {
+    background: var(--studio-tile, var(--surface-color));
+    color: var(--studio-tile-ink, var(--ink-color));
+    font-weight: 600;
   }
 }
 
-/* One part at a time under a bar with the pad switch, Cancel and Done; the pad stays laid out, so it keeps its strokes. */
+@container brush-studio (orientation: portrait) and (width >= 700px) {
+  .frame.studio {
+    grid-template: minmax(0, 44fr) minmax(0, 56fr) / minmax(0, 1fr);
+    grid-template-areas:
+      'pad'
+      'sheet';
+  }
+}
+
+/*
+ * One part at a time under a bar with the pad switch, Cancel and Done, as a phone's Settings goes from its list to a
+ * page; the pad stays laid out, so it keeps its strokes.
+ */
 @container brush-studio (width < 700px) {
   .frame.studio {
     grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
@@ -962,10 +1054,43 @@
       'main';
   }
 
-  .studioSide,
-  .studio .pane,
+  .studioSheet,
   .studioPad {
     grid-area: main;
+  }
+
+  .studioSheet {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studioSide,
+  .studio .pane {
+    grid-area: 1 / 1;
+  }
+
+  /* Each row opens a page of its own here, so it shows a chevron; the chosen one is no longer marked. */
+  .studio .studioList {
+    --settings-list-chevron: block;
+    --settings-list-selected: transparent;
+    --settings-list-selected-ink: var(--column-ink);
+    --settings-list-inset: 8px;
+  }
+
+  .studio[data-sidebar] .studioSide {
+    border-right: 0;
+  }
+
+  .studio[data-sidebar='joined'] .studioList [aria-current] {
+    border-radius: var(--settings-list-radius, 9px);
+
+    &::before,
+    &::after {
+      display: none;
+    }
+  }
+
+  .studio[data-sidebar='joined'] .pane {
+    margin: 0;
   }
 
   .studioActions {
@@ -986,14 +1111,9 @@
     display: flex;
   }
 
-  .studio .chevron {
-    display: block;
-  }
-
   .studio[data-view='list'] .pane,
   .studio[data-view='detail'] .studioSide,
-  .studio[data-view='pad'] .studioSide,
-  .studio[data-view='pad'] .pane {
+  .studio[data-view='pad'] .studioSheet {
     display: none;
   }
 

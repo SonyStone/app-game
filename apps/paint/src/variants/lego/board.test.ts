@@ -1,8 +1,10 @@
 import { expect, it } from 'vitest';
 import {
+  freeSpot,
   frameAt,
   panelFrame,
   partsBounds,
+  panelPadding,
   pinPanels,
   pitch,
   placeBlock,
@@ -113,4 +115,22 @@ it('keeps a panel at the view edge still while it grows, and shifts it in only o
 
   const kept = pinPanels({ panels: [grown] }, new Map([['p', origin]]), view);
   expect(kept.panels[0]?.at).toEqual({ x: origin.x / view.width, y: origin.y / view.height });
+});
+
+it('finds a free spot for a new plate beside the panels, clear of them and of the view edges', () => {
+  const view = { width: 800, height: 600 };
+  const span = { columns: 4, rows: 1 };
+  const part = (id: string): Part => ({ id, kind: 'value:size', cell: { column: 0, row: 0 }, span });
+  // One plate at the top left, 4 × 1 cells.
+  const board = { panels: [{ id: 'a', at: { x: 22 / 800, y: 22 / 600 }, parts: [part('a1')] }] };
+  const taken = panelFrame(board.panels[0]!, view, false).rect;
+  const at = freeSpot(board, view, span);
+  const plate = { left: at.x * view.width - panelPadding, top: at.y * view.height - panelPadding };
+  expect(plate.left >= taken.left + taken.width + 16 || plate.top >= taken.top + taken.height + 16).toBe(true);
+  expect(plate.left).toBeGreaterThanOrEqual(16);
+  expect(plate.top).toBeGreaterThanOrEqual(16);
+  // The workbench and owned panels do not count; an empty board gives the top left.
+  expect(freeSpot({ panels: [{ id: 'b', at: { x: 0, y: 0 }, bench: true, parts: [part('b1')] }] }, view, span)).toEqual(
+    { x: (16 + panelPadding) / 800, y: (16 + panelPadding) / 600 }
+  );
 });

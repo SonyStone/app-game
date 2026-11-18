@@ -261,6 +261,42 @@ export function besideRect(
     : { x, y: clampY(anchor.top - gap - size.height) };
 }
 
+/**
+ * Where a new panel holding one part of `span` can lie in a view of `view` size without touching the board's other
+ * panels: the first place, row by row from the top left in steps of half a cell, whose plate keeps `margin` CSS pixels
+ * clear of every free panel's plate and of the view's edges. Owned panels and the workbench are left out, as they
+ * come and go. Returns the panel's `at`, as fractions of the view; the top left corner when no place is free, where
+ * the new plate then lies over others.
+ */
+export function freeSpot(board: Board, view: { width: number; height: number }, span: Span, margin = 16): Point {
+  const width = span.columns * pitch - cellGap + panelPadding * 2;
+  const height = span.rows * pitch - cellGap + panelPadding * 2;
+  const taken = board.panels
+    .filter((panel) => !panel.bench && panel.owner === undefined)
+    .map((panel) => panelFrame(panel, view, false).rect);
+  const at = (left: number, top: number) => ({
+    x: (left + panelPadding) / view.width,
+    y: (top + panelPadding) / view.height
+  });
+
+  for (let top = margin; top + height + margin <= view.height; top += pitch / 2) {
+    for (let left = margin; left + width + margin <= view.width; left += pitch / 2) {
+      const clear = taken.every(
+        (rect) =>
+          left + width + margin <= rect.left ||
+          rect.left + rect.width + margin <= left ||
+          top + height + margin <= rect.top ||
+          rect.top + rect.height + margin <= top
+      );
+      if (clear) {
+        return at(left, top);
+      }
+    }
+  }
+
+  return at(margin, margin);
+}
+
 /** The cell whose top-left corner is nearest to `point`, on a grid whose cell (0, 0) starts at `origin`. */
 export function nearestCell(origin: Point, point: Point): Cell {
   return { column: Math.round((point.x - origin.x) / pitch), row: Math.round((point.y - origin.y) / pitch) };

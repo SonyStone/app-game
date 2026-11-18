@@ -1,0 +1,120 @@
+/*
+ * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles. See `SettingsList` for the properties a
+ * host sets; the fallbacks give a quiet light list.
+ */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-inline: var(--settings-list-inset, 8px);
+  color: var(--settings-list-ink, #24262c);
+  font-size: var(--settings-list-text, 13px);
+}
+
+.group {
+  margin: 14px 10px 4px;
+  color: var(--settings-list-quiet, #7c7f88);
+  font-size: var(--settings-list-small, 11px);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+
+  &:first-child {
+    margin-top: 2px;
+  }
+}
+
+/* Its reset has no specificity, so a host's button rules lose to the row's own below. */
+:where(.list) .row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--settings-list-row, 40px);
+  margin: 0;
+  padding: 0 10px 0 7px;
+  border: 0;
+  border-radius: var(--settings-list-radius, 9px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+
+  @media (hover: hover) {
+    &:hover:not([aria-current]) {
+      background: var(--settings-list-hover, rgb(0 0 0 / 0.05));
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--settings-list-focus, var(--settings-list-selected, #3d7eff));
+    outline-offset: -2px;
+  }
+
+  &[aria-current] {
+    background: var(--settings-list-selected, #3d7eff);
+    color: var(--settings-list-selected-ink, #ffffff);
+  }
+}
+
+/* The icon on a small tile, as iOS draws its icons on colored squares. */
+.icon {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--settings-list-icon, rgb(0 0 0 / 0.07));
+  color: var(--settings-list-icon-ink, inherit);
+
+  &:empty {
+    background: none;
+  }
+}
+
+/* The label, then the trailing text, which gives way first. */
+.text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.label {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trailing {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--settings-list-quiet, #7c7f88);
+  font-size: var(--settings-list-small, 11px);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  [aria-current] & {
+    color: inherit;
+    opacity: 0.82;
+  }
+}
+
+.chevron {
+  display: var(--settings-list-chevron, none);
+  color: var(--settings-list-quiet, #7c7f88);
+
+  [aria-current] & {
+    color: inherit;
+  }
+}

@@ -448,8 +448,9 @@ it('a studio row and the board part of one setting are the same control and show
   pointer(slider(board), 'pointerup', 0.6, 0);
   expect(shown()).toEqual(['60', '60']);
   expect(slider(dialog).textContent).toBe(slider(board).textContent);
-  // Its number field beside the slider is the same part's number look.
-  expect(dialog.querySelector('[data-part-kind="value:brush:flow"] input')).not.toBeNull();
+  // One input: no number field beside the slider; the slider's value chip opens number entry.
+  expect(dialog.querySelector('[data-part-kind="value:brush:flow"] input')).toBeNull();
+  expect(slider(dialog).querySelector('[data-value-chip]')).not.toBeNull();
 });
 
 it("lifts a part of the setting by its studio row's grip onto the board, out of the studio's way, without Edit", () => {
@@ -511,6 +512,53 @@ it('a studio row of a setting that does not apply now shows the part inactive an
   flush();
   expect(press.defaultPrevented).toBe(true);
   expect(wiring.session!.brush().stroke).toEqual(before);
+});
+
+it("Escape in a studio row's keypad closes the keypad and keeps the studio open", () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  const chip = dialog.querySelector<HTMLElement>('[data-part-kind="value:brush:flow"] [data-value-chip]')!;
+  pointer(chip, 'pointerdown', 0, 0);
+  pointer(chip, 'pointerup', 0, 0);
+  const keypad = dialog.querySelector<HTMLElement>('[popover][role="dialog"]');
+  expect(keypad).not.toBeNull();
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  keypad!.dispatchEvent(escape);
+  flush();
+  expect(escape.defaultPrevented).toBe(true);
+  expect(dialog.querySelector('[popover][role="dialog"]')).toBeNull();
+  expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
+});
+
+it("Enter on a studio row's grip puts the part on the board without dragging", () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
+  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  flush();
+  const placed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]');
+  expect(placed).not.toBeNull();
+  expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
+  expect(placed!.closest('[data-panel]')!.getAttribute('data-panel')).not.toBe('test-panel');
+  expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
+  expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
+});
+
+it('switches the trial sidebar style and keeps the choice', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  let dialog = openStudio();
+  const frame = () => dialog.querySelector<HTMLElement>('[data-sidebar]')!;
+  expect(frame().dataset.sidebar).toBe('sidebar');
+  [...dialog.querySelectorAll<HTMLElement>('[role="radio"]')].find((radio) => radio.textContent === 'Joined')!.click();
+  flush();
+  expect(frame().dataset.sidebar).toBe('joined');
+  expect(localStorage.getItem('paint.brushStudio.sidebar')).toBe('joined');
+  click('Done');
+  dialog = openStudio();
+  expect(frame().dataset.sidebar).toBe('joined');
 });
 
 /** Opens the brush studio through the "Brush settings" part on the board and returns its dialog. */

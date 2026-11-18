@@ -1,6 +1,7 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, createUniqueId, For, Show, untrack } from 'solid-js';
+import { SettingsList } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
 import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
@@ -57,6 +58,49 @@ export function CategoryList(props: {
         )}
       </For>
     </nav>
+  );
+}
+
+/**
+ * The categories as a Settings-style sidebar (`SettingsList`), as the brush studio shows them: one line per category
+ * with its icon, name and status, under the headings of their groups. `onChoose` receives the pressed category.
+ */
+export function CategorySidebar(props: {
+  categories: readonly BrushCategory[];
+  chosen: BrushCategory;
+  brush: Brush;
+  onChoose: (category: BrushCategory) => void;
+  /** Added to the list's own class, for a presentation's layout and colors. */
+  class?: string;
+}) {
+  const items = createMemo(() =>
+    groups.flatMap((group) =>
+      props.categories
+        .filter((category) => category.group === group.id)
+        .map((category) => ({
+          id: category.id,
+          label: category.label,
+          icon: categoryIcons[category.id] ?? 'brush',
+          trailing: category.status(props.brush),
+          group: category.group
+        }))
+    )
+  );
+
+  return (
+    <SettingsList
+      class={props.class}
+      label="Brush setting categories"
+      items={items()}
+      groups={groups}
+      selected={props.chosen.id}
+      onSelect={(id) => {
+        const category = props.categories.find((candidate) => candidate.id === id);
+        if (category) {
+          props.onChoose(category);
+        }
+      }}
+    />
   );
 }
 

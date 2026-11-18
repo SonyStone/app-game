@@ -1,4 +1,4 @@
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import { wheelToHex } from '../../../features/color-wheel';
 import { hsvToHex, luminance, type Hsv } from '../../../features/color/hsv';
 import { pressHandlers, type Press } from '../../../shared/ui/pressHandlers';
@@ -9,6 +9,7 @@ import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
 import { brushChannels } from './brushChannels';
 import { definePart, type PartBinding } from './definition';
+import { LevelPicker, moveLevelFocus, NumberKeypad, ValueEntryCard, type ValueLevel } from './ValueEntry';
 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
 export type ValueKind = (typeof channels)[number]['id'] | `brush:${string}`;
@@ -31,6 +32,12 @@ export type ValueChannel = {
   minimum?: (services: LegoServices) => number;
   /** Numeric input step, supplied by the brush schema. */
   step?: number;
+  /**
+   * The value's named levels in order, for a value with a few discrete steps such as the stabilizer's 0 to 15 and
+   * S-1 to S-7: its slider shows a tick per level and snaps to them, marks where one `zone` ends and the next begins,
+   * and its value chip opens a picker of the levels instead of the keypad.
+   */
+  levels?: readonly ValueLevel[];
   /** Unavailable channels stay mounted but cannot receive edits. */
   active?: (services: LegoServices) => boolean;
   /** Enters the board from the brush studio rather than the box. */
@@ -217,6 +224,12 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
 /**
  * Controlled knob, slider or scrub field. Input callbacks edit live; commit records the settled edit; cancel
  * restores the exact captured value. This component has no session, registry, cells or storage knowledge.
+ *
+ * A slider wide enough to name its value shows the value in a chip at its end. A press on the track sets the value
+ * where it is and slides it; a tap on the chip (a press that moves less than a tap's distance) leaves the value and
+ * opens number entry anchored to the slider: a keypad (`NumberKeypad`), or for a value with named levels a picker of
+ * them (`LevelPicker`). A drag that starts on the chip slides the value from where it was, without a jump. Entry
+ * commits once, as one edit, and is open only while the part is live: a board in edit mode keeps its parts inert.
  */
 function ValueControl(
   props: Omit<ReturnType<typeof valueNeeds>, 'span' | 'unit'> & {
@@ -227,6 +240,10 @@ function ValueControl(
   }
 ) {
   let start = 0;
+  /** Whether the press in progress began on the value chip, which slides only once it moves as no tap does. */
+  let fromChip = false;
+  /** The element number entry is anchored to while it is open. */
+  const [entry, setEntry] = createSignal<Element>();
   const begin = () => {
     start = props.fraction;
     props.onStart();
@@ -245,17 +262,31 @@ function ValueControl(
     tap: (press) => props.onOpen(press.target)
   });
   const slide = pressHandlers({
-    start: (press) => {
+    start: (press, event) => {
       if (!props.active) {
         return false;
       }
+      fromChip = event.target instanceof Element && event.target.closest('[data-value-chip]') !== null;
       begin();
-      set(trackFraction(press));
+      if (!fromChip) {
+        set(trackFraction(press));
+      }
     },
-    move: (press) => set(trackFraction(press)),
+    move: (press) => {
+      if (!fromChip) {
+        set(trackFraction(press));
+      } else if (press.moved) {
+        set(start + chipDelta(press));
+      }
+    },
     end: props.onCommit,
     cancel: props.onCancel,
-    tapDistance: 0
+    tap: (press) => {
+      props.onCommit();
+      if (fromChip) {
+        setEntry(press.target);
+      }
+    }
   });
 
   function trackFraction(press: Press) {
@@ -265,77 +296,164 @@ function ValueControl(
       : (press.point.x - rect.left) / Math.max(1, rect.width);
   }
 
+  /** The fraction of the track a drag from the chip has covered. */
+  function chipDelta(press: Press) {
+    const rect = press.target.getBoundingClientRect();
+    return props.vertical
+      ? (press.start.y - press.point.y) / Math.max(1, rect.height)
+      : (press.point.x - press.start.x) / Math.max(1, rect.width);
+  }
+
+  const enter = (value: number) => {
+    setEntry(undefined);
+    props.onStart();
+    props.onNumberCommit(value);
+  };
+  /** The keypad's key handler, which it hands over as it is made; see `NumberKeypad`'s `keys`. */
+  let keypadKeys: ((event: KeyboardEvent) => boolean) | undefined;
+
   return (
-    <Show
-      when={props.look !== 'number'}
-      fallback={
-        <div class={styles.number} data-compact={!props.caption ? '' : undefined}>
-          <Show when={props.caption}>
-            <span class={styles.numberCaption}>{props.caption}</span>
-          </Show>
-          <Show when={props.active} fallback={<span>—</span>}>
-            <ScrubNumber
-              label={props.label}
-              disabled={!props.active}
-              step={props.step}
-              value={props.number}
-              min={props.min}
-              max={props.max}
-              unit={props.unit && unitSuffix(props.unit)}
-              scale={props.scale}
-              wrap={props.wrap}
-              onStart={props.onStart}
-              onCancel={props.onCancel}
-              onInput={props.onNumberInput}
-              onChange={props.onNumberCommit}
-            />
-          </Show>
-        </div>
-      }
-    >
+    <>
       <Show
-        when={props.look !== 'knob'}
+        when={props.look !== 'number'}
         fallback={
-          <div
-            class={styles.knob}
-            role="slider"
-            aria-label={props.label}
-            aria-valuenow={Math.round(props.fraction * 100)}
-            style={{
-              '--fraction': `${props.fraction * 360}deg`,
-              '--swatch': props.color,
-              '--swatch-ink': props.color && luminance(props.color) < 0.4 ? '#ffffff' : undefined
-            }}
-            {...scrub}
-          >
-            <span>{props.text}</span>
+          <div class={styles.number} data-compact={!props.caption ? '' : undefined}>
+            <Show when={props.caption}>
+              <span class={styles.numberCaption}>{props.caption}</span>
+            </Show>
+            <Show when={props.active} fallback={<span>—</span>}>
+              <ScrubNumber
+                label={props.label}
+                disabled={!props.active}
+                step={props.step}
+                value={props.number}
+                min={props.min}
+                max={props.max}
+                unit={props.unit && unitSuffix(props.unit)}
+                scale={props.scale}
+                wrap={props.wrap}
+                onStart={props.onStart}
+                onCancel={props.onCancel}
+                onInput={props.onNumberInput}
+                onChange={props.onNumberCommit}
+              />
+            </Show>
           </div>
         }
       >
-        <div
-          class={[styles.slider, props.vertical && styles.vertical, props.track !== undefined && styles.colored]}
-          role="slider"
-          aria-label={props.label}
-          aria-orientation={props.vertical ? 'vertical' : 'horizontal'}
-          aria-valuenow={Math.round(props.fraction * 100)}
-          style={{
-            '--fraction': `${props.fraction * 100}%`,
-            '--track-to': props.vertical ? 'top' : 'right',
-            background: props.track
-          }}
-          {...slide}
-        >
-          <span class={styles.fill} />
-          <span class={styles.thumb} />
-          <Show when={props.named}>
-            <span class={styles.sliderLabel}>
-              <span>{props.label}</span>
+        <Show
+          when={props.look !== 'knob'}
+          fallback={
+            <div
+              class={styles.knob}
+              role="slider"
+              aria-label={props.label}
+              aria-valuenow={Math.round(props.fraction * 100)}
+              aria-valuetext={props.text}
+              style={{
+                '--fraction': `${props.fraction * 360}deg`,
+                '--swatch': props.color,
+                '--swatch-ink': props.color && luminance(props.color) < 0.4 ? '#ffffff' : undefined
+              }}
+              {...scrub}
+            >
               <span>{props.text}</span>
-            </span>
-          </Show>
-        </div>
+            </div>
+          }
+        >
+          <div
+            class={[styles.slider, props.vertical && styles.vertical, props.track !== undefined && styles.colored]}
+            role="slider"
+            aria-label={props.label}
+            aria-orientation={props.vertical ? 'vertical' : 'horizontal'}
+            aria-valuenow={Math.round(props.fraction * 100)}
+            aria-valuetext={props.text}
+            data-levels={props.levels ? '' : undefined}
+            data-entry={entry() ? '' : undefined}
+            style={{
+              '--fraction': `${props.fraction * 100}%`,
+              '--track-to': props.vertical ? 'top' : 'right',
+              background: props.track
+            }}
+            {...slide}
+          >
+            <span class={styles.fill} />
+            <Show when={props.levels}>
+              {(levels) => <LevelTicks levels={levels()} vertical={props.vertical} />}
+            </Show>
+            <span class={styles.thumb} />
+            <Show when={props.named}>
+              <span class={styles.sliderLabel}>
+                <span>{props.label}</span>
+                <span
+                  class={styles.valueChip}
+                  data-value-chip
+                  title={props.active ? (props.levels ? 'Tap to choose a level' : 'Tap to type a value') : undefined}
+                >
+                  {props.text}
+                </span>
+              </span>
+            </Show>
+          </div>
+        </Show>
       </Show>
-    </Show>
+      <Show when={entry()}>
+        {(anchor) => (
+          <ValueEntryCard
+            anchor={anchor()}
+            label={props.label}
+            onCancel={() => setEntry(undefined)}
+            onKey={(event) => (props.levels ? moveLevelFocus(event) : (keypadKeys?.(event) ?? false))}
+          >
+            <Show
+              when={props.levels}
+              fallback={
+                <NumberKeypad
+                  label={props.label}
+                  value={props.number}
+                  min={props.min}
+                  max={props.max}
+                  step={props.step}
+                  unit={props.unit ? unitSuffix(props.unit) : ''}
+                  onCommit={enter}
+                  onCancel={() => setEntry(undefined)}
+                  keys={(handler) => (keypadKeys = handler)}
+                />
+              }
+            >
+              {(levels) => (
+                <LevelPicker label={props.label} levels={levels()} value={props.number} onChoose={enter} />
+              )}
+            </Show>
+          </ValueEntryCard>
+        )}
+      </Show>
+    </>
+  );
+}
+
+/**
+ * A level slider's marks: a tick at each level, and the zones after the first tinted, with a line where each begins,
+ * so the stabilizer's S levels read apart from 0 to 15.
+ */
+function LevelTicks(props: { levels: readonly (ValueLevel & { fraction: number })[]; vertical: boolean }) {
+  const edge = (fraction: number) => (props.vertical ? { bottom: `${fraction * 100}%` } : { left: `${fraction * 100}%` });
+  const zones = createMemo(() =>
+    props.levels.flatMap((level, index) => {
+      const previous = props.levels[index - 1];
+      return previous && previous.zone !== level.zone
+        ? [{ zone: level.zone, from: (previous.fraction + level.fraction) / 2 }]
+        : [];
+    })
+  );
+
+  return (
+    <span class={styles.levelTicks} aria-hidden="true">
+      <For each={zones()}>
+        {(zone) => <span class={styles.levelZoneMark} data-zone={zone.zone} style={edge(zone.from)} />}
+      </For>
+      <For each={props.levels}>{(level) => <span class={styles.levelTick} style={edge(level.fraction)} />}</For>
+    </span>
   );
 }
 
@@ -348,7 +466,17 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
   const observed = createMemo(() => channel.read(services));
   const value = () => draft() ?? observed();
   const max = createMemo(() => channel.max(services));
-  const fraction = () => channel.toFraction?.(value(), max(), services) ?? (value() - min()) / (max() - min());
+  const toFraction = (of: number) => channel.toFraction?.(of, max(), services) ?? (of - min()) / (max() - min());
+  const fraction = () => toFraction(value());
+  /** The channel's levels where the slider draws them, while the value applies; see `ValueChannel`'s `levels`. */
+  const levels = createMemo(() =>
+    active() ? channel.levels?.map((level) => ({ ...level, fraction: toFraction(level.value) })) : undefined
+  );
+  /** `next` at the nearest of the channel's levels, or as it is for a channel without levels. */
+  const snap = (next: number) =>
+    channel.levels?.reduce((best, level) =>
+      Math.abs(level.value - next) < Math.abs(best.value - next) ? level : best
+    ).value ?? next;
   let start: { value: number; hsv: Hsv; color: string };
   let captured: ReturnType<NonNullable<ValueChannel['capture']>> | undefined;
   const write = (next: number, hsv: Hsv) => {
@@ -400,6 +528,9 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       return active();
     },
     step: channel.step,
+    get levels() {
+      return levels();
+    },
     scale: channel.scale,
     wrap: channel.wrap,
     get text() {
@@ -420,7 +551,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
       start = { value: value(), hsv: color.hsv(), color: color.value() };
     }),
     onInput: frame.command((next: number) =>
-      write(channel.fromFraction?.(next, max(), services) ?? min() + next * (max() - min()), start.hsv)
+      write(snap(channel.fromFraction?.(next, max(), services) ?? min() + next * (max() - min())), start.hsv)
     ),
     onNumberInput: frame.command((next: number) => write(next, start.hsv)),
     onNumberCommit: frame.command((next: number) => {
