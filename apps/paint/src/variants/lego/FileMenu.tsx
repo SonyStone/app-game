@@ -1,6 +1,12 @@
+import type { JSX } from '@solidjs/web';
+import { createContext, Show, useContext } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
+import appStyles from './FileMenu.module.css';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
+
+/** Optional host content for the last File menu group; embedded studios leave it empty. */
+export const FileApplicationControls = createContext<(() => JSX.Element) | null>(null);
 
 /**
  * The drawing's file commands, which the File part opens beside itself: open a drawing (`.paint` or Photoshop), place
@@ -17,6 +23,7 @@ export function FileMenu(props: {
   place: LegoServices['files']['place'];
   onDone: () => void;
 }) {
+  const applicationControls = useContext(FileApplicationControls);
   let drawing!: HTMLInputElement;
   let image!: HTMLInputElement;
   const ready = () => props.ready;
@@ -70,6 +77,13 @@ export function FileMenu(props: {
       />
       <Item icon="scene" label="Export picture" detail="PNG" disabled={!ready()} onSelect={() => run(props.png)} />
       <Item icon="layers" label="Export layers" detail="PSD" disabled={!ready()} onSelect={() => run(props.psd)} />
+      <Show when={applicationControls}>
+        {(controls) => (
+          <div class={appStyles.applicationGroup} role="group" aria-label="Paint app">
+            {controls()()}
+          </div>
+        )}
+      </Show>
     </div>
   );
 }

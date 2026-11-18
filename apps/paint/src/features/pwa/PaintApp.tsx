@@ -1,19 +1,19 @@
 import { Show } from 'solid-js';
 import { registerSW } from 'virtual:pwa-register';
-import { PaintStudio } from '../studio/PaintStudio';
+import { LegoStudio } from '../../variants/lego/LegoStudio';
 import { paintBuild } from './buildInfo';
 import { createPwa } from './createPwa';
 import styles from './PaintApp.module.css';
 
 /**
- * The standalone app: the editor plus installation, offline status and build identity in the drawing menu. Only this
+ * The standalone app: the editor plus installation, offline status and build identity in the File menu. Only this
  * host registers a service worker; the editor embedded in the playground never does.
  */
 export function PaintApp() {
   const pwa = createPwa(registerSW);
 
   return (
-    <PaintStudio
+    <LegoStudio
       applicationControls={
         <>
           <Show when={pwa.canInstall()}>
@@ -23,8 +23,8 @@ export function PaintApp() {
           </Show>
           <Show when={pwa.homeScreenHint}>
             <p class={styles.panelNote}>
-              Safari may erase drawings after a week without visits. To keep them, tap Share, then Add to Home
-              Screen. The Home Screen app starts empty, so export drawings from here first.
+              Safari may erase drawings after a week without visits. To keep them, tap Share, then Add to Home Screen.
+              The Home Screen app starts empty, so export drawings from here first.
             </p>
           </Show>
           <p class={styles.panelNote} role="status">

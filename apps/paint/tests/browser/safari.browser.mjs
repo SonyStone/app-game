@@ -31,7 +31,7 @@ let session;
 try {
   session = await openSession(driver.url);
   await session.command('POST', '/window/rect', { width: 1280, height: 800 });
-  await session.command('POST', '/url', { url: `${baseURL}/` });
+  await session.command('POST', '/url', { url: `${baseURL}/variants.html#studio` });
   await session.run(collectPageErrors);
 
   await step('WebGPU opens an adapter', async () => {

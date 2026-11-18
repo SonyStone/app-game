@@ -1,5 +1,6 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { BrushStudioDialog } from '../../features/brush/BrushStudioDialog';
@@ -18,6 +19,7 @@ import { brushPinned, toggleBrushPin } from './brushPins';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
 import { createKits } from './kits';
+import { FileApplicationControls } from './FileMenu';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
@@ -26,7 +28,7 @@ import { PartFrame } from './PartFrame';
 import type { Popup } from './parts/definition';
 
 /**
- * The LEGO variant, a prototype of a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
+ * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
  * of studs, and parts sit on the studs in any whole number of cells. A part shows more the larger it is, like an
  * Android widget: a brush is a stroke sample, then gets its name, then a large sample; a value is a knob that opens a
  * slider, then a slider itself. Parts never overlap; placing or growing one pushes the others aside, and that is how
@@ -40,7 +42,12 @@ import type { Popup } from './parts/definition';
  * panels and back, size them by their corner and move panels by their rim; a long press on a free spot offers the
  * parts right there (see `BoardView`). The board is kept per device.
  */
-export function LegoStudio(props: PaintVariantProps) {
+export function LegoStudio(
+  props: PaintVariantProps & {
+    /** Host-owned installation, offline status and build identity in the File menu. */
+    applicationControls?: JSX.Element;
+  }
+) {
   const [editing, setEditing] = createSignal(false);
   /** The swatch whose panel is open; see `BoardView`. */
   const [openPanel, setOpenPanel] = createSignal<string>();
@@ -201,11 +208,15 @@ export function LegoStudio(props: PaintVariantProps) {
                   </Match>
                   <Match when={popup()?.popup.kind === 'part' && popup()!.popup}>
                     {(open) => (
-                      <PartFrame
-                        kind={(open() as Extract<Popup, { kind: 'part' }>).partKind}
-                        popup
-                        onDone={() => setPopup(undefined)}
-                      />
+                      <FileApplicationControls
+                        value={props.applicationControls ? () => props.applicationControls : null}
+                      >
+                        <PartFrame
+                          kind={(open() as Extract<Popup, { kind: 'part' }>).partKind}
+                          popup
+                          onDone={() => setPopup(undefined)}
+                        />
+                      </FileApplicationControls>
                     )}
                   </Match>
                   <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>

@@ -33,7 +33,7 @@ try {
   const page = await context.newPage();
   watchErrors(page);
   await page.route('**/favicon.ico', (route) => route.fulfill({ status: 204 }));
-  await page.goto(`${baseURL}/`);
+  await page.goto(`${baseURL}/variants.html#studio`);
   await waitForSaved(page);
 
   await step('resting the pointer on a toolbar button shows its visual hint', async () => {

@@ -23,7 +23,7 @@ adb logcat -s PaintShell
 ```
 
 The app opens the URL from `--es url`, else the last one, else the production Lego page
-(`https://app-game-one.vercel.app/paint/lego`). Classic is `/paint/studio`; `/paint` lists every variant. For a local
+(`https://app-game-one.vercel.app/paint/lego`). Classic is `/paint/studio`; `/paint` opens LEGO and `/paint/variants` lists every variant. For a local
 dev server, `adb reverse tcp:PORT tcp:PORT` and pass `--es url http://localhost:PORT/paint/lego`; the bridge allows
 `localhost` and `127.0.0.1` on the port of each URL loaded this way. Pages can be inspected from `chrome://inspect`
 (or `adb forward tcp:9333 localabstract:webview_devtools_remote_$(adb shell pidof dev.appgame.paint)`).

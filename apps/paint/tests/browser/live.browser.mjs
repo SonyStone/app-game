@@ -38,7 +38,7 @@ const errors = [];
 try {
   const author = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   author.on('pageerror', (error) => errors.push(`author: ${error.message}`));
-  await author.goto(`${baseURL}/`);
+  await author.goto(`${baseURL}/variants.html#studio`);
   await saved(author);
   const workspace = await author.getByRole('main', { name: 'Drawing workspace' }).boundingBox();
   const cx = workspace.x + workspace.width / 2,
@@ -56,7 +56,8 @@ try {
   const viewer = await (await browser.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
   viewer.on('pageerror', (error) => errors.push(`viewer: ${error.message}`));
   viewer.on('console', (message) => message.type() === 'error' && errors.push(`viewer console: ${message.text()}`));
-  await viewer.goto(link);
+  // Watch links omit the dev variant hash; keep this Classic UI test on Classic.
+  await viewer.goto(`${link}#studio`);
   await viewer
     .getByRole('status')
     .filter({ hasText: /^Live/ })

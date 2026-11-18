@@ -24,9 +24,16 @@ export type PaintVariant = {
 /** Every Paint variant, in the order variant lists show them. */
 export const paintVariants: PaintVariant[] = [
   {
+    id: 'lego',
+    name: 'LEGO',
+    description:
+      'Paint’s interface: parts on plates over the drawing, rearranged in edit mode.',
+    load: () => import('./lego').then(({ LegoStudio }) => LegoStudio)
+  },
+  {
     id: 'studio',
     name: 'Classic',
-    description: 'The current editor: toolbar, side panels, radial menu and developer tools.',
+    description: 'The original editor: toolbar, side panels, radial menu and developer tools.',
     load: () => import('../features/studio/PaintStudio').then(({ PaintStudio }) => PaintStudio)
   },
   {
@@ -59,13 +66,6 @@ export const paintVariants: PaintVariant[] = [
     name: 'Zen',
     description: 'An empty page and one pebble; everything else is a gesture.',
     load: () => import('./zen').then(({ ZenStudio }) => ZenStudio)
-  },
-  {
-    id: 'lego',
-    name: 'LEGO',
-    description:
-      'A prototype: panels of studs on the drawing, parts of any size that show more as they grow, and an edit mode to build your own.',
-    load: () => import('./lego').then(({ LegoStudio }) => LegoStudio)
   },
   {
     id: 'command',

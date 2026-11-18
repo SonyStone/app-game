@@ -1,6 +1,6 @@
 # Paint Studio editor
 
-The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhost:3030) and is embedded in the web playground at `/paint/studio`. Older experiments remain at `/paint`.
+The editor runs standalone (`pnpm --filter @app-game/paint dev`, http://localhost:3030/variants.html#studio) and is embedded in the web playground at `/paint/studio`. The main page opens LEGO; other variants and experiments remain at `/paint/variants`.
 
 [Maintenance guide](./maintenance.md): module map, error contracts, queue limits and required checks.
 

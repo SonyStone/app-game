@@ -1,10 +1,10 @@
-import { FolderIndex, Thumbnail, type FolderGroups, type Routes } from '@app-game/app-router';
+import { Thumbnail, type FolderGroups, type Routes } from '@app-game/app-router';
 import multitouchThumbnail from '@app-game/hammer-examples/thumbnail.png';
 import { nativeShell } from '@app-game/paint/native-shell';
 import { featureDemos, paintVariants, type PaintVariant } from '@app-game/paint/variants';
 import { Ripple } from '@app-game/ui-components/ripple';
 
-import { lazy } from 'solid-js';
+import { For, lazy } from 'solid-js';
 import texturesViewThumbnail from './thumbnail/chrome_2024-06-13_07-04-13.png?url';
 
 export const rendererRoutes: Routes[] = [];
@@ -179,7 +179,7 @@ export const paintRoutes: Routes = {
       href={props.path}
     >
       <h2 class="text-4xl">Paint App</h2>
-      <span class="text-center text-sm">Stuff associated with creating a drawing application</span>
+      <span class="text-center text-sm">Parts on plates over the drawing, rearranged in edit mode</span>
       <div class="absolute -end-2 bottom-1">
         <span class="text-4rem leading-6">🎨</span>
       </div>
@@ -189,7 +189,11 @@ export const paintRoutes: Routes = {
   children: [
     {
       path: '/',
-      component: FolderIndex
+      component: variantRoutes.find((route) => route.path === '/lego')!.component
+    },
+    {
+      path: '/variants',
+      component: PaintVariants
     },
     ...variantRoutes,
     ...componentCanvasRoutes,
@@ -205,7 +209,7 @@ export const paintRoutes: Routes = {
  * experiments, except in the Android shell app, which opens one variant as an app of its own.
  */
 function variantRoute(variant: PaintVariant, prefix: string): Routes {
-  const experimentsHref = nativeShell() ? undefined : '/paint';
+  const experimentsHref = nativeShell() ? undefined : '/paint/variants';
   return {
     path: `/${variant.id}`,
     name: `${prefix} · ${variant.name}`,
@@ -214,4 +218,29 @@ function variantRoute(variant: PaintVariant, prefix: string): Routes {
       variant.load().then((Variant) => ({ default: () => <Variant experimentsHref={experimentsHref} /> }))
     )
   };
+}
+
+/** The remaining interfaces and experiments, linked from each embedded studio's Exit button. */
+function PaintVariants() {
+  return (
+    <main style={{ padding: '24px', font: '14px/1.5 system-ui, sans-serif' }}>
+      <h1>Paint variants and experiments</h1>
+      <For each={paintFolderGroups}>
+        {(group) => (
+          <section>
+            <h2>{group().title}</h2>
+            <ul>
+              <For each={group().routes}>
+                {(route) => (
+                  <li>
+                    <a href={`/paint${route().path}`}>{route().name}</a>
+                  </li>
+                )}
+              </For>
+            </ul>
+          </section>
+        )}
+      </For>
+    </main>
+  );
 }

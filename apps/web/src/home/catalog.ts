@@ -2,7 +2,7 @@ import { countPages, type FolderGroups, type Routes } from '@app-game/app-router
 import { escyRoutes } from '@app-game/ecsy-pages/routes';
 import { mathRoutes } from '@app-game/math-examples/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
-import { paintFolderGroups, paintRoutes } from '@app-game/paint-examples/routes';
+import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
 import { tankiRoutes } from '@app-game/tanki/routes';
 import { threeRoutes } from '@app-game/three-examples';
@@ -133,9 +133,7 @@ export const catalog: ProjectGroup[] = [
           paintPiePreview,
           paintDemoFillPreview,
           paintDesktopPreview
-        ],
-        folder: paintRoutes,
-        folderGroups: paintFolderGroups
+        ]
       },
       {
         href: '/solid-svg-editor',
