@@ -1,0 +1,19 @@
+.demo {
+  margin: 0 0 12px;
+  color: var(--studio-column-ink, currentColor);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 84px;
+  border-radius: 6px;
+  background: var(--studio-paper, color-mix(in srgb, currentColor 4%, transparent));
+}
+
+.caption {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--studio-column-quiet, currentColor);
+}
