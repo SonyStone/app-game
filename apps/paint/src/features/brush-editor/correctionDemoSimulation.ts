@@ -7,7 +7,11 @@ export const correctionDemoTiming = { lift: 2500, loop: 3250 };
 
 /**
  * Replays pen packets and a short mid-gesture rest through Paint's real processor. Coordinates are CSS pixels
- * in a 360 × 84 strip. Time is clamped, not wrapped, so callers can also request a finished still.
+ * in the supplied samples, by default a 360 × 84 strip. Time is milliseconds, clamped, not wrapped.
+ * `lifted` means time has reached pen-up at 2500 ms. `beforeLift` is committed ink before finish,
+ * excluding disposable preview tails; `afterLift` is the output added by finish, empty while drawing.
+ * `line` joins those arrays after lift, or committed ink and a disposable preview during contact.
+ * `pen` is the latest raw sample and remains at the lift point in a finished still.
  * Preview tails are disposable and never become committed points.
  */
 export function strokeCorrectionFrame(settings: StrokeSettings, time: number, samples = correctionPenSamples()) {
@@ -37,12 +41,18 @@ export function strokeCorrectionFrame(settings: StrokeSettings, time: number, sa
   }
 
   const lifted = time >= correctionDemoTiming.lift;
-  const line = [...committed, ...(lifted ? processor.finish() : processor.preview())];
-  return { raw, line, pen: raw.at(-1), lifted };
+  const afterLift = lifted ? processor.finish() : [];
+  const line = [...committed, ...(lifted ? afterLift : processor.preview())];
+  return { raw, line, beforeLift: committed, afterLift, pen: raw.at(-1), lifted };
 }
 
-/** Fixed 120 Hz pen input with curves, a corner, jitter, a rest, and a fast straight exit before lift. */
-export function correctionPenSamples(): Sample[] {
+/**
+ * Fixed 120 Hz pen input in CSS pixels for a strip of `width` × 84, default 360.
+ * Includes curves, jitter, a rest, and a 50 ms flick across the final 30% of the usable width.
+ * Widths below 240 are clamped to keep the gesture and lift gap legible.
+ */
+export function correctionPenSamples(width = 360): Sample[] {
+  const travelWidth = Math.max(240, width) - 32;
   const points: Sample[] = [];
   for (let index = 0; index <= 300; index++) {
     const time = (index * 1000) / 120;
@@ -52,10 +62,11 @@ export function correctionPenSamples(): Sample[] {
 
     const travel = time <= 1150 ? time : Math.max(1150, time - 200);
     const t = travel / 2300;
-    const x = 16 + 328 * t;
-    const y = t < 0.6 ? 42 - 23 * Math.sin((t / 0.6) * Math.PI * 2) : t < 0.78 ? 42 + ((t - 0.6) / 0.18) * 22 : 64;
+    const progress = time <= 2450 ? 0.7 * (travel / 2250) : 0.7 + 0.3 * ((time - 2450) / 50);
+    const x = 16 + travelWidth * progress;
+    const y = t < 0.3 ? 42 - 23 * Math.sin((t / 0.3) * Math.PI * 2) : t < 0.4 ? 42 + ((t - 0.3) / 0.1) * 22 : 64;
     // Fade jitter out on the straight exit so the finishing distance is easy to compare.
-    const jitter = t < 0.78 ? Math.sin(index * 1.7) * 1.8 : 0;
+    const jitter = t < 0.4 ? Math.sin(index * 1.7) * 1.8 : 0;
     points.push({ x, y: y + jitter, pressure: 0.35 + 0.3 * Math.sin(Math.PI * t), time, pointerType: 'pen' });
   }
 
@@ -73,9 +84,9 @@ export function correctionDemoCaption(settings: StrokeSettings) {
       return 'The dot is your pen. The line smooths movements and finishes where you lift.';
     case 'smooth':
       return settings.catchUp
-        ? 'The dot is your pen. The line catches up when the pen lifts.'
-        : 'The dot is your pen. The line stops short when the pen lifts.';
+        ? 'The ring is where you lift. Blue ink catches up after the pen lifts.'
+        : 'The ring is where you lift. The line stops short; dashes show the missing end.';
     case 'stabilizer':
-      return 'The dot is your pen. Higher levels trail farther; lifting finishes the line.';
+      return 'The dot is your pen. Higher levels trail farther; blue ink finishes the line after lift.';
   }
 }

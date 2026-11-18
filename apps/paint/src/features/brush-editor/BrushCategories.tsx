@@ -163,7 +163,9 @@ export function CategoryPane(props: {
       <Show when={props.category.about} keyed>
         {(about) => <About title={props.category.label} text={about} />}
       </Show>
-      <Show when={props.category.id === 'stroke-correction'}><StrokeCorrectionDemo brush={props.brush} /></Show>
+      <Show when={props.category.id === 'stroke-correction'}>
+        <StrokeCorrectionDemo brush={props.brush} />
+      </Show>
       <CategoryRows
         numberRow={props.numberRow}
         category={props.category}

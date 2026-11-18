@@ -29,7 +29,16 @@ it('restarts on settings changes, suspends offscreen/hidden, holds reduced motio
     return next;
   });
   vi.stubGlobal('cancelAnimationFrame', (id: number) => callbacks.delete(id));
-  const context = { scale() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, fill() {}, arc() {} };
+  const context = {
+    setLineDash() {},
+    scale() {},
+    beginPath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+    fill() {},
+    arc() {}
+  };
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
     context as unknown as ReturnType<HTMLCanvasElement['getContext']>
   );
