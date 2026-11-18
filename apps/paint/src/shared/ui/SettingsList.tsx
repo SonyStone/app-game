@@ -14,7 +14,8 @@ import styles from './SettingsList.module.css';
  *
  * The host styles it through custom properties, each with a fallback: `--settings-list-ink` and
  * `--settings-list-quiet` for the text, `--settings-list-icon` and `--settings-list-icon-ink` for the icon tiles,
- * `--settings-list-selected` and `--settings-list-selected-ink` for the selected row, `--settings-list-hover`,
+ * `--settings-list-selected`, `--settings-list-selected-ink` and `--settings-list-selected-quiet` (its trailing text)
+ * for the selected row, `--settings-list-hover`,
  * `--settings-list-row` (row height, 40 px), `--settings-list-radius`, `--settings-list-inset` (the rows' distance
  * from the list's sides, as `padding-inline`), `--settings-list-text` and `--settings-list-small` for the type, and
  * `--settings-list-chevron` (`none` by default, `block` to show a chevron at each row's end, as a phone's list does

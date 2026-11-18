@@ -105,8 +105,7 @@
   white-space: nowrap;
 
   [aria-current] & {
-    color: inherit;
-    opacity: 0.82;
+    color: var(--settings-list-selected-quiet, color-mix(in srgb, currentColor 82%, transparent));
   }
 }
 

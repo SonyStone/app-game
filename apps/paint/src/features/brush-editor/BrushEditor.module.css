@@ -731,7 +731,12 @@
   .studioList {
     --settings-list-selected: var(--raised-color);
     --settings-list-selected-ink: var(--column-ink);
+    --settings-list-selected-quiet: var(--column-quiet);
     --settings-list-inset: 8px 0;
+
+    button {
+      padding-right: 16px;
+    }
 
     [aria-current] {
       position: relative;
@@ -1073,6 +1078,7 @@
     --settings-list-chevron: block;
     --settings-list-selected: transparent;
     --settings-list-selected-ink: var(--column-ink);
+    --settings-list-selected-quiet: var(--column-quiet);
     --settings-list-inset: 8px;
   }
 
