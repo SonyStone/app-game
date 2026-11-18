@@ -108,7 +108,7 @@ it('switches between the categories, a category and the pad in the narrow layout
   expect(frame.getAttribute('data-view')).toBe('list');
 });
 
-it("puts the host's rows in place of number rows, and keeps its own where the host gives none", () => {
+it("puts the host's rows in place of number and curve rows, and keeps its own where the host gives none", () => {
   const asked: string[] = [];
   const studio = mount(
     'studio',
@@ -131,6 +131,9 @@ it("puts the host's rows in place of number rows, and keeps its own where the ho
     null
   ]);
   expect(rows.lastElementChild!.getAttribute('role')).toBe('radiogroup');
+  studio.click(studio.category('Pressure curve'));
+  expect(asked.at(-1)).toBe('pressure-curve:pressure-curve');
+  expect(studio.root().querySelector('[data-hosted="pressure-curve"]')).not.toBeNull();
   // The host's rows edit the brush themselves; the studio sends no patch for them.
   expect(studio.changes).toEqual([]);
 });
@@ -145,7 +148,7 @@ function mount(
   categories?: readonly BrushCategory[],
   onDone: () => void = () => {},
   name?: string,
-  numberRow?: Parameters<typeof BrushStudio>[0]['numberRow']
+  hostRow?: Parameters<typeof BrushStudio>[0]['hostRow']
 ) {
   const [brush, setBrush] = createSignal(initial);
   const baseline = snapshotBrushSettings(initial);
@@ -173,7 +176,7 @@ function mount(
             baseline={baseline}
             categories={categories}
             name={name}
-            numberRow={numberRow}
+            hostRow={hostRow}
             onChange={onChange}
             onDone={onDone}
             pad={<div data-pad />}

@@ -73,7 +73,10 @@ it('steps a slider with the keys', () => {
 });
 
 it('takes the whole row of a switch, a choice option and a category as its press target', () => {
-  const { brush, editor, category, status, click, menu } = mount();
+  const { brush, editor, category, status, click } = mount({
+    ...defaultBrush(),
+    stroke: { ...defaultBrush().stroke, mode: 'stabilizer', stabilizer: 4 }
+  });
   click(status('Painting'));
   const radio = [...editor().querySelectorAll('[role="radio"]')].find((element) =>
     element.textContent?.includes('Classic')
@@ -84,17 +87,6 @@ it('takes the whole row of a switch, a choice option and a category as its press
 
   click(status('Stroke correction'));
   expect(category('Stroke correction').getAttribute('aria-current')).toBe('true');
-
-  click(menu('Smoothing').firstElementChild!);
-  const option = [...editor().querySelectorAll('[role="option"]')].find((element) =>
-    element.textContent?.includes('Leonardo smooth')
-  )!;
-  expect(option.getAttribute('aria-selected')).toBe('false');
-  click(option.firstElementChild!);
-  expect(brush().stroke.mode).toBe('smooth');
-  expect(menu('Smoothing').textContent).toBe('Leonardo smooth');
-  expect(editor().textContent).toContain('Higher stabilization smooths more');
-
   const toggle = editor().querySelector<HTMLElement>('[role="switch"]')!;
   const on = brush().stroke.catchUp;
   click(toggle.lastElementChild!);
@@ -103,27 +95,27 @@ it('takes the whole row of a switch, a choice option and a category as its press
 });
 
 it('shows a greyed row with its value, announces it disabled and ignores presses', () => {
-  const { brush, editor, category, click, slider, pointer } = mount();
+  const { brush, editor, category, click, slider } = mount();
   click(category('Stroke correction'));
-  // Studio smoothing: the Leonardo level, the stabilizer level and catch-up do not apply.
-  const level = slider('Stabilization');
-  expect(level.getAttribute('aria-disabled')).toBe('true');
-  expect(level.getAttribute('aria-valuenow')).toBe('1');
-  expect(editor().querySelector<HTMLInputElement>('input[aria-label="Stabilization"]')!.value).toBe('1');
-  expect(editor().querySelector<HTMLInputElement>('input[aria-label="Stabilization"]')!.disabled).toBe(true);
-  const before = brush();
-  pointer(level, 'pointerdown', 280);
-  pointer(level, 'pointermove', 290);
-  level.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  // At Smoothing 0 nothing trails, so catch-up does not apply; the pressure curve applies to smoothed strokes only.
+  expect(slider('Smoothing').getAttribute('aria-disabled')).toBe('false');
+  expect(slider('Smoothing').getAttribute('aria-valuenow')).toBe('0');
   const catchUp = editor().querySelector<HTMLButtonElement>('[role="switch"]')!;
   expect(catchUp.disabled).toBe(true);
+  const before = brush();
   catchUp.click();
+  flush();
+  click(category('Pressure curve'));
+  const handle = editor().querySelector<HTMLElement>('[data-curve-handle="minimum"]')!;
+  expect(handle.getAttribute('aria-disabled')).toBe('true');
+  expect(handle.getAttribute('aria-valuenow')).toBe('5');
+  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   flush();
   expect(brush()).toBe(before);
 });
 
 it('keeps every row in place while a slider drags and after a switch or a choice changes', () => {
-  const { editor, category, click, slider, pointer, menu } = mount();
+  const { brush, editor, category, click, slider, pointer } = mount();
   const rows = () => [...editor().querySelectorAll('section[aria-labelledby] > div:last-child > *')];
 
   const painting = rows();
@@ -140,37 +132,36 @@ it('keeps every row in place while a slider drags and after a switch or a choice
 
   expect(rows()).toEqual(pressure);
 
+  // Smoothing from Studio to the stabilizer and back changes the mode, and no row comes or goes.
   click(category('Stroke correction'));
   const correction = rows();
-  for (const name of ['None (raw input)', 'Leonardo normal', 'Stabilizer (Paint Tool SAI)', 'Studio']) {
-    click(menu('Smoothing'));
-    expect(rows()).toEqual(correction);
-    click([...editor().querySelectorAll('[role="option"]')].find((option) => option.textContent === name)!);
-    expect(menu('Smoothing').textContent).toBe(name);
+  for (const x of [200, 300, 100]) {
+    pointer(slider('Smoothing'), 'pointerdown', x);
+    pointer(slider('Smoothing'), 'pointerup', x);
     expect(rows()).toEqual(correction);
   }
+  expect(brush().stroke.mode).toBe('studio');
 });
 
 it('shows a choice of more than three options as one row that opens them, and closes it on a choice, outside or Escape', () => {
-  const { brush, editor, category, click, menu, pointer } = mount();
-  click(category('Stroke correction'));
+  const values = brushToFormValues(abrSource);
+  const abr: Brush = {
+    ...defaultBrush(),
+    engine: { id: 'abr', settings: { values: { ...values, useTransfer: true }, tipId: 'tip' } }
+  };
+  const { brush, editor, category, click, menu, pointer } = mount(abr, { categories: abrCategories });
+  click(category('Transfer'));
   expect(editor().querySelectorAll('[role="radio"]')).toHaveLength(0);
-  const button = menu('Smoothing');
+  const button = menu('Flow Control');
   expect(button.getAttribute('aria-haspopup')).toBe('listbox');
-  expect(button.textContent).toBe('Studio');
+  expect(button.textContent).toBe('Off');
   const list = () => editor().querySelector('[role="listbox"]');
   expect(list()).toBeNull();
 
   click(button);
   expect(button.getAttribute('aria-expanded')).toBe('true');
-  expect([...list()!.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual([
-    'None (raw input)',
-    'Studio',
-    'Leonardo normal',
-    'Leonardo smooth',
-    'Stabilizer (Paint Tool SAI)'
-  ]);
-  expect(list()!.querySelector('[aria-selected="true"]')!.textContent).toBe('Studio');
+  expect(list()!.querySelectorAll('[role="option"]').length).toBeGreaterThan(3);
+  expect(list()!.querySelector('[aria-selected="true"]')!.textContent).toBe('Off');
   expect(document.activeElement).toBe(list()!.querySelector('[aria-selected="true"]'));
 
   // Escape closes the list without a change and gives the focus back to the row's button.
@@ -293,12 +284,32 @@ it('depends on no hover', () => {
   expect(css).not.toContain(':hover');
 });
 
-it("shows a category's note in place of rows when none of its settings apply", () => {
-  const { editor, category, click, categories } = mount({ ...defaultBrush(), engine: { id: 'abr', settings: {} } });
-  expect(categories()).toEqual(['Painting', 'Brush tip', 'Stroke correction', 'Pressure curve']);
-  click(category('Brush tip'));
-  expect(editor().textContent).toContain('ABR presets keep their own tip shape and pressure dynamics.');
-  expect(editor().querySelector('[role="slider"]')).toBeNull();
+it('leaves out a category with no rows for the brush, as Brush tip for an ABR preset', () => {
+  const { categories } = mount({ ...defaultBrush(), engine: { id: 'abr', settings: {} } });
+  expect(categories()).toEqual(['Painting', 'Stroke correction', 'Pressure curve']);
+});
+
+it('shows no explanatory text in a category: only its title, status, headings, labels and values', () => {
+  const values = brushToFormValues(abrSource);
+  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
+  for (const [brush, categories] of [
+    [defaultBrush(), undefined],
+    [abr, abrCategories]
+  ] as const) {
+    const { editor, click, categories: names, category } = mount(brush, { categories });
+    for (const name of names()) {
+      click(category(name!));
+      const pane = editor().querySelector('section[aria-labelledby]')!;
+      expect(pane.querySelector('[aria-controls]'), name!).toBeNull();
+      // Paragraphs are prose; the pane's only one is its status, which the column shows where it has room.
+      expect(
+        [...pane.querySelectorAll('p')].map((p) => p.textContent),
+        name!
+      ).toEqual([category(name!).querySelector('span:nth-child(2) > span:last-child')!.textContent]);
+    }
+    dispose?.();
+    document.body.replaceChildren();
+  }
 });
 
 it('updates only the moved row and the status lines it affects', () => {
@@ -397,7 +408,7 @@ it('names each category button by its category and describes it by its status, a
     '32 px · 100%',
     'Soft round · 65%',
     'Pressure → Size',
-    'Studio',
+    'Off',
     'Off'
   ]);
   const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
@@ -413,7 +424,6 @@ it('shows a tapped category alone and goes back to the list in the narrow layout
   expect(editor().querySelector('h2')!.textContent).toBe('Pressure curve');
   click([...editor().querySelectorAll('button')].find((button) => button.textContent === 'All categories')!);
   expect(frame.getAttribute('data-view')).toBe('list');
-  expect(editor().textContent).toContain('About pressure curve');
 });
 
 /**

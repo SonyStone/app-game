@@ -9,7 +9,7 @@ import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
 import { brushChannels } from './brushChannels';
 import { definePart, type PartBinding } from './definition';
-import { LevelPicker, moveLevelFocus, NumberKeypad, ValueEntryCard, type ValueLevel } from './ValueEntry';
+import { LevelPicker, moveLevelFocus, NumberKeypad, unitSuffix, ValueEntryCard, type ValueLevel } from './ValueEntry';
 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
 export type ValueKind = (typeof channels)[number]['id'] | `brush:${string}`;
@@ -33,9 +33,9 @@ export type ValueChannel = {
   /** Numeric input step, supplied by the brush schema. */
   step?: number;
   /**
-   * The value's named levels in order, for a value with a few discrete steps such as the stabilizer's 0 to 15 and
-   * S-1 to S-7: its slider shows a tick per level and snaps to them, marks where one `zone` ends and the next begins,
-   * and its value chip opens a picker of the levels instead of the keypad.
+   * The value's named levels in order, for a value with a few discrete steps such as Smoothing's 0 to 22: its slider
+   * shows a tick per level and snaps to them, marks where one `zone` ends and the next begins, and its value chip opens
+   * a picker of the levels instead of the keypad.
    */
   levels?: readonly ValueLevel[];
   /** Unavailable channels stay mounted but cannot receive edits. */
@@ -378,9 +378,7 @@ function ValueControl(
             {...slide}
           >
             <span class={styles.fill} />
-            <Show when={props.levels}>
-              {(levels) => <LevelTicks levels={levels()} vertical={props.vertical} />}
-            </Show>
+            <Show when={props.levels}>{(levels) => <LevelTicks levels={levels()} vertical={props.vertical} />}</Show>
             <span class={styles.thumb} />
             <Show when={props.named}>
               <span class={styles.sliderLabel}>
@@ -421,9 +419,7 @@ function ValueControl(
                 />
               }
             >
-              {(levels) => (
-                <LevelPicker label={props.label} levels={levels()} value={props.number} onChoose={enter} />
-              )}
+              {(levels) => <LevelPicker label={props.label} levels={levels()} value={props.number} onChoose={enter} />}
             </Show>
           </ValueEntryCard>
         )}
@@ -434,10 +430,11 @@ function ValueControl(
 
 /**
  * A level slider's marks: a tick at each level, and the zones after the first tinted, with a line where each begins,
- * so the stabilizer's S levels read apart from 0 to 15.
+ * so Smoothing's strong levels above 15 read apart from the others.
  */
 function LevelTicks(props: { levels: readonly (ValueLevel & { fraction: number })[]; vertical: boolean }) {
-  const edge = (fraction: number) => (props.vertical ? { bottom: `${fraction * 100}%` } : { left: `${fraction * 100}%` });
+  const edge = (fraction: number) =>
+    props.vertical ? { bottom: `${fraction * 100}%` } : { left: `${fraction * 100}%` };
   const zones = createMemo(() =>
     props.levels.flatMap((level, index) => {
       const previous = props.levels[index - 1];
@@ -474,9 +471,8 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
   );
   /** `next` at the nearest of the channel's levels, or as it is for a channel without levels. */
   const snap = (next: number) =>
-    channel.levels?.reduce((best, level) =>
-      Math.abs(level.value - next) < Math.abs(best.value - next) ? level : best
-    ).value ?? next;
+    channel.levels?.reduce((best, level) => (Math.abs(level.value - next) < Math.abs(best.value - next) ? level : best))
+      .value ?? next;
   let start: { value: number; hsv: Hsv; color: string };
   let captured: ReturnType<NonNullable<ValueChannel['capture']>> | undefined;
   const write = (next: number, hsv: Hsv) => {
@@ -582,12 +578,4 @@ function gradient(stops: readonly string[]) {
 export function roundedValue(value: number, step = 1) {
   const decimals = (String(step).split('.')[1] ?? '').length;
   return Number((Math.round(value / step) * step).toFixed(decimals));
-}
-
-/**
- * `unit` as it follows a number: a word, such as "marks", after a no-break space ("80 marks"); a symbol or an
- * abbreviation of up to two letters, such as %, ° or px, right after it ("80%").
- */
-export function unitSuffix(unit: string) {
-  return /^\p{L}{3,}/u.test(unit) ? `\u00a0${unit}` : unit;
 }

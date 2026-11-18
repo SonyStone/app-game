@@ -4,7 +4,13 @@ import { createMemo, createSignal, createUniqueId, For, Show, untrack } from 'so
 import { SettingsList } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
+import {
+  brushCategories,
+  type BrushCategory,
+  type BrushSetting,
+  type CurveSetting,
+  type NumberSetting
+} from './schema';
 import { SettingRow } from './SettingRow';
 import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
@@ -173,18 +179,18 @@ const categoryIcons: Record<string, SketchIconName> = {
 
 /**
  * The chosen category's settings: a way back to the category list (shown only where the layout shows one at a time),
- * its name as the heading, its status (shown where the column has no room for it), its "About" disclosure and its
- * rows.
+ * its name as the heading, its status (shown where the column has no room for it) and its rows, with the stroke
+ * correction's moving sample above them.
  */
 export function CategoryPane(props: {
   category: BrushCategory;
   /**
-   * The host's row for a number setting, in place of the editor's own label, slider and field, such as a control the
+   * The host's row for a number or curve setting, in place of the editor's own slider or graph, such as a control the
    * host uses elsewhere for the same setting; `undefined` keeps the editor's row. Called once per row as it is made,
    * under the row's owner, with the setting and the category it is shown in. The host's row edits the setting itself:
    * the editor sends no patch for it.
    */
-  numberRow?: (setting: NumberSetting, category: BrushCategory) => JSX.Element | undefined;
+  hostRow?: (setting: NumberSetting | CurveSetting, category: BrushCategory) => JSX.Element | undefined;
   brush: Brush;
   onChange: (patch: Partial<Brush>) => void;
   /** Called by the way back to the category list. */
@@ -204,59 +210,26 @@ export function CategoryPane(props: {
         {props.category.label}
       </h2>
       <p class={styles.paneStatus}>{props.category.status(props.brush)}</p>
-      <Show when={props.category.about} keyed>
-        {(about) => <About title={props.category.label} text={about} />}
-      </Show>
       <Show when={props.category.id === 'stroke-correction'}>
         <StrokeCorrectionDemo brush={props.brush} />
       </Show>
-      <CategoryRows
-        numberRow={props.numberRow}
-        category={props.category}
-        brush={props.brush}
-        onChange={props.onChange}
-      />
+      <CategoryRows hostRow={props.hostRow} category={props.category} brush={props.brush} onChange={props.onChange} />
     </section>
   );
 }
 
-/** A collapsed block that explains the category, opened and closed by its heading. */
-function About(props: { title: string; text: string }) {
-  const [open, setOpen] = createSignal(false);
-  const textId = createUniqueId();
-
-  return (
-    <div class={styles.about}>
-      <button
-        type="button"
-        aria-expanded={open() ? 'true' : 'false'}
-        aria-controls={textId}
-        onClick={() => setOpen(!open())}
-      >
-        <SketchIcon name={open() ? 'down' : 'right'} size={14} />
-        About {props.title.toLowerCase()}
-      </button>
-      <p id={textId} hidden={!open()}>
-        {props.text}
-      </p>
-    </div>
-  );
-}
-
 /**
- * The rows of a category whose settings apply to the brush, in schema order, or its note when none does. Rows of a
- * section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
+ * The rows of a category whose settings apply to the brush, in schema order. Rows of a section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
  * once per heading, so values change in place and no row appears, disappears or moves while one is used.
  */
 function CategoryRows(props: {
-  numberRow?: Parameters<typeof CategoryPane>[0]['numberRow'];
+  hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
   brush: Brush;
   onChange: (patch: Partial<Brush>) => void;
 }) {
   const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
   const runs = createMemo(() => sectionRuns(rows()));
-  const note = createMemo(() => (rows().length === 0 ? props.category.note?.(props.brush) : undefined));
 
   return (
     <div class={styles.rows}>
@@ -268,7 +241,7 @@ function CategoryRows(props: {
               <For each={run().rows}>
                 {(setting) => (
                   <Row
-                    numberRow={props.numberRow}
+                    hostRow={props.hostRow}
                     category={props.category}
                     setting={setting}
                     brush={props.brush}
@@ -280,7 +253,7 @@ function CategoryRows(props: {
           >
             {(title) => (
               <Section
-                numberRow={props.numberRow}
+                hostRow={props.hostRow}
                 category={props.category}
                 title={title()}
                 rows={run().rows}
@@ -291,7 +264,6 @@ function CategoryRows(props: {
           </Show>
         )}
       </For>
-      <Show when={note()}>{(text) => <p class={styles.note}>{text()}</p>}</Show>
     </div>
   );
 }
@@ -317,7 +289,7 @@ function sectionRuns(rows: readonly BrushSetting[]) {
 
 /** A framed group of rows under a short heading, announced as a group named by it. */
 function Section(props: {
-  numberRow?: Parameters<typeof CategoryPane>[0]['numberRow'];
+  hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
   title: string;
   rows: readonly BrushSetting[];
@@ -334,7 +306,7 @@ function Section(props: {
       <For each={props.rows}>
         {(setting) => (
           <Row
-            numberRow={props.numberRow}
+            hostRow={props.hostRow}
             category={props.category}
             setting={setting}
             brush={props.brush}
@@ -346,9 +318,9 @@ function Section(props: {
   );
 }
 
-/** A setting's row: the host's for a number setting when it has one, otherwise the editor's own `SettingRow`. */
+/** A setting's row: the host's for a number or curve setting when it has one, otherwise the editor's own `SettingRow`. */
 function Row(props: {
-  numberRow?: Parameters<typeof CategoryPane>[0]['numberRow'];
+  hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
   setting: BrushSetting;
   brush: Brush;
@@ -356,7 +328,9 @@ function Row(props: {
 }) {
   // A row is made once per setting, so neither its setting nor the host's row changes under it.
   const setting = untrack(() => props.setting);
-  const hosted = untrack(() => (setting.kind === 'number' ? props.numberRow?.(setting, props.category) : undefined));
+  const hosted = untrack(() =>
+    setting.kind === 'number' || setting.kind === 'curve' ? props.hostRow?.(setting, props.category) : undefined
+  );
 
   return hosted ?? <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />;
 }

@@ -496,22 +496,104 @@ it('a studio row of a setting that does not apply now shows the part inactive an
   storeParts(['action:brush-editor']);
   mount();
   const dialog = openStudio();
-  [...dialog.querySelectorAll<HTMLElement>('nav button')]
-    .find((element) => element.textContent?.includes('Stroke correction'))!
-    .click();
-  flush();
-  const row = dialog.querySelector('[data-part-kind="value:brush:stabilization"]')!.parentElement!.parentElement!;
-  const slider = row.querySelector<HTMLElement>('[role="slider"]')!;
-  expect(slider.closest('[aria-disabled]')!.getAttribute('aria-disabled')).toBe('true');
-  expect(slider.textContent).toContain('—');
-  expect(row.querySelector('input')).toBeNull();
+  category(dialog, 'Pressure curve');
+  // At Smoothing 0 strokes are not calibrated, so the curve's part is unlit and its handles take nothing.
+  const part = dialog.querySelector('[data-part-kind="value:brush:pressure-curve"]')!;
+  expect(part.querySelector('[data-inactive]')).not.toBeNull();
+  const handle = part.querySelector<HTMLElement>('[data-curve-handle="minimum"]')!;
+  expect(handle.getAttribute('aria-disabled')).toBe('true');
   const before = wiring.session!.brush().stroke;
-  const press = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 0.8 });
-  slider.dispatchEvent(press);
-  slider.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 0.8 }));
+  pointer(handle, 'pointerdown', 0, 0);
+  pointer(handle, 'pointermove', 40, 0);
+  pointer(handle, 'pointerup', 40, 0);
+  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   flush();
-  expect(press.defaultPrevented).toBe(true);
   expect(wiring.session!.brush().stroke).toEqual(before);
+});
+
+it("keeps the studio's pressure curve and the board's in sync, both ways, and lifts the curve at four by four", () => {
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version: 2,
+      board: {
+        panels: [
+          {
+            id: 'test-panel',
+            at: { x: 12, y: 12 },
+            parts: [
+              {
+                id: 'settings',
+                kind: 'action:brush-editor',
+                cell: { column: 0, row: 0 },
+                span: { columns: 2, rows: 1 }
+              },
+              {
+                id: 'curve',
+                kind: 'value:brush:pressure-curve',
+                cell: { column: 0, row: 1 },
+                span: { columns: 4, rows: 4 }
+              }
+            ]
+          }
+        ]
+      }
+    })
+  );
+  mount();
+  wiring.session!.tools.updateBrush({
+    stroke: { ...wiring.session!.brush().stroke, mode: 'stabilizer', stabilizer: 4 }
+  });
+  flush();
+  const dialog = openStudio();
+  category(dialog, 'Pressure curve');
+  const studio = dialog.querySelector('[data-part-kind="value:brush:pressure-curve"]')!;
+  const board = [...document.querySelectorAll('[data-part-kind="value:brush:pressure-curve"]')].find(
+    (element) => !dialog.contains(element)
+  )!;
+  const handle = (root: Element, name: string) => root.querySelector<HTMLElement>(`[data-curve-handle="${name}"]`)!;
+
+  // A key in the studio moves the board's handle too.
+  handle(studio, 'minimum').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  flush();
+  expect(wiring.session!.brush().stroke.minimum).toBeCloseTo(0.06);
+  expect(handle(board, 'minimum').getAttribute('aria-valuenow')).toBe('6');
+
+  // A drag on the board's maximum, half the graph's width, moves the studio's; the maximum stops at full.
+  const plot = handle(board, 'maximum').parentElement!;
+  plot.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }) as DOMRect;
+  pointer(handle(board, 'maximum'), 'pointerdown', 0, 0);
+  pointer(handle(board, 'maximum'), 'pointermove', 50, 0);
+  pointer(handle(board, 'maximum'), 'pointerup', 50, 0);
+  expect(wiring.session!.brush().stroke.maximum).toBe(1);
+  expect(handle(studio, 'maximum').getAttribute('aria-valuenow')).toBe('100');
+
+  // The firmness chip opens the keypad for firmness in the studio, and the board shows what it commits.
+  const chip = handle(studio, 'firmness').lastElementChild!;
+  pointer(chip, 'pointerdown', 0, 0);
+  pointer(chip, 'pointerup', 0, 0);
+  const keypad = dialog.querySelector<HTMLElement>('[popover][role="dialog"]')!;
+  expect(keypad.getAttribute('aria-label')).toBe('Pressure firmness');
+  for (const key of ['2', '0', '0']) {
+    keypad.querySelector<HTMLButtonElement>(`[data-key="${key}"]`)!.click();
+    flush();
+  }
+  [...keypad.querySelectorAll('button')].find((element) => element.textContent === 'OK')!.click();
+  flush();
+  expect(wiring.session!.brush().stroke.firmness).toBe(2);
+  expect(handle(board, 'firmness').textContent).toBe('200%');
+
+  // The studio row's grip knows a curve is on the board, and puts another there at four by four.
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Pressure curve onto the board (on the board)"]')!;
+  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  flush();
+  const placed = [
+    ...document.querySelectorAll<HTMLElement>('[data-panel] [data-part-kind="value:brush:pressure-curve"]')
+  ]
+    .map((element) => element.closest<HTMLElement>('[data-part]')!)
+    .filter((part) => part.closest('[data-panel]')!.getAttribute('data-panel') !== 'test-panel');
+  expect(placed).toHaveLength(1);
+  expect([placed[0]!.style.width, placed[0]!.style.height]).toEqual(['188px', '188px']);
 });
 
 it("Escape in a studio row's keypad closes the keypad and keeps the studio open", () => {
@@ -560,6 +642,14 @@ it('switches the trial sidebar style and keeps the choice', () => {
   dialog = openStudio();
   expect(frame().dataset.sidebar).toBe('joined');
 });
+
+/** Chooses the category named `name` in the studio's sidebar. */
+function category(dialog: HTMLElement, name: string) {
+  [...dialog.querySelectorAll<HTMLElement>('nav button')]
+    .find((element) => element.textContent?.includes(name))!
+    .click();
+  flush();
+}
 
 /** Opens the brush studio through the "Brush settings" part on the board and returns its dialog. */
 function openStudio() {

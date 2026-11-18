@@ -163,14 +163,14 @@ it('edits, reads and settles drafts as a calculator does', () => {
   expect(settleValue(-3, { min: 1, max: 5, step: 1 })).toBe(1);
 });
 
-it('draws the stabilizer level with a tick per level and an S zone, and its chip opens a level picker', () => {
-  const { host, brush, setBrush, update } = mountPart('value:brush:stabilizer-level');
+it('draws Smoothing with a tick per level and a strong zone, and its chip opens a level picker of plain numbers', () => {
+  const { host, brush, setBrush, update } = mountPart('value:brush:smoothing');
   setBrush({ ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'stabilizer', stabilizer: 6 } });
   flush();
   const slider = host.querySelector<HTMLElement>('[role="slider"]')!;
   expect(slider.hasAttribute('data-levels')).toBe(true);
   expect(slider.querySelectorAll('[aria-hidden="true"] > :not([data-zone])')).toHaveLength(23);
-  expect(slider.querySelectorAll('[data-zone="S"]')).toHaveLength(1);
+  expect(slider.querySelectorAll('[data-zone="strong"]')).toHaveLength(1);
   expect(slider.getAttribute('aria-valuetext')).toBe('6');
 
   const chip = host.querySelector<HTMLElement>('[data-value-chip]')!;
@@ -178,31 +178,47 @@ it('draws the stabilizer level with a tick per level and an S zone, and its chip
   pointer(chip, 'pointerup', 0);
   const picker = card()!;
   const options = [...picker.querySelectorAll<HTMLButtonElement>('[role="option"]')];
-  expect(options.map((option) => option.textContent)).toEqual([
-    ...Array.from({ length: 16 }, (_, level) => `${level}`),
-    ...Array.from({ length: 7 }, (_, level) => `S-${level + 1}`)
-  ]);
-  expect(options.filter((option) => option.getAttribute('aria-selected') === 'true').map((o) => o.textContent)).toEqual([
-    '6'
-  ]);
+  expect(options.map((option) => option.textContent)).toEqual(Array.from({ length: 23 }, (_, level) => `${level}`));
+  expect(options.filter((option) => option.getAttribute('aria-selected') === 'true').map((o) => o.textContent)).toEqual(
+    ['6']
+  );
   expect(picker.querySelector('[role="listbox"]')).not.toBeNull();
   expect(picker.querySelector('[data-key]')).toBeNull();
 
-  options.find((option) => option.textContent === 'S-3')!.click();
+  options.find((option) => option.textContent === '18')!.click();
   flush();
   expect(card()).toBeNull();
   expect(update).toHaveBeenCalledTimes(1);
-  expect(brush().stroke.stabilizer).toBe(18);
-  expect(chip.textContent).toBe('S-3');
+  expect(brush().stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 18 });
+  expect(chip.textContent).toBe('18');
 
-  // A drag on the track snaps to whole levels.
+  // A drag on the track snaps to whole levels; the far left is 0, Studio's curve without trailing.
   pointer(slider, 'pointerdown', 0.52);
   pointer(slider, 'pointerup', 0.52);
   expect(brush().stroke.stabilizer).toBe(11);
+  pointer(slider, 'pointerdown', 0);
+  pointer(slider, 'pointerup', 0);
+  expect(brush().stroke.mode).toBe('studio');
+});
+
+it('shows a stored stabilizer level or Leonardo stabilization part as Smoothing', () => {
+  for (const kind of ['value:brush:stabilizer-level', 'value:brush:stabilization']) {
+    const { host, setBrush, brush } = mountPart(kind);
+    setBrush({ ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'smooth', smooth: 10 } });
+    flush();
+    const slider = host.querySelector<HTMLElement>('[data-part-kind] [role="slider"]')!;
+    expect(slider.getAttribute('aria-label'), kind).toBe('Smoothing');
+    expect(slider.getAttribute('aria-valuetext'), kind).toBe('10');
+    pointer(slider, 'pointerdown', 0.52);
+    pointer(slider, 'pointerup', 0.52);
+    expect(brush().stroke, kind).toMatchObject({ mode: 'stabilizer', stabilizer: 11 });
+    host.remove();
+  }
 });
 
 it('opens no entry on a part that does not apply now, nor while the board is being edited', () => {
-  const inactive = mountPart('value:brush:stabilizer-level');
+  // At Smoothing 0 the pressure curve does not apply, nor do its numbers.
+  const inactive = mountPart('value:brush:pressure-minimum');
   const chip = inactive.host.querySelector<HTMLElement>('[data-value-chip]')!;
   expect(chip.textContent).toBe('—');
   pointer(chip, 'pointerdown', 0);

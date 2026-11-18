@@ -8,6 +8,7 @@ import {
   snapshotBrushSettings,
   type NumberSetting
 } from './index';
+import { numberSettings } from './schema';
 
 const modes: StrokeSettings['mode'][] = ['none', 'studio', 'normal', 'smooth', 'stabilizer'];
 const brushes: [string, Brush][] = [
@@ -28,11 +29,12 @@ describe('brush editor schema', () => {
       'advanced',
       'advanced'
     ]);
-    for (const setting of settings) {
+    for (const setting of [...settings, ...numberSettings(settings)]) {
       expect(setting.id).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
       expect(getBrushSetting(setting.id)).toBe(setting);
     }
     expect(getBrushSetting('missing')).toBeUndefined();
+    expect(getBrushSetting('stabilizer-level')).toBeUndefined();
   });
 
   for (const [engine, original] of brushes) {
@@ -41,7 +43,7 @@ describe('brush editor schema', () => {
         const brush = { ...original, stroke: { ...original.stroke, mode } };
         expect(brushCategories.filter((category) => category.applies(brush)).map((category) => category.id)).toEqual(
           engine === 'abr'
-            ? ['painting', 'brush-tip', 'stroke-correction', 'pressure-curve']
+            ? ['painting', 'stroke-correction', 'pressure-curve']
             : ['painting', 'brush-tip', 'dynamics', 'stroke-correction', 'pressure-curve']
         );
         const rows = brushCategories
@@ -55,24 +57,14 @@ describe('brush editor schema', () => {
           ...(engine === 'round' ? ['hardness'] : engine === 'textured' ? ['spacing'] : []),
           ...(engine === 'abr' ? [] : ['pressure-size', 'pressure-flow']),
           'smoothing',
-          'stabilization',
-          'stabilizer-level',
           'catch-up',
-          'pressure-minimum',
-          'pressure-maximum',
-          'pressure-firmness'
+          'pressure-curve'
         ]);
-        for (const row of rows) {
-          const enabled =
-            row.id === 'stabilization'
-              ? mode === 'normal' || mode === 'smooth'
-              : row.id === 'stabilizer-level'
-                ? mode === 'stabilizer'
-                : row.id === 'catch-up'
-                  ? mode === 'smooth'
-                  : ['pressure-minimum', 'pressure-maximum', 'pressure-firmness'].includes(row.id)
-                    ? ['normal', 'smooth', 'stabilizer'].includes(mode)
-                    : true;
+        // An ABR preset smooths by itself in the Leonardo modes and Studio, so only the stabilizer trails and calibrates.
+        const trails = engine === 'abr' ? mode === 'stabilizer' : ['normal', 'smooth', 'stabilizer'].includes(mode);
+        for (const row of [...rows, ...numberSettings(rows)]) {
+          const curve = ['pressure-curve', 'pressure-minimum', 'pressure-maximum', 'pressure-firmness'];
+          const enabled = row.id === 'catch-up' || curve.includes(row.id) ? trails : true;
           expect(row.enabled(brush), row.id).toBe(enabled);
         }
       });
@@ -80,11 +72,7 @@ describe('brush editor schema', () => {
   }
 
   for (const [engine, brush] of brushes) {
-    for (const setting of brushCategories.flatMap((category) => category.settings)) {
-      if (setting.kind !== 'number') {
-        continue;
-      }
-
+    for (const setting of numberSettings(brushCategories.flatMap((category) => category.settings))) {
       it(`${engine}/${setting.id} clamps, rounds, and round-trips UI units`, () => {
         const readWrite = (value: number) => setting.read({ ...brush, ...setting.write(brush, value) });
         expect(readWrite(-Infinity)).toBeCloseTo(setting.min(brush));
@@ -104,19 +92,15 @@ describe('brush editor schema', () => {
     }
   }
 
-  it('preserves the independent Leonardo levels and normalizes every stroke patch', () => {
-    const setting = numeric('stabilization');
-    for (const mode of modes) {
-      const brush = { ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode } };
-      const patch = setting.write(brush, 23);
-      expect(patch.stroke?.[mode === 'smooth' ? 'smooth' : 'normal']).toBe(23);
-      expect(patch.stroke?.[mode === 'smooth' ? 'normal' : 'smooth']).toBe(mode === 'smooth' ? 1 : 10);
-    }
-    const brush = defaultBrush();
+  it('normalizes every stroke patch of a switch or a choice', () => {
+    const brush = { ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'stabilizer' as const } };
     for (const setting of brushCategories.flatMap((category) => category.settings)) {
       if (setting.kind === 'toggle') {
         const patch = setting.write(brush, !setting.read(brush));
         expect(setting.read({ ...brush, ...patch })).toBe(!setting.read(brush));
+        if (patch.stroke) {
+          expect(patch.stroke).toEqual(normalizeStrokeSettings(patch.stroke));
+        }
       }
       if (setting.kind === 'choice') {
         for (const option of setting.options) {
@@ -150,18 +134,20 @@ describe('brush editor schema', () => {
   it('provides the panel ranges, steps, units, curves, and named options', () => {
     const brush = defaultBrush();
     expect(
-      brushCategories
-        .flatMap((category) => category.settings)
-        .filter((setting) => setting.kind === 'number')
-        .map((setting) => [setting.id, setting.min(brush), setting.max(brush), setting.step, setting.unit])
+      numberSettings(brushCategories.flatMap((category) => category.settings)).map((setting) => [
+        setting.id,
+        setting.min(brush),
+        setting.max(brush),
+        setting.step,
+        setting.unit
+      ])
     ).toEqual([
       ['size', 1, 512, 1, 'px'],
       ['opacity', 1, 100, 1, '%'],
       ['flow', 1, 100, 1, '%'],
       ['hardness', 0, 100, 1, '%'],
       ['spacing', 1, 1000, 1, '%'],
-      ['stabilization', 0, 49, 1, ''],
-      ['stabilizer-level', 0, 22, 1, ''],
+      ['smoothing', 0, 22, 1, ''],
       ['pressure-minimum', 0, 79, 1, '%'],
       ['pressure-maximum', 6, 100, 1, '%'],
       ['pressure-firmness', 10, 500, 5, '%']
@@ -169,17 +155,16 @@ describe('brush editor schema', () => {
     expect(numeric('size').max(brushes[2]![1])).toBe(5000);
     expect(numeric('size').curve?.(brush)).toBeDefined();
     expect(numeric('spacing').curve?.(brush)).toBeDefined();
-    expect(numeric('stabilizer-level').format?.(18)).toBe('S-3');
-    expect(getBrushSetting('smoothing')).toMatchObject({
-      options: [
-        { value: 'none', label: 'None (raw input)' },
-        { value: 'studio', label: 'Studio' },
-        { value: 'normal', label: 'Leonardo normal' },
-        { value: 'smooth', label: 'Leonardo smooth' },
-        { value: 'stabilizer', label: 'Stabilizer (Paint Tool SAI)' }
-      ]
-    });
-    expect(brushCategories.find((category) => category.id === 'stroke-correction')!.about).toBeUndefined();
+    // Smoothing's levels are plain numbers, the strong ones above 15 in a zone of their own.
+    expect(numeric('smoothing').format).toBeUndefined();
+    expect(numeric('smoothing').levels?.map((level) => level.label)).toEqual(
+      Array.from({ length: 23 }, (_, level) => String(level))
+    );
+    expect(
+      numeric('smoothing')
+        .levels?.filter((level) => level.zone)
+        .map((level) => level.value)
+    ).toEqual([16, 17, 18, 19, 20, 21, 22]);
     expect(getBrushSetting('color-mixing')).toMatchObject({
       options: [
         { value: 'linear', label: 'Smooth color' },
@@ -188,19 +173,17 @@ describe('brush editor schema', () => {
     });
   });
 
-  it('describes each smoothing mode, with one note shared by both Leonardo modes', () => {
-    const smoothing = getBrushSetting('smoothing');
-    if (smoothing?.kind !== 'choice') {
-      throw new Error('Expected the smoothing choice');
+  it('carries no explanatory text: no option, category or row has a description, an about or a note', () => {
+    for (const category of brushCategories) {
+      expect(Object.keys(category).sort()).toEqual(['applies', 'group', 'id', 'label', 'settings', 'status']);
+      for (const setting of category.settings) {
+        if (setting.kind === 'choice') {
+          for (const option of setting.options) {
+            expect(Object.keys(option).sort()).toEqual(['label', 'value']);
+          }
+        }
+      }
     }
-
-    const description = (value: string) => smoothing.options.find((option) => option.value === value)!.description;
-    expect(description('none')).toMatch(/^No path smoothing/);
-    expect(description('studio')).toMatch(/^Paint's original smoothing/);
-    expect(description('normal')).toMatch(/^Higher stabilization/);
-    expect(description('smooth')).toBe(description('normal'));
-    expect(description('stabilizer')).toMatch(/^As in Paint Tool SAI/);
-    expect(getBrushSetting('color-mixing')).toMatchObject({ options: [{}, {}] });
   });
 
   it('summarizes painting, tips, pressure, and correction modes', () => {
@@ -210,9 +193,6 @@ describe('brush editor schema', () => {
     expect(status('brush-tip')).toBe('Soft round · 65%');
     expect(status('brush-tip', brushes[1]![1])).toBe('Textured tip · 12%');
     expect(status('brush-tip', brushes[2]![1])).toBe('ABR brush');
-    expect(brushCategories.find((category) => category.id === 'brush-tip')!.note?.(brushes[2]![1])).toBe(
-      'ABR presets keep their own tip shape and pressure dynamics.'
-    );
     for (const [pressureSize, pressureFlow, expected] of [
       [true, true, 'Pressure → Size + Flow'],
       [true, false, 'Pressure → Size'],
@@ -221,7 +201,7 @@ describe('brush editor schema', () => {
     ] as const) {
       expect(status('dynamics', { ...brush, pressureSize, pressureFlow })).toBe(expected);
     }
-    const expected = ['None', 'Studio', 'Leonardo normal · 1', 'Leonardo smooth · 10', 'Stabilizer · S-3'];
+    const expected = ['Off', 'Off', '1', '10', '18'];
     modes.forEach((mode, index) => {
       const b = { ...brush, stroke: { ...brush.stroke, mode, stabilizer: 18 } };
       expect(status('stroke-correction', b)).toBe(expected[index]);
@@ -237,13 +217,19 @@ describe('brush editor schema', () => {
     );
     expect(snapshot.stroke).not.toBe(brush.stroke);
     expect(brushSettingsDiffer(brush, snapshot)).toBe(false);
-    for (const setting of brushCategories.flatMap((category) => category.settings)) {
+    for (const setting of brushCategories.flatMap((category) =>
+      category.settings.flatMap((setting) =>
+        setting.kind === 'curve' ? [setting.minimum, setting.maximum, setting.firmness] : [setting]
+      )
+    )) {
       const patch =
         setting.kind === 'number'
           ? setting.write(brush, setting.read(brush) === setting.max(brush) ? setting.min(brush) : setting.max(brush))
           : setting.kind === 'toggle'
             ? setting.write(brush, !setting.read(brush))
-            : setting.write(brush, setting.options.find((option) => option.value !== setting.read(brush))!.value);
+            : setting.kind === 'choice'
+              ? setting.write(brush, setting.options.find((option) => option.value !== setting.read(brush))!.value)
+              : {};
       const edited = { ...brush, ...patch };
       expect(brushSettingsDiffer(edited, snapshot), setting.id).toBe(true);
       expect(brushSettingsDiffer({ ...edited, ...snapshot }, snapshot)).toBe(false);

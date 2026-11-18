@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 import { render } from '@solidjs/web';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it } from 'vitest';
 import { SettingsList, type SettingsListItem } from './SettingsList';
@@ -66,4 +68,19 @@ it('heads each group once where it starts, marks the selected item and selects t
   flush();
   expect([...nav.querySelectorAll('button')][3]).toBe(stroke);
   expect(stroke.textContent).toBe('Stroke correctionOff');
+});
+
+it("insets each row's icon from the highlight's side as far as from its top, against a host's button reset", () => {
+  // jsdom applies no stylesheet, so it is read as text. The brush studio resets its buttons with
+  // `.frame :where(button) { padding: 0 }`, one class, loaded after the list: the row's padding needs two to win.
+  const css = readFileSync(join(__dirname, 'SettingsList.module.css'), 'utf8');
+  const row = /\n\.list \.row \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+  expect(row).toContain('min-height: var(--settings-list-row, 40px);');
+  const tile = Number(/\.icon \{[^}]*?width: (\d+)px/.exec(css)![1]);
+  const inset = Number(/\n\s*padding: 0 \d+px 0 (\d+)px;/.exec(row)![1]);
+  expect(inset).toBe((40 - tile) / 2);
+  // Selected and other rows share the padding: only colors change with `aria-current`.
+  const selected = /&\[aria-current\] \{([^}]*)\}/.exec(row)?.[1];
+  expect(selected).toContain('background');
+  expect(selected).not.toMatch(/padding|margin|grid/);
 });

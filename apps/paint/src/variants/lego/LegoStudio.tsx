@@ -25,9 +25,10 @@ import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
 import { PartFrame } from './PartFrame';
-import { partDefinition } from './parts';
+import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
+import { pressureCurveSpan } from './parts/pressureCurve';
 import { StudioSettingRow } from './StudioSettingRow';
 
 /**
@@ -46,8 +47,9 @@ import { StudioSettingRow } from './StudioSettingRow';
  * parts right there (see `BoardView`). The board is kept per device.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
- * setting there is its value part itself (`StudioSettingRow`), and its grip lifts a new part of it onto the board, in
- * edit mode or not; the studio gets out of the way while the part is carried and comes back once it lands.
+ * setting there is its value part itself, and the pressure curve its curve part (`StudioSettingRow`); a row's grip
+ * lifts a new part of it onto the board, in edit mode or not; the studio gets out of the way while the part is carried
+ * and comes back once it lands.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
@@ -274,21 +276,28 @@ export function LegoStudio(
               session={session}
               editor={services.brushEditor}
               away={boardControls()?.carrying() ?? false}
-              numberRow={(setting, category) => {
+              hostRow={(setting, category) => {
                 const kind = brushSettingKind(setting.id);
                 if (!partDefinition(kind)) {
                   return undefined;
                 }
 
+                const curve = setting.kind === 'curve';
+                const span = curve ? pressureCurveSpan : studioPartSpan;
                 return (
                   <StudioSettingRow
                     kind={kind}
+                    span={curve ? studioCurveSpan : studioPartSpan}
+                    look={curve ? 'curve' : 'slider'}
+                    tall={curve}
                     label={brushSettingName(category, setting)}
                     onBoard={board
                       .board()
-                      .panels.some((panel) => !panel.bench && panel.parts.some((part) => part.kind === kind))}
-                    onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
-                    onPlace={() => boardControls()?.place(kind, studioPartSpan)}
+                      .panels.some(
+                        (panel) => !panel.bench && panel.parts.some((part) => currentKind(part.kind) === kind)
+                      )}
+                    onLift={(event) => boardControls()?.lift(event, kind, span)}
+                    onPlace={() => boardControls()?.place(kind, span)}
                   />
                 );
               }}
@@ -305,5 +314,11 @@ export function LegoStudio(
 /** CSS pixels around the card the drawing shrinks to. */
 const cardMargin = 16;
 
-/** The span of a part lifted from the brush studio: four cells across, as a slider shows its name and value. */
+/**
+ * The span of a number's part lifted from the brush studio, and the span it shows at in its row: four cells across, as
+ * a slider shows its name and value.
+ */
 const studioPartSpan: Span = { columns: 4, rows: 1 };
+
+/** The span the pressure curve's part shows at in its studio row: a large graph, its name above it. */
+const studioCurveSpan: Span = { columns: 8, rows: 6 };

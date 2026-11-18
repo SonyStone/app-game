@@ -7,23 +7,22 @@ import { createRoot, flush } from 'solid-js';
 import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../features/brush-editor/brushSettingName';
-import { brushCategories } from '../../features/brush-editor/schema';
+import { brushCategories, numberSettings } from '../../features/brush-editor/schema';
 import { removePart, type Board } from './board';
 import { createBoard } from './createBoard';
 import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { boxSections, partDefinition } from './parts';
 import { brushChannels, brushSettingKind } from './parts/brushChannels';
-import { roundedValue, unitSuffix } from './parts/values';
+import { unitSuffix } from './parts/ValueEntry';
+import { roundedValue } from './parts/values';
 import { createTestServices } from './testServices';
 
 it('generates unique names across both schemas, counting shared IDs once', () => {
   const categories = [...brushCategories, ...abrCategories];
   {
     const rows = [
-      ...new Map(
-        categories.flatMap((c) => c.settings.filter((s) => s.kind === 'number').map((s) => [s.id, { c, s }] as const))
-      ).values()
+      ...new Map(categories.flatMap((c) => numberSettings(c.settings).map((s) => [s.id, { c, s }] as const))).values()
     ];
     const names = rows.map(({ c, s }) => brushSettingName(c, s));
     expect(new Set(names).size).toBe(names.length);
@@ -75,7 +74,7 @@ it('uses Paint and ABR range, units, curves and schema writes; unavailable chann
     await abr.write(services, 45, hsv);
     flush();
     expect(abr.read(services)).toBe(45);
-    const disabled = brushChannels.find((s) => s.id === 'brush:stabilization')!;
+    const disabled = brushChannels.find((s) => s.id === 'brush:pressure-minimum')!;
     expect(disabled.active!(services)).toBe(false);
   } finally {
     dispose();

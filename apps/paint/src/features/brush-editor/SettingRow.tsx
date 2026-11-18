@@ -4,14 +4,16 @@ import { createMemo, createSignal, createUniqueId, For, onSettled, Show } from '
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import type { BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
+import { PressureCurveEditor } from './PressureCurveEditor';
+import type { BrushSetting, ChoiceSetting, CurveSetting, NumberSetting, ToggleSetting } from './schema';
 import { Slider } from './Slider';
 
 /**
  * One generated row of the brush editor for `setting`, which the caller has already found applicable. A row whose
  * setting is not `enabled` keeps its place and shows its value, greyed, and takes no presses. Every change is sent
  * at once as the patch the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
- * all; a longer one shows the chosen option in a single row that opens the list.
+ * all; a longer one shows the chosen option in a single row that opens the list. A curve is its graph
+ * (`PressureCurveEditor`).
  */
 export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
   // A row is made once per setting, so its kind never changes under it.
@@ -22,6 +24,8 @@ export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChang
     <NumberRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.kind === 'toggle' ? (
     <ToggleRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
+  ) : setting.kind === 'curve' ? (
+    <CurveRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.options.length > inlineChoiceLimit ? (
     <MenuRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : (
@@ -141,13 +145,49 @@ function ToggleRow(props: RowProps & { setting: ToggleSetting }) {
 }
 
 /**
- * The options as a visible list, each a full-width row, with the chosen one marked. Under the list, the chosen
- * option's description; see {@link Descriptions}.
+ * The curve's graph across the row: each handle writes its own number setting, in percent, as a number row does.
+ * A press the browser cancels puts the stroke back as it was when the press began.
  */
+function CurveRow(props: RowProps & { setting: CurveSetting }) {
+  const setting = props.setting;
+  let before: Brush | undefined;
+  const fraction = (number: NumberSetting) => number.read(props.brush) / 100;
+  const write = (number: NumberSetting, value: number) => {
+    const brush = props.brush;
+    const patch = number.write(brush, value);
+    if (number.read({ ...brush, ...patch }) !== number.read(brush)) {
+      props.onChange(patch);
+    }
+  };
+
+  return (
+    <div class={styles.curveRow} data-kind="curve" data-disabled={props.enabled ? undefined : ''}>
+      <PressureCurveEditor
+        class={styles.curveEditor}
+        label={setting.label}
+        minimum={fraction(setting.minimum)}
+        maximum={fraction(setting.maximum)}
+        firmness={fraction(setting.firmness)}
+        disabled={!props.enabled}
+        onStart={() => (before = props.brush)}
+        onInput={(handle, value) => write(setting[handle], value * 100)}
+        onCommit={() => (before = undefined)}
+        onCancel={() => {
+          if (before) {
+            props.onChange({ stroke: before.stroke });
+          }
+
+          before = undefined;
+        }}
+      />
+    </div>
+  );
+}
+
+/** The options as a visible list, each a full-width row, with the chosen one marked. */
 function ChoiceRow(props: RowProps & { setting: ChoiceSetting }) {
   const setting = props.setting;
   const labelId = createUniqueId();
-  const descriptionId = createUniqueId();
   const chosen = createMemo(() => setting.read(props.brush));
 
   return (
@@ -166,7 +206,6 @@ function ChoiceRow(props: RowProps & { setting: ChoiceSetting }) {
             class={styles.option}
             role="radio"
             aria-checked={chosen() === option.value ? 'true' : 'false'}
-            aria-describedby={option.description ? descriptionId : undefined}
             disabled={!props.enabled}
             onClick={() => {
               if (chosen() !== option.value) {
@@ -179,7 +218,6 @@ function ChoiceRow(props: RowProps & { setting: ChoiceSetting }) {
           </button>
         )}
       </For>
-      <Descriptions setting={setting} chosen={chosen()} id={descriptionId} />
     </div>
   );
 }
@@ -194,7 +232,6 @@ function MenuRow(props: RowProps & { setting: ChoiceSetting }) {
   const setting = props.setting;
   const labelId = createUniqueId();
   const valueId = createUniqueId();
-  const descriptionId = createUniqueId();
   const chosen = createMemo(() => setting.read(props.brush));
   const chosenLabel = createMemo(() => setting.options.find((option) => option.value === chosen())?.label ?? '');
   const [open, setOpen] = createSignal(false);
@@ -217,7 +254,6 @@ function MenuRow(props: RowProps & { setting: ChoiceSetting }) {
           aria-haspopup="listbox"
           aria-expanded={open() ? 'true' : 'false'}
           aria-labelledby={`${labelId} ${valueId}`}
-          aria-describedby={setting.options.some((option) => option.description) ? descriptionId : undefined}
           disabled={!props.enabled}
           onClick={() => setOpen(!open())}
           onKeyDown={(event) => {
@@ -248,7 +284,6 @@ function MenuRow(props: RowProps & { setting: ChoiceSetting }) {
           onClose={close}
         />
       </Show>
-      <Descriptions setting={setting} chosen={chosen()} id={descriptionId} />
     </div>
   );
 }
@@ -383,31 +418,3 @@ function placeMenu(list: HTMLElement, anchor: HTMLElement) {
 
 /** Space between an open menu and its button, and between the menu and the editor's edge. */
 const menuGap = 4;
-
-/**
- * The chosen option's description under a choice. Every description of the setting takes the same place, so the
- * tallest sets the height and choosing another option moves no row; nothing shows for a setting without any.
- */
-function Descriptions(props: { setting: ChoiceSetting; chosen: string; id: string }) {
-  const descriptions = [...new Set(props.setting.options.flatMap((option) => option.description ?? []))];
-  const chosenDescription = createMemo(
-    () => props.setting.options.find((option) => option.value === props.chosen)?.description
-  );
-
-  return (
-    <Show when={descriptions.length > 0}>
-      <div class={styles.descriptions}>
-        <For each={descriptions}>
-          {(text) => (
-            <p
-              id={text === chosenDescription() ? props.id : undefined}
-              data-shown={text === chosenDescription() ? '' : undefined}
-            >
-              {text}
-            </p>
-          )}
-        </For>
-      </div>
-    </Show>
-  );
-}

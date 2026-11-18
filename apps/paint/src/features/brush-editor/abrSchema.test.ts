@@ -66,6 +66,10 @@ describe('generated ABR settings', () => {
   it('round trips every generated ABR field through the descriptor conversion', () => {
     for (const category of abrCategories.slice(0, 12)) {
       for (const row of category.settings) {
+        if (row.kind === 'curve') {
+          continue;
+        }
+
         const b = brush();
         const next =
           row.kind === 'number'
@@ -181,7 +185,7 @@ describe('generated ABR settings', () => {
         .filter((key) => !key.startsWith('use'));
       expect(placed.length, group).toBe(new Set(placed).size);
       expect(new Set([...placed, ...(hidden[group] ?? [])]), group).toEqual(
-        new Set([...Object.keys(fields), ...(group === 'smoothing' ? ['method', 'amount'] : [])])
+        new Set([...Object.keys(fields), ...(group === 'smoothing' ? ['amount'] : [])])
       );
     }
 
@@ -262,27 +266,39 @@ describe('generated ABR settings', () => {
     expect(abrCategories.find((c) => c.id === 'colorDynamics')!.label).toBe('Color dynamics');
   });
 
-  it('shows the smoothing that changes an ABR stroke under one name: off, the preset’s own, or the stabilizer', () => {
+  it('shows the smoothing that changes an ABR stroke under one name: the Smoothing level, then the preset’s own', () => {
     expect(abrCategories.filter((c) => /smooth|correction/i.test(`${c.id} ${c.label}`)).map((c) => c.label)).toEqual([
       'Smoothing'
     ]);
-    const method = setting('smoothing', 'abr-smoothing-method');
+    const category = abrCategories.find((c) => c.id === 'smoothing')!;
+    expect(category.settings.map((r) => [r.section, r.label])).toEqual([
+      [undefined, 'Smoothing'],
+      [undefined, 'Catch up on pen lift'],
+      ['Photoshop smoothing', 'Amount'],
+      ['Photoshop smoothing', 'Pulled string'],
+      ['Photoshop smoothing', 'Catch up'],
+      ['Photoshop smoothing', 'Catch up at stroke end'],
+      ['Photoshop smoothing', 'Adjust for zoom']
+    ]);
+    const level = setting('smoothing', 'smoothing');
     const amount = setting('smoothing', 'abr-smoothing-amount');
-    const level = setting('smoothing', 'stabilizer-level');
-    if (method.kind !== 'choice' || amount.kind !== 'number') {
-      throw new Error('Expected a method choice and an amount');
+    if (level.kind !== 'number' || amount.kind !== 'number') {
+      throw new Error('Expected the Smoothing level and an amount');
     }
 
+    // At level 0 the preset smooths as Photoshop does; above it the stabilizer replaces that, and the curve applies.
     const b = brush();
-    expect(method.read(b)).toBe('preset');
-    expect(level.enabled(b)).toBe(false);
-    const stabilized = { ...b, ...method.write(b, 'stabilizer') };
-    expect(stabilized.stroke.mode).toBe('stabilizer');
-    expect(level.enabled(stabilized)).toBe(true);
+    expect(level.read(b)).toBe(0);
+    expect(amount.enabled(b)).toBe(true);
+    expect(setting('smoothing', 'catch-up').enabled(b)).toBe(false);
+    const stabilized = { ...b, ...level.write(b, 6) };
+    expect(stabilized.stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 6 });
+    expect(status('smoothing', stabilized)).toBe('6');
     expect(amount.enabled(stabilized)).toBe(false);
-    expect(setting('pressure-curve', 'pressure-minimum').enabled(stabilized)).toBe(true);
-    expect(setting('pressure-curve', 'pressure-minimum').enabled(b)).toBe(false);
-    expect({ ...b, ...method.write(b, 'none') }.stroke.mode).toBe('none');
+    expect(setting('smoothing', 'catch-up').enabled(stabilized)).toBe(true);
+    expect(setting('pressure-curve', 'pressure-curve').enabled(stabilized)).toBe(true);
+    expect(setting('pressure-curve', 'pressure-curve').enabled(b)).toBe(false);
+    expect({ ...stabilized, ...level.write(stabilized, 0) }.stroke.mode).toBe('studio');
 
     const smoothed = { ...b, ...amount.write(b, 30) };
     expect(abrValues(smoothed).useSmoothing).toBe(true);
@@ -291,6 +307,31 @@ describe('generated ABR settings', () => {
     const off = { ...smoothed, ...amount.write(smoothed, 0) };
     expect(abrValues(off).useSmoothing).toBe(false);
     expect(amount.read(off)).toBe(0);
+    expect(status('smoothing', off)).toBe('Off');
     expect(setting('smoothing', 'abr-smoothing-pulledString').enabled(off)).toBe(false);
+
+    // Raw input reads as level 0 and no amount; a raised amount lets the preset smooth again.
+    const raw = { ...smoothed, stroke: { ...smoothed.stroke, mode: 'none' as const } };
+    expect(level.read(raw)).toBe(0);
+    expect(amount.read(raw)).toBe(0);
+    expect(status('smoothing', raw)).toBe('Off');
+    const again = { ...raw, ...amount.write(raw, 40) };
+    expect(again.stroke.mode).toBe('studio');
+    expect(amount.read(again)).toBe(40);
+  });
+
+  it('carries no explanatory text in any category', () => {
+    for (const category of abrCategories) {
+      expect(Object.keys(category), category.id).not.toContain('about');
+      expect(Object.keys(category), category.id).not.toContain('note');
+      for (const row of category.settings) {
+        if (row.kind === 'choice') {
+          expect(
+            row.options.every((option) => Object.keys(option).sort().join() === 'label,value'),
+            row.id
+          ).toBe(true);
+        }
+      }
+    }
   });
 });

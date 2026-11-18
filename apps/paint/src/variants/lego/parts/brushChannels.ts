@@ -1,9 +1,10 @@
 import { curvePosition, curveValue } from '@app-game/abr-brush/sliderCurves';
 import { abrCategories } from '../../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../../features/brush-editor/brushSettingName';
-import { brushCategories } from '../../../features/brush-editor/schema';
+import { brushCategories, numberSettings } from '../../../features/brush-editor/schema';
 import type { LegoServices } from '../LegoServices';
-import { unitSuffix, type ValueChannel } from './values';
+import { unitSuffix } from './ValueEntry';
+import type { ValueChannel } from './values';
 
 /**
  * The kind of the value part for the brush setting `id`: Size and Opacity reuse the board's own parts, every other
@@ -13,16 +14,19 @@ export function brushSettingKind(id: string) {
   return id === 'size' || id === 'opacity' ? `value:${id}` : `value:brush:${id}`;
 }
 
-/** Stable settings generate channels once; availability and bounds resolve against the live brush. */
+/**
+ * Stable settings generate channels once; availability and bounds resolve against the live brush. A curve's three
+ * numbers have a channel each, which its part edits through (see `parts/pressureCurve`).
+ */
 export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCategories].flatMap((categories, schema) =>
   categories.flatMap((category) =>
-    category.settings.flatMap((setting): ValueChannel[] => {
-      if (setting.kind !== 'number' || setting.id === 'size' || setting.id === 'opacity') {
+    numberSettings(category.settings).flatMap((setting): ValueChannel[] => {
+      if (setting.id === 'size' || setting.id === 'opacity') {
         return [];
       }
 
       // Shared Paint rows in the ABR editor have the same stable IDs and behavior.
-      if (schema === 1 && brushCategories.some((c) => c.settings.some((s) => s.id === setting.id))) {
+      if (schema === 1 && brushCategories.some((c) => numberSettings(c.settings).some((s) => s.id === setting.id))) {
         return [];
       }
 

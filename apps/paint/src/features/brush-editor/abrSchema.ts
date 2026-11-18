@@ -4,9 +4,8 @@ import { brushPreviewResources } from '@app-game/abr-brush/resources';
 import { featureFields, settingGroups, type SettingField } from '@app-game/abr-brush/settings-fields';
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { Brush } from '@app-game/paint-core/brush';
-import { stabilizerLabel } from '@app-game/paint-core/stabilizerStroke';
-import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { brushCategories, getBrushSetting, type BrushCategory, type BrushSetting } from './schema';
+import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { brushCategories, catchUpSetting, smoothingSetting, type BrushCategory, type BrushSetting } from './schema';
 
 // The tables below are declared before the categories, which read them while they are built.
 
@@ -234,8 +233,8 @@ const units: Record<string, string> = { '#Prc': '%', '#Ang': '°', '#Pxl': 'px' 
 /**
  * The editor's categories for an ABR (Photoshop) brush, generated from the shared descriptor bindings in
  * `settingGroups`. Rows are grouped and labelled by {@link layouts}; a row is greyed while its value has no effect,
- * as the engine reads it (see {@link rules}). Smoothing joins the preset's own smoothing with Paint's stabilizer,
- * the only two that change an ABR stroke, and the pressure curve follows.
+ * as the engine reads it (see {@link rules}). Smoothing joins Paint's Smoothing level with the preset's own smoothing,
+ * the only two that change an ABR stroke, and Paint's pressure curve follows.
  */
 export const abrCategories: readonly BrushCategory[] = [
   category('tool', 'Painting', 'basics'),
@@ -263,7 +262,7 @@ export const abrCategories: readonly BrushCategory[] = [
   smoothingCategory(),
   category('bristle', 'Bristle', 'advanced'),
   category('erodible', 'Erodible', 'advanced'),
-  pressureCurveCategory()
+  brushCategories.find((category) => category.id === 'pressure-curve')!
 ];
 
 /** Keeps texture availability tied to the source resource, even while the runtime texture is off. */
@@ -317,10 +316,6 @@ function category(
         : id === 'texture' && !settings(b).patternId
           ? 'No embedded pattern'
           : statuses[id](values(b), b),
-    about:
-      id === 'bristle' || id === 'erodible'
-        ? 'Paint uses a generated 2D tip approximation, without physical wear simulation.'
-        : undefined,
     settings: [
       ...(feature
         ? [
@@ -627,74 +622,30 @@ const tipKinds: Record<string, string> = {
 };
 
 /**
- * Smoothing of an ABR stroke, under one name. Paint's stroke processor decides it (see `studioBrushRecipe`): None
- * paints the raw input, the stabilizer replaces the preset's smoothing with Paint Tool SAI's, and every other mode
- * (Studio and both Leonardo modes) smooths as the preset's Photoshop smoothing says. Paint's own Studio and Leonardo
- * smoothing, its stabilization level and catch-up therefore never change an ABR stroke and are not shown.
+ * Smoothing of an ABR stroke: Paint's Smoothing level and catch-up, as for Paint's brushes, then the preset's own
+ * Photoshop smoothing. Paint's stroke processor decides which applies (see `studioBrushRecipe`): above level 0 the
+ * stabilizer replaces the preset's smoothing, whose rows are then greyed; at 0 the preset smooths as its Photoshop
+ * smoothing says, an Amount of 0 being none. A brush stored with raw input reads as level 0 and Amount 0, and a
+ * raised Amount lets the preset smooth again.
  */
 function smoothingCategory(): BrushCategory {
-  const method = (b: Brush) =>
-    b.stroke.mode === 'none' ? 'none' : b.stroke.mode === 'stabilizer' ? 'stabilizer' : 'preset';
-  const amount = (b: Brush) => (values(b).useSmoothing ? values(b).smoothing.amount : 0);
-  const smoothing = (b: Brush) => method(b) === 'preset' && amount(b) > 0;
+  const level = smoothingSetting();
+  const presetSmooths = (b: Brush) => level.read(b) === 0 && b.stroke.mode !== 'none';
+  const amount = (b: Brush) => (presetSmooths(b) && values(b).useSmoothing ? values(b).smoothing.amount : 0);
   const preset = (key: keyof BrushFormValues['smoothing'], label: string, catchUp = false): BrushSetting => ({
     ...row('smoothing', key, settingGroups.smoothing[key], { label, section: 'Photoshop smoothing' }),
-    enabled: (b) => smoothing(b) && !(catchUp && values(b).smoothing.pulledString)
+    enabled: (b) => amount(b) > 0 && !(catchUp && values(b).smoothing.pulledString)
   });
-  const level = getBrushSetting('stabilizer-level')!;
 
   return {
     id: 'smoothing',
     label: 'Smoothing',
     group: 'advanced',
     applies: always,
-    about:
-      "An ABR brush smooths as its preset does in Photoshop. The stabilizer replaces that with Paint Tool SAI's; Off paints the pen's input as it is.",
-    status: (b) =>
-      method(b) === 'stabilizer'
-        ? `Stabilizer ${stabilizerLabel(b.stroke.stabilizer)}`
-        : smoothing(b)
-          ? `${amount(b)}%${values(b).smoothing.pulledString ? ' · pulled string' : ''}`
-          : 'Off',
+    status: (b) => (level.read(b) > 0 ? String(level.read(b)) : amount(b) > 0 ? `${amount(b)}%` : 'Off'),
     settings: [
-      {
-        id: 'abr-smoothing-method',
-        label: 'Method',
-        kind: 'choice',
-        applies: always,
-        enabled: always,
-        options: [
-          { value: 'none', label: 'Off', description: 'Strokes follow the pen exactly, with no smoothing.' },
-          {
-            value: 'preset',
-            label: 'Photoshop smoothing',
-            description: "The preset's own smoothing, set below, as in Photoshop."
-          },
-          {
-            value: 'stabilizer',
-            label: 'Stabilizer',
-            description: 'As in Paint Tool SAI: the stroke trails the pen and eases in and out, more at higher levels.'
-          }
-        ],
-        read: method,
-        write: (b, value) => {
-          const mode: StrokeSettings['mode'] | undefined =
-            value === 'none'
-              ? 'none'
-              : value === 'stabilizer'
-                ? 'stabilizer'
-                : value === 'preset'
-                  ? method(b) === 'preset'
-                    ? b.stroke.mode
-                    : 'studio'
-                  : undefined;
-          if (!mode) {
-            throw new RangeError(`Unknown smoothing method: ${value}`);
-          }
-
-          return { stroke: normalizeStrokeSettings({ ...b.stroke, mode }) };
-        }
-      },
+      level,
+      catchUpSetting(),
       {
         id: 'abr-smoothing-amount',
         label: 'Amount',
@@ -705,13 +656,17 @@ function smoothingCategory(): BrushCategory {
         max: () => 100,
         step: 1,
         applies: always,
-        enabled: (b) => method(b) === 'preset',
+        enabled: (b) => level.read(b) === 0,
         read: amount,
-        // Zero switches the preset's smoothing off and keeps its last amount, as Photoshop's own switch does.
+        // Zero switches the preset's smoothing off and keeps its last amount, as Photoshop's own switch does; a raised
+        // amount also leaves raw input for the preset's smoothing.
         write: (b, value) => {
           const next = Math.max(0, Math.min(100, Math.round(Number.isNaN(value) ? amount(b) : value)));
           const current = values(b);
           return {
+            ...(next > 0 && b.stroke.mode === 'none'
+              ? { stroke: normalizeStrokeSettings({ ...b.stroke, mode: 'studio' }) }
+              : {}),
             engine: {
               ...b.engine!,
               settings: {
@@ -729,27 +684,8 @@ function smoothingCategory(): BrushCategory {
       preset('pulledString', 'Pulled string'),
       preset('catchUp', 'Catch up', true),
       preset('catchUpAtEnd', 'Catch up at stroke end', true),
-      preset('adjustForZoom', 'Adjust for zoom'),
-      { ...level, label: 'Level', section: 'Stabilizer' }
+      preset('adjustForZoom', 'Adjust for zoom')
     ]
-  };
-}
-
-/**
- * Paint's pressure curve, which shapes an ABR brush's pen pressure only under the stabilizer: the preset's smoothing
- * and raw input pass the pen's pressure on unchanged, so the rows are greyed then.
- */
-function pressureCurveCategory(): BrushCategory {
-  const curve = brushCategories.find((c) => c.id === 'pressure-curve')!;
-  const stabilized = (b: Brush) => b.stroke.mode === 'stabilizer';
-  return {
-    ...curve,
-    status: (b) => (stabilized(b) ? curve.status(b) : 'Off'),
-    about: `${curve.about} For an ABR brush it applies with the stabilizer, chosen under Smoothing.`,
-    settings: curve.settings.map((setting) => ({
-      ...setting,
-      enabled: (b: Brush) => stabilized(b) && setting.enabled(b)
-    }))
   };
 }
 

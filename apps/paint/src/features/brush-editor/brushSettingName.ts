@@ -1,8 +1,8 @@
 import { abrCategories } from './abrSchema';
-import { brushCategories, type BrushCategory, type BrushSetting } from './schema';
+import { brushCategories, numberSettings as numbersOf, type BrushCategory, type BrushSetting } from './schema';
 
 /**
- * The name a number setting has as a part alone on the board, unique across Paint's and ABR's settings (a setting both
+ * The name a number or curve setting has as a part alone on the board, unique across Paint's and ABR's settings (a setting both
  * schemas share counts once). A name from {@link boardNames} comes first; otherwise a Paint setting keeps its label, and
  * an ABR setting takes the shortest of its label, its section and label ("Size jitter"), and its category, section
  * and label that no other setting has.
@@ -13,7 +13,7 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
     return named;
   }
 
-  const own = brushCategories.flatMap((c) => c.settings).find((s) => s.id === setting.id);
+  const own = numbersOf(brushCategories.flatMap((c) => c.settings)).find((s) => s.id === setting.id);
   if (own) {
     return own.label;
   }
@@ -35,6 +35,7 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
  * or reads awkwardly ("Scattering scatter amount").
  */
 const boardNames: Record<string, string> = {
+  'pressure-curve': 'Pressure curve',
   'pressure-minimum': 'Pressure minimum',
   'pressure-maximum': 'Pressure maximum',
   'pressure-firmness': 'Pressure firmness',
@@ -57,7 +58,7 @@ const boardNames: Record<string, string> = {
   'abr-brushPose-tiltY': 'Tilt Y',
   'abr-brushPose-rotation': 'Pose rotation',
   'abr-brushPose-pressure': 'Pose pressure',
-  'abr-smoothing-amount': 'Smoothing',
+  'abr-smoothing-amount': 'Photoshop smoothing',
   'abr-bristle-density': 'Bristle density',
   'abr-bristle-thickness': 'Bristle thickness',
   'abr-bristle-stiffness': 'Bristle stiffness',
@@ -68,9 +69,7 @@ const boardNames: Record<string, string> = {
 /** Every number setting of both schemas, a setting they share once. */
 const numberSettings = [
   ...new Map(
-    [...brushCategories, ...abrCategories].flatMap((c) =>
-      c.settings.filter((s) => s.kind === 'number').map((s) => [s.id, s] as const)
-    )
+    [...brushCategories, ...abrCategories].flatMap((c) => numbersOf(c.settings).map((s) => [s.id, s] as const))
   ).values()
 ];
 
