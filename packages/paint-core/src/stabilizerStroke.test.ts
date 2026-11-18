@@ -132,3 +132,19 @@ it('steadies a shaking hand', () => {
   const output = processor.add(shaking);
   expect(Math.max(...output.slice(40).map(({ y }) => Math.abs(y)))).toBeLessThan(0.5);
 });
+
+it.each([15, 22])('stops at the filtered point with a tapered cut when catch-up is off at level %s', (level) => {
+  const selected = brush(level);
+  selected.stroke.catchUp = false;
+  const processor = createStabilizerProcessor(selected);
+  processor.add(Array.from({ length: 100 }, (_, index) => pen(index * 5, 0, index * 4, 0.6)));
+  const endpoint = processor.preview().at(-1)!;
+  const tail = processor.finish();
+  expect(495 - tail.at(-1)!.x).toBeGreaterThan(30);
+  expect(tail.at(-1)).toMatchObject({ x: endpoint.x, y: endpoint.y, pressure: 0 });
+  expect(tail.every((sample) => sample.x <= endpoint.x)).toBe(true);
+  expect(tail[0]!.pressure).toBeGreaterThan(0);
+  expect(tail.every((sample, index) => index === 0 || sample.pressure <= tail[index - 1]!.pressure)).toBe(true);
+  expect(processor.finish()).toEqual([]);
+  expect(processor.idle!(200)).toEqual([]);
+});

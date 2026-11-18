@@ -3,6 +3,7 @@ import { defaultBrush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import * as simulation from './correctionDemoSimulation';
 import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
 const controls = vi.hoisted(() => ({ visible: (): boolean => true, reduced: (): boolean => false }));
@@ -19,7 +20,8 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-it('restarts on settings changes, suspends offscreen/hidden, holds reduced motion and cancels on disposal', () => {
+it('keeps time and caches full replays on settings changes, suspends offscreen/hidden, holds reduced motion and cancels on disposal', () => {
+  const prepare = vi.spyOn(simulation, 'prepareStrokeCorrection');
   vi.stubGlobal('IntersectionObserver', class {});
   vi.stubGlobal('matchMedia', () => ({}));
   const callbacks = new Map<number, FrameRequestCallback>();
@@ -55,15 +57,28 @@ it('restarts on settings changes, suspends offscreen/hidden, holds reduced motio
   flush();
   const canvas = host.querySelector('canvas')!;
   expect(callbacks.size).toBe(1);
+  const initialComputations = prepare.mock.calls.length;
   const id = next;
   callbacks.get(id)!(performance.now() + 1700);
+  flush();
   expect(Number(canvas.dataset.time)).toBeGreaterThan(1600);
   // A browser removes a dispatched RAF callback before calling it.
   callbacks.delete(id);
+  const timeBeforeChange = canvas.dataset.time;
+  const requestBeforeChange = next;
   setBrush({ ...brush(), stroke: { ...brush().stroke, mode: 'smooth', catchUp: false } });
   flush();
-  expect(canvas.dataset.time).toBe('0');
-  expect(host.textContent).toContain('stops short');
+  expect(Number(canvas.dataset.time)).toBeGreaterThan(1600);
+  expect(canvas.dataset.time).toBe(timeBeforeChange);
+  expect(next).toBe(requestBeforeChange);
+  expect(prepare).toHaveBeenCalledTimes(initialComputations + 1);
+  expect(host.textContent).toBe('');
+  expect(host.querySelector('figcaption')).toBeNull();
+  expect(canvas.getAttribute('aria-label')).toBe('Stroke correction demonstration');
+  const frameId = next;
+  callbacks.get(frameId)!(performance.now() + 1800);
+  callbacks.delete(frameId);
+  expect(prepare).toHaveBeenCalledTimes(initialComputations + 1);
   setVisible(false);
   flush();
   expect(callbacks.size).toBe(0);
