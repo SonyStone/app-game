@@ -5,6 +5,7 @@ import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
 import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
 import { SettingRow } from './SettingRow';
+import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
 /**
  * The categories a brush editor offers for `props.brush` and the one it shows: `props.categories` (Paint's by
@@ -162,6 +163,7 @@ export function CategoryPane(props: {
       <Show when={props.category.about} keyed>
         {(about) => <About title={props.category.label} text={about} />}
       </Show>
+      <Show when={props.category.id === 'stroke-correction'}><StrokeCorrectionDemo brush={props.brush} /></Show>
       <CategoryRows
         numberRow={props.numberRow}
         category={props.category}
