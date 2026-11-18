@@ -21,11 +21,31 @@ export function PaintCanvas(props: {
       return;
     }
 
-    const disconnect = props.connect(element);
-    const detach = attachInput(element, props.input);
+    let disposed = false;
+    let disconnect: (() => void) | undefined;
+    let detach: (() => void) | undefined;
+
+    // Drag/drop refs can flush effects while the canvas still belongs to a template document.
+    // Wait until DOM insertion finishes before opening the engine and binding its window listeners.
+    const connect = () => {
+      if (disposed) {
+        return;
+      }
+
+      disconnect = props.connect(element);
+      detach = attachInput(element, props.input);
+    };
+
+    if (element.ownerDocument.defaultView) {
+      connect();
+    } else {
+      queueMicrotask(connect);
+    }
+
     return () => {
-      detach();
-      disconnect();
+      disposed = true;
+      detach?.();
+      disconnect?.();
     };
   });
 
