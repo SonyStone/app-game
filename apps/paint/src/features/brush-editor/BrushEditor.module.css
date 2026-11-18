@@ -452,6 +452,7 @@
   border: 1px solid var(--line-color);
   border-radius: 8px;
   background: var(--surface-color);
+  color: var(--ink-color);
   box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
   visibility: hidden;
   box-sizing: border-box;
@@ -618,6 +619,9 @@
  * press target: the slider's target reaches 12 px up under the label line, beside the pill. The layout follows the
  * studio's own size through the brush-studio container: three columns, the pad across the top in portrait, and one
  * part at a time below 700 px.
+ *
+ * A host restyles the studio through the --studio-* properties that BrushStudio's JSDoc lists; each falls back to the
+ * look described here.
  */
 .studioRoot {
   container: brush-studio / size;
@@ -628,10 +632,17 @@
 .frame.studio {
   --side-color: color-mix(in srgb, var(--ink-color) 4%, var(--surface-color));
   --pill-color: color-mix(in srgb, var(--ink-color) 9%, var(--surface-color));
+  --column-ink: var(--studio-column-ink, var(--ink-color));
+  --column-quiet: var(--studio-column-quiet, var(--muted-color));
+  --tile-radius: var(--studio-tile-radius, 8px);
+  --tile-shadow: var(--studio-tile-shadow, 0 1px 4px rgb(0 0 0 / 12%));
 
   grid-template: minmax(0, 1fr) / 19fr 31fr 50fr;
   grid-template-areas: 'side pane pad';
-  font-size: 15px;
+  gap: var(--studio-gap, 0);
+  padding: var(--studio-gap, 0);
+  background: var(--studio-ground, var(--surface-color));
+  font-size: var(--studio-text, 15px);
 }
 
 .studioSide {
@@ -640,25 +651,31 @@
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  background: var(--side-color);
+  overflow: hidden;
+  border-radius: var(--studio-column-radius, 0);
+  background: var(--studio-column, var(--side-color));
+  color: var(--column-ink);
 }
 
 .studioHead {
-  padding: 22px 20px 10px;
+  padding: var(--studio-inset, 22px 20px 10px);
 }
 
 .studioName {
   margin: 0;
   overflow: hidden;
-  font-size: 28px;
+  font-size: var(--studio-name, 28px);
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The stroke preview, framed as one of the studio's controls. */
 .studioPreview {
-  margin: 8px -8px 0;
+  margin: 8px 0 0;
+  overflow: hidden;
+  border-radius: var(--tile-radius);
 
   &:empty {
     display: none;
@@ -666,14 +683,15 @@
 }
 
 .studio .nav {
-  gap: 0;
+  gap: var(--studio-row-gap, 0);
   padding: 4px 8px 16px;
   border-right: 0;
 }
 
 .studio .group {
   margin: 14px 12px 4px;
-  font-size: 12px;
+  color: var(--column-quiet);
+  font-size: var(--studio-small, 12px);
 
   &:first-child {
     margin-top: 4px;
@@ -682,15 +700,16 @@
 
 .studio .category {
   gap: 14px;
-  min-height: 52px;
+  min-height: var(--studio-row, 52px);
   padding: 2px 12px 2px 14px;
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--tile-radius);
+  background: var(--studio-tile, transparent);
+  color: var(--studio-tile-ink, inherit);
 
   &[aria-current='true'] {
-    background: var(--accent-color);
-    box-shadow: none;
-    color: var(--surface-color);
+    background: var(--studio-chosen, var(--accent-color));
+    box-shadow: inset 0 0 0 2px var(--studio-chosen-ring, transparent);
+    color: var(--studio-chosen-ink, var(--surface-color));
 
     .categoryStatus {
       color: inherit;
@@ -704,12 +723,19 @@
 }
 
 .studio .categoryStatus {
-  font-size: 12px;
+  font-size: var(--studio-small, 12px);
 }
 
 .studio .pane {
   grid-area: pane;
-  padding: 26px 24px 24px 20px;
+  padding: var(--studio-inset, 26px 24px 24px 20px);
+  border-radius: var(--studio-column-radius, 0);
+  background: var(--studio-column, transparent);
+  color: var(--column-ink);
+}
+
+.studio .back {
+  color: var(--column-ink);
 }
 
 .studio .title {
@@ -718,13 +744,22 @@
   font-weight: 700;
 }
 
+.studio .previewSize,
+.studio .paneStatus,
+.studio .note,
+.studio .about button,
+.studio .about p,
+.studio .descriptions p {
+  color: var(--column-quiet);
+}
+
 .studio .rows {
-  gap: 0;
+  gap: var(--studio-row-gap, 0);
 }
 
 /* Section headings stay; the reference frames no rows, so the box around a section goes. */
 .studio .section {
-  gap: 0;
+  gap: var(--studio-row-gap, 0);
   margin: 10px 0 0;
   padding: 0;
   border: 0;
@@ -732,12 +767,12 @@
 
 .studio .sectionTitle {
   margin: 6px 0 0;
-  color: var(--muted-color);
-  font-size: 13px;
+  color: var(--column-quiet);
+  font-size: var(--studio-small, 13px);
 }
 
 .studio .label {
-  font-size: 16px;
+  font-size: var(--studio-text, 16px);
 }
 
 /*
@@ -835,12 +870,31 @@
 
 .studio .menuButton {
   border: 0;
-  border-radius: 8px;
-  background: var(--pill-color);
+  border-radius: var(--tile-radius);
+  background: var(--studio-tile, var(--pill-color));
+  color: var(--studio-tile-ink, inherit);
+}
+
+/* Switches and a choice's options; one that is on or chosen takes the chosen colors where the host gives them. */
+.studio .row[data-kind='toggle'],
+.studio .option {
+  border-radius: var(--tile-radius);
+  background: var(--studio-tile, var(--raised));
+  color: var(--studio-tile-ink, inherit);
+
+  &[aria-checked='true'] {
+    background: var(--studio-chosen, var(--studio-tile, var(--raised)));
+    box-shadow: inset 0 0 0 2px var(--studio-chosen-ring, transparent);
+    color: var(--studio-chosen-ink, var(--studio-tile-ink, inherit));
+  }
 }
 
 .studio .row[data-kind='toggle'] {
   margin: 4px 0;
+}
+
+.studio .choice {
+  gap: var(--studio-row-gap, 2px);
 }
 
 .studioPad {
@@ -850,6 +904,7 @@
   min-height: 0;
 }
 
+/* Cancel and Done over the pad, on a plate of the host's where it gives one. */
 .studioActions {
   z-index: 2;
   display: flex;
@@ -857,16 +912,20 @@
   align-self: start;
   justify-self: end;
   gap: 8px;
-  margin: 24px 16px 0 0;
+  margin: 20px 12px 0 0;
+  padding: 4px;
+  border-radius: calc(var(--tile-radius) + 4px);
+  background: var(--studio-plate, transparent);
 }
 
 .frame .studioActions button {
   min-height: var(--target);
   padding: 0 16px;
-  border-radius: 8px;
-  background: var(--surface-color);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
-  font-size: 16px;
+  border-radius: var(--tile-radius);
+  background: var(--studio-tile, var(--surface-color));
+  box-shadow: var(--tile-shadow);
+  color: var(--studio-tile-ink, inherit);
+  font-size: var(--studio-text, 16px);
 }
 
 .frame .studioActions .done {
@@ -915,6 +974,7 @@
     margin: 0;
     padding: 8px 12px;
     border-bottom: 1px solid var(--line-color);
+    border-radius: var(--studio-column-radius, 0);
   }
 
   .frame .studioActions .studioPadToggle {
@@ -947,6 +1007,7 @@
   position: absolute;
   inset: 0;
   overflow: hidden;
+  border-radius: var(--studio-column-radius, 0);
 
   :where(button) {
     font: inherit;
@@ -973,13 +1034,17 @@
   }
 }
 
+/* The pad's own buttons, on a plate of the host's where it gives one. */
 .padOptions {
   position: absolute;
-  top: 24px;
-  left: 24px;
+  top: 20px;
+  left: 20px;
   z-index: 1;
   display: flex;
   gap: 8px;
+  padding: 4px;
+  border-radius: calc(var(--studio-tile-radius, 22px) + 4px);
+  background: var(--studio-plate, transparent);
 }
 
 .pad .padButton {
@@ -988,10 +1053,11 @@
   gap: 8px;
   min-height: var(--target, 44px);
   padding: 0 16px 0 14px;
-  border-radius: 22px;
-  background: var(--surface-color, #f8f8f8);
-  box-shadow: 0 1px 4px rgb(0 0 0 / 12%);
-  font-size: 16px;
+  border-radius: var(--studio-tile-radius, 22px);
+  background: var(--studio-tile, var(--surface-color, #f8f8f8));
+  box-shadow: var(--studio-tile-shadow, 0 1px 4px rgb(0 0 0 / 12%));
+  color: var(--studio-tile-ink, inherit);
+  font-size: var(--studio-text, 16px);
   font-weight: 600;
 
   &[aria-expanded='true'] {
@@ -1010,6 +1076,7 @@
   border: 1px solid var(--line-color, #dedede);
   border-radius: 10px;
   background: var(--surface-color, #f8f8f8);
+  color: var(--ink-color, #444);
   box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
 
   button {
@@ -1032,50 +1099,4 @@
   background: var(--surface-color, #f8f8f8);
   color: var(--muted-color, #777);
   font-size: 13px;
-}
-
-/*
- * Pins (rows given `pins`): a 44 px pin button ends every number row, in the panel as a fifth column and in the studio
- * in the column kept for it after the value pill. A pinned row is tinted with the accent and marked by a bar along its
- * leading edge, and its button is filled, so pinned rows stand out in a list at a glance; every pinnable row keeps the
- * same padding, so pinning moves nothing.
- */
-.row[data-pinnable] {
-  grid-template-columns: minmax(72px, 28%) minmax(56px, 1fr) 64px 34px var(--target);
-  padding-inline: 6px 0;
-  border-radius: 8px;
-
-  &[data-pinned] {
-    background: var(--selected);
-    box-shadow: inset 4px 0 0 var(--accent-color);
-  }
-}
-
-.frame .pin {
-  display: grid;
-  place-items: center;
-  width: var(--target);
-  height: var(--target);
-  border-radius: 50%;
-  color: var(--muted-color);
-
-  &[aria-pressed='true'] {
-    background: var(--accent-color);
-    color: var(--surface-color);
-  }
-}
-
-@container brush-editor (width < 400px) {
-  .row[data-pinnable] {
-    grid-template-columns: minmax(50px, 25%) minmax(30px, 1fr) 48px 20px var(--target);
-    column-gap: 4px;
-  }
-}
-
-.studio .row[data-pinnable] {
-  padding-inline: 8px 0;
-
-  > .pin {
-    grid-area: 1 / 3;
-  }
 }

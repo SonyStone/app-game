@@ -29,8 +29,7 @@ import { createDemoStart } from './createDemoStart';
  *
  * Brush studio, in the top bar, opens the full-screen editor (`BrushStudio`) for the same brush over the whole demo,
  * with a drawing pad (`DrawingPad`) on a scratch document of its own, so the panel and the studio can be compared.
- * Its Cancel returns to the brush as it was when the studio opened, and closes it. The pin buttons of both keep their
- * pins in memory.
+ * Its Cancel returns to the brush as it was when the studio opened, and closes it.
  *
  * Brushes, in the top bar, opens the app's preset list to switch between round, textured and ABR presets, whose
  * editors differ. ABR brushes are imported there through the ABR viewer; Paint has no importer that makes textured
@@ -73,12 +72,6 @@ export function BrushEditorDemo(props: PaintVariantProps) {
   });
   const editor = createBrushSettingsEditor(session);
   const { edited, categories, editError, update: updateEditor } = editor;
-  // The demo has no board; pins are kept in memory, so the pin buttons can be tried.
-  const [pinned, setPinned] = createSignal<readonly string[]>([]);
-  const pins = {
-    pinned: (id: string) => pinned().includes(id),
-    toggle: (id: string) => setPinned((ids) => (ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]))
-  };
   const [brushesOpen, setBrushesOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
   const [abrOpen, setAbrOpen] = createSignal(false);
@@ -200,7 +193,6 @@ export function BrushEditorDemo(props: PaintVariantProps) {
           <Show when={editError()}>{(message) => <p role="alert">{message()}</p>}</Show>
           <div class={styles.editor}>
             <BrushEditor
-              pins={pins}
               brush={edited()}
               categories={brush().engine?.id === 'abr' ? categories() : undefined}
               baseline={baseline()}
@@ -213,13 +205,7 @@ export function BrushEditorDemo(props: PaintVariantProps) {
         </aside>
       </Show>
       <Show when={studioOpen()}>
-        <BrushStudioDialog
-          ref={setStudio}
-          session={session}
-          editor={editor}
-          pins={pins}
-          onClose={() => setStudioOpen(false)}
-        />
+        <BrushStudioDialog ref={setStudio} session={session} editor={editor} onClose={() => setStudioOpen(false)} />
       </Show>
       <Show when={abrMounted()}>
         <AbrViewerDialog

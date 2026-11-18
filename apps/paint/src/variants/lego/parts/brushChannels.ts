@@ -5,6 +5,14 @@ import { brushCategories } from '../../../features/brush-editor/schema';
 import type { LegoServices } from '../LegoServices';
 import { unitSuffix, type ValueChannel } from './values';
 
+/**
+ * The kind of the value part for the brush setting `id`: Size and Opacity reuse the board's own parts, every other
+ * number setting has the part its channel below defines.
+ */
+export function brushSettingKind(id: string) {
+  return id === 'size' || id === 'opacity' ? `value:${id}` : `value:brush:${id}`;
+}
+
 /** Stable settings generate channels once; availability and bounds resolve against the live brush. */
 export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCategories].flatMap((categories, schema) =>
   categories.flatMap((category) =>
@@ -33,7 +41,7 @@ export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCateg
           short: brushSettingName(category, setting),
           unit: setting.unit,
           colored: false,
-          pinOnly: true,
+          studioOnly: true,
           min: 0,
           minimum: (s) => (active(s) ? setting.min(brush(s)) : 0),
           max: (s) => (active(s) ? setting.max(brush(s)) : 1),

@@ -17,6 +17,9 @@
   background: var(--surface, #f8f8f8);
   color: var(--ink, #444);
   pointer-events: auto;
+  transition:
+    opacity 160ms ease-out,
+    translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 
   /* The studio has no height of its own (it is a size container), so it takes what the error line leaves. */
   > :last-child {
@@ -30,6 +33,13 @@
 
   &:focus {
     outline: none;
+  }
+
+  /* Out of the way while the host carries something from it onto the page under it. */
+  &[data-away] {
+    opacity: 0;
+    translate: 0 48px;
+    pointer-events: none;
   }
 }
 

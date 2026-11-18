@@ -461,10 +461,3 @@ const modeLabels: Record<StrokeSettings['mode'], string> = {
   smooth: 'Leonardo smooth',
   stabilizer: 'Stabilizer'
 };
-
-/**
- * A host board's pins of number settings, by setting ID, for the editors' pin buttons. The host derives `pinned` from
- * its board, reactively, so a setting stays pinned while its part is anywhere on the board; `toggle` puts the setting's
- * part on the board or removes every copy of it.
- */
-export type BrushPins = { pinned(id: string): boolean; toggle(id: string): void };

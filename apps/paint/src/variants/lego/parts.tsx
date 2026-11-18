@@ -8,7 +8,7 @@ import { layerParts } from './parts/layers';
 import { presetPart } from './parts/presets';
 import { brushValueParts, valueParts } from './parts/values';
 
-/** The box catalogue. Pin-only schema definitions resolve separately; all bindings remain inert until mounted. */
+/** The box catalogue. Studio-only schema definitions resolve separately; all bindings remain inert until mounted. */
 export const partDefinitions: readonly PartDefinition[] = [
   ...actionParts,
   ...colorParts,
@@ -31,7 +31,7 @@ export const boxSections = ['Tools', 'Color', 'Values', 'Layers'].map((title) =>
   id: title,
   title,
   kinds: partDefinitions
-    .filter((definition) => definition.section === title && !definition.pinOnly)
+    .filter((definition) => definition.section === title && !definition.studioOnly)
     .map((definition) => definition.kind)
 }));
 

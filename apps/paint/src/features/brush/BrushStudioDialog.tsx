@@ -1,7 +1,7 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { editable } from '@app-game/paint-core/input';
 import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
-import { BrushStudio, snapshotBrushSettings, type BrushPins } from '../brush-editor';
+import { BrushStudio, snapshotBrushSettings } from '../brush-editor';
 import { BrushStrokePreview } from '../brush-editor/BrushStrokePreview';
 import { DrawingPad } from '../brush-editor/DrawingPad';
 import type { PaintSession } from '../session';
@@ -22,12 +22,17 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
  * then calls `onClose`, as Done does. Escape closes it too, keeping the changes, unless a control inside used the key,
  * as a menu or a typed number does. While it is open the page behind it is inert, and no key or pointer event in it
  * reaches the page's listeners on the document or the window, so the drawing's shortcuts and gestures stay idle.
+ *
+ * While `away`, as while the host carries something out of the studio onto the page, the studio slides down and fades
+ * out, taking no presses, and comes back as it was once `away` ends; it stays open throughout, keeping its state.
  */
 export function BrushStudioDialog(props: {
   session: PaintSession;
   editor: BrushSettingsEditor;
-  /** The host board's pins; see `BrushStudio`. */
-  pins?: BrushPins;
+  /** The host's rows for number settings; see `BrushStudio`. */
+  numberRow?: Parameters<typeof BrushStudio>[0]['numberRow'];
+  /** Whether the studio is out of the way, showing the page under it; false by default. */
+  away?: boolean;
   /** Called by Done, by Cancel once it has restored the baseline, and by Escape; the caller then unmounts the dialog. */
   onClose: () => void;
   /** Added to the dialog's class, so a host can map its theme to the editor's colors (`--surface`, `--ink`, ...). */
@@ -62,6 +67,7 @@ export function BrushStudioDialog(props: {
         props.ref?.(element);
       }}
       class={[styles.dialog, props.class]}
+      data-away={props.away ? '' : undefined}
       aria-label="Brush studio"
       onCancel={(event) => {
         event.preventDefault();
@@ -93,7 +99,7 @@ export function BrushStudioDialog(props: {
         categories={brush().engine?.id === 'abr' ? editor.categories() : undefined}
         baseline={baseline()}
         name={library.find(preset())?.name}
-        pins={props.pins}
+        numberRow={props.numberRow}
         onChange={(patch) => void editor.update(patch)}
         onDone={() => props.onClose()}
         preview={<SessionStrokePreview session={session} editor={editor} height={96} />}

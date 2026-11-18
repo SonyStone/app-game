@@ -422,6 +422,106 @@ it('records a value popup using its part kind', () => {
   expect(wiring.panel?.()).toBe('value:size');
 });
 
+it('a studio row and the board part of one setting are the same control and show one value', () => {
+  storeParts(['action:brush-editor', 'value:brush:flow']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[1].span = { columns: 4, rows: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
+  mount();
+  const dialog = openStudio();
+  const board = document.querySelector('[data-panel="test-panel"]')!;
+  const slider = (root: Element) =>
+    root.querySelector<HTMLElement>('[data-part-kind="value:brush:flow"] [role="slider"]')!;
+  const shown = () => [board, dialog].map((root) => slider(root).getAttribute('aria-valuenow'));
+  // The studio row is the part itself: the same slider, with the board part's label and value chips.
+  expect(slider(dialog).className).toBe(slider(board).className);
+  expect(slider(dialog).textContent).toBe(slider(board).textContent);
+
+  pointer(slider(dialog), 'pointerdown', 0.2, 0);
+  pointer(slider(dialog), 'pointerup', 0.2, 0);
+  expect(wiring.session!.brush().flow).toBeCloseTo(0.21, 2);
+  expect(shown()).toEqual(['20', '20']);
+  expect(slider(board).textContent).toContain('21%');
+  expect(slider(dialog).textContent).toBe(slider(board).textContent);
+
+  pointer(slider(board), 'pointerdown', 0.6, 0);
+  pointer(slider(board), 'pointerup', 0.6, 0);
+  expect(shown()).toEqual(['60', '60']);
+  expect(slider(dialog).textContent).toBe(slider(board).textContent);
+  // Its number field beside the slider is the same part's number look.
+  expect(dialog.querySelector('[data-part-kind="value:brush:flow"] input')).not.toBeNull();
+});
+
+it("lifts a part of the setting by its studio row's grip onto the board, out of the studio's way, without Edit", () => {
+  storeParts(['action:brush-editor']);
+  // A full-screen layout, so the board maps the drop to a place on it.
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
+  mount();
+  const dialog = openStudio();
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
+  expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
+
+  pointer(grip, 'pointerdown', 20, 200);
+  expect(dialog.hasAttribute('data-away')).toBe(false);
+  pointer(grip, 'pointermove', 300, 400);
+  expect(dialog.hasAttribute('data-away')).toBe(true);
+  pointer(grip, 'pointermove', 420, 420);
+  pointer(grip, 'pointerup', 420, 420);
+
+  expect(dialog.hasAttribute('data-away')).toBe(false);
+  const landed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]')!;
+  expect(landed).not.toBeNull();
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('44px');
+  expect(button('Edit')).toBeDefined();
+  expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
+  expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
+});
+
+it('the slider of a studio row moves the value but never lifts a part', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  const slider = dialog.querySelector<HTMLElement>('[data-part-kind="value:brush:flow"] [role="slider"]')!;
+  pointer(slider, 'pointerdown', 0.5, 0);
+  pointer(slider, 'pointermove', 0.9, 300);
+  expect(dialog.hasAttribute('data-away')).toBe(false);
+  pointer(slider, 'pointerup', 0.9, 300);
+  expect(wiring.session!.brush().flow).toBeCloseTo(0.9, 1);
+  expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
+});
+
+it('a studio row of a setting that does not apply now shows the part inactive and takes no edits', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  [...dialog.querySelectorAll<HTMLElement>('nav button')]
+    .find((element) => element.textContent?.includes('Stroke correction'))!
+    .click();
+  flush();
+  const row = dialog.querySelector('[data-part-kind="value:brush:stabilization"]')!.parentElement!.parentElement!;
+  const slider = row.querySelector<HTMLElement>('[role="slider"]')!;
+  expect(slider.closest('[aria-disabled]')!.getAttribute('aria-disabled')).toBe('true');
+  expect(slider.textContent).toContain('—');
+  expect(row.querySelector('input')).toBeNull();
+  const before = wiring.session!.brush().stroke;
+  const press = new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 0.8 });
+  slider.dispatchEvent(press);
+  slider.dispatchEvent(new MouseEvent('pointerup', { bubbles: true, clientX: 0.8 }));
+  flush();
+  expect(press.defaultPrevented).toBe(true);
+  expect(wiring.session!.brush().stroke).toEqual(before);
+});
+
+/** Opens the brush studio through the "Brush settings" part on the board and returns its dialog. */
+function openStudio() {
+  document.querySelector<HTMLButtonElement>('[data-part-kind="action:brush-editor"] button')!.click();
+  flush();
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Brush studio"]');
+  expect(dialog).not.toBeNull();
+  return dialog!;
+}
+
 /** Writes a small, known board without using the live session or the app's stored drawing. */
 function storeParts(kinds: string[]) {
   localStorage.setItem(

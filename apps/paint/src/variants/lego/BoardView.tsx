@@ -78,6 +78,11 @@ import { canDropParts, openChain, visiblePanels } from './windows';
  *
  * A long press on the bare drawing or on a panel's free cells (or a right click) opens the `SpawnMenu` there; a part
  * tapped in it lands at the press, as if dropped there.
+ *
+ * Other surfaces lift new parts onto the board through `ref`'s `lift`, as the brush studio's rows do, in edit mode or
+ * not. The board follows every drag with listeners on the window's capture phase, so a drag that began in a layer
+ * keeping its pointer events to itself, as the studio's modal dialog does, is followed all the same; while a lifted
+ * part is carried the plates show their studs.
  */
 export function BoardView(props: {
   board: ReturnType<typeof createBoard>;
@@ -90,6 +95,8 @@ export function BoardView(props: {
   onPopup: (anchor: Element, popup: Popup) => void;
   /** The box of parts' sheet; this sinks it while something is carried and closes it once a part is taken. */
   sheet: ReturnType<typeof createSheet>;
+  /** Receives the board's commands for other surfaces once it is made, and `undefined` when it is disposed. */
+  ref?: (controls: BoardControls | undefined) => void;
 }) {
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
@@ -322,7 +329,8 @@ export function BoardView(props: {
     { capture: true }
   );
 
-  createEventListener(window, 'pointermove', (event) => {
+  createEventListener(window, 'pointermove', followPointer, { capture: true });
+  function followPointer(event: PointerEvent) {
     if (press && event.pointerId === press.pointer) {
       if (Math.hypot(event.clientX - press.start.x, event.clientY - press.start.y) >= tapDistance) {
         stopPress();
@@ -369,7 +377,7 @@ export function BoardView(props: {
     // Only what is carried out of the box sinks it, to show the board at full size; from the board, an open box stays
     // to take it. A closed one shows its strip to put it away.
     const carried = current.carried || moved;
-    if (carried && (current.fromSheet || props.sheet.height() <= 0)) {
+    if (carried && props.editing && (current.fromSheet || props.sheet.height() <= 0)) {
       followSheet(point);
     }
 
@@ -396,7 +404,7 @@ export function BoardView(props: {
     }
 
     setDrag({ ...current, point, carried });
-  });
+  }
   // A lift drops where the part is, without waiting; a press that did not move is a tap.
   const finish = (event: PointerEvent) => {
     if (press && event.pointerId === press.pointer) {
@@ -492,19 +500,31 @@ export function BoardView(props: {
     const kept = props.board.latest();
     setSelected(new Set([...selected()].filter((id) => findPart(kept, id) !== undefined)));
   };
-  createEventListener(window, 'pointerup', finish);
-  createEventListener(window, 'pointercancel', (event) => {
-    if (event.pointerId === press?.pointer) {
-      stopPress();
-    }
+  createEventListener(window, 'pointerup', finish, { capture: true });
+  createEventListener(
+    window,
+    'pointercancel',
+    (event) => {
+      if (event.pointerId === press?.pointer) {
+        stopPress();
+      }
 
-    if (event.pointerId === drag()?.pointer) {
-      stopWaiting();
-      stopSpring();
-      setDrag(undefined);
-      props.sheet.setSunk(false);
-    }
+      if (event.pointerId === drag()?.pointer) {
+        stopWaiting();
+        stopSpring();
+        setDrag(undefined);
+        props.sheet.setSunk(false);
+      }
+    },
+    { capture: true }
+  );
+
+  props.ref?.({
+    lift: (event, kind, span) =>
+      startPartDrag(event, { id: newId('part'), kind, span: span ?? { columns: 1, rows: 1 } }, { fromBox: true }),
+    carrying: () => lifted()?.carried === true
   });
+  onCleanup(() => props.ref?.(undefined));
 
   /** A panel of the board, or the workbench, with its parts and, while editing, their handles. */
   function PanelView(entryProps: { entry: { panel: Panel; frame: ReturnType<typeof panelFrame> } }) {
@@ -667,7 +687,12 @@ export function BoardView(props: {
 
   return (
     <>
-      <div ref={setLayer} class={styles.board} data-editing={props.editing ? '' : undefined}>
+      <div
+        ref={setLayer}
+        class={styles.board}
+        data-editing={props.editing ? '' : undefined}
+        data-carrying={lifted()?.carried ? '' : undefined}
+      >
         <Show when={props.editing}>
           <div
             class={styles.bare}
@@ -1736,6 +1761,18 @@ const emptyBench: Panel = { id: 'bench', at: { x: 0, y: 0 }, parts: [], bench: t
 function inside(point: Point, rect: DOMRect) {
   return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
 }
+
+/** The board's commands for surfaces other than its own panels and box; see `BoardView`'s `ref`. */
+export type BoardControls = {
+  /**
+   * Lifts a new part of `kind` and `span` (one cell by default) for the press `event`, as a part taken from the box:
+   * it follows the pointer and lands where it is let go, on a plate or as a new one, in edit mode or not. The press's
+   * `currentTarget` is where the part is held from. The caller keeps the pointer's events coming, as by capturing it.
+   */
+  lift: (event: PointerEvent, kind: string, span?: Span) => void;
+  /** Whether a lifted part is being carried, having moved off where it was pressed; reactive. */
+  carrying: () => boolean;
+};
 
 /**
  * A drag in progress, by the pointer that started it; `base` is the board without what is being dragged, from which

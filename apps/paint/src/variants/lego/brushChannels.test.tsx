@@ -8,13 +8,12 @@ import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../features/brush-editor/brushSettingName';
 import { brushCategories } from '../../features/brush-editor/schema';
-import { removePart } from './board';
-import { brushPinKind, brushPinned, toggleBrushPin } from './brushPins';
+import { removePart, type Board } from './board';
 import { createBoard } from './createBoard';
 import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { boxSections, partDefinition } from './parts';
-import { brushChannels } from './parts/brushChannels';
+import { brushChannels, brushSettingKind } from './parts/brushChannels';
 import { roundedValue, unitSuffix } from './parts/values';
 import { createTestServices } from './testServices';
 
@@ -34,7 +33,7 @@ it('generates unique names across both schemas, counting shared IDs once', () =>
     expect(named('abr-colorDynamics-fade')).toBe('FG/BG fade length');
     expect(named('abr-shapeDynamics-sizeJitter')).toBe('Size jitter');
     for (const { s } of rows) {
-      expect(partDefinition(brushPinKind(s.id))).toBeDefined();
+      expect(partDefinition(brushSettingKind(s.id))).toBeDefined();
       expect(boxSections.flatMap((s) => s.kinds)).not.toContain(`value:brush:${s.id}`);
     }
   }
@@ -83,24 +82,24 @@ it('uses Paint and ABR range, units, curves and schema writes; unavailable chann
   }
 });
 
-it('collects pins, removes duplicates across plates, and removes the last plate through either removal path', () => {
-  const view = { width: 1646, height: 1029 };
-  const first = toggleBrushPin({ panels: [] }, 'flow', view);
-  const second = toggleBrushPin(first, 'hardness', view);
-  expect(second.panels).toHaveLength(1);
-  expect(second.panels[0]!.parts[1]!.cell.row).toBe(1);
-  const removed = toggleBrushPin(second, 'flow', view);
-  expect(brushPinned(removed, 'flow')).toBe(false);
-  expect(toggleBrushPin(removed, 'hardness', view).panels).toHaveLength(0);
-  expect(removePart(first, first.panels[0]!.parts[0]!.id).panels).toHaveLength(0);
-  const duplicate = { panels: [...first.panels, { ...first.panels[0]!, id: 'another' }] };
-  expect(brushPinned(toggleBrushPin(duplicate, 'flow', view), 'flow')).toBe(false);
-});
-
-it('reloads known and removed schema kinds through ordinary board storage', () => {
+it('reloads plates of brush setting parts made by the pin buttons, known kinds and removed ones alike', () => {
   localStorage.clear();
-  const stored = toggleBrushPin({ panels: [] }, 'flow', { width: 1646, height: 1029 });
-  stored.panels[0]!.parts.push({ ...stored.panels[0]!.parts[0]!, id: 'future', kind: 'value:brush:removed-setting' });
+  const part = (id: string, kind: string, row: number) => ({
+    id,
+    kind,
+    cell: { column: 0, row },
+    span: { columns: 4, rows: 1 }
+  });
+  const stored: Board = {
+    panels: [
+      {
+        id: 'brush-pins',
+        floating: true,
+        at: { x: 0.7, y: 0.15 },
+        parts: [part('flow', 'value:brush:flow', 0), part('future', 'value:brush:removed-setting', 1)]
+      }
+    ]
+  };
   let stop!: () => void;
   const saved = createRoot((dispose) => {
     stop = dispose;
@@ -110,9 +109,12 @@ it('reloads known and removed schema kinds through ordinary board storage', () =
   stop();
   createRoot((dispose) => {
     const board = createBoard();
-    expect(brushPinned(board.latest(), 'flow')).toBe(true);
-    expect(brushPinned(board.latest(), 'removed-setting')).toBe(true);
+    const kinds = board.latest().panels.flatMap((panel) => panel.parts.map((p) => p.kind));
+    expect(kinds).toEqual(['value:brush:flow', 'value:brush:removed-setting']);
     expect(partDefinition('value:brush:removed-setting')).toBeUndefined();
+    // The pins' plate still goes with its last part.
+    const loaded = board.latest();
+    expect(removePart(removePart(loaded, 'flow'), 'future').panels).toHaveLength(0);
     dispose();
   });
   localStorage.clear();
@@ -160,23 +162,14 @@ it('keeps unavailable parts named and inert, and revives them when the brush sup
   }
 });
 
-it('reuses Size and Opacity kinds and removes all existing copies', () => {
-  const view = { width: 1646, height: 1029 };
+it('reuses the Size and Opacity parts for those settings and removes floating point noise', () => {
   for (const id of ['size', 'opacity']) {
     expect(partDefinition(`value:brush:${id}`)).toBeUndefined();
-    const board = toggleBrushPin({ panels: [] }, id, view);
-    expect(board.panels[0]!.parts[0]!.kind).toBe(`value:${id}`);
-    expect(brushPinned(board, id)).toBe(true);
-    expect(toggleBrushPin(board, id, view).panels).toEqual([]);
+    expect(brushSettingKind(id)).toBe(`value:${id}`);
+    expect(partDefinition(brushSettingKind(id))).toBeDefined();
   }
-});
 
-it('uses a uniform four-cell span and removes floating point noise', () => {
-  let board = { panels: [] } as import('./board').Board;
-  for (const id of ['flow', 'hardness', 'stabilization']) {
-    board = toggleBrushPin(board, id, { width: 1646, height: 1029 });
-  }
-  expect(board.panels[0]!.parts.map((p) => p.span)).toEqual(Array(3).fill({ columns: 4, rows: 1 }));
+  expect(brushSettingKind('flow')).toBe('value:brush:flow');
   expect(roundedValue(0.30000000000000004, 0.1)).toBe(0.3);
   expect(roundedValue(1.234, 0.05)).toBe(1.25);
 });

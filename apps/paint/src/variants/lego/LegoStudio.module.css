@@ -55,7 +55,9 @@
   touch-action: none;
 }
 
+/* While a part is carried, from the box or from the brush studio, the plates show their studs to drop it on. */
 .board[data-editing] .panel,
+.board[data-carrying] .panel,
 .benchSlot .panel {
   touch-action: none;
   cursor: grab;
@@ -1491,11 +1493,86 @@
   filter: grayscale(1);
 }
 
-/* The brush studio over the whole screen, in the LEGO tile's colors; the drawing pad keeps its own paper. */
+/*
+ * The brush studio over the whole screen, built as the board is: its columns are plates lying on paper as the
+ * drawing's, its controls tiles on them with the board's radii, gaps and type, and the chosen ones lit as a pressed
+ * action. The drawing pad keeps its own paper. See `BrushStudio` for the properties it reads.
+ */
 .brushStudio {
   --surface: var(--lego-tile);
   --ink: var(--lego-ink);
   --muted: var(--lego-quiet);
   --accent: var(--lego-accent);
   --line: color-mix(in srgb, var(--lego-ink) 14%, transparent);
+  --studio-ground: #faf8f5;
+  --studio-gap: 8px;
+  --studio-column: var(--lego-plate);
+  --studio-column-ink: #ffffff;
+  --studio-column-quiet: rgb(255 255 255 / 0.62);
+  --studio-column-radius: 10px;
+  --studio-inset: 10px 6px;
+  --studio-plate: var(--lego-plate);
+  --studio-tile: var(--lego-tile);
+  --studio-tile-ink: var(--lego-ink);
+  --studio-tile-radius: 7px;
+  --studio-tile-shadow: none;
+  --studio-chosen: var(--lego-preset-active);
+  --studio-chosen-ink: var(--lego-ink);
+  --studio-chosen-ring: var(--lego-accent);
+  --studio-row-gap: 4px;
+  --studio-row: 44px;
+  --studio-text: 13px;
+  --studio-small: 11px;
+  --studio-name: 18px;
+}
+
+/* A number setting in the studio: its grip, then its value part as a slider and as a number, one cell high. */
+.studioSetting {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 44px;
+  gap: 4px;
+  height: 44px;
+}
+
+/* A part's tile outside a plate's cells, as `.part` draws it on the board. */
+.studioTile {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+
+  > * {
+    min-width: 0;
+    min-height: 0;
+  }
+}
+
+/* The grip a part is lifted by: studs on the plate, lit in the accent while the setting has a part on the board. */
+.studioGrip {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.1);
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.studioGripDots {
+  width: 12px;
+  height: 20px;
+  background: radial-gradient(circle, rgb(255 255 255 / 0.8) 1.6px, transparent 2.2px) 0 0 / 6px 6.67px;
+}
+
+.studioSetting[data-on-board] .studioGripDots {
+  background-image: radial-gradient(circle, var(--lego-accent) 1.6px, transparent 2.2px);
 }

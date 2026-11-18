@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
+import { brushSettingName } from '../../features/brush-editor/brushSettingName';
 import { BrushStudioDialog } from '../../features/brush/BrushStudioDialog';
 import {
   createPaintSession,
@@ -13,19 +14,21 @@ import {
   StageOverlays
 } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { besideRect, findPart } from './board';
-import { BoardView } from './BoardView';
-import { brushPinned, toggleBrushPin } from './brushPins';
+import { besideRect, findPart, type Span } from './board';
+import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
 import { closedHeight, createSheet } from './createSheet';
-import { createKits } from './kits';
 import { FileApplicationControls } from './FileMenu';
+import { createKits } from './kits';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
 import { PartFrame } from './PartFrame';
+import { partDefinition } from './parts';
+import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
+import { StudioSettingRow } from './StudioSettingRow';
 
 /**
  * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
@@ -41,6 +44,10 @@ import type { Popup } from './parts/definition';
  * further, with the workbench to build a kit on at full size: drag parts out of the box, between
  * panels and back, size them by their corner and move panels by their rim; a long press on a free spot offers the
  * parts right there (see `BoardView`). The board is kept per device.
+ *
+ * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
+ * setting there is its value part itself (`StudioSettingRow`), and its grip lifts a new part of it onto the board, in
+ * edit mode or not; the studio gets out of the way while the part is carried and comes back once it lands.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
@@ -63,6 +70,8 @@ export function LegoStudio(
   });
   /** Whether the brush studio, opened by the "Brush settings" part, covers the screen. */
   const [studioOpen, setStudioOpen] = createSignal(false);
+  /** The board's commands, which the studio's rows lift new parts with; set by the board as it is made. */
+  const [boardControls, setBoardControls] = createSignal<BoardControls | undefined>(undefined, { ownedWrite: true });
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
@@ -175,6 +184,7 @@ export function LegoStudio(
             onOpenPanel={setOpenPanel}
             sheet={sheet}
             onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
+            ref={setBoardControls}
           />
           <Show when={popup() && popupPlace()}>
             {(place) => (
@@ -263,9 +273,23 @@ export function LegoStudio(
               class={styles.brushStudio}
               session={session}
               editor={services.brushEditor}
-              pins={{
-                pinned: (id) => brushPinned(board.board(), id),
-                toggle: (id) => board.set(toggleBrushPin(board.latest(), id, session.size()))
+              away={boardControls()?.carrying() ?? false}
+              numberRow={(setting, category) => {
+                const kind = brushSettingKind(setting.id);
+                if (!partDefinition(kind)) {
+                  return undefined;
+                }
+
+                return (
+                  <StudioSettingRow
+                    kind={kind}
+                    label={brushSettingName(category, setting)}
+                    onBoard={board
+                      .board()
+                      .panels.some((panel) => !panel.bench && panel.parts.some((part) => part.kind === kind))}
+                    onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
+                  />
+                );
               }}
               onClose={() => setStudioOpen(false)}
             />
@@ -279,3 +303,6 @@ export function LegoStudio(
 
 /** CSS pixels around the card the drawing shrinks to. */
 const cardMargin = 16;
+
+/** The span of a part lifted from the brush studio: four cells across, as a slider shows its name and value. */
+const studioPartSpan: Span = { columns: 4, rows: 1 };

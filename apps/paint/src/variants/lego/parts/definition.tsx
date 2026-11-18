@@ -37,7 +37,8 @@ export type PartBinding = {
  * App mutations, including settings/storage writes, always use `frame.command`.
  */
 export function definePart<N extends object, P extends object = N>(spec: {
-  pinOnly?: boolean;
+  /** Left out of the box: the part enters the board from elsewhere, as from the brush studio. */
+  studioOnly?: boolean;
   kind: string;
   family: 'color' | 'value' | 'action' | 'preset';
   label: string;
@@ -74,5 +75,5 @@ export function definePart<N extends object, P extends object = N>(spec: {
 /** The uniform registry entry erases props only after `definePart` has checked needs against its view. */
 export type PartDefinition = Pick<
   ReturnType<typeof definePart>,
-  'pinOnly' | 'kind' | 'family' | 'label' | 'icon' | 'section' | 'looks' | 'owned' | 'hasPopup' | 'render'
+  'studioOnly' | 'kind' | 'family' | 'label' | 'icon' | 'section' | 'looks' | 'owned' | 'hasPopup' | 'render'
 >;

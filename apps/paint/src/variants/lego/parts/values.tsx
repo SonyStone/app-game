@@ -33,8 +33,8 @@ export type ValueChannel = {
   step?: number;
   /** Unavailable channels stay mounted but cannot receive edits. */
   active?: (services: LegoServices) => boolean;
-  /** Enters the board through the editor rather than the box. */
-  pinOnly?: boolean;
+  /** Enters the board from the brush studio rather than the box. */
+  studioOnly?: boolean;
   max: (services: LegoServices) => number;
   read: (services: LegoServices) => number;
   write: (services: LegoServices, value: number, hsv: Hsv) => void;
@@ -160,7 +160,7 @@ const channels = [
 /** Static definitions and their full-slider popups are generated from the same channel specs. */
 export const valueParts = channels.map(defineValuePart);
 
-/** Pin-only definitions follow the ordinary catalogue so existing specimen positions stay stable. */
+/** Studio-only definitions follow the ordinary catalogue so existing specimen positions stay stable. */
 export const brushValueParts = brushChannels.map(defineValuePart);
 
 /** Defines a value part from one complete channel spec. Missing writers fail immediately, including untyped input. */
@@ -173,7 +173,7 @@ export function defineValuePart(channel: ValueChannel) {
     kind: `value:${channel.id}`,
     family: 'value',
     section: channel.section ?? 'Values',
-    pinOnly: channel.pinOnly,
+    studioOnly: channel.studioOnly,
     label: channel.label,
     looks: { looks, auto: (span) => (span.columns === 1 && span.rows === 1 ? 'knob' : 'slider') },
     needs: (services, frame) => valueNeeds(services, frame, channel),
