@@ -33,6 +33,7 @@ it('keeps time and caches full replays on settings changes, suspends offscreen/h
   vi.stubGlobal('cancelAnimationFrame', (id: number) => callbacks.delete(id));
   const context = {
     setLineDash() {},
+    fillRect() {},
     scale() {},
     beginPath() {},
     moveTo() {},

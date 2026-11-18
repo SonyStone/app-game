@@ -97,12 +97,19 @@ function drawFrame(canvas: HTMLCanvasElement, frame: ReturnType<typeof strokeCor
   context.fillStyle = context.strokeStyle;
   context.lineCap = 'round';
   context.lineJoin = 'round';
+  // The quiet full result is painted opaque on the cleared canvas and then faded as one layer: its short segments
+  // overlap, so painting each of them translucent would add up to a nearly opaque line.
+  drawLine(frame.fullLine, 1, frame.finishIndex);
+  context.globalCompositeOperation = 'destination-in';
+  context.globalAlpha = 0.3;
+  context.fillRect(0, 0, width, height);
+  context.globalCompositeOperation = 'source-over';
+  context.strokeStyle = ink;
   context.globalAlpha = 0.22;
   context.lineWidth = 1;
   context.beginPath();
   frame.raw.forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
   context.stroke();
-  drawLine(frame.fullLine, 0.36, frame.finishIndex);
   const end = frame.missing[0];
   const lift = frame.missing[1];
   if (end && lift) {
