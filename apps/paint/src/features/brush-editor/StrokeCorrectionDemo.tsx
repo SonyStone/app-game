@@ -5,9 +5,9 @@ import { createMediaQuery } from '@solid-primitives/media';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import {
-  correctionDemoCaption,
   correctionDemoTiming,
   correctionPenSamples,
+  prepareStrokeCorrection,
   strokeCorrectionFrame
 } from './correctionDemoSimulation';
 import styles from './StrokeCorrectionDemo.module.css';
@@ -25,42 +25,54 @@ export function StrokeCorrectionDemo(props: { brush: Brush }) {
   createEventListener(document, 'visibilitychange', () => setHidden(document.hidden));
   const size = typeof ResizeObserver === 'undefined' ? { width: 360 } : createElementSize(canvas);
   const samples = createMemo(() => correctionPenSamples(size.width || 360));
-  const settings = createMemo(() => ({ ...props.brush.stroke }));
+  const simulation = createMemo(() => prepareStrokeCorrection({ ...props.brush.stroke }, samples()));
+  const [elapsed, setElapsed] = createSignal(0);
+  let pausedAt = 0;
+
+  // Settings invalidate only the replay, leaving the running frame clock alone.
+  createEffect(
+    () => visible() && !hidden() && !reduced(),
+    (active) => {
+      if (!active) {
+        return;
+      }
+
+      const start = performance.now();
+      const offset = pausedAt;
+      let request = 0;
+      const tick = (now: number) => {
+        pausedAt = offset + now - start;
+        setElapsed(pausedAt);
+        request = requestAnimationFrame(tick);
+      };
+      request = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(request);
+    }
+  );
 
   createEffect(
     () => ({
       canvas: canvas(),
-      settings: settings(),
-      samples: samples(),
-      active: visible() && !hidden(),
-      reduced: reduced()
+      frame: strokeCorrectionFrame(
+        simulation(),
+        reduced() ? correctionDemoTiming.lift : elapsed() % correctionDemoTiming.loop
+      ),
+      time: reduced() ? correctionDemoTiming.lift : elapsed() % correctionDemoTiming.loop
     }),
-    ({ canvas, settings, samples, active, reduced }) => {
+    ({ canvas, frame, time }) => {
       if (!canvas) {
         return;
       }
 
-      let request = 0;
-      const start = performance.now();
-      const draw = (now: number) => {
-        const time = reduced ? correctionDemoTiming.lift : (now - start) % correctionDemoTiming.loop;
-        const frame = strokeCorrectionFrame(settings, time, samples);
-        drawFrame(canvas, frame);
-        canvas.dataset.phase = frame.lifted ? 'lifted' : 'drawing';
-        canvas.dataset.time = String(Math.round(time));
-        if (active && !reduced) {
-          request = requestAnimationFrame(draw);
-        }
-      };
-      draw(start);
-      return () => cancelAnimationFrame(request);
+      drawFrame(canvas, frame);
+      canvas.dataset.phase = frame.lifted ? 'lifted' : 'drawing';
+      canvas.dataset.time = String(Math.round(time));
     }
   );
 
   return (
     <figure class={styles.demo}>
       <canvas ref={setCanvas} class={styles.canvas} role="img" aria-label="Stroke correction demonstration" />
-      <figcaption class={styles.caption}>{correctionDemoCaption(settings())}</figcaption>
     </figure>
   );
 }
@@ -85,33 +97,34 @@ function drawFrame(canvas: HTMLCanvasElement, frame: ReturnType<typeof strokeCor
   context.fillStyle = context.strokeStyle;
   context.lineCap = 'round';
   context.lineJoin = 'round';
+  // The quiet full result is painted opaque on the cleared canvas and then faded as one layer: its short segments
+  // overlap, so painting each of them translucent would add up to a nearly opaque line.
+  drawLine(frame.fullLine, 1, frame.finishIndex);
+  context.globalCompositeOperation = 'destination-in';
+  context.globalAlpha = 0.3;
+  context.fillRect(0, 0, width, height);
+  context.globalCompositeOperation = 'source-over';
+  context.strokeStyle = ink;
   context.globalAlpha = 0.22;
   context.lineWidth = 1;
   context.beginPath();
   frame.raw.forEach((point, index) => (index ? context.lineTo(point.x, point.y) : context.moveTo(point.x, point.y)));
   context.stroke();
-  context.globalAlpha = 0.9;
-  frame.line.forEach((point, index) => {
-    const previous = frame.line[index - 1] ?? point;
-    context.strokeStyle = frame.lifted && index >= frame.beforeLift.length ? accent : ink;
-    context.lineWidth = Math.max(0.2, (previous.pressure + point.pressure) * 2.5);
-    context.beginPath();
-    context.moveTo(previous.x, previous.y);
-    context.lineTo(point.x, point.y);
-    context.stroke();
-  });
-  const end = frame.line.at(-1);
-  if (frame.lifted && end && frame.pen && Math.hypot(end.x - frame.pen.x, end.y - frame.pen.y) > 2) {
+  const end = frame.missing[0];
+  const lift = frame.missing[1];
+  if (end && lift) {
     context.strokeStyle = ink;
     context.globalAlpha = 0.4;
     context.lineWidth = 1.5;
     context.setLineDash([5, 5]);
     context.beginPath();
     context.moveTo(end.x, end.y);
-    context.lineTo(frame.pen.x, frame.pen.y);
+    context.lineTo(lift.x, lift.y);
     context.stroke();
     context.setLineDash([]);
   }
+
+  drawLine(frame.line, 0.9, frame.lifted ? frame.beforeLift.length : Infinity);
 
   if (frame.pen) {
     context.strokeStyle = ink;
@@ -124,5 +137,19 @@ function drawFrame(canvas: HTMLCanvasElement, frame: ReturnType<typeof strokeCor
     } else {
       context.fill();
     }
+  }
+
+  /** Paints pressure-width segments with lift additions in the accent colour. */
+  function drawLine(line: typeof frame.line, alpha: number, finishIndex: number) {
+    context!.globalAlpha = alpha;
+    line.forEach((point, index) => {
+      const previous = line[index - 1] ?? point;
+      context!.strokeStyle = index >= finishIndex ? accent : ink;
+      context!.lineWidth = Math.max(0.2, (previous.pressure + point.pressure) * 2.5);
+      context!.beginPath();
+      context!.moveTo(previous.x, previous.y);
+      context!.lineTo(point.x, point.y);
+      context!.stroke();
+    });
   }
 }

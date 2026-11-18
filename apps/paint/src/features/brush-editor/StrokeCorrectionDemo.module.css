@@ -10,10 +10,3 @@
   border-radius: 6px;
   background: var(--studio-paper, color-mix(in srgb, currentColor 4%, transparent));
 }
-
-.caption {
-  margin-top: 4px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--studio-column-quiet, currentColor);
-}

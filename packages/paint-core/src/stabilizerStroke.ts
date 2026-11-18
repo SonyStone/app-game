@@ -11,7 +11,8 @@ import { interpolateTabletAxes } from './tabletAxes';
  * with their own latest outputs (`createSaiFilter`). Before the filter, a pen step much longer than the one before it
  * is split along the circle through the last three samples, as SAI corrects uneven tablet packets; after it, cubic
  * Bézier curves join the filtered points. A pen's pressure starts from zero and over a longer window, so strokes ease
- * in; lifting the pen finishes the line toward the pen with its pressure tapering to zero. `stroke.stabilizer` is the
+ * in; with catch-up enabled, lifting finishes toward the pen with pressure tapering to zero. With catch-up off,
+ * only the pending curve is flushed to the last filtered position, tapering its pressure to zero. `stroke.stabilizer` is the
  * level, 0 to 15 or 16 to 22 for S-1 to S-7; `zoom` is the document-to-screen scale, as SAI corrects packets in screen
  * pixels. While the pen rests, the latest sample keeps being filtered at the pen's rate (`idle`), as tablets keep
  * reporting a pen held still. Pressure is calibrated like Leonardo's filter.
@@ -101,6 +102,10 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
       }
 
       finished = true;
+      if (!settings.catchUp) {
+        return curve.flush(true);
+      }
+
       const lift = recent.at(-1)!;
       const result = code > 128 ? finishOnArc(lift) : [];
       if (!result.length) {
@@ -347,15 +352,15 @@ function createCurve() {
     },
     /** Whether a point waits for the next one to draw the curve to it. */
     pending: () => points.length >= 2,
-    /** Draws the curve to the last point, which has no next point to shape its end. */
-    flush(): Sample[] {
+    /** Flushes the pending segment; optionally tapers its pressure to zero without moving its endpoint. */
+    flush(taper = false): Sample[] {
       if (points.length < 2) {
         return [];
       }
 
       const [a, b] = points.slice(-2) as [(typeof points)[0], (typeof points)[0]];
       points.length = 0;
-      return segment(a, b);
+      return segment(a, taper ? { ...b, sample: { ...b.sample, pressure: 0 } } : b);
     }
   };
 

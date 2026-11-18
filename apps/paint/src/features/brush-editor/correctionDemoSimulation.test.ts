@@ -1,7 +1,16 @@
 import { defaultStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { describe, expect, it } from 'vitest';
-import { correctionPenSamples, strokeCorrectionFrame } from './correctionDemoSimulation';
+import {
+  correctionPenSamples,
+  prepareStrokeCorrection,
+  strokeCorrectionFrame as selectFrame
+} from './correctionDemoSimulation';
 
+const strokeCorrectionFrame = (
+  settings: Parameters<typeof prepareStrokeCorrection>[0],
+  time: number,
+  samples?: Parameters<typeof prepareStrokeCorrection>[1]
+) => selectFrame(prepareStrokeCorrection(settings, samples), time);
 const settings = defaultStrokeSettings();
 const distance = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -34,8 +43,8 @@ describe('stroke correction demo', () => {
     expect(gaps[1]).toBeGreaterThanOrEqual(40);
   });
 
-  it.each([0, 15, 22])('stabilizer %s finishes within the pen marker regardless of catch-up', (stabilizer) => {
-    for (const catchUp of [true, false]) {
+  it.each([0, 15, 22])('stabilizer %s finishes within the pen marker with catch-up', (stabilizer) => {
+    for (const catchUp of [true]) {
       const frame = strokeCorrectionFrame({ ...settings, mode: 'stabilizer', stabilizer, catchUp }, 2700);
       expect(distance(frame.line.at(-1)!, frame.pen!)).toBeLessThan(2);
     }
@@ -78,4 +87,22 @@ describe('stroke correction demo', () => {
     const rest = strokeCorrectionFrame(stroke, 1340);
     expect(distance(rest.line.at(-1)!, rest.pen!)).toBeLessThan(distance(before.line.at(-1)!, before.pen!));
   });
+});
+
+it.each([15, 22])('reports the full result and missing stretch before lift at level %s', (stabilizer) => {
+  const simulation = prepareStrokeCorrection({ ...settings, mode: 'stabilizer', stabilizer, catchUp: false });
+  const early = selectFrame(simulation, 100);
+  const finished = selectFrame(simulation, 2700);
+  expect(early.fullLine).toBe(finished.line);
+  expect(early.line.length).toBeLessThan(early.fullLine.length);
+  expect(early.raw).toBe(simulation.raw);
+  expect(early.missing).toHaveLength(2);
+  expect(distance(early.missing[0]!, early.missing[1]!)).toBeGreaterThan(40);
+});
+
+it('changes the quiet full result at every stabilizer step, even at time zero', () => {
+  const results = Array.from({ length: 23 }, (_, stabilizer) =>
+    JSON.stringify(selectFrame(prepareStrokeCorrection({ ...settings, mode: 'stabilizer', stabilizer }), 0).fullLine)
+  );
+  expect(new Set(results).size).toBe(23);
 });

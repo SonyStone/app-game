@@ -10,7 +10,7 @@ export type StrokeSettings = {
    * which trail further; see `createStabilizerProcessor`.
    */
   stabilizer: number;
-  /** Smooth mode can leave the endpoint behind the pen; normal mode and the stabilizer always finish the line. */
+  /** Defaults to true. Smooth and stabilizer modes finish toward the lift point; false leaves their filtered endpoint. */
   catchUp: boolean;
   /** Raw pressure mapped to zero, in [0, maximum). */
   minimum: number;

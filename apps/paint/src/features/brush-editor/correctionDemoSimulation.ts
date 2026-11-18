@@ -6,44 +6,70 @@ import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-co
 export const correctionDemoTiming = { lift: 2500, loop: 3250 };
 
 /**
- * Replays pen packets and a short mid-gesture rest through Paint's real processor. Coordinates are CSS pixels
- * in the supplied samples, by default a 360 × 84 strip. Time is milliseconds, clamped, not wrapped.
- * `lifted` means time has reached pen-up at 2500 ms. `beforeLift` is committed ink before finish,
- * excluding disposable preview tails; `afterLift` is the output added by finish, empty while drawing.
- * `line` joins those arrays after lift, or committed ink and a disposable preview during contact.
- * `pen` is the latest raw sample and remains at the lift point in a finished still.
- * Preview tails are disposable and never become committed points.
+ * Replays the real processor once for a settings/sample change. Stores committed-prefix lengths and
+ * disposable preview tails at 120 Hz, including idle updates during the rest. Frames only slice this cache.
+ * The full finished line and missing stretch are available even at the start of the loop.
  */
-export function strokeCorrectionFrame(settings: StrokeSettings, time: number, samples = correctionPenSamples()) {
+export function prepareStrokeCorrection(settings: StrokeSettings, samples = correctionPenSamples()) {
   const stroke = normalizeStrokeSettings(settings);
   const processor = studioProcessors[stroke.mode]({ ...defaultBrush(), size: 4, stroke }, 1);
   const committed: Sample[] = [];
-  const raw: Sample[] = [];
-  const until = Math.max(0, Math.min(correctionDemoTiming.lift, time));
+  const snapshots: { time: number; count: number; rawCount: number; preview: Sample[] }[] = [];
+  let rawCount = 0;
   let previousTime = 0;
-  for (const sample of samples) {
-    if (sample.time > until) {
+  // Include packet times exactly, plus idle ticks so the resting pen continues to settle.
+  const times = [
+    ...new Set([
+      ...samples.map((sample) => sample.time),
+      ...Array.from({ length: 301 }, (_, index) => (index * 1000) / 120)
+    ])
+  ].sort((a, b) => a - b);
+  for (const time of times) {
+    if (time > correctionDemoTiming.lift) {
       break;
     }
 
-    // No packets during the rest: use the engine's idle clock instead.
-    if (sample.time - previousTime > 20) {
-      committed.push(...(processor.idle?.(sample.time - previousTime) ?? []));
+    const sample = samples[rawCount];
+    if (sample && sample.time === time) {
+      committed.push(...processor.add([sample]));
+      rawCount++;
+    } else {
+      committed.push(...(processor.idle?.(time - previousTime) ?? []));
     }
 
-    committed.push(...processor.add([sample]));
-    raw.push(sample);
-    previousTime = sample.time;
+    snapshots.push({ time, count: committed.length, rawCount, preview: processor.preview() });
+    previousTime = time;
   }
 
-  if (until > previousTime) {
-    committed.push(...(processor.idle?.(until - previousTime) ?? []));
-  }
+  const beforeLift = committed.slice();
+  const afterLift = processor.finish();
+  const fullLine = [...beforeLift, ...afterLift];
+  const end = fullLine.at(-1);
+  const lift = samples.at(-1);
+  const missing = end && lift && Math.hypot(end.x - lift.x, end.y - lift.y) > 2 ? [end, lift] : [];
+  return { raw: samples, fullLine, beforeLift, afterLift, missing, snapshots };
+}
 
+/** Selects a cached replay at clamped milliseconds; returns both the full result and ink drawn so far. */
+export function strokeCorrectionFrame(simulation: ReturnType<typeof prepareStrokeCorrection>, time: number) {
   const lifted = time >= correctionDemoTiming.lift;
-  const afterLift = lifted ? processor.finish() : [];
-  const line = [...committed, ...(lifted ? afterLift : processor.preview())];
-  return { raw, line, beforeLift: committed, afterLift, pen: raw.at(-1), lifted };
+  const until = Math.max(0, Math.min(correctionDemoTiming.lift, time));
+  const snapshot = simulation.snapshots.findLast((snapshot) => snapshot.time <= until);
+  const rawCount = snapshot?.rawCount ?? 0;
+  const line = lifted
+    ? simulation.fullLine
+    : [...simulation.beforeLift.slice(0, snapshot?.count ?? 0), ...(snapshot?.preview ?? [])];
+  return {
+    raw: simulation.raw,
+    fullLine: simulation.fullLine,
+    finishIndex: simulation.beforeLift.length,
+    missing: simulation.missing,
+    line,
+    beforeLift: lifted ? simulation.beforeLift : simulation.beforeLift.slice(0, snapshot?.count ?? 0),
+    afterLift: lifted ? simulation.afterLift : [],
+    pen: simulation.raw[rawCount - 1],
+    lifted
+  };
 }
 
 /**
@@ -71,22 +97,4 @@ export function correctionPenSamples(width = 360): Sample[] {
   }
 
   return points;
-}
-
-/** Plain-language description of the selected processor and its lift behavior. */
-export function correctionDemoCaption(settings: StrokeSettings) {
-  switch (settings.mode) {
-    case 'none':
-      return 'The dot is your pen. The line follows every movement.';
-    case 'studio':
-      return 'The dot is your pen. The line rounds small movements and follows it to the end.';
-    case 'normal':
-      return 'The dot is your pen. The line smooths movements and finishes where you lift.';
-    case 'smooth':
-      return settings.catchUp
-        ? 'The ring is where you lift. Blue ink catches up after the pen lifts.'
-        : 'The ring is where you lift. The line stops short; dashes show the missing end.';
-    case 'stabilizer':
-      return 'The dot is your pen. Higher levels trail farther; blue ink finishes the line after lift.';
-  }
 }
