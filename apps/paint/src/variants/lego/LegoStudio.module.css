@@ -425,6 +425,17 @@
   font-weight: 600;
 }
 
+/* A pressure curve's graph opened from its small picture: as large as the part lifted from the studio. */
+.popupCurve {
+  display: grid;
+  width: calc(4 * 48px - 4px);
+  height: calc(4 * 48px - 4px);
+  border-radius: 7px;
+  overflow: hidden;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+}
+
 .popupSlider {
   position: relative;
   display: grid;
@@ -1493,7 +1504,9 @@
  * quiet, with no track, fill or thumb. Clearly off, without the murk of a faded, greyed control.
  */
 .part:has(.valueState[data-inactive]),
-.studioTile:has(.valueState[data-inactive]) {
+.studioTile:has(.valueState[data-inactive]),
+.part:has(.curvePart[data-inactive]),
+.studioTile:has(.curvePart[data-inactive]) {
   background: transparent;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
 }
@@ -1774,9 +1787,7 @@
   }
 
   .entryCard &[data-zone] button:not([aria-selected='true']) {
-    background:
-      repeating-linear-gradient(135deg, rgb(0 0 0 / 0.07) 0 3px, transparent 3px 7px),
-      var(--lego-tile);
+    background: repeating-linear-gradient(135deg, rgb(0 0 0 / 0.07) 0 3px, transparent 3px 7px), var(--lego-tile);
   }
 }
 
@@ -1825,6 +1836,21 @@
   grid-template-columns: 32px minmax(0, 1fr);
   gap: 4px;
   height: 44px;
+
+  /* The pressure curve: a graph about as tall as it is wide, its grip at the top. */
+  &[data-tall] {
+    grid-template-columns: 32px minmax(0, 420px);
+    align-items: start;
+    height: 340px;
+
+    .studioGrip {
+      height: 100%;
+    }
+
+    .studioTile {
+      height: 100%;
+    }
+  }
 }
 
 /* A part's tile outside a plate's cells, as `.part` draws it on the board. */
@@ -1868,4 +1894,72 @@
 
 .studioSetting[data-on-board] .studioGripDots {
   background-image: radial-gradient(circle, var(--lego-accent) 1.6px, transparent 2.2px);
+}
+
+/*
+ * The pressure curve as a part (`parts/pressureCurve`): its name, then the graph in the tile's colors, the handles and
+ * their chips in the accent as a slider's fill is; or, small, a picture of the curve. Unlit, as a value is, while the
+ * curve does not apply.
+ */
+.curvePart {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+
+  &[data-inactive] {
+    color: rgb(255 255 255 / 0.5);
+  }
+}
+
+.curveCaption {
+  padding: 8px 10px 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.curveEditor {
+  --curve-ground: rgb(0 0 0 / 0.04);
+  --curve-line: rgb(0 0 0 / 0.16);
+  --curve-ink: var(--lego-ink);
+  --curve-handle: var(--lego-accent);
+  --curve-handle-ink: #ffffff;
+  --curve-pen: #e5484d;
+
+  grid-row: -2;
+
+  [data-inactive] & {
+    --curve-ground: transparent;
+    --curve-line: rgb(255 255 255 / 0.2);
+    --curve-ink: rgb(255 255 255 / 0.5);
+    --curve-handle: rgb(255 255 255 / 0.3);
+    --curve-handle-ink: rgb(255 255 255 / 0.6);
+
+    opacity: 1;
+  }
+}
+
+.curvePicture {
+  display: grid;
+  grid-row: 1 / -1;
+  padding: 22%;
+  cursor: pointer;
+  touch-action: none;
+
+  svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
 }

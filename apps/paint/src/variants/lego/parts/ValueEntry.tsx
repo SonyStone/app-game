@@ -243,21 +243,7 @@ function Key(props: {
 
 /** A key of the keypad: a digit, the decimal point, the sign, backspace or a nudge by one step. */
 export type KeypadKey =
-  | '0'
-  | '1'
-  | '2'
-  | '3'
-  | '4'
-  | '5'
-  | '6'
-  | '7'
-  | '8'
-  | '9'
-  | '.'
-  | 'sign'
-  | 'backspace'
-  | 'nudge-down'
-  | 'nudge-up';
+  '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '.' | 'sign' | 'backspace' | 'nudge-down' | 'nudge-up';
 
 /** The keypad key a hardware key stands for, if any. */
 function keyOf(key: string): KeypadKey | undefined {
@@ -329,9 +315,9 @@ function formatNumber(value: number) {
 }
 
 /**
- * The named levels of a value, such as the stabilizer's 0 to 15 and S-1 to S-7, as a small grid with the current one
- * highlighted: a tap chooses a level and calls `onChoose` once. Levels of one zone share a row run; a new zone starts
- * a new row under a quiet line. Enter or Space chooses the focused level; `moveLevelFocus` gives the arrow keys.
+ * The named levels of a value, such as Smoothing's 0 to 22, as a small grid with the current one highlighted: a tap
+ * chooses a level and calls `onChoose` once. Levels of one zone share a row run; a new zone starts a new row under a
+ * quiet line. Enter or Space chooses the focused level; `moveLevelFocus` gives the arrow keys.
  */
 export function LevelPicker(props: {
   label: string;
@@ -382,7 +368,7 @@ export function LevelPicker(props: {
   );
 }
 
-/** A named level of a value, such as the stabilizer's "S-3"; see `ValueChannel`'s `levels`. */
+/** A named level of a value, such as Smoothing's "18"; see `ValueChannel`'s `levels`. */
 export type ValueLevel = {
   value: number;
   label: string;
@@ -404,4 +390,12 @@ export function moveLevelFocus(event: KeyboardEvent) {
   const index = buttons.indexOf(target);
   buttons[Math.max(0, Math.min(buttons.length - 1, index + (event.key === 'ArrowRight' ? 1 : -1)))]?.focus();
   return true;
+}
+
+/**
+ * `unit` as it follows a number: a word, such as "marks", after a no-break space ("80 marks"); a symbol or an
+ * abbreviation of up to two letters, such as %, ° or px, right after it ("80%").
+ */
+export function unitSuffix(unit: string) {
+  return /^\p{L}{3,}/u.test(unit) ? `\u00a0${unit}` : unit;
 }

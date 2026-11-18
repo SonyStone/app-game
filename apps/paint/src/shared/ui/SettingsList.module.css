@@ -24,8 +24,11 @@
   }
 }
 
-/* Its reset has no specificity, so a host's button rules lose to the row's own below. */
-:where(.list) .row {
+/*
+ * Two classes, so that a host's reset of its buttons, such as `.frame :where(button)`, cannot take the row's padding;
+ * a host's own rule for the rows, such as `.studio .list button`, still wins.
+ */
+.list .row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -33,6 +36,7 @@
   width: 100%;
   min-height: var(--settings-list-row, 40px);
   margin: 0;
+  /* The icon's tile sits as far inside the highlight from the side as from the top and bottom, as macOS draws it. */
   padding: 0 10px 0 7px;
   border: 0;
   border-radius: var(--settings-list-radius, 9px);

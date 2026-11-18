@@ -29,8 +29,8 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
 export function BrushStudioDialog(props: {
   session: PaintSession;
   editor: BrushSettingsEditor;
-  /** The host's rows for number settings; see `BrushStudio`. */
-  numberRow?: Parameters<typeof BrushStudio>[0]['numberRow'];
+  /** The host's rows for number and curve settings; see `BrushStudio`. */
+  hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'];
   /** Whether the studio is out of the way, showing the page under it; false by default. */
   away?: boolean;
   /** Called by Done, by Cancel once it has restored the baseline, and by Escape; the caller then unmounts the dialog. */
@@ -99,7 +99,7 @@ export function BrushStudioDialog(props: {
         categories={brush().engine?.id === 'abr' ? editor.categories() : undefined}
         baseline={baseline()}
         name={library.find(preset())?.name}
-        numberRow={props.numberRow}
+        hostRow={props.hostRow}
         onChange={(patch) => void editor.update(patch)}
         onDone={() => props.onClose()}
         preview={<SessionStrokePreview session={session} editor={editor} height={96} />}

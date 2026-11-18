@@ -14,9 +14,9 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * right. In portrait the pad lies across the top and the two columns share the space under it. Narrower than 700 px,
  * one part shows at a time: the categories, a category's rows, or the pad.
  *
- * It shows the same categories, rows, statuses, sections and "About" disclosures as `BrushEditor`, with each number
+ * It shows the same categories, rows, statuses and sections as `BrushEditor`, with each number
  * row on two lines: its label and its value in a pill that can be dragged or tapped to type, then a slider across the
- * column; a host may render number rows itself instead (`numberRow`). Controlled as `BrushEditor` is: every change
+ * column; a host may render number rows itself instead (`hostRow`). Controlled as `BrushEditor` is: every change
  * goes through `onChange` as a patch.
  *
  * Besides the editor's theme properties (`--surface`, `--ink`, `--muted`, `--line`, `--accent`), the studio reads
@@ -40,8 +40,8 @@ export function BrushStudio(props: {
   /** The name of the edited brush, shown as the studio's title; "Brush studio" without it. */
   name?: string;
   onChange: (patch: Partial<Brush>) => void;
-  /** The host's rows for number settings; see `CategoryPane`. */
-  numberRow?: Parameters<typeof CategoryPane>[0]['numberRow'];
+  /** The host's rows for number and curve settings; see `CategoryPane`. */
+  hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   /** Leaves the studio: called by Done, and by Cancel once it has sent the baseline. */
   onDone: () => void;
   /** The stroke preview under the title, made by the caller, which owns the painting it needs. */
@@ -79,7 +79,7 @@ export function BrushStudio(props: {
           </div>
           <CategoryPane
             category={chosen()}
-            numberRow={props.numberRow}
+            hostRow={props.hostRow}
             brush={props.brush}
             onChange={props.onChange}
             onBack={() => setView('list')}

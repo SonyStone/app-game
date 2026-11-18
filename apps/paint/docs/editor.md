@@ -235,6 +235,8 @@ The stroke processors in `packages/paint-core/src/strokeProcessors.ts` select st
 
 In the brush panel, choose **Stroke smoothing → Leonardo normal** or **Leonardo smooth**. Normal starts at Stabilization 1, Smooth at 10; the two values are kept separately. Studio remains the default mode. Brush settings, including smoothing, survive a reload (see Brush presets below).
 
+The brush studio (`features/brush-editor`) offers no choice of mode: its one **Smoothing** level, 0 to 22, is Studio at 0 and the stabilizer at that level above it (`smoothing.ts`). A brush saved with a Leonardo mode shows the level whose trailing is nearest its window and becomes the stabilizer once the level is moved; raw input shows as 0.
+
 `paint-core/src/leonardoStroke.ts` averages the last `N = clamp(setting + 1, 1, 50)` samples of position, raw pressure and time. History is filled with the first point; the Studio distance threshold does not apply here. Calibration runs after averaging: `clamp((pressure - minimum) / (maximum - minimum), 0, 1) ** firmness`. Initial minimum/maximum: 5%/80%, firmness: 100%, i.e. exponent 1. Mouse pressure stays full. Normalization guarantees an increasing range and a positive exponent.
 
 Normal always catches up to the end on pen lift. In Smooth, this is controlled by **Catch up on pen lift**. Catch-up synchronously repeats the last point `N` times, including the last contact pressure. The zero pressure of the pointerup event does not create an artificial taper; a stationary lift adds no extra input sample. With catch-up off, the line ends at the last filtered point.

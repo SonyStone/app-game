@@ -1,8 +1,8 @@
 import { brushSizeCurve, brushSpacingCurve, type SliderCurve } from '@app-game/abr-brush/sliderCurves';
 import type { Brush } from '@app-game/paint-core/brush';
-import { stabilizerLabel } from '@app-game/paint-core/stabilizerStroke';
-import { maxStabilizerLevel, normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { maxBrushSize } from '../brush/createBrushTools';
+import { maxSmoothing, smoothingLevel, steadySmoothing, withSmoothing } from './smoothing';
 
 /** Shared metadata; applicability hides a row, while enabled only disables its control. */
 export type SettingBase = {
@@ -38,11 +38,12 @@ export type NumberSetting = SettingBase & {
   read: (brush: Brush) => number;
   /** Returns a shallow-merge patch; does not enforce applicability or enablement. NaN retains the rounded current value. */
   write: (brush: Brush, value: number) => Partial<Brush>;
-  /** Optional display text for values such as S-3; unit is rendered separately. */
+  /** Optional display text for a value; unit is rendered separately. */
   format?: (value: number) => string;
   /**
-   * The value's named levels in order, for a setting with a few discrete steps, such as the stabilizer's 0 to 15 and
-   * S-1 to S-7; a level's `zone` groups it with its neighbours of the same zone. Controls that know levels show them.
+   * The value's named levels in order, for a setting with a few discrete steps, such as Smoothing's 0 to 22; a level's
+   * `zone` groups it with its neighbours of the same zone, as the strong levels above 15. Controls that know levels
+   * show them.
    */
   levels?: readonly { value: number; label: string; zone?: string }[];
 };
@@ -73,14 +74,39 @@ export type ChoiceOption = {
   value: string;
   /** Visible option name. */
   label: string;
-  /** What choosing this option does, shown while it is chosen; options may share one text. */
-  description?: string;
+};
+
+/**
+ * The pen's pressure curve: three number settings edited together on one graph, pen pressure across and the pressure
+ * the brush gets up, as `calibratePressure` maps it. Each keeps its own ID, bounds, step and writes, so it also stands
+ * alone, as a part on the LEGO board does. All three are in percent: `minimum` and `maximum` of the pen's raw pressure
+ * that map to none and to full, and `firmness` the curve's exponent, 100 for a straight line.
+ */
+export type CurveSetting = SettingBase & {
+  kind: 'curve';
+  /** Raw pressure that maps to zero; its upper bound keeps it below `maximum`. */
+  minimum: NumberSetting;
+  /** Raw pressure that maps to one; its lower bound keeps it above `minimum`. */
+  maximum: NumberSetting;
+  /** The exponent, above 100 needing a firmer press. */
+  firmness: NumberSetting;
 };
 
 /** Discriminated control definition for generated editors and standalone controls. */
-export type BrushSetting = NumberSetting | ToggleSetting | ChoiceSetting;
+export type BrushSetting = NumberSetting | ToggleSetting | ChoiceSetting | CurveSetting;
 
-/** Ordered editor section with a live summary and optional explanatory text. */
+/** The number settings among `settings`, a curve's three in its place, in order. */
+export function numberSettings(settings: readonly BrushSetting[]): NumberSetting[] {
+  return settings.flatMap((setting) =>
+    setting.kind === 'number'
+      ? [setting]
+      : setting.kind === 'curve'
+        ? [setting.minimum, setting.maximum, setting.firmness]
+        : []
+  );
+}
+
+/** Ordered editor section with a live summary. */
 export type BrushCategory = {
   /** Stable navigation identifier. */
   id: string;
@@ -94,15 +120,7 @@ export type BrushCategory = {
   status: (brush: Brush) => string;
   /** False hides the whole category. */
   applies: (brush: Brush) => boolean;
-  /** Static explanatory text for a collapsed About block. */
-  about?: string;
-  /** Explanation for an applicable category with no editable rows, when needed. */
-  note?: (brush: Brush) => string | undefined;
 };
-
-/** Shared by both Leonardo smoothing modes; declared before the categories, which read it while they are built. */
-const leonardoDescription =
-  'Higher stabilization smooths more and follows the pen more slowly. Zero keeps curve smoothing only.';
 
 /** Editor navigation and rows in display order. Callbacks are pure; writes return shallow-merge patches. */
 export const brushCategories: readonly BrushCategory[] = [
@@ -141,13 +159,13 @@ export const brushCategories: readonly BrushCategory[] = [
     id: 'brush-tip',
     label: 'Brush tip',
     group: 'basics',
-    applies: always,
+    // An ABR preset keeps its own tip, which its own editor's Brush tip edits.
+    applies: (b) => b.engine?.id !== 'abr',
     status: (b) => {
       const name = tipLabels[b.engine?.id ?? 'round'] ?? 'Brush tip';
       const value = b.engine === undefined ? b.hardness : b.engine.id === 'textured' ? b.spacing : undefined;
       return value === undefined ? name : `${name} · ${Math.round(value * 100)}%`;
     },
-    note: (b) => (b.engine?.id === 'abr' ? 'ABR presets keep their own tip shape and pressure dynamics.' : undefined),
     settings: [
       { ...percent('hardness', 'Hardness', 0), applies: (b) => b.engine === undefined },
       {
@@ -193,77 +211,10 @@ export const brushCategories: readonly BrushCategory[] = [
     group: 'advanced',
     applies: always,
     status: (b) => {
-      const mode = b.stroke.mode;
-      const label = modeLabels[mode];
-      return mode === 'stabilizer'
-        ? `${label} · ${stabilizerLabel(b.stroke.stabilizer)}`
-        : isLeonardo(b)
-          ? `${label} · ${mode === 'smooth' ? b.stroke.smooth : b.stroke.normal}`
-          : label;
+      const level = brushSmoothing(b);
+      return level === 0 ? 'Off' : String(level);
     },
-    settings: [
-      choice(
-        'smoothing',
-        'Smoothing',
-        [
-          {
-            value: 'none',
-            label: 'None (raw input)',
-            description: 'No path smoothing or stabilization. Brush stamps connect input points directly.'
-          },
-          {
-            value: 'studio',
-            label: 'Studio',
-            description: "Paint's original smoothing: brush stamps follow quadratic curves through the input points."
-          },
-          { value: 'normal', label: 'Leonardo normal', description: leonardoDescription },
-          { value: 'smooth', label: 'Leonardo smooth', description: leonardoDescription },
-          {
-            value: 'stabilizer',
-            label: 'Stabilizer (Paint Tool SAI)',
-            description:
-              'As in Paint Tool SAI: levels 0 to 15 average the latest 1 to 16 pen samples, S-1 to S-7 steady the hand more and trail further. Strokes ease in and taper out where the pen lifts.'
-          }
-        ],
-        (b) => b.stroke.mode,
-        (b, value) => strokePatch(b, { mode: value as StrokeSettings['mode'] })
-      ),
-      number({
-        id: 'stabilization',
-        label: 'Stabilization',
-        unit: '',
-        min: () => 0,
-        max: () => 49,
-        enabled: isLeonardo,
-        read: (b) => (b.stroke.mode === 'smooth' ? b.stroke.smooth : b.stroke.normal),
-        write: (b, value) => strokePatch(b, b.stroke.mode === 'smooth' ? { smooth: value } : { normal: value })
-      }),
-      number({
-        id: 'stabilizer-level',
-        label: 'Stabilizer level',
-        unit: '',
-        min: () => 0,
-        max: () => maxStabilizerLevel,
-        enabled: (b) => b.stroke.mode === 'stabilizer',
-        format: stabilizerLabel,
-        levels: Array.from({ length: maxStabilizerLevel + 1 }, (_, level) => ({
-          value: level,
-          label: stabilizerLabel(level),
-          zone: level > 15 ? 'S' : undefined
-        })),
-        read: (b) => b.stroke.stabilizer,
-        write: (b, stabilizer) => strokePatch(b, { stabilizer })
-      }),
-      {
-        ...toggle(
-          'catch-up',
-          'Catch up on pen lift',
-          (b) => b.stroke.catchUp,
-          (b, catchUp) => strokePatch(b, { catchUp })
-        ),
-        enabled: (b) => b.stroke.mode === 'smooth'
-      }
-    ]
+    settings: [smoothingSetting(), catchUpSetting()]
   },
   {
     id: 'pressure-curve',
@@ -272,38 +223,95 @@ export const brushCategories: readonly BrushCategory[] = [
     applies: always,
     status: (b) =>
       calibratesPressure(b) ? `${Math.round(b.stroke.minimum * 100)}–${Math.round(b.stroke.maximum * 100)}%` : 'Off',
-    about:
-      "Minimum and maximum set the pen's pressure range. Firmness at 100% is linear; higher values need a firmer press.",
     settings: [
-      strokePercent(
-        'pressure-minimum',
-        'Minimum',
-        'minimum',
-        () => 0,
-        (b) => Math.round(b.stroke.maximum * 100) - 1
-      ),
-      strokePercent(
-        'pressure-maximum',
-        'Maximum',
-        'maximum',
-        (b) => Math.round(b.stroke.minimum * 100) + 1,
-        () => 100
-      ),
-      strokePercent(
-        'pressure-firmness',
-        'Firmness',
-        'firmness',
-        () => 10,
-        () => 500,
-        5
-      )
+      {
+        id: 'pressure-curve',
+        label: 'Pressure curve',
+        kind: 'curve',
+        applies: always,
+        enabled: calibratesPressure,
+        minimum: strokePercent(
+          'pressure-minimum',
+          'Minimum',
+          'minimum',
+          () => 0,
+          (b) => Math.round(b.stroke.maximum * 100) - 1
+        ),
+        maximum: strokePercent(
+          'pressure-maximum',
+          'Maximum',
+          'maximum',
+          (b) => Math.round(b.stroke.minimum * 100) + 1,
+          () => 100
+        ),
+        firmness: strokePercent(
+          'pressure-firmness',
+          'Firmness',
+          'firmness',
+          () => 10,
+          () => 500,
+          5
+        )
+      }
     ]
   }
 ];
 
-/** Finds a setting regardless of the current engine or stroke mode; unknown IDs return undefined. */
+/**
+ * Finds a setting regardless of the current engine or stroke mode, also one of a curve's three; unknown IDs return
+ * undefined.
+ */
 export function getBrushSetting(id: string): BrushSetting | undefined {
-  return brushCategories.flatMap((category) => category.settings).find((setting) => setting.id === id);
+  const settings = brushCategories.flatMap((category) => category.settings);
+
+  return settings.find((setting) => setting.id === id) ?? numberSettings(settings).find((setting) => setting.id === id);
+}
+
+/**
+ * Smoothing as one level, 0 to 22, with a tick per level and the strong levels above 15 marked; see `smoothingLevel`
+ * for how it reads and writes the stroke's mode, and {@link brushSmoothing} for an ABR brush. Shared by Paint's Stroke
+ * correction and ABR's Smoothing.
+ */
+export function smoothingSetting(): NumberSetting {
+  return number({
+    id: 'smoothing',
+    label: 'Smoothing',
+    unit: '',
+    min: () => 0,
+    max: () => maxSmoothing,
+    levels: Array.from({ length: maxSmoothing + 1 }, (_, level) => ({
+      value: level,
+      label: String(level),
+      zone: level > steadySmoothing ? 'strong' : undefined
+    })),
+    read: brushSmoothing,
+    write: (b, level) => ({ stroke: withSmoothing(b.stroke, level) })
+  });
+}
+
+/**
+ * Whether the line finishes at the pen when it lifts, or stops where the smoothing has got to. Active while Smoothing
+ * is above 0, the only levels that trail. A brush stored with a Leonardo mode becomes the stabilizer at its level as
+ * it is switched, since Leonardo's normal mode always catches up.
+ */
+export function catchUpSetting(): ToggleSetting {
+  return {
+    ...toggle(
+      'catch-up',
+      'Catch up on pen lift',
+      (b) => b.stroke.catchUp,
+      (b, catchUp) => ({ stroke: withSmoothing({ ...b.stroke, catchUp }, brushSmoothing(b)) })
+    ),
+    enabled: (b) => brushSmoothing(b) > 0
+  };
+}
+
+/**
+ * The brush's Smoothing level. An ABR brush smooths as its preset says in every mode but the stabilizer and raw input
+ * (see `studioBrushRecipe`), so it reads as the stabilizer's level or 0.
+ */
+function brushSmoothing(b: Brush) {
+  return b.engine?.id === 'abr' && b.stroke.mode !== 'stabilizer' ? 0 : smoothingLevel(b.stroke);
 }
 
 /** Captures editable fields; opt into a detached ABR engine baseline for descriptor editing. */
@@ -349,13 +357,13 @@ function supportsPressure(b: Brush) {
   return b.engine?.id !== 'abr';
 }
 
-function isLeonardo(b: Brush) {
-  return b.stroke.mode === 'normal' || b.stroke.mode === 'smooth';
-}
-
-/** The modes in which the pen pressure range and firmness apply: the Leonardo modes and the stabilizer. */
+/**
+ * Whether the pen pressure range and firmness apply: in the stabilizer, and in the Leonardo modes except for an ABR
+ * brush, whose preset smooths and passes the pen's pressure on unchanged there.
+ */
 function calibratesPressure(b: Brush) {
-  return isLeonardo(b) || b.stroke.mode === 'stabilizer';
+  const leonardo = b.stroke.mode === 'normal' || b.stroke.mode === 'smooth';
+  return b.stroke.mode === 'stabilizer' || (leonardo && b.engine?.id !== 'abr');
 }
 
 /** Merges `patch` into the brush's stroke settings and normalizes the result, as every stroke write must. */
@@ -463,11 +471,3 @@ function strokePercent(
 }
 
 const tipLabels: Record<string, string> = { round: 'Soft round', textured: 'Textured tip', abr: 'ABR brush' };
-
-const modeLabels: Record<StrokeSettings['mode'], string> = {
-  none: 'None',
-  studio: 'Studio',
-  normal: 'Leonardo normal',
-  smooth: 'Leonardo smooth',
-  stabilizer: 'Stabilizer'
-};
