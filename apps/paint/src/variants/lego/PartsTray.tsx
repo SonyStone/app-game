@@ -1,6 +1,8 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
+import { SettingsList } from '../../shared/ui/SettingsList';
+import type { SketchIconName } from '../../shared/ui/SketchIcon';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
 import type { createKits, Kit } from './kits';
@@ -13,10 +15,12 @@ import { opaqueData } from './partStorage';
 /**
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
  * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it. It
- * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside every part by
- * family with its name and the brushes, where a part dropped is put away, and apart from them the kits as live
- * previews, the user's with a delete button and a name to tap and rename, where a part, group or panel dropped is
- * kept as a kit (the workbench above both in a narrow view). While it is sunk, the strip it leaves puts away what is dropped on it.
+ * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside the parts, where a
+ * part dropped is put away, and apart from them the kits as live previews, the user's with a delete button and a name
+ * to tap and rename, where a part, group or panel dropped is kept as a kit (the workbench above both in a narrow
+ * view). The parts are chosen by family in a Settings-style sidebar (`SettingsList`) joined to the chosen family's
+ * parts, each with its name; the box opens on the family chosen last, Tools at first. While it is sunk, the strip it
+ * leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   presets: LegoServices['presets']['all'];
@@ -39,7 +43,11 @@ export function PartsTray(props: {
   flashKit: string | undefined;
 }) {
   const [body, setBody] = createSignal<HTMLElement>();
+  const [pane, setPane] = createSignal<HTMLElement>();
   const [shelf, setShelf] = createSignal<HTMLElement>();
+  const [familyId, setFamilyId] = createSignal('Tools');
+  const families = () => partFamilies(props.presets);
+  const family = () => families().find((candidate) => candidate.id === familyId()) ?? families()[0]!;
   const split = createSplit();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
   const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(closedHeight, props.sheet.height()));
@@ -58,7 +66,8 @@ export function PartsTray(props: {
       }
 
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-      const list = [body(), shelf()].find((element) => element?.contains(target));
+      const families = body()?.querySelector('nav');
+      const list = [families, pane(), shelf()].find((element) => element?.contains(target));
       if (list) {
         const atTop = list.scrollTop <= 0;
         const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
@@ -107,6 +116,7 @@ export function PartsTray(props: {
       props.benchRef(undefined);
       props.kitsRef(undefined);
       setBody(undefined);
+      setPane(undefined);
       setShelf(undefined);
     });
 
@@ -124,24 +134,33 @@ export function PartsTray(props: {
         />
         <div class={styles.trayShelves}>
           <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
-            <span class={styles.zoneLabel}>{props.over ? 'Drop to put it away' : 'Parts'}</span>
-            <For each={partFamilies(props.presets)} keyed={(family) => family.id}>
-              {(family) => (
-                <section>
-                  <h4>{family().title}</h4>
-                  <div class={styles.trayItems}>
-                    <For each={family().kinds}>
-                      {(kind) => (
-                        <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
-                      )}
-                    </For>
-                  </div>
-                </section>
-              )}
-            </For>
-            <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
-              Reset board
-            </button>
+            <Show when={props.over}>
+              <span class={[styles.zoneLabel, styles.dropNote]}>Drop to put it away</span>
+            </Show>
+            <SettingsList
+              class={styles.boxFamilies}
+              label="Families of parts"
+              items={families().map((candidate) => ({
+                id: candidate.id,
+                label: candidate.title,
+                icon: familyIcons[candidate.id] ?? 'tools',
+                trailing: String(candidate.kinds.length)
+              }))}
+              selected={family().id}
+              onSelect={setFamilyId}
+            />
+            <section ref={setPane} class={styles.boxPane} aria-label={family().title}>
+              <div class={styles.trayItems}>
+                <For each={family().kinds}>
+                  {(kind) => (
+                    <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
+                  )}
+                </For>
+              </div>
+              <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
+                Reset board
+              </button>
+            </section>
           </div>
           <div
             class={styles.splitter}
@@ -295,6 +314,16 @@ const flingSpeed = 0.3;
 
 /** Milliseconds after the last wheel turn the sheet settles on a stop. */
 const wheelSettle = 160;
+
+/** The icons of the families of parts by id, on their tiles in the box's sidebar. */
+const familyIcons: Record<string, SketchIconName> = {
+  Plates: 'scene',
+  Tools: 'tools',
+  Color: 'hue',
+  Values: 'sliders',
+  Layers: 'layers',
+  Brushes: 'brush'
+};
 
 /** The families of parts the box and the spawn menu offer: the box's sections, then the user's brushes. */
 export function partFamilies(presets: LegoServices['presets']['all']) {

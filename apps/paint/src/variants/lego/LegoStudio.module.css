@@ -8,6 +8,8 @@
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
+  /* The raised surface a Settings-style sidebar's chosen row joins, as the brush studio's settings lie on. */
+  --lego-raised: rgb(74 78 89);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
 
   background: #faf8f4;
@@ -373,48 +375,55 @@
   box-shadow: var(--lego-shadow);
 }
 
-/* Procreate's brush library in a popup: placed by the popup, not by its own stylesheet. */
-.brushesCard:is(section) {
-  position: relative;
+/*
+ * The brush library in a popup, in LEGO's colors: its title and file commands on the popup's plate, the sets as a
+ * Settings-style sidebar on the darkest plate joined to the brushes on the raised one, as in the brush studio.
+ */
+.brushesCard {
+  --brush-library-sets: rgb(24 25 29);
+  --brush-library-pane: var(--lego-raised);
+  --brush-library-chosen: var(--lego-accent);
+  --brush-library-ink: #ffffff;
+  --brush-library-quiet: rgb(255 255 255 / 0.62);
+  --brush-library-line: transparent;
+  --brush-library-icon: var(--lego-tile);
+  --brush-library-icon-ink: var(--lego-ink);
+  --brush-library-disabled: rgb(255 255 255 / 0.35);
+  --brush-library-radius: 12px;
+  --brush-library-height: min(440px, calc(70vh - 64px));
+
+  display: flex;
+  flex-direction: column;
   width: min(470px, 80vw);
-  max-height: min(70vh, 560px);
-  animation: none;
+  color: #ffffff;
+
+  header {
+    min-height: 48px;
+    padding: 0 0 0 8px;
+  }
 }
 
-/* The file commands the File part opens: one row each, icon, name and what it makes. */
+/*
+ * The rows of LEGO's plain lists and menus, such as the file commands, in the colors of the brush studio's sidebar:
+ * white type, light icon tiles, the chosen row on a quiet pill with its tile lit in the accent.
+ */
+.settingsRows {
+  --settings-list-ink: #ffffff;
+  --settings-list-quiet: rgb(255 255 255 / 0.62);
+  --settings-list-icon: var(--lego-tile);
+  --settings-list-icon-ink: var(--lego-ink);
+  --settings-list-hover: rgb(255 255 255 / 0.07);
+  --settings-list-pressed: rgb(255 255 255 / 0.14);
+  --settings-list-selected-pill: rgb(255 255 255 / 0.12);
+  --settings-list-mark: var(--lego-accent);
+  --settings-list-mark-ink: #ffffff;
+  --settings-list-focus: var(--lego-accent);
+  --settings-list-inset: 0;
+}
+
 .fileMenu {
-  display: grid;
-  min-width: 240px;
-
-  button {
-    display: grid;
-    grid-template-columns: 20px 1fr auto;
-    align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 0 12px;
-    border: 0;
-    border-radius: 10px;
-    background: none;
-    color: #ffffff;
-    font: inherit;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
-  }
-
-  button:hover:not(:disabled) {
-    background: rgb(255 255 255 / 0.1);
-  }
-
-  button:disabled {
-    opacity: 0.45;
-  }
-
-  small {
-    color: rgb(255 255 255 / 0.55);
-    font-weight: 500;
-  }
+  composes: settingsRows;
+  width: 216px;
 }
 
 /* A short note on how to use a part, such as the fill without a selection. */
@@ -512,6 +521,11 @@
   background: var(--lego-tile);
 }
 
+/*
+ * The looks of a part, chosen by their live miniatures: a grid of pictures, not a list, set in the Settings rows'
+ * type, radii and marks: the heading as a group's, each choice on the rows' pill when hovered, pressed or chosen,
+ * and the chosen one's picture ringed in the accent as a chosen row's tile.
+ */
 .chooser {
   display: grid;
   gap: 8px;
@@ -520,9 +534,10 @@
 
   h3 {
     margin: 4px 2px 0;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
-    color: rgb(255 255 255 / 0.7);
+    letter-spacing: 0.02em;
+    color: rgb(255 255 255 / 0.62);
   }
 }
 
@@ -539,15 +554,46 @@
   gap: 4px;
   padding: 8px 4px 6px;
   border: 0;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 0.06);
+  border-radius: 9px;
+  background: transparent;
   color: #ffffff !important;
   cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 160ms ease-out;
+  -webkit-tap-highlight-color: transparent;
+
+  @media (hover: hover) {
+    &:hover:not([data-selected], :disabled) {
+      background: rgb(255 255 255 / 0.07);
+    }
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+    transition-duration: 60ms;
+
+    &:not([data-selected]) {
+      background: rgb(255 255 255 / 0.14);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--lego-accent);
+    outline-offset: -2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .choice[data-selected] {
-  background: rgb(61 126 255 / 0.3);
-  box-shadow: inset 0 0 0 2px var(--lego-accent);
+  background: rgb(255 255 255 / 0.12);
+
+  .preview {
+    border-radius: 9px;
+    box-shadow: 0 0 0 2px var(--lego-accent);
+  }
 }
 
 .choice:disabled {
@@ -556,13 +602,14 @@
 }
 
 .choiceLabel {
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
   text-align: center;
 }
 
 .choiceNote {
   font-size: 11px;
-  color: rgb(255 255 255 / 0.6);
+  color: rgb(255 255 255 / 0.62);
 }
 
 /* A choice's live miniature. */
@@ -1008,13 +1055,72 @@
     border-color 120ms;
 }
 
+/*
+ * The parts: their families in a sidebar on the sheet's ground, joined to the chosen family's parts on a raised pane,
+ * in the brush studio's colors. The list and the pane scroll on their own.
+ */
 .trayBody {
+  position: relative;
+  grid-template-columns: clamp(112px, 34%, 160px) minmax(0, 1fr);
+  align-content: stretch;
+  justify-items: stretch;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
   background: rgb(255 255 255 / 0.03);
 
   &[data-over] {
     border-color: rgb(230 70 60 / 0.9);
     background: rgb(230 70 60 / 0.16);
   }
+}
+
+/* What the parts do with a part dropped on them, over them while one is carried there. */
+.dropNote {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  z-index: 1;
+  translate: -50% 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgb(20 21 25 / 0.9);
+  color: #ffffff;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.boxFamilies {
+  --settings-list-ink: #ffffff;
+  --settings-list-quiet: rgb(255 255 255 / 0.62);
+  --settings-list-icon: var(--lego-tile);
+  --settings-list-icon-ink: var(--lego-ink);
+  --settings-list-hover: rgb(255 255 255 / 0.07);
+  --settings-list-pressed: rgb(255 255 255 / 0.14);
+  --settings-list-selected: var(--lego-raised);
+  --settings-list-mark: var(--lego-accent);
+  --settings-list-mark-ink: #ffffff;
+  --settings-list-focus: var(--lego-accent);
+  --settings-list-inset: 6px 0;
+
+  min-height: 0;
+  padding-block: 6px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.boxPane {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+  min-height: 0;
+  padding: 10px 12px 12px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 10px;
+  background: var(--lego-raised);
+  touch-action: pan-y;
 }
 
 .kitShelf {
@@ -1028,13 +1134,12 @@
   }
 }
 
-/* What a box does with what is dropped on it. */
+/* What a box holds or does with what is dropped on it, set as a Settings list's group heading. */
 .zoneLabel {
-  color: rgb(255 255 255 / 0.5);
+  color: rgb(255 255 255 / 0.62);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 /* The workbench's place: the board renders the bench plate into it at full size, filling it. */
@@ -1215,11 +1320,10 @@
 .tray h4,
 .spawnCard h4 {
   margin: 0 0 8px;
-  color: rgb(255 255 255 / 0.55);
+  color: rgb(255 255 255 / 0.62);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
 }
 
 .trayItems {
@@ -1298,13 +1402,17 @@
   animation: spawn-pop 160ms ease-out both;
 }
 
+/*
+ * A family in the ring: a pill, as the ring is chosen by direction and not read as a list, in the colors of the
+ * Settings sidebar the box shows the same families in, the chosen one lit in the accent as a chosen row's tile.
+ */
 .spawnFamily {
   position: absolute;
   translate: -50% -50%;
   padding: 8px 13px;
   border: 0;
   border-radius: 999px;
-  background: rgb(20 21 25 / 0.95);
+  background: rgb(24 25 29 / 0.97);
   color: #ffffff !important;
   font-size: 12px;
   font-weight: 600;
@@ -1317,6 +1425,14 @@
   &[aria-pressed='true'] {
     background: var(--lego-accent);
   }
+
+  &:active {
+    scale: 0.97;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @keyframes spawn-pop {
@@ -1326,12 +1442,13 @@
   }
 }
 
+/* The chosen family's parts, on the raised plate the box's sidebar joins them to. */
 .spawnCard {
   position: absolute;
   max-width: 340px;
   padding: 10px 12px 12px;
-  border-radius: 14px;
-  background: rgb(20 21 25 / 0.97);
+  border-radius: 12px;
+  background: var(--lego-raised);
   color: #ffffff;
   box-shadow: var(--lego-shadow);
 }
@@ -1810,7 +1927,7 @@
   --studio-column-ink: #ffffff;
   --studio-column-quiet: rgb(255 255 255 / 0.62);
   --studio-column-radius: 12px;
-  --studio-raised: rgb(74 78 89);
+  --studio-raised: var(--lego-raised);
   --studio-icon: var(--lego-tile);
   --studio-icon-ink: var(--lego-ink);
   --studio-hover: rgb(255 255 255 / 0.07);

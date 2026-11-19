@@ -2,14 +2,18 @@ import { TILE_SIZE } from '@app-game/paint-core/brush';
 import type { BlendMode } from '@app-game/paint-core/document';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, Show } from 'solid-js';
+import { SettingsRow, SettingsRows } from '../../shared/ui/SettingsList';
 import { blendPreview } from './blendPreview';
 import styles from './LayersPanel.module.css';
 
 /**
  * The layer blend mode as a dropdown, as in Photoshop's Layers panel: the button shows the current mode and opens a
  * list of the modes, each with what it does to two overlapping circles, rendered with the same composite as the
- * canvas, so that a mode can be chosen by its look rather than its name. The list closes on a choice, Escape or a
- * press outside, window resize or ancestor scroll; arrow keys move through it.
+ * canvas, so that a mode can be chosen by its look rather than its name. The list is a plain Settings list
+ * (`SettingsRows`): one row per mode with its circles on the row's tile, the current mode on a pill with its tile
+ * ringed in the mark color; a host colors it through the list's `--settings-list-*` properties on `blendList`. It
+ * closes on a choice, Escape or a press outside, window resize or ancestor scroll; the arrow keys, Home and End move
+ * through it.
  */
 export function BlendModePicker(props: {
   /** Host classes theme the trigger and top-layer menu without copying their behavior. */
@@ -93,16 +97,8 @@ export function BlendModePicker(props: {
               setOpen(false);
             }
           }}
-          role="listbox"
-          aria-label="Layer blend modes"
           onKeyDown={(event) => {
-            const options = [...menu.querySelectorAll<HTMLElement>('[role="option"]')];
-            const index = options.indexOf(document.activeElement as HTMLElement);
-            const step = { ArrowDown: 1, ArrowUp: -1 }[event.key];
-            if (step !== undefined) {
-              event.preventDefault();
-              options[(index + step + options.length) % options.length]?.focus();
-            } else if (event.key === 'Escape') {
+            if (event.key === 'Escape') {
               event.preventDefault();
               event.stopPropagation();
               setOpen(false);
@@ -110,26 +106,25 @@ export function BlendModePicker(props: {
             }
           }}
         >
-          <For each={modes} keyed={(mode) => mode.id}>
-            {(item) => {
-              const mode = item();
+          <SettingsRows role="listbox" label="Layer blend modes">
+            <For each={modes} keyed={(mode) => mode.id}>
+              {(item) => {
+                const mode = item();
 
-              return (
-                <button
-                  role="option"
-                  aria-selected={props.mode === mode.id ? 'true' : 'false'}
-                  aria-label={mode.name}
-                  onClick={() => choose(mode.id)}
-                >
-                  <Preview mode={mode.id} linear={props.linear} />
-                  <span>
-                    <strong>{mode.name}</strong>
-                    <small>{mode.summary}</small>
-                  </span>
-                </button>
-              );
-            }}
-          </For>
+                return (
+                  <SettingsRow
+                    id={mode.id}
+                    role="option"
+                    label={mode.name}
+                    title={mode.description}
+                    selected={props.mode === mode.id}
+                    tile={<Preview mode={mode.id} linear={props.linear} />}
+                    onSelect={() => choose(mode.id)}
+                  />
+                );
+              }}
+            </For>
+          </SettingsRows>
         </div>
       </Show>
     </div>
@@ -155,7 +150,7 @@ function Preview(props: { mode: BlendMode; linear: boolean }) {
   return <canvas ref={canvas} width={TILE_SIZE} height={TILE_SIZE} aria-hidden="true" />;
 }
 
-/** Modes in menu order, with a short label for the button, a one-line summary for the list and a tooltip sentence. */
+/** Modes in menu order, with a short label for the button, a one-line summary and a tooltip sentence. */
 const modes = [
   {
     id: 'normal',

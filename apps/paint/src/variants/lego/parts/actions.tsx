@@ -1,8 +1,6 @@
 import { For, merge, Show } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
-import popover from '../../procreate/Popover.module.css';
-import procreate from '../../procreate/ProcreateStudio.module.css';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
 import type { LegoServices } from '../LegoServices';
@@ -45,13 +43,9 @@ export const actionParts = [
       onChoose: f.command(s.presets.use)
     }),
     View: (props) => (
-      <div class={procreate.editor}>
-        <section class={[popover.popover, styles.brushesCard]}>
-          <div class={popover.body}>
-            <BrushLibrary title="Brushes" {...props} />
-          </div>
-        </section>
-      </div>
+      <section class={styles.brushesCard}>
+        <BrushLibrary title="Brushes" sidebar {...props} />
+      </section>
     )
   }),
   definePart({

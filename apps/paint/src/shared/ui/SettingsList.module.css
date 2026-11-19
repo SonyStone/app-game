@@ -1,7 +1,7 @@
 /*
  * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles, the selected one joined to the detail
- * beside the list. See `SettingsList` for the properties a host sets; the fallbacks give a quiet light list joined to
- * a white detail.
+ * beside the list, or on a pill in a plain list (`.plain`, `SettingsRows`). See `SettingsList` for the properties a
+ * host sets; the fallbacks give a quiet light list joined to a white detail.
  */
 .list {
   /* The travel of the joined shape (`createJoinedSelection`), for the marks that cross-fade with it. */
@@ -61,7 +61,7 @@
   stroke: none;
   stroke-width: 2px;
 
-  .list:has(.row[aria-current]:focus-visible) & {
+  .list:has(.row[data-selected]:focus-visible) & {
     stroke: var(--settings-list-focus, #3d7eff);
   }
 }
@@ -89,12 +89,11 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
   width: 100%;
   min-height: var(--settings-list-row, 40px);
   margin: 0;
   /* The icon's tile sits as far inside the row from the side as from the top and bottom, as macOS draws it. */
-  padding: 0 calc(var(--settings-list-join-radius, 12px) + 4px) 0 7px;
+  padding: 0 calc(var(--settings-list-join-radius, 12px) + 4px) 0 var(--settings-list-row-start, 7px);
   border: 0;
   border-radius: var(--settings-list-radius, 9px);
   background: transparent;
@@ -119,17 +118,17 @@
   }
 
   @media (hover: hover) {
-    &:hover:not([aria-current])::before {
+    &:hover:not([data-selected], :disabled)::before {
       background: var(--settings-list-hover, rgb(0 0 0 / 0.05));
     }
   }
 
   /* Pressed: at once, before the selection lands, the row sinks a little under a darker pill. */
-  &[data-pressed] {
+  &[data-pressed]:not(:disabled) {
     transform: scale(0.97);
     transition-duration: 60ms;
 
-    &:not([aria-current])::before {
+    &:not([data-selected])::before {
       background: var(--settings-list-pressed, rgb(0 0 0 / 0.1));
     }
   }
@@ -139,9 +138,18 @@
     outline-offset: -2px;
   }
 
+  &:disabled {
+    cursor: default;
+    opacity: 0.45;
+  }
+
   /* The joined shape draws the selected row's ground and its focus ring, unless the host turns the join off. */
-  &[aria-current] {
+  &[data-selected] {
     color: var(--settings-list-selected-ink, inherit);
+
+    &::before {
+      background: var(--settings-list-selected-pill, transparent);
+    }
 
     @container not style(--settings-list-join: none) {
       outline: none;
@@ -153,12 +161,36 @@
   }
 }
 
+/*
+ * A plain list joins nothing: its selected row lies on a pill as wide as the row, and the end padding needs no room
+ * for concave corners. Two classes, as the row's own rule.
+ */
+.plain .row {
+  padding-right: 10px;
+
+  &::before {
+    inset: 0;
+  }
+
+  &[data-selected] {
+    &::before {
+      background: var(--settings-list-selected-pill, rgb(0 0 0 / 0.08));
+    }
+  }
+
+  &[data-selected]:focus-visible {
+    outline: 2px solid var(--settings-list-focus, #3d7eff);
+  }
+}
+
 /* The icon on a small tile, as iOS draws its icons on colored squares; the selected row's tile takes the mark. */
 .icon {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: var(--settings-list-icon-size, 26px);
+  height: var(--settings-list-icon-size, 26px);
+  margin-right: var(--settings-list-icon-gap, 10px);
+  overflow: hidden;
   border-radius: 7px;
   background: var(--settings-list-icon, rgb(0 0 0 / 0.07));
   color: var(--settings-list-icon-ink, inherit);
@@ -166,13 +198,30 @@
     background-color var(--settings-list-travel),
     color var(--settings-list-travel);
 
-  [aria-current] > & {
+  [data-selected] > & {
     background: var(--settings-list-mark, var(--settings-list-icon, rgb(0 0 0 / 0.07)));
     color: var(--settings-list-mark-ink, var(--settings-list-icon-ink, inherit));
   }
 
   &:empty {
     background: none;
+  }
+
+  /* A picture fills its tile; when its row is chosen, the mark rings it instead of filling it. */
+  &[data-picture] {
+    overflow: visible;
+
+    > * {
+      display: block;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+    }
+
+    [data-selected] > & {
+      background: none;
+      box-shadow: 0 0 0 2px var(--settings-list-mark, currentColor);
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -192,7 +241,7 @@
   flex: 0 0 auto;
   max-width: 100%;
   overflow: hidden;
-  font-weight: 500;
+  font-weight: var(--settings-list-weight, 500);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -208,12 +257,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 
-  [aria-current] & {
+  [data-selected] & {
     color: var(--settings-list-selected-quiet, var(--settings-list-quiet, #7c7f88));
   }
 }
 
 .chevron {
   display: var(--settings-list-chevron, none);
+  margin-left: 10px;
   color: var(--settings-list-quiet, #7c7f88);
 }
