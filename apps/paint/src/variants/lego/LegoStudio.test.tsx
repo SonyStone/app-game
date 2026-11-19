@@ -423,6 +423,15 @@ it('records a value popup using its part kind', () => {
   expect(wiring.panel?.()).toBe('value:size');
 });
 
+it("shows the brush's stroke preview above the studio's categories", () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+
+  // The preview is the caller's: the dialog once lost it while its other pages were rearranged.
+  expect(dialog.querySelector('[class*="studioPreview"]')!.childElementCount).toBeGreaterThan(0);
+});
+
 it('a studio row and the board part of one setting are the same control and show one value', () => {
   storeParts(['action:brush-editor', 'value:brush:flow']);
   const saved = JSON.parse(localStorage.getItem('paint.lego')!);

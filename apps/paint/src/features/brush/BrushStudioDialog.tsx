@@ -130,6 +130,7 @@ export function BrushStudioDialog(props: {
         onChange={(patch) => void editor.update(patch)}
         onDone={() => props.onClose()}
         onCancel={restorePen}
+        preview={<SessionStrokePreview session={session} editor={editor} height={96} />}
         penStatus={penPressureStatus(pressureCalibration.calibration()?.curve)}
         penPane={
           <Show
