@@ -76,7 +76,12 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
   };
 
   return (
-    <div class={styles.row} data-kind="number" data-disabled={props.enabled ? undefined : ''}>
+    <div
+      class={styles.row}
+      data-kind="number"
+      data-disabled={props.enabled ? undefined : ''}
+      style={setting.unit ? { '--unit-chars': String(setting.unit.length) } : undefined}
+    >
       <Label setting={setting} id={labelId} />
       <Slider
         labelledBy={labelId}
