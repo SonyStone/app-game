@@ -13,7 +13,8 @@ export const FileApplicationControls = createContext<(() => JSX.Element) | null>
  * The drawing's file commands, which the File part opens beside itself: open a drawing (`.paint` or Photoshop), place
  * an image as a new layer, save the drawing, and export the visible canvas as PNG or every layer as PSD. Saved and
  * exported files are browser downloads, or land in Downloads/Paint in the Android app. Each command waits for the
- * engine; `onDone` closes the menu once one ran or a file was picked. The commands are Settings rows
+ * engine; `onDone` closes the menu once one ran or a file was picked. After them, Options opens the editor's own
+ * settings (`OptionsSheet`), which needs no engine. The commands are Settings rows
  * (`SettingsRows`), as every list of LEGO's panels.
  */
 export function FileMenu(props: {
@@ -23,6 +24,8 @@ export function FileMenu(props: {
   png: LegoServices['files']['png'];
   psd: LegoServices['files']['psd'];
   place: LegoServices['files']['place'];
+  /** Opens the Options sheet. */
+  options: LegoServices['options']['open'];
   onDone: () => void;
 }) {
   const applicationControls = useContext(FileApplicationControls);
@@ -79,6 +82,7 @@ export function FileMenu(props: {
       />
       <Item icon="scene" label="Export picture" detail="PNG" disabled={!ready()} onSelect={() => run(props.png)} />
       <Item icon="layers" label="Export layers" detail="PSD" disabled={!ready()} onSelect={() => run(props.psd)} />
+      <Item icon="options" label="Options" disabled={false} onSelect={() => run(props.options)} />
       <Show when={applicationControls}>
         {(controls) => (
           <div class={appStyles.applicationGroup} role="group" aria-label="Paint app">
@@ -90,8 +94,14 @@ export function FileMenu(props: {
   );
 }
 
-/** A command of the menu: a Settings row with its icon, name and what it makes as the trailing text. */
-function Item(props: { icon: SketchIconName; label: string; detail: string; disabled: boolean; onSelect: () => void }) {
+/** A command of the menu: a Settings row with its icon, name and what it makes, if anything, as the trailing text. */
+function Item(props: {
+  icon: SketchIconName;
+  label: string;
+  detail?: string;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
   return (
     <SettingsRow
       id={props.label}

@@ -6,7 +6,10 @@ import { chipsAlong } from './colorParts';
 import { createGrid, GridContext } from './grid';
 import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
-import { valueCaptions, valueTextWidths } from './parts/values';
+import { partDefinition, partDefinitions } from './parts';
+import { shortNames } from './parts/actions';
+import { gridSizeKind } from './parts/options';
+import { brushValueParts, valueCaptions, valueTextWidths } from './parts/values';
 import { createTestServices } from './testServices';
 import { fitsLines, fitText, textWidth } from './textFit';
 
@@ -137,3 +140,15 @@ function partText(kind: string, cell: number, span: { columns: number; rows: num
   flush();
   return host.textContent ?? '';
 }
+
+it('never shows two parts with the same caption: Brush settings is "Settings" when short, the Options part "Options"', () => {
+  const definitions = [...partDefinitions, ...brushValueParts, partDefinition(gridSizeKind)!];
+  const labels = definitions.map((definition) => definition.label.toLowerCase());
+  const shorts = Object.values(shortNames).map((name) => name.toLowerCase());
+  const repeated = (names: string[]) => names.filter((name, index) => names.indexOf(name) !== index);
+
+  expect(repeated(labels)).toEqual([]);
+  expect(repeated([...new Set(labels), ...shorts])).toEqual([]);
+  expect(partDefinition('action:options')!.label).toBe('Options');
+  expect(shortNames['brush-editor']).toBe('Settings');
+});

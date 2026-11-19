@@ -5,6 +5,7 @@ import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wh
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
 import { downloadBlob } from '../../shared/downloadBlob';
+import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
 
 /**
@@ -13,13 +14,20 @@ import { runPartCommand } from './partCommand';
  * `openBrushStudio` is what the "Brush settings" part runs; `brushSettingsNeeded` tells when the brush settings
  * editor must prepare ABR settings, as while the studio is open or an ABR setting is pinned. `openPen` opens the
  * brush studio on its Pen page, where the pen's pressure lives, with the calibration steps started when `measure`.
+ * `options` are the editor's own options, which the "Options" part opens (see `OptionsSheet`): the grid's cell in
+ * use, choosing one, and opening the sheet.
  */
 export function createLegoServices(
   session: PaintSession,
   openBrushStudio: () => void = () => {},
   brushSettingsNeeded: () => boolean = () => false,
   openPen: (measure: boolean) => void = () => {},
-  openAbr?: () => void
+  openAbr?: () => void,
+  options: { cell: () => number; setCell: (cell: number) => void; open: () => void } = {
+    cell: deviceCell,
+    setCell: () => {},
+    open: () => {}
+  }
 ) {
   const color = createMemo(() => session.brush().color);
   const background = createMemo(() => session.brush().backgroundColor ?? '#ffffff');
@@ -183,6 +191,7 @@ export function createLegoServices(
       psd: () => session.edit({ type: 'psd' }),
       place: session.images.place
     },
+    options,
     run: (command: () => unknown) => runPartCommand(session, command)
   };
 }

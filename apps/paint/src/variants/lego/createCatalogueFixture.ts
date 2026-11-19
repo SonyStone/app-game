@@ -9,6 +9,7 @@ import { hexToHsv } from '../../features/color/hsv';
 import type { CoolorusSettings } from '../../features/coolorus-wheel';
 import type { PaintError } from '../../shared/errors';
 import { createChannelBrush, type LegoServices } from './LegoServices';
+import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
 
 /** One in-memory catalogue scope, shared by all specimens. Uses real brush tools; never reads or writes user storage. */
@@ -156,6 +157,7 @@ export function createCatalogueFixture() {
       psd: () => {},
       place: async () => {}
     },
+    options: { cell: deviceCell, setCell: () => {}, open: () => {} },
     run: (command) => runPartCommand({ setError }, command)
   };
 

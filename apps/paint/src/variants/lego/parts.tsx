@@ -6,6 +6,7 @@ import { actionParts } from './parts/actions';
 import { colorParts } from './parts/colors';
 import type { PartDefinition } from './parts/definition';
 import { layerParts } from './parts/layers';
+import { gridSizePart } from './parts/options';
 import { presetPart } from './parts/presets';
 import { penPressureKind, pressureCurvePart } from './parts/pressureCurve';
 import { brushValueParts, valueParts } from './parts/values';
@@ -31,13 +32,16 @@ export function partDefinition(kind: string): PartDefinition | undefined {
 
   return (
     partDefinitions.find((definition) => definition.kind === current) ??
-    brushParts.find((definition) => definition.kind === current) ??
+    outsideParts.find((definition) => definition.kind === current) ??
     (current.startsWith('preset:') && current.length > 'preset:'.length ? presetPart : undefined)
   );
 }
 
-/** Studio-only parts: a part per brush number setting, which enter the board from the studio. */
-const brushParts: readonly PartDefinition[] = brushValueParts;
+/**
+ * Parts outside the box: a part per brush number setting, which enter the board from the studio, and the grid size,
+ * which shows on the Options sheet.
+ */
+const outsideParts: readonly PartDefinition[] = [...brushValueParts, gridSizePart];
 
 /**
  * Kinds of parts the brush studio once offered, by the kind that replaced them. The stabilizer's level and Leonardo's

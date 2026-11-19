@@ -19,6 +19,7 @@ export function createTestServices() {
   const setColor = vi.fn((color: string) => setBrush((current) => ({ ...current, color })));
   const errors = vi.fn();
   const [penCurve, setPenCurve] = createSignal<PressureCurve>();
+  const [gridCell, setGridCell] = createSignal(28);
   const services: LegoServices = {
     brushEditor: {
       channelBrush: createChannelBrush(brush),
@@ -100,6 +101,7 @@ export function createTestServices() {
       psd: vi.fn(),
       place: vi.fn()
     },
+    options: { cell: () => gridCell(), setCell: vi.fn((cell: number) => setGridCell(cell)), open: vi.fn() },
     run: (command: () => unknown) => runPartCommand({ setError: errors }, command)
   };
   return { services, setBrush, brush, errors };
