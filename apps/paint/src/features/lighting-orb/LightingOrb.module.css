@@ -9,6 +9,7 @@
 .orb {
   position: relative;
   border-radius: 50%;
+  corner-shape: round;
   touch-action: none;
   cursor: crosshair;
 }
@@ -26,6 +27,7 @@
   margin: -23px 0 0 -23px;
   border: 1px solid rgb(255 255 255 / 0.4);
   border-radius: 50%;
+  corner-shape: round;
   pointer-events: none;
 }
 
@@ -55,6 +57,7 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
+  corner-shape: round;
   cursor: pointer;
   transition:
     width 0.12s,

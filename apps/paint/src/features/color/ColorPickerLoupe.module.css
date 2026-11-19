@@ -10,6 +10,7 @@
   width: var(--loupe-size);
   height: var(--loupe-size);
   border-radius: 50%;
+  corner-shape: round;
   box-shadow:
     0 0 0 1px #0005,
     0 4px 16px #0003;
@@ -21,6 +22,7 @@
     position: absolute;
     inset: var(--loupe-ring);
     border-radius: 50%;
+    corner-shape: round;
     box-shadow: 0 0 0 1px #0005;
   }
 }
@@ -30,6 +32,7 @@
   inset: 0;
   overflow: hidden;
   border-radius: 50%;
+  corner-shape: round;
   mask: radial-gradient(circle, transparent calc(var(--loupe-hole) / 2), #000 calc(var(--loupe-hole) / 2));
 }
 
@@ -61,6 +64,7 @@
   width: var(--loupe-hole);
   height: var(--loupe-hole);
   border-radius: 50%;
+  corner-shape: round;
   opacity: 0;
 
   &[data-ready='true'] {

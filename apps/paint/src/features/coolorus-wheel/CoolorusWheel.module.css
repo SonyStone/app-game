@@ -23,6 +23,7 @@
 /* Hue 0 at the top, increasing clockwise, as `hueAt` measures it; 22 of 110 units thick. */
 .ring {
   border-radius: 50%;
+  corner-shape: round;
   mask: radial-gradient(circle closest-side, transparent 79.5%, #000 80.5%);
 }
 

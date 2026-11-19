@@ -23,6 +23,7 @@
     display: grid;
     place-items: center;
     border-radius: 50%;
+    corner-shape: round;
   }
 }
 
@@ -136,6 +137,7 @@
     margin-top: -5.5px;
     border: 2px solid #419bcf;
     border-radius: 50%;
+    corner-shape: round;
     background: #fff;
   }
 
@@ -149,6 +151,7 @@
     height: 11px;
     border: 2px solid #419bcf;
     border-radius: 50%;
+    corner-shape: round;
     background: #fff;
   }
 }
@@ -243,6 +246,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  corner-shape: round;
   background: #e0852b;
 }
 

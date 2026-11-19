@@ -19,6 +19,7 @@
   transform: translate(-50%, -50%);
   border: 1px solid #0000001a;
   border-radius: 50%;
+  corner-shape: round;
   background: #fbfaf8;
   color: #3d4850;
   box-shadow: 0 2px 8px #0003;

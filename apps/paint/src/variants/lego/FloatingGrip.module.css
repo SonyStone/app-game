@@ -1,15 +1,21 @@
+/*
+ * The grip is the top of its plate, not a shape of its own: the plate grows by `floatingGripHeight` above its parts,
+ * and this strip over that band and the plate's padding draws only its dots, so the plate's one outline, its top
+ * corners at the plate radius, holds both. Pressed, the dots light up.
+ */
 .grip {
   position: absolute;
   inset: 0 0 auto;
   z-index: 1;
   height: 14px;
-  border-radius: inherit;
-  background: var(--lego-plate);
   cursor: grab;
   touch-action: none;
 }
 
-/* Extend above the plate so the 24px touch target never covers its first row of parts. */
+/*
+ * The press area reaches 10 px above the plate, so with the 14 px band it is 24 px tall across the plate's whole
+ * width, and never covers the first row of parts. It draws nothing.
+ */
 .grip::before {
   content: '';
   position: absolute;
@@ -29,4 +35,8 @@
   background: radial-gradient(circle, var(--lego-plate-ink, #ffffff) 1px, transparent 1.5px) 0 0 / 6px 4px;
   opacity: 0.3;
   pointer-events: none;
+}
+
+.grip:active > span {
+  opacity: 0.7;
 }

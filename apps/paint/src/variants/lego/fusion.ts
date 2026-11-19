@@ -1,9 +1,9 @@
-import type { Part, Span } from './board';
+import type { Part } from './board';
 
 /**
- * Fusing: neighbouring parts of one group (`PartGroup`) on a plate draw as one block where the tile look fuses them,
- * their fill reaching across the gap to a thin seam and their corners at the seam square. The grid and the parts'
- * cells never change; only how a part draws its edge does, from the four flags `partJoins` derives here.
+ * Fusing: neighbouring parts of one group (`PartGroup`) on a plate draw as one block, their fill reaching across the
+ * gap to a thin seam and their corners at the seam square. The grid and the parts' cells never change; only how a
+ * part draws its edge does, from the four flags `partJoins` derives here.
  *
  * A side of a part fuses only when everything across it belongs to the part's group and covers the whole side, and
  * each of those neighbours' facing sides fuses in turn. So parts of different sizes fuse when one's side lies wholly
@@ -71,11 +71,6 @@ export function partJoins(parts: readonly Part[], groupOf: (kind: string) => str
   }
 
   return result;
-}
-
-/** Whether a part of `span` is a large tile, two cells or more both ways, which the squircle look rounds. */
-export function isLarge(span: Span) {
-  return span.columns >= 2 && span.rows >= 2;
 }
 
 /** `joins` as the space-separated list of fused sides a part's `data-joins` attribute holds; `undefined` for none. */

@@ -44,7 +44,7 @@ import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { isLarge, joinsAttribute, partJoins, sameCells } from './fusion';
+import { joinsAttribute, partJoins, sameCells } from './fusion';
 import { kindLabel, lookOf, partDefinition, partGroup, partLooks } from './parts';
 import type { Popup } from './parts/definition';
 import { BlockView, PartsTray } from './PartsTray';
@@ -634,7 +634,6 @@ export function BoardView(props: {
                   class={styles.part}
                   data-part={part().id}
                   data-joins={joinsAttribute(joins().get(part().id))}
-                  data-large={isLarge(part().span) ? '' : undefined}
                   data-lifted={isLifted() ? '' : undefined}
                   data-open={chain().has(part().id) ? '' : undefined}
                   data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
