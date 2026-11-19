@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { createStrokeSampler, defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import 'fake-indexeddb/auto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -9,6 +9,37 @@ import { clearRoundBrush, createBrushTools } from './createBrushTools';
 const disposers: (() => void)[] = [];
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose());
+});
+
+it.each(['brush', 'eraser', 'user'] as const)('draws identical %s dabs from the library document', async (kind) => {
+  const { library, tools } = await setup();
+  const legacy = defaultBrush();
+  if (kind === 'user') {
+    Object.assign(legacy, { size: 4, engine: { id: 'round', settings: { hardness: 0.2, spacing: 0.08 } } });
+  }
+  if (kind === 'eraser') {
+    legacy.tool = 'eraser';
+  }
+  const preset =
+    kind === 'user'
+      ? library.add({ name: 'Fine', settings: legacy, resourceIds: [] })
+      : library.find(kind === 'brush' ? 'builtin:soft-round' : 'builtin:eraser')!;
+  expect(preset.nativeDocument).toBeDefined();
+  tools.selectPreset(preset.id, 'brush');
+  flush();
+  const actual = tools.brush();
+  expect(actual).toMatchObject(legacy);
+  expect(actual.engine).toEqual(legacy.engine);
+
+  const overrides = legacy.engine?.settings as object | undefined;
+  const before = createStrokeSampler({ ...legacy, ...overrides });
+  const after = createStrokeSampler({ ...actual, ...(actual.engine?.settings as object) });
+  const samples = Array.from({ length: 6 }, (_, i) => ({ x: i * 4, y: i, pressure: 0.04 + i * 0.01, time: i * 9 }));
+  expect(after.add(samples.slice(0, 2)).concat(after.add(samples.slice(2, 4)))).toEqual(
+    before.add(samples.slice(0, 4))
+  );
+  expect(after.preview(samples.slice(4))).toEqual(before.preview(samples.slice(4)));
+  expect(after.add(samples.slice(4))).toEqual(before.add(samples.slice(4)));
 });
 
 it('keeps separate brush and eraser settings while sharing colors', async () => {
@@ -245,6 +276,43 @@ it('restores brush and eraser slots and saved overrides without their retired pr
   expect(restored.tools.changes('inactive')).toEqual({ stroke: expected, flow: 0.4 });
   await restored.storage.idle();
   expect(JSON.stringify(await restored.storage.readState())).not.toMatch(/minimum|maximum|firmness/);
+});
+
+it('reopens both converted round slots using the document and keeps the legacy brush for rollback', async () => {
+  const name = crypto.randomUUID();
+  const first = await setup(name);
+  const legacy = { ...defaultBrush(), size: 4 };
+  first.storage.writeState({
+    version: 2,
+    slots: {
+      brush: { preset: 'builtin:soft-round', brush: legacy },
+      eraser: { preset: 'builtin:eraser', brush: legacy }
+    },
+    colors: {},
+    changes: { 'builtin:soft-round': { size: 4 } }
+  });
+  await first.storage.idle();
+
+  const second = await setup(name);
+  flush();
+  await second.storage.idle();
+  type Stored = { slots: Record<'brush' | 'eraser', { nativeDocument: string; brush: Brush }> };
+  const converted = (await second.storage.readState()) as Stored;
+  for (const entry of Object.values(converted.slots)) {
+    expect(JSON.parse(entry.nativeDocument).definition.size).toBe(4);
+    expect(entry.brush.size).toBe(4);
+  }
+
+  converted.slots.brush.brush.size = 50;
+  second.storage.writeState(converted);
+  await second.storage.idle();
+  const third = await setup(name);
+  flush();
+  expect(third.tools.brush().size).toBe(4);
+  expect(third.tools.changes('builtin:soft-round')).toEqual({ size: 4 });
+  await third.storage.idle();
+  const reopened = (await third.storage.readState()) as Stored;
+  expect(reopened.slots.brush.nativeDocument).toBe(converted.slots.brush.nativeDocument);
 });
 
 async function setup(name?: string, clear?: (brush: Brush) => Brush | undefined) {

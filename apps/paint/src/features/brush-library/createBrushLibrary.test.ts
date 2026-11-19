@@ -56,6 +56,38 @@ it('stores user presets and loads them lazily, one at a time or as a list, witho
   expect(await second.library.load(marker.id)).toBeUndefined();
 });
 
+it('migrates each round preset once and leaves a failed record usable', async () => {
+  const name = crypto.randomUUID();
+  const onError = vi.fn();
+  const { storage } = open(name);
+  const good = { id: 'fine', name: 'Fine', settings: { size: 4, pressureFlow: true }, resourceIds: [], created: 1 };
+  const broken = { ...good, id: 'bad', settings: { size: 0 }, created: 2 };
+  await storage.putPreset(good);
+  await storage.putPreset(broken);
+
+  for (let run = 0; run < 2; run++) {
+    const reader = open(name, { onError });
+    const write = vi.spyOn(reader.storage, 'putPreset');
+    await Promise.all([reader.library.load(good.id), reader.library.loadAll()]);
+    flush();
+    expect(
+      reader.library
+        .presets()
+        .slice(-2)
+        .map((preset) => preset.id)
+    ).toEqual(['fine', 'bad']);
+    expect(reader.library.find('fine')?.settings).toEqual(good.settings);
+    expect(reader.library.find('bad')?.settings).toEqual(broken.settings);
+    expect(reader.library.find('bad')?.nativeDocument).toBeUndefined();
+    expect(write).toHaveBeenCalledTimes(run === 0 ? 1 : 0);
+    expect(onError).toHaveBeenCalledTimes(run + 1);
+  }
+
+  const saved = await storage.readPreset('fine');
+  expect(saved).toMatchObject(good);
+  expect(JSON.parse(saved!.nativeDocument!)).toMatchObject({ id: good.id, definition: { size: 4 } });
+});
+
 it('drops retired pressure fields when loading one preset or listing the library', async () => {
   const { library, storage } = open(crypto.randomUUID());
   const expected = { ...defaultStrokeSettings(), stabilizer: 14 };
@@ -123,7 +155,10 @@ function open(name: string, options: { onError?: () => void; imageBudget?: numbe
   return createRoot((dispose) => {
     disposers.push(dispose);
     const storage = createBrushStorage({ name, onError: options.onError ?? vi.fn() });
-    return { storage, library: createBrushLibrary({ storage, imageBudget: options.imageBudget }) };
+    return {
+      storage,
+      library: createBrushLibrary({ storage, imageBudget: options.imageBudget, onError: options.onError })
+    };
   });
 }
 

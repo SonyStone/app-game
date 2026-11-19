@@ -5,6 +5,7 @@ import { brushError, type PaintError } from '../../shared/errors';
 import { syncAbrPreset } from './abrHost';
 import { builtInPresets, type BrushPreset } from './brushPresets';
 import type { BrushStorage, StoredPreset } from './createBrushStorage';
+import { readRoundPreset } from './nativeDocument';
 
 /**
  * The brush library: built-in presets followed by the user's presets in creation order. Stored presets load lazily:
@@ -12,7 +13,7 @@ import type { BrushStorage, StoredPreset } from './createBrushStorage';
  * is used, keeping recently used images in memory within `imageBudget`. Changes apply at once and are written to
  * `storage` in the background; images not yet written stay in memory regardless of the budget.
  *
- * Loading a legacy Photoshop preset converts its descriptor and images before publishing it.
+ * Loading a legacy round or Photoshop preset converts it once before publishing it. A failed conversion keeps the original.
  * Must be created within a Solid owner.
  */
 export function createBrushLibrary(options: {
@@ -72,7 +73,7 @@ export function createBrushLibrary(options: {
       for (const item of batch) {
         const input = item.preset;
         const copy = input.id.startsWith('builtin:') || ids.has(input.id) || Object.hasOwn(Object.prototype, input.id);
-        const preset = syncAbrPreset({
+        const preset = preparePreset({
           ...input,
           id: copy ? crypto.randomUUID() : input.id,
           derivedFrom: copy ? input.id : input.derivedFrom,
@@ -115,7 +116,7 @@ export function createBrushLibrary(options: {
         await loadAll();
         const resourceIds = preset.resourceIds ?? resources.map(({ id }) => id);
         const existing = [...latestKnown().values()].find((candidate) => candidate.source === preset.source);
-        const imported = syncAbrPreset({
+        const imported = preparePreset({
           ...preset,
           resourceIds,
           id: existing?.id ?? crypto.randomUUID(),
@@ -146,7 +147,7 @@ export function createBrushLibrary(options: {
     ) {
       const existing = latestKnown().get(id);
       if (existing) {
-        store(syncAbrPreset({ ...existing, ...patch }, !!patch.settings), resources);
+        store(preparePreset({ ...existing, ...patch }, !!patch.settings), resources);
       }
     },
     /** Deletes a user preset; built-in presets are ignored. Its images are deleted when no other preset uses them. */
@@ -201,7 +202,7 @@ export function createBrushLibrary(options: {
   function add(preset: Omit<BrushPreset, 'id' | 'builtIn'>, resources: readonly BrushResource[] = []): BrushPreset {
     const latest = Math.max(0, ...[...latestKnown().values()].map(({ created }) => created));
     // Strictly increasing, so presets created within one millisecond keep their order.
-    const added = syncAbrPreset(
+    const added = preparePreset(
       { ...preset, id: crypto.randomUUID(), created: Math.max(Date.now(), latest + 1) },
       true
     );
@@ -221,8 +222,43 @@ export function createBrushLibrary(options: {
     return listing;
   }
 
+  function preparePreset<T extends BrushPreset>(preset: T, saveHost = false): T {
+    if (!isRound(preset)) {
+      const next = syncAbrPreset(preset, saveHost);
+      if (next.nativeDocument) {
+        const copy = { ...next };
+        delete copy.nativeDocument;
+        return copy;
+      }
+      return next;
+    }
+    try {
+      return readRoundPreset(preset);
+    } catch (cause) {
+      reportConversion(preset, cause);
+      const fallback = { ...preset };
+      delete fallback.nativeDocument;
+      return fallback;
+    }
+  }
+
+  function reportConversion(preset: BrushPreset, cause: unknown) {
+    options.onError?.(brushError('invalid-preset', 'Could not convert “' + preset.name + '”: ' + String(cause), cause));
+  }
+
   async function loadStored(record: StoredPreset) {
-    if (!record.abrDocument && record.abrSource) {
+    if (record.nativeDocument) {
+      try {
+        remember(readRoundPreset(record, record.nativeDocument));
+      } catch (cause) {
+        reportConversion(record, cause);
+        const fallback = { ...record };
+        delete fallback.nativeDocument;
+        remember(fallback);
+      }
+      return;
+    }
+    if (!record.abrDocument && (record.abrSource || isRound(record))) {
       const pending = migrations.get(record.id);
       if (pending) {
         return pending;
@@ -241,16 +277,30 @@ export function createBrushLibrary(options: {
 
   async function migrate(record: StoredPreset) {
     try {
-      const { convertAbr } = await import('./abrPresetDocument');
-      const { preset, resources } = await convertAbr(record.abrSource!, record.settings);
-      const converted = syncAbrPreset(
-        { ...record, ...preset, name: record.name, settings: { ...record.settings, engine: preset.settings.engine } },
-        true
-      );
+      let converted: StoredPreset;
+      let resources: readonly BrushResource[] = [];
+      if (record.abrSource) {
+        const { convertAbr } = await import('./abrPresetDocument');
+        const item = await convertAbr(record.abrSource, record.settings);
+        resources = item.resources;
+        converted = syncAbrPreset(
+          {
+            ...record,
+            ...item.preset,
+            name: record.name,
+            settings: { ...record.settings, engine: item.preset.settings.engine }
+          },
+          true
+        );
+      } else {
+        converted = readRoundPreset(record);
+      }
       if (removed.has(record.id) || latestKnown().has(record.id)) {
         return;
       }
-      if (await options.storage!.putPreset(converted, resources, record)) {
+      // Keep the original round settings in storage for older readers, even for sparse presets.
+      const stored = converted.nativeDocument ? { ...converted, settings: record.settings } : converted;
+      if (await options.storage!.putPreset(stored, resources, record)) {
         record = converted;
       } else {
         const latest = await options.storage!.readPreset(record.id);
@@ -258,14 +308,12 @@ export function createBrushLibrary(options: {
           return;
         }
         record = latest;
-        if (!record.abrDocument) {
+        if (!record.abrDocument && !record.nativeDocument) {
           throw new Error('Conversion could not be saved');
         }
       }
     } catch (cause) {
-      options.onError?.(
-        brushError('invalid-preset', 'Could not convert “' + record.name + '”: ' + String(cause), cause)
-      );
+      reportConversion(record, cause);
     }
     if (!removed.has(record.id) && !latestKnown().has(record.id)) {
       remember(record);
@@ -354,4 +402,8 @@ function createImageCache(budget: number) {
       }
     }
   }
+}
+
+function isRound(preset: BrushPreset) {
+  return !preset.abrSource && !preset.abrDocument && (!preset.settings.engine || preset.settings.engine.id === 'round');
 }
