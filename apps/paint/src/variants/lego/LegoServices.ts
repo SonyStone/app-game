@@ -1,10 +1,10 @@
-import { downloadBlob } from '../../shared/downloadBlob';
 import { createContext, createMemo, createSignal } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
 import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wheel';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
+import { downloadBlob } from '../../shared/downloadBlob';
 import { runPartCommand } from './partCommand';
 
 /**
@@ -18,7 +18,8 @@ export function createLegoServices(
   session: PaintSession,
   openBrushStudio: () => void = () => {},
   brushSettingsNeeded: () => boolean = () => false,
-  openPen: (measure: boolean) => void = () => {}
+  openPen: (measure: boolean) => void = () => {},
+  openAbr?: () => void
 ) {
   const color = createMemo(() => session.brush().color);
   const background = createMemo(() => session.brush().backgroundColor ?? '#ffffff');
@@ -128,6 +129,7 @@ export function createLegoServices(
       toggle: () => session.quickShape.update({ enabled: !session.quickShape.settings().enabled })
     },
     presets: {
+      ...(openAbr && { openAbr }),
       all: session.library.presets,
       async importFile(file: File) {
         const { importPaintbrush } = await import('../../features/brush-library/paintbrushFile');
@@ -141,7 +143,9 @@ export function createLegoServices(
         if (!selected) {
           throw new Error('Brush no longer exists');
         }
-        const images = await session.library.resources(selected);
+        const images = await (selected.abrDocument
+          ? session.library.assets(selected)
+          : session.library.resources(selected));
         if (images.isErr()) {
           throw new Error(images.error.message);
         }

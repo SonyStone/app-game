@@ -4,8 +4,9 @@ import { screenToWorld, worldToScreen, type Point } from '@app-game/paint-core/c
 import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { errorMessage } from '@app-game/solid-gpu/errors';
 import { createEventListener } from '@solid-primitives/event-listener';
+import { ok } from 'neverthrow';
 import { createEffect, createSignal, flush } from 'solid-js';
-import { engineError, type PaintError } from '../../shared/errors';
+import { brushError, engineError, type PaintError } from '../../shared/errors';
 import { createContextMenuBlock } from '../../shared/ui/createContextMenuBlock';
 import { createPageGestureGuard } from '../../shared/ui/createPageGestureGuard';
 import { createPointerTypeAttribute } from '../../shared/ui/createPointerTypeAttribute';
@@ -85,9 +86,10 @@ export function createPaintSession(options: {
 
   const developer = createDeveloperSettings();
   const brushStorage = createBrushStorage({ onError: setError });
-  const library = createBrushLibrary({ storage: brushStorage });
+  const library = createBrushLibrary({ storage: brushStorage, onError: setError });
   const tools = createBrushTools({
     library,
+    onError: (message) => setError(brushError('restore', message)),
     storage: brushStorage,
     clear: (brush) => (brush.engine?.id === 'abr' ? clearAbrBrush(brush) : clearRoundBrush(brush))
   });
@@ -180,7 +182,10 @@ export function createPaintSession(options: {
     onError: setError
   });
   const uploads = createPresetUploads({
-    resources: library.resources,
+    resources: async (preset) => {
+      const edited = tools.editedResources(preset.id);
+      return edited ? ok([...edited]) : library.resources(preset);
+    },
     upload: engine.putResources,
     canChange: canChangeBrush,
     select: tools.selectPreset,

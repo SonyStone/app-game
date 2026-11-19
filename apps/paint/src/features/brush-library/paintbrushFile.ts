@@ -1,7 +1,11 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
 import { assetId, encodePng } from '@app-game/paint-core/paintbrush/asset';
+import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
 import { brushSchema, parseDocument, patch, patchList, singleManifest } from '@app-game/paint-core/paintbrush/document';
+import { photoshopExtensions } from './abrDocument';
+import { hostExtension, syncAbrPreset } from './abrHost';
+import { prepareDocument } from './abrPresetDocument';
 import type { BrushPreset } from './brushPresets';
 import type { BrushLibrary } from './createBrushLibrary';
 import { nativeDocument, resolveNative } from './nativeDocument';
@@ -18,10 +22,23 @@ export type RetainedBrush = {
 /** Exports saved preset fields. A retained preset changes only at addresses edited since import. */
 export async function exportPaintbrush(preset: BrushPreset, images: readonly BrushResource[]) {
   const kept = preset.paintbrush;
-  const file = kept?.file ?? 'brushes/brush.json';
+  const envelope = preset.abrArchive ?? kept;
+  const file = envelope?.file ?? 'brushes/brush.json';
   const manifest =
-    kept?.manifest ?? JSON.stringify({ format: 'paintbrush', version: [1, 0], minReader: [1, 0], brushes: [{ file }] });
-  const entries = new Map(kept?.entries);
+    envelope?.manifest ??
+    JSON.stringify({ format: 'paintbrush', version: [1, 0], minReader: [1, 0], brushes: [{ file }] });
+  const entries = new Map(envelope?.entries);
+  if (preset.abrDocument) {
+    const text = syncAbrPreset(preset).abrDocument!;
+    for (const id of preset.assetIds ?? []) {
+      const image = images.find((r) => r.id === id);
+      if (!image) {
+        throw new Error('Missing Photoshop coverage: ' + id);
+      }
+      entries.set('assets/' + id + '.png', encodePng(image));
+    }
+    return writeArchive(manifest, new Map([[file, text]]), entries);
+  }
   const selected = preset.settings.engine;
   let resources;
   if (selected?.id === 'textured') {
@@ -114,8 +131,48 @@ export async function importPaintbrush(bytes: Uint8Array, library: BrushLibrary)
   const accepted = [];
   const manifestFor = singleManifest(archive.manifestText);
   for (const [i, brush] of archive.brushes.entries()) {
-    if (brush.compatibility.status === 'unavailable') {
+    // These Photoshop presets already draw with Paint's ABR brush fallback. Check all
+    // other sections against that capability, then resolve their original tool code.
+    const definition = brush.view.definition;
+    const legacyTool =
+      definition.placement?.law === 'photoshop-v1' &&
+      ['photoshop.ClTl', 'photoshop.HBTl', 'photoshop.ABTl'].includes(definition.tool);
+    if (brush.compatibility.status === 'unavailable' && !legacyTool) {
       rejected.push(brush.view.name + ': ' + brush.compatibility.reasons.join(', '));
+      continue;
+    }
+    if (brush.view.definition.placement?.law === 'photoshop-v1') {
+      try {
+        const reasons = compatibility(
+          legacyTool ? { ...brush.view, definition: { ...definition, tool: 'brush' } } : brush.view,
+          [...photoshopExtensions, hostExtension]
+        ).reasons.filter((reason) => !reason.endsWith(': photoshop.unresolved-sample'));
+        if (reasons.length) {
+          throw new Error(reasons.join(', '));
+        }
+        const item = await prepareDocument(brush.text, archive.assets);
+        const companions = new Map(entries);
+        const retained = brush.text + manifestFor(i);
+        for (const [id, image] of archive.assets) {
+          const path = 'assets/' + id + '.png';
+          companions.delete(path);
+          if (!item.preset.assetIds.includes(id) && (opaqueCompanions || retained.includes(id))) {
+            item.preset.assetIds.push(id);
+            item.resources.push({ ...image, id, format: 'r8unorm' });
+          }
+        }
+        accepted.push({
+          preset: {
+            ...item.preset,
+            id: brush.view.id,
+            derivedFrom: brush.view.derivedFrom,
+            abrArchive: { file: brush.file, manifest: manifestFor(i), entries: companions }
+          },
+          resources: item.resources
+        });
+      } catch (cause) {
+        rejected.push(brush.view.name + ': ' + String(cause));
+      }
       continue;
     }
     const result = resolveNative(brush.view);

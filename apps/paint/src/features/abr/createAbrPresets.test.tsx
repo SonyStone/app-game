@@ -1,6 +1,7 @@
 import type { BrushAsset } from '@app-game/abr-brush/library';
 // @vitest-environment jsdom
 import { ok, type Result } from 'neverthrow';
+import { webcrypto } from 'node:crypto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { PaintError } from '../../shared/errors';
@@ -9,6 +10,7 @@ import { createAbrPresets, type AbrPreset } from './createAbrPresets';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
+  vi.unstubAllGlobals();
   disposers.splice(0).forEach((dispose) => dispose());
 });
 
@@ -46,20 +48,21 @@ it('imports a preset into the library once per viewer brush and chooses it', asy
   ).toEqual(['Edited ink']);
 });
 
-it('retains the source descriptor and resources on an editable import', async () => {
+it('stores a document for an editable import', async () => {
   const choose = vi.fn<(preset: BrushPreset) => Promise<Result<void, PaintError>>>(async () => ok());
   const { presets, library } = setup({ choose });
+  vi.stubGlobal('crypto', webcrypto);
   const asset = {
     id: 'original',
     name: 'Ink',
-    preset: { tip: { kind: 'computed', diameter: 40 } },
+    preset: { kind: 'brush', sourceId: 'original', tip: { kind: 'computed', diameter: 40 } },
     resources: [],
     source: {}
   } as unknown as BrushAsset;
-  expect((await presets.usePreset(abrPreset(), 'abr:original', asset)).isOk()).toBe(true);
+  (await presets.usePreset(abrPreset(), 'abr:original', asset))._unsafeUnwrap();
   const imported = choose.mock.calls[0];
   expect(imported).toBeDefined();
-  expect(library.presets().find((p) => p.source === 'abr:original')?.abrSource).toEqual(asset);
+  expect(library.presets().find((p) => p.source === 'abr:original')?.abrDocument).toContain('photoshop-v1');
 });
 
 it('refuses presets without a tip and imports nothing while Paint is busy', async () => {

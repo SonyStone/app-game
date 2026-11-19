@@ -1,3 +1,5 @@
+import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
+import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { createEffect, createMemo, untrack } from 'solid-js';
@@ -12,6 +14,7 @@ import {
   type BrushStorage,
   type PresetGroup
 } from '../brush-library';
+import { patchAbrValues } from '../brush-library/abrDocument';
 
 /**
  * Owns the active tool and the brush settings captured by the next stroke. The brush and the eraser each use a preset
@@ -28,7 +31,8 @@ import {
  * change; changes made before the restore win over it. Must be created within a Solid owner.
  */
 export function createBrushTools(options: {
-  library: Pick<BrushLibrary, 'find' | 'load' | 'add' | 'update' | 'remove'>;
+  library: Pick<BrushLibrary, 'find' | 'load' | 'add' | 'update' | 'remove'> & Partial<Pick<BrushLibrary, 'assets'>>;
+  onError?: (message: string) => void;
   storage?: Pick<BrushStorage, 'readState' | 'writeState'>;
   /**
    * The erasing version of a brush, with the same tip and dynamics; `undefined` when its engine cannot erase with it.
@@ -36,6 +40,10 @@ export function createBrushTools(options: {
    */
   clear?: (brush: Brush) => Brush | undefined;
 }) {
+  const documentEdits = new Map<
+    string,
+    { base: string | undefined; engine: Brush['engine']; abrDocument: string; resources: readonly BrushResource[] }
+  >();
   const clear = options.clear ?? clearRoundBrush;
   // Commands build on the last written state, so several commands in one event compose.
   const [state, setState, currentState] = createImmediateSignal<ToolState>(initialState());
@@ -47,7 +55,7 @@ export function createBrushTools(options: {
   const loaded = restore();
   createEffect(state, (value) => {
     if (persisting) {
-      options.storage?.writeState(value);
+      persist(value);
     }
   });
 
@@ -60,7 +68,7 @@ export function createBrushTools(options: {
     /** The preset the active brush tool paints with; the brush's preset while the eraser erases with the brush. */
     preset: () => state().slots[presetSlot(state())].preset,
     /** Settings of `id` changed on the fly, relative to the saved preset; `undefined` when unchanged. */
-    changes: (id: string) => state().changes[id],
+    changes: (id: string) => state().changes[id] ?? (documentEdit(id) ? {} : undefined),
     /** Presets do not change the size; each tool keeps its own size instead. */
     sharedSize: () => state().sharedSize,
     /** Whether the eraser erases with the brush (`clear`) or uses its own preset (`preset`). */
@@ -85,6 +93,11 @@ export function createBrushTools(options: {
       return toolBrush(currentState(), 'eraser');
     },
     updateBrush,
+    /** Holds the accepted edit until Save or Save As, including its newly generated masks. */
+    setDocumentEdit(id: string, abrDocument: string, engine: Brush['engine'], resources: readonly BrushResource[]) {
+      documentEdits.set(id, { base: options.library.find(id)?.abrDocument, abrDocument, engine, resources });
+    },
+    editedResources: (id: string) => documentEdit(id)?.resources,
     /**
      * Makes `slot` use the preset with `id`, restoring its remembered changes, and activates that tool. Choosing a
      * preset for the eraser switches it to its `preset` mode. The preset's images must already be resident in the
@@ -98,6 +111,10 @@ export function createBrushTools(options: {
 
       const current = currentState();
       const next = applyPreset(current.slots[slot].brush, preset, current.changes[id], sizeKeys(current));
+      const edit = documentEdit(id);
+      if (edit) {
+        next.engine = edit.engine;
+      }
       const colors = {
         color: next.color,
         backgroundColor: next.backgroundColor ?? current.colors.backgroundColor
@@ -123,6 +140,7 @@ export function createBrushTools(options: {
         return;
       }
 
+      documentEdits.delete(id);
       const changes = without(current.changes, id);
       const slots = { ...current.slots };
       for (const slot of brushSlots) {
@@ -141,7 +159,16 @@ export function createBrushTools(options: {
         return;
       }
 
-      options.library.update(preset.id, { settings: { ...preset.settings, ...current.changes[preset.id] } });
+      const edit = documentEdit(preset.id);
+      options.library.update(
+        preset.id,
+        {
+          settings: { ...preset.settings, ...current.changes[preset.id], ...(edit && { engine: edit.engine }) },
+          ...(edit && { abrDocument: edit.abrDocument, resourceIds: edit.resources.map((r) => r.id) })
+        },
+        edit?.resources
+      );
+      documentEdits.delete(preset.id);
       setState({ ...current, changes: without(current.changes, preset.id) });
     },
     /**
@@ -153,22 +180,43 @@ export function createBrushTools(options: {
       const current = currentState();
       const saved = currentBrush();
       const source = options.library.find(current.slots[presetSlot(current)].preset);
-      const added = options.library.add({
-        name,
-        settings: presetSettings(saved, groups),
-        derivedFrom: source?.id,
-        paintbrush: source?.paintbrush,
-        resourceIds: source?.resourceIds ?? []
-      });
+      const edit = source && documentEdit(source.id);
+      const settings = presetSettings(saved, groups);
+      let document = saved.engine?.id === 'abr' ? (edit?.abrDocument ?? source?.abrDocument) : undefined;
+      // Clear-mode erasing overrides the runtime blend without changing the source preset.
+      // A standalone copy needs the same mode in its editable Photoshop tool options.
+      if (document && settings.engine) {
+        const abr = settings.engine.settings as AbrBrushSettings;
+        if (abr.blendMode === 'Cler' && abr.values.tool.type !== 'ErTl' && abr.values.tool.mode !== 'Cler') {
+          const values = { ...abr.values, tool: { ...abr.values.tool, mode: 'Cler' } };
+          document = patchAbrValues(document, values);
+          settings.engine = { ...settings.engine, settings: { ...abr, values } };
+        }
+      }
+      const added = options.library.add(
+        {
+          name,
+          settings,
+          derivedFrom: source?.id,
+          paintbrush: source?.paintbrush,
+          ...(document && { abrDocument: document, assetIds: source?.assetIds, abrArchive: source?.abrArchive }),
+          resourceIds: edit?.resources.map((r) => r.id) ?? source?.resourceIds ?? []
+        },
+        edit?.resources
+      );
       setState({
         ...current,
         eraserMode: current.slot === 'eraser' ? 'preset' : current.eraserMode,
-        slots: { ...current.slots, [current.slot]: { preset: added.id, brush: saved } }
+        slots: {
+          ...current.slots,
+          [current.slot]: { preset: added.id, brush: { ...saved, engine: added.settings.engine } }
+        }
       });
       return added;
     },
     /** Deletes a user preset and its changes; tools using it stop using it, see `abandonPreset`. */
     deletePreset(id: string) {
+      documentEdits.delete(id);
       options.library.remove(id);
       abandonPreset(id);
       const current = currentState();
@@ -205,6 +253,15 @@ export function createBrushTools(options: {
       setState(snapshot as ToolState);
     }
   };
+
+  function documentEdit(id: string) {
+    const edit = documentEdits.get(id);
+    if (edit && edit.base !== options.library.find(id)?.abrDocument) {
+      documentEdits.delete(id);
+      return undefined;
+    }
+    return edit;
+  }
 
   /**
    * Settings of a brush tool with the current colors. The eraser in `clear` mode erases with the brush at its own
@@ -298,15 +355,52 @@ export function createBrushTools(options: {
     const initial = untrack(currentState);
     const stored = await options.storage?.readState();
     await Promise.all(storedPresetIds(stored).map((id) => options.library.load(id)));
+    const drafts = isRecord(stored) && isRecord(stored.documentEdits) ? stored.documentEdits : {};
+    for (const [id, draft] of Object.entries(drafts)) {
+      if (!options.library.assets || !isRecord(draft) || typeof draft.abrDocument !== 'string') {
+        continue;
+      }
+      try {
+        const preset = await options.library.load(id);
+        if (!preset?.abrDocument || draft.base !== preset.abrDocument) {
+          continue;
+        }
+        const images = await options.library.assets(preset);
+        if (images.isErr()) {
+          throw new Error(images.error.message);
+        }
+        const { resolveAbrText } = await import('../brush-library/abrPresetDocument');
+        const { engine, resources } = await resolveAbrText(draft.abrDocument, images.value);
+        if (currentState() === initial) {
+          documentEdits.set(id, { base: preset.abrDocument, abrDocument: draft.abrDocument, engine, resources });
+        }
+      } catch (error) {
+        options.onError?.('Could not restore brush edits: ' + String(error));
+      }
+    }
     persisting = true;
     if (currentState() === initial) {
       const restored = restoredState(stored, options.library.find);
       if (restored) {
+        for (const slot of brushSlots) {
+          const entry = restored.slots[slot];
+          const draft = documentEdit(entry.preset);
+          if (draft) {
+            entry.brush.engine = draft.engine;
+          }
+        }
         setState(restored);
       }
     } else {
-      options.storage?.writeState(currentState());
+      persist(currentState());
     }
+  }
+  /** Draft documents survive reopening the studio. Their GPU masks regenerate from shared assets. */
+  function persist(value: ToolState) {
+    const documents = Object.fromEntries(
+      [...documentEdits].map(([id, { base, abrDocument }]) => [id, { base, abrDocument }])
+    );
+    options.storage?.writeState(documentEdits.size ? { ...value, documentEdits: documents } : value);
   }
 }
 

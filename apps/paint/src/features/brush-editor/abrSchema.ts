@@ -268,6 +268,11 @@ export const abrCategories: readonly BrushCategory[] = [
 export function abrCategoriesFor(source: BrushAsset): readonly BrushCategory[] {
   const form = brushToFormValues(source);
   const hasPattern = !!brushPreviewResources(formValuesToBrush(source, { ...form, useTexture: true })).pattern;
+  return abrCategoriesWithPattern(hasPattern);
+}
+
+/** ABR studio rows gated by embedded pattern coverage. */
+export function abrCategoriesWithPattern(hasPattern: boolean): readonly BrushCategory[] {
   const texture = category('texture', 'Texture', 'advanced', 'useTexture', () => hasPattern);
   return abrCategories.map((category) =>
     category.id !== 'texture'

@@ -67,7 +67,9 @@ export function BrushLibrary(props: {
           when={
             props.onExportFile &&
             props.presets.some(
-              (p) => p.id === props.preset && ['round', 'textured'].includes(p.settings.engine?.id ?? 'round')
+              (p) =>
+                p.id === props.preset &&
+                (!!p.abrDocument || ['round', 'textured'].includes(p.settings.engine?.id ?? 'round'))
             )
           }
         >

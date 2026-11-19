@@ -15,8 +15,13 @@ export type BrushPreset = {
   resourceIds: readonly string[];
   /** Identifies an imported original, such as an ABR brush; importing the same original again replaces the preset. */
   source?: string;
-  /** Original descriptor and embedded resources, retained for generated ABR editing. */
+  /** Legacy import retained for rollback and editing if conversion fails. */
   abrSource?: BrushAsset;
+  /** Editable Photoshop document and the coverage it references, including dormant effects. */
+  abrDocument?: string;
+  assetIds?: readonly string[];
+  /** Single-brush manifest and opaque companions retained on Photoshop archive import. */
+  abrArchive?: Pick<NonNullable<BrushPreset['paintbrush']>, 'file' | 'manifest' | 'entries'>;
   /** Ships with Paint: not stored, and cannot be renamed, overwritten or deleted. */
   builtIn?: boolean;
   /** Original file data retained across native edits. */
