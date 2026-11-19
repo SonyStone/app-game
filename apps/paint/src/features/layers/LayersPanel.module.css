@@ -31,6 +31,7 @@
     display: grid;
     place-items: center;
     border-radius: 50%;
+    corner-shape: round;
   }
 }
 

@@ -3,15 +3,13 @@
   --zen-surface: #ffffff;
   --zen-line: rgb(0 0 0 / 0.12);
   --lego-plate: rgb(36 38 44 / 0.92);
-  /* The tile look trial dims the tiles by mixing the ink into them; 0% leaves every tile colour as it was. */
-  --lego-dim: 0%;
-  --lego-tile: color-mix(in srgb, #f4f2ee, var(--lego-ink) var(--lego-dim));
-  --lego-preset-active: color-mix(in srgb, #dde7ff, var(--lego-ink) var(--lego-dim));
+  --lego-tile: #f4f2ee;
+  --lego-preset-active: #dde7ff;
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
   /* The empty part of a value's slider or knob. */
-  --lego-track: color-mix(in srgb, #dad7d0, var(--lego-ink) var(--lego-dim));
+  --lego-track: #dad7d0;
   /* The hairline between a Settings-style sidebar and its detail on one dark plate. */
   --lego-divider: rgb(255 255 255 / 0.1);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
@@ -29,23 +27,35 @@
    * Corners, all from one number: a plate's radius (LegoStudio sets it from the tile look trial, see `tileLook.ts`).
    * A corner inside another is the outer radius less the distance between the two edges, never below zero, at every
    * level: plate, then tile (6 px in, the plate's padding), then what lies in a tile (3 px in, as its chips). A
-   * popup, card or bar is a plate; what lies in it is its radius less its padding. Circles and pills stay round:
-   * they are shapes, not corners.
+   * popup, card or bar is a plate; what lies in it is its radius less its padding. Each token below is such a radius
+   * at a fixed depth from a plate's edge, so a corner is always a token here and never a sum worked out elsewhere.
+   * Circles and pills stay round: they are shapes, not corners.
+   *
+   * The shape of every corner comes from `--lego-corner-shape`, applied to everything in the editor by one rule
+   * (below `.editor`). A squircle hugs its corner more tightly than a circular arc of the same radius, so where it is
+   * drawn every radius is multiplied by `--lego-corner-scale` (see the squircle look at the end of the file): the
+   * radii are worked out as arcs, depth subtracted first, and then scaled. Scaling the whole nest keeps its gaps.
    */
   --lego-radius: 13px;
-  --lego-r-plate: var(--lego-radius);
-  --lego-r-tile: max(0px, calc(var(--lego-r-plate) - 6px));
-  --lego-r-inner: max(0px, calc(var(--lego-r-tile) - 3px));
-  /* A tile in a popup, 8 px in. */
-  --lego-r-popup-tile: max(0px, calc(var(--lego-r-plate) - 8px));
-  /* A key on the number entry card, 10 px in. */
-  --lego-r-card-key: max(0px, calc(var(--lego-r-plate) - 10px));
+  --lego-corner-shape: round;
+  --lego-corner-scale: 1;
+  --lego-r-plate: calc(var(--lego-radius) * var(--lego-corner-scale));
+  /* A selection's outline, 4 px outside a tile. */
+  --lego-r-outline: calc(max(0px, var(--lego-radius) - 2px) * var(--lego-corner-scale));
   /* A button on the selection bar, 4 px in. */
-  --lego-r-bar-button: max(0px, calc(var(--lego-r-plate) - 4px));
+  --lego-r-bar-button: calc(max(0px, var(--lego-radius) - 4px) * var(--lego-corner-scale));
+  --lego-r-tile: calc(max(0px, var(--lego-radius) - 6px) * var(--lego-corner-scale));
+  /* A tile in a popup, 8 px in. */
+  --lego-r-popup-tile: calc(max(0px, var(--lego-radius) - 8px) * var(--lego-corner-scale));
+  --lego-r-inner: calc(max(0px, var(--lego-radius) - 9px) * var(--lego-corner-scale));
+  /* A key on the number entry card, 10 px in; a key 4 px inside a tile, as a kit's colour keys, at the same depth. */
+  --lego-r-card-key: calc(max(0px, var(--lego-radius) - 10px) * var(--lego-corner-scale));
+  /* The mark on a fresh keypad value, 3 px inside its field. */
+  --lego-r-card-mark: calc(max(0px, var(--lego-radius) - 13px) * var(--lego-corner-scale));
 
   /* The Settings-style lists LEGO shows on its plates and popups: rows 8 px in, their icons 6 px into a row. */
   --settings-list-radius: var(--lego-r-popup-tile);
-  --settings-list-icon-radius: max(0px, calc(var(--lego-r-popup-tile) - 6px));
+  --settings-list-icon-radius: calc(max(0px, var(--lego-radius) - 14px) * var(--lego-corner-scale));
 
   background: #faf8f4;
   color: var(--lego-ink);
@@ -63,6 +73,26 @@
     font: inherit;
     color: inherit;
   }
+}
+
+/*
+ * The one rule that shapes corners: every rounded thing in the editor, LEGO's and what it hosts (the brush studio,
+ * the pickers) alike, takes the same shape, so no corner is a squircle beside another's arc. It weighs nothing, so a
+ * circle or pill anywhere keeps itself one with its own `corner-shape: round`: those are shapes, not corners.
+ */
+:where(.editor, .editor *),
+:where(.editor *)::before,
+:where(.editor *)::after {
+  corner-shape: var(--lego-corner-shape);
+}
+
+/*
+ * What fills a tile edge to edge takes its corners, so a ring drawn on it (the chosen brush's, a lit action's) or a
+ * fill reaching its corner follows the tile's outline, square at a fused seam; the tile's `overflow: hidden` clips
+ * the rest.
+ */
+:where(.content, .partFrame, .partFrame > *, .valueState > *) {
+  border-radius: inherit;
 }
 
 /* The layer over the drawing; only its children take presses. */
@@ -188,6 +218,7 @@
     inset: 12px;
     border: 3px solid #ffffff;
     border-radius: 50%;
+    corner-shape: round;
     background: var(--lego-accent);
     box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
   }
@@ -267,6 +298,7 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
+    corner-shape: round;
     background: var(--swatch, var(--lego-tile));
     color: var(--swatch-ink, var(--lego-ink));
     box-shadow: 0 0 0 2px var(--lego-tile);
@@ -525,6 +557,7 @@
   padding: 8px 16px;
   border: 0;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--lego-chrome);
   color: #ffffff !important;
   font-weight: 600;
@@ -725,6 +758,7 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
+  corner-shape: round;
   background: rgb(0 0 0 / 0.55);
   color: #ffffff !important;
   font-size: 11px;
@@ -743,7 +777,7 @@
     display: grid;
     place-items: center;
     border: 0;
-    border-radius: max(0px, calc(var(--lego-r-tile) - 4px));
+    border-radius: var(--lego-r-card-key);
     font-size: 11px;
     font-weight: 600;
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
@@ -830,6 +864,7 @@
 
 .round .chip {
   border-radius: 50%;
+  corner-shape: round;
 }
 
 /* A place in the history no color has taken yet. */
@@ -852,6 +887,7 @@
   height: 16px;
   translate: -50% -50%;
   border-radius: 50%;
+  corner-shape: round;
   box-shadow:
     0 0 0 2px #ffffff,
     0 1px 4px 2px rgb(0 0 0 / 0.35);
@@ -1145,6 +1181,7 @@
   translate: -50% 0;
   padding: 6px 10px;
   border-radius: 999px;
+  corner-shape: round;
   background: rgb(20 21 25 / 0.9);
   color: #ffffff;
   pointer-events: none;
@@ -1321,7 +1358,7 @@
 /* Around the selected tiles, 4 px out (BoardView's selectionPadding): their corner and that distance. */
 .selection {
   border: 2px dashed var(--lego-accent);
-  border-radius: calc(var(--lego-r-tile) + 4px);
+  border-radius: var(--lego-r-outline);
 }
 
 /* How to start editing, at the bottom of the board until something is first selected. */
@@ -1333,6 +1370,7 @@
   padding: 10px 16px;
   translate: -50% 0;
   border-radius: 999px;
+  corner-shape: round;
   background: rgb(36 38 44 / 0.9);
   color: #ffffff;
   font-weight: 600;
@@ -1463,6 +1501,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--lego-accent);
   box-shadow: 0 0 0 6px rgb(61 126 255 / 0.25);
   animation: spawn-pop 160ms ease-out both;
@@ -1478,6 +1517,7 @@
   padding: 8px 13px;
   border: 0;
   border-radius: 999px;
+  corner-shape: round;
   background: rgb(24 25 29 / 0.97);
   color: #ffffff !important;
   font-size: 12px;
@@ -1889,7 +1929,7 @@
   }
 
   &[data-fresh] span {
-    border-radius: max(0px, calc(var(--lego-r-card-key) - 3px));
+    border-radius: var(--lego-r-card-mark);
     background: color-mix(in srgb, var(--lego-accent) 45%, transparent);
     padding: 0 3px;
   }
@@ -2000,6 +2040,8 @@
   --studio-tile: var(--lego-tile);
   --studio-tile-ink: var(--lego-ink);
   --studio-tile-radius: var(--lego-r-tile);
+  /* The plates under the pad's buttons and Cancel and Done lie 4 px around their tiles. */
+  --studio-plate-radius: var(--lego-r-outline);
   --studio-menu-radius: var(--lego-r-plate);
   --studio-menu-item-radius: var(--lego-r-bar-button);
   --studio-tile-shadow: none;
@@ -2123,7 +2165,7 @@
   height: 36px;
   padding: 0;
   border: 0;
-  border-radius: max(0px, calc(var(--lego-r-tile) - 4px));
+  border-radius: var(--lego-r-card-key);
   background: rgb(0 0 0 / 0.06);
   color: var(--lego-ink);
   touch-action: manipulation;
@@ -2186,40 +2228,35 @@
 }
 
 /*
- * TEMPORARY: the tile look trial (see `tileLook.ts`). LegoStudio puts these classes on the editor, so the board, the
- * workbench, kits, popups and the brush studio all follow.
+ * Parts fuse with their group's neighbours (`data-joins`, see `fusion.ts`). Across a fused side the fill reaches over
+ * the 4 px gap to a 1 px seam: 2 px from the part before the seam, 1 px from the part after it, so the seam lies on
+ * whole pixels. Padding grows the tile without moving its cells, and the corners at the seam are square; the outer
+ * corners of the block keep the tile radius, and a selection's outline follows this outline.
  */
-
-/*
- * Looks B and C: parts fuse with their group's neighbours (`data-joins`, see `fusion.ts`). Across a fused side the
- * fill reaches over the 4 px gap to a 1 px seam: 2 px from the part before the seam, 1 px from the part after it, so
- * the seam lies on whole pixels. Padding grows the tile without moving its cells, and the corners at the seam are
- * square; the outer corners of the block keep the tile radius, and a selection's outline follows this outline.
- */
-.fusedLook .part[data-joins] {
+.part[data-joins] {
   box-sizing: content-box;
 }
 
-.fusedLook .part[data-joins~='top'] {
+.part[data-joins~='top'] {
   margin-top: -1px;
   padding-top: 1px;
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
 
-.fusedLook .part[data-joins~='right'] {
+.part[data-joins~='right'] {
   padding-right: 2px;
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.fusedLook .part[data-joins~='bottom'] {
+.part[data-joins~='bottom'] {
   padding-bottom: 2px;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.fusedLook .part[data-joins~='left'] {
+.part[data-joins~='left'] {
   margin-left: -1px;
   padding-left: 1px;
   border-top-left-radius: 0;
@@ -2227,71 +2264,37 @@
 }
 
 /* The outline around one selected part takes its square corners on the sides it fuses along. */
-.fusedLook .selection[data-joins~='top'] {
+.selection[data-joins~='top'] {
   border-top-left-radius: 0;
   border-top-right-radius: 0;
 }
 
-.fusedLook .selection[data-joins~='right'] {
+.selection[data-joins~='right'] {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.fusedLook .selection[data-joins~='bottom'] {
+.selection[data-joins~='bottom'] {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-.fusedLook .selection[data-joins~='left'] {
+.selection[data-joins~='left'] {
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
 }
 
 /*
- * Look C: the plate muted towards the tiles' tone, so the gaps and seams between tiles read as soft lines rather than
- * dark ones; what lies on the plate turns dark. Popups, cards and the box stay dark: they are not plates of tiles.
+ * TEMPORARY: the squircle side of the tile look trial (see `tileLook.ts`); LegoStudio puts the class on the editor.
+ * Where the browser draws squircles (Chrome and Edge 139 and later), every corner becomes one through the shared
+ * rule, and every radius grows by 1.84: a squircle, `superellipse(2)`, cuts its corner's diagonal at 0.159 of its
+ * radius where an arc cuts it at 0.293, so 0.293 / 0.159 makes a squircle as deep a corner as the arc the radius
+ * slider names. Elsewhere the look keeps arcs of the plain radius.
  */
-.editor.mutedLook {
-  --lego-plate: #d3cec5;
-  /* Lighter than the plate, so a slider's empty end still reads as part of its tile. */
-  --lego-track: #e6e3dd;
-  --lego-plate-ink: var(--lego-ink);
-  --lego-plate-quiet: rgb(36 38 44 / 0.6);
-  --lego-plate-line: rgb(36 38 44 / 0.22);
-  --lego-plate-raise: rgb(36 38 44 / 0.07);
-  --lego-stud: rgb(36 38 44 / 0.1);
-  --lego-stud-rim: rgb(36 38 44 / 0.04);
-  --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.16), 0 6px 20px rgb(0 0 0 / 0.12);
-}
-
-.mutedLook .brushStudio {
-  --studio-column-ink: var(--lego-ink);
-  --studio-column-quiet: rgb(36 38 44 / 0.6);
-  --studio-divider: rgb(36 38 44 / 0.12);
-  --studio-hover: rgb(36 38 44 / 0.05);
-  --studio-pressed: rgb(36 38 44 / 0.1);
-  --studio-disabled-ink: rgb(36 38 44 / 0.45);
-  --studio-disabled-line: rgb(36 38 44 / 0.2);
-}
-
-/* Squircle corners on plates and large tiles, where the browser draws them (Chrome and Edge 139 and later). */
 @supports (corner-shape: squircle) {
-  .squircleLook {
-    .panel,
-    .ghostBlock,
-    .popup,
-    .entryCard,
-    .selectionBar,
-    .spawnCard,
-    .benchSlot,
-    .part[data-large],
-    .studioSetting[data-tall] .studioTile {
-      corner-shape: squircle;
-    }
-
-    .brushStudio {
-      --studio-corner-shape: squircle;
-    }
+  .editor.squircleLook {
+    --lego-corner-shape: squircle;
+    --lego-corner-scale: 1.84;
   }
 }
 
@@ -2378,10 +2381,6 @@
 
   button[aria-pressed='true'] {
     background: var(--lego-accent);
-  }
-
-  b {
-    font-size: 15px;
   }
 
   small {

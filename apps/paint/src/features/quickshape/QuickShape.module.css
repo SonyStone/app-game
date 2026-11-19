@@ -41,6 +41,7 @@
   padding: 6px 12px;
   border: 1px solid #0000001a;
   border-radius: 999px;
+  corner-shape: round;
   background: #fbfbfaf2;
   color: #1f1f1f;
   box-shadow: 0 2px 10px #0002;

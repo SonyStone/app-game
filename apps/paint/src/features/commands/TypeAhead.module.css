@@ -143,6 +143,7 @@
   padding: 0;
   border: 1px solid #00000080;
   border-radius: 50%;
+  corner-shape: round;
 
   &[aria-pressed='true'],
   &[data-selected] {
@@ -230,6 +231,7 @@
   height: 12px;
   border: 1px solid #00000080;
   border-radius: 50%;
+  corner-shape: round;
 }
 
 .done {

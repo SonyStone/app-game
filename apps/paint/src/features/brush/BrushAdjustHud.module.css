@@ -6,6 +6,7 @@
 .disc {
   position: absolute;
   border-radius: 50%;
+  corner-shape: round;
   box-shadow:
     0 0 0 1px #fff,
     0 0 0 2px #38444c9c;

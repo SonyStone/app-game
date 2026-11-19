@@ -1,31 +1,25 @@
 import { createSignal } from 'solid-js';
 
 /**
- * TEMPORARY, a trial: how LEGO's tiles look, switched as a whole by a developer control (`TileLookSwitch`) so the
- * looks can be compared on the tablet. Remove this, the switch and the losing looks' CSS once one look is chosen.
- *
- * - `A`: as before: every part a separate tile, all gaps equal.
- * - `B`: neighbouring parts of one group fuse into one block with a thin seam (see `fusion.ts`).
- * - `C`: fused, and the plate muted towards the tiles' tone, so the remaining gaps stop reading as dark lines.
+ * TEMPORARY, a trial: the corners of LEGO's plates and tiles, switched for the whole editor by a developer control
+ * (`TileLookSwitch`) so they can be compared on the tablet. Remove this and the switch once the corners are chosen,
+ * keeping the chosen radius as `--lego-radius` in `LegoStudio.module.css` (and the squircle look, if chosen).
  *
  * `radius` is the one number every corner derives from: a plate's corner in CSS pixels; a tile's is it less the
- * plate's padding, and so on inwards (see `LegoStudio.module.css`). `squircle` draws plates and large tiles with
- * `corner-shape: squircle` where the browser has it. `dim` makes the tiles themselves less bright: the percentage
- * of the ink colour mixed into them, 0 leaving them as before. The look is kept per device and never in the board.
+ * plate's padding, and so on inwards (see `LegoStudio.module.css`). `squircle` draws every corner with
+ * `corner-shape: squircle` where the browser has it, its radii grown so a corner reads as round as the arc `radius`
+ * names. The look is kept per device and never in the board.
  */
-export type TileLook = { look: 'A' | 'B' | 'C'; radius: number; squircle: boolean; dim: number };
+export type TileLook = { radius: number; squircle: boolean };
 
-/** The look a device without a stored choice gets: the tiles as before. */
-export const defaultTileLook: TileLook = { look: 'A', radius: 13, squircle: false, dim: 0 };
+/** The look a device without a stored choice gets: the corners as before the trial. */
+export const defaultTileLook: TileLook = { radius: 13, squircle: false };
 
 /** Plate radii to compare: tiles square, tiles as before (7 px), tiles soft (14 px). */
 export const plateRadii = { sharp: 6, today: 13, soft: 20 } as const;
 
 /** The smallest and largest plate radius the switch offers. */
 export const radiusRange = { min: 0, max: 24 } as const;
-
-/** The least and most the switch dims the tiles, in percent of ink mixed into them. */
-export const dimRange = { min: 0, max: 40 } as const;
 
 /** The key the look is kept under in `localStorage`. */
 export const tileLookKey = 'paint.lego.tile-look';
@@ -52,7 +46,10 @@ export function createTileLook() {
   };
 }
 
-/** The stored tile look, or `defaultTileLook` when there is none or it cannot be read. */
+/**
+ * The stored tile look, or `defaultTileLook` when there is none or it cannot be read. Entries from the trial's
+ * first round, which also held a look letter and a dimming, keep their radius and squircle choice.
+ */
 export function readTileLook(): TileLook {
   try {
     const stored = JSON.parse(localStorage.getItem(tileLookKey) ?? 'null') as Partial<TileLook> | null;
@@ -62,17 +59,12 @@ export function readTileLook(): TileLook {
   }
 }
 
-/**
- * `look` with every field valid: an unknown look becomes A, the radius a whole number within `radiusRange`, the
- * dimming a whole number within `dimRange`.
- */
+/** `look` with only its own fields, each valid: the radius a whole number within `radiusRange`. */
 function normalTileLook(look: TileLook): TileLook {
   const radius = Number.isFinite(look.radius) ? Math.round(look.radius) : defaultTileLook.radius;
 
   return {
-    look: look.look === 'B' || look.look === 'C' ? look.look : 'A',
     radius: Math.max(radiusRange.min, Math.min(radiusRange.max, radius)),
-    squircle: look.squircle === true,
-    dim: Math.max(dimRange.min, Math.min(dimRange.max, Number.isFinite(look.dim) ? Math.round(look.dim) : 0))
+    squircle: look.squircle === true
   };
 }

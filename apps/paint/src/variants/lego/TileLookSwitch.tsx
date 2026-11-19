@@ -1,12 +1,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import styles from './LegoStudio.module.css';
-import { dimRange, plateRadii, radiusRange, type TileLook } from './tileLook';
+import { plateRadii, radiusRange, type TileLook } from './tileLook';
 
 /**
- * TEMPORARY developer control for the tile look trial (see `tileLook.ts`): a round button beside Edit that opens a
- * small card to switch the whole look (A, B, C), the plate radius every corner derives from, how much the tiles are
- * dimmed, and squircle corners.
- * Changes apply at once and are kept on the device. Remove it with the trial.
+ * TEMPORARY developer control for the tile look trial (see `tileLook.ts`): a round button beside Edit, showing the
+ * plate radius, that opens a small card to set that radius, directly or by its sharp, today and soft shortcuts, and to
+ * switch squircle corners. Changes apply at once and are kept on the device. Remove it with the trial.
  */
 export function TileLookSwitch(props: {
   look: TileLook;
@@ -25,26 +24,11 @@ export function TileLookSwitch(props: {
         title="Tile look (trial)"
         onClick={() => setOpen(!open())}
       >
-        {props.look.look}
+        {props.look.radius}
       </button>
       <Show when={open()}>
         <div class={styles.tileLookCard} role="group" aria-label="Tile look (trial)">
           <span class={styles.tileLookHeading}>Tile look · trial</span>
-          <div class={styles.tileLookChoices}>
-            <For each={looks}>
-              {(look) => (
-                <button
-                  type="button"
-                  aria-pressed={props.look.look === look.id ? 'true' : 'false'}
-                  title={look.title}
-                  onClick={() => props.onChange({ look: look.id })}
-                >
-                  <b>{look.id}</b>
-                  <small>{look.label}</small>
-                </button>
-              )}
-            </For>
-          </div>
           <label class={styles.tileLookRadius}>
             <span>
               Plate radius <output>{props.look.radius} px</output>
@@ -71,19 +55,6 @@ export function TileLookSwitch(props: {
               )}
             </For>
           </div>
-          <label class={styles.tileLookRadius}>
-            <span>
-              Tiles dimmer <output>{props.look.dim}%</output>
-            </span>
-            <input
-              type="range"
-              min={dimRange.min}
-              max={dimRange.max}
-              step={2}
-              value={props.look.dim}
-              onInput={(event) => props.onChange({ dim: event.currentTarget.valueAsNumber })}
-            />
-          </label>
           <label class={styles.tileLookCheck}>
             <input
               type="checkbox"
@@ -97,9 +68,3 @@ export function TileLookSwitch(props: {
     </div>
   );
 }
-
-const looks = [
-  { id: 'A', label: 'Today', title: 'Every part a separate tile' },
-  { id: 'B', label: 'Fused', title: 'Related neighbours fuse into one block' },
-  { id: 'C', label: 'Fused, light', title: 'Fused, the plate muted towards the tiles' }
-] as const;

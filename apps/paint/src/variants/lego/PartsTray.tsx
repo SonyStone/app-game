@@ -9,7 +9,7 @@ import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { isLarge, joinsAttribute, partJoins } from './fusion';
+import { joinsAttribute, partJoins } from './fusion';
 import { boxSections, kindLabel, lookOf, partGroup } from './parts';
 import { opaqueData } from './partStorage';
 
@@ -493,7 +493,6 @@ export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }
         <div
           class={styles.part}
           data-joins={joinsAttribute(joins().get(part().id))}
-          data-large={isLarge(part().span) ? '' : undefined}
           style={{
             left: `${(part().cell.column - bounds().column) * pitch}px`,
             top: `${(part().cell.row - bounds().row) * pitch}px`,

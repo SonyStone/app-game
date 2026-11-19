@@ -86,12 +86,6 @@ export function LegoStudio(
   const board = createBoard(reportSavingError);
   /** TEMPORARY: the tile look trial's choice, applied to the whole editor; see `tileLook.ts`. */
   const tileLook = createTileLook();
-  const tileLookClasses = () => {
-    const { look, squircle } = tileLook.look();
-    return [look !== 'A' && styles.fusedLook, look === 'C' && styles.mutedLook, squircle && styles.squircleLook]
-      .filter(Boolean)
-      .join(' ');
-  };
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
@@ -205,10 +199,9 @@ export function LegoStudio(
     <LegoServicesContext value={services}>
       <PaintEditor
         session={session}
-        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLookClasses()}`}
+        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLook.look().squircle ? styles.squircleLook : ''}`}
         style={{
           '--lego-radius': `${tileLook.look().radius}px`,
-          '--lego-dim': `${tileLook.look().dim}%`,
           '--card-scale': `${card().scale}`,
           '--card-x': `${card().x}px`,
           '--card-y': `${card().y}px`,

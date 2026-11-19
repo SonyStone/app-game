@@ -29,10 +29,9 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * text on them, `--studio-gap` around and between them, `--studio-column-radius` and `--studio-divider`, the hairline
  * between them; `--studio-icon`, `--studio-icon-ink`, `--studio-hover` and `--studio-pressed` for the category rows,
  * and `--studio-selected`, `--studio-selected-ink` and `--studio-selected-quiet` for the chosen one's pill and text;
- * `--studio-plate` under the
- * buttons over the pad; `--studio-tile`, `--studio-tile-ink` and `--studio-tile-radius` for its controls;
- * `--studio-menu-radius` and `--studio-menu-item-radius` for its menus and their rows; `--studio-corner-shape` for the
- * sheet's corners;
+ * `--studio-plate` under the buttons over the pad and `--studio-plate-radius` for its corners (the tiles' radius and
+ * the plate's 4 px padding); `--studio-tile`, `--studio-tile-ink` and `--studio-tile-radius` for its controls;
+ * `--studio-menu-radius` and `--studio-menu-item-radius` for its menus and their rows;
  * `--studio-chosen`, `--studio-chosen-ink` and `--studio-chosen-ring` for the chosen category and option and a switch
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
  *
