@@ -19,6 +19,10 @@ export type BrushPreset = {
   abrSource?: BrushAsset;
   /** Ships with Paint: not stored, and cannot be renamed, overwritten or deleted. */
   builtIn?: boolean;
+  /** Original file data retained across native edits. */
+  paintbrush?: import('./paintbrushFile').RetainedBrush;
+  /** Source preset identity for a saved copy. */
+  derivedFrom?: string;
 };
 
 /**

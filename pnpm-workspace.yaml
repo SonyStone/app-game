@@ -59,6 +59,8 @@ catalog:
   class-variance-authority: ^0.7.1
   clsx: ^2.1.1
   fake-indexeddb: ^6.2.5
+  fflate: 0.8.2
+  jsonc-parser: 3.3.1
   jsdom: ^29.1.1
   neverthrow: ^8.2.0
   pdfjs-dist: 6.3.289

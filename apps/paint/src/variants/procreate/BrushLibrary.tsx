@@ -28,11 +28,14 @@ export function BrushLibrary(props: {
   onChoose: (id: string) => void;
   /** Opens the ABR brush importer; omitted, the `+` button is hidden. */
   onImport?: () => void;
+  onImportFile?: (file: File) => void;
+  onExportFile?: (id: string) => void;
   /** Rows above the sets, such as the eraser's mode. */
   children?: JSX.Element;
   /** Rows under the columns, such as Mixer Brush commands. */
   footer?: JSX.Element;
 }) {
+  let picker: HTMLInputElement | undefined;
   const sets = () => brushSets(props.presets, props.recent);
   const [chosen, setChosen] = createSignal(() => setOf(sets(), props.preset));
   const shown = () => sets().find((set) => set.id === chosen()) ?? sets()[0];
@@ -40,6 +43,38 @@ export function BrushLibrary(props: {
   return (
     <>
       <PopoverHeader title={props.title}>
+        <Show when={props.onImportFile}>
+          <input
+            hidden
+            type="file"
+            accept=".paintbrush"
+            ref={(el) => {
+              picker = el;
+            }}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = '';
+              if (file) {
+                props.onImportFile?.(file);
+              }
+            }}
+          />
+          <button disabled={props.disabled} onClick={() => picker?.click()}>
+            Import .paintbrush
+          </button>
+        </Show>
+        <Show
+          when={
+            props.onExportFile &&
+            props.presets.some(
+              (p) => p.id === props.preset && ['round', 'textured'].includes(p.settings.engine?.id ?? 'round')
+            )
+          }
+        >
+          <button disabled={props.disabled} onClick={() => props.onExportFile?.(props.preset)}>
+            Export .paintbrush
+          </button>
+        </Show>
         <Show when={props.onImport}>
           {(onImport) => (
             <button

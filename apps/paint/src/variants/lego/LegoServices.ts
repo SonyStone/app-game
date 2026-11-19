@@ -1,3 +1,4 @@
+import { downloadBlob } from '../../shared/downloadBlob';
 import { createContext, createMemo, createSignal } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
 import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
@@ -126,6 +127,26 @@ export function createLegoServices(
     },
     presets: {
       all: session.library.presets,
+      async importFile(file: File) {
+        const { importPaintbrush } = await import('../../features/brush-library/paintbrushFile');
+        const rejected = await importPaintbrush(new Uint8Array(await file.arrayBuffer()), session.library);
+        if (rejected.length) {
+          throw new Error(rejected.join('\n'));
+        }
+      },
+      async exportFile(id: string) {
+        const selected = session.library.find(id);
+        if (!selected) {
+          throw new Error('Brush no longer exists');
+        }
+        const images = await session.library.resources(selected);
+        if (images.isErr()) {
+          throw new Error(images.error.message);
+        }
+        const { exportPaintbrush } = await import('../../features/brush-library/paintbrushFile');
+        const bytes = await exportPaintbrush(selected, images.value);
+        downloadBlob(new Blob([new Uint8Array(bytes)], { type: 'application/zip' }), selected.name + '.paintbrush');
+      },
       resources: session.library.resources,
       recent: () => [preset(), ...session.recentPresets.recent(7)],
       use: session.usePreset,

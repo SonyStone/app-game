@@ -1,0 +1,116 @@
+{
+  "id": "17ea5133-9f38-4877-baad-a9a121450c26",
+  "name": "Alternating lettering pen",
+  "origin": {
+    "format": "clip-studio",
+    "presetKey": "example-lettering",
+    "importer": "example-csp/1",
+    "mappings": [
+      {
+        "field": "overlap mode",
+        "value": "maximum",
+        "target": "/extensions/clip-studio.maximum-overlap.v1",
+        "outcome": "approximate",
+        "fallbackTarget": "/placement/overlap",
+        "reason": "Ordinary accumulation can darken a crossing where maximum coverage would cap it."
+      }
+    ]
+  },
+  "definition": {
+    "tool": "brush",
+    "size": 12,
+    "tips": {
+      "fine": {
+        "kind": "ellipse",
+        "roundness": 0.25,
+        "angleDeg": 30,
+        "hardness": 1
+      },
+      "broad": {
+        "kind": "ellipse",
+        "roundness": 0.65,
+        "angleDeg": 30,
+        "hardness": 1
+      }
+    },
+    "sequence": {
+      "order": "cycle",
+      "tips": [
+        "fine",
+        "broad"
+      ]
+    },
+    "placement": {
+      "law": "paint-distance-v1",
+      "spacing": 0.09,
+      "overlap": "accumulate"
+    },
+    "dynamics": [
+      {
+        "target": "/size",
+        "input": "pressure",
+        "domain": [
+          0,
+          1
+        ],
+        "curve": [
+          [
+            0,
+            0.12
+          ],
+          [
+            0.4,
+            0.3
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "op": "multiply"
+      },
+      {
+        "target": "/size",
+        "input": "speed",
+        "domain": [
+          0,
+          800
+        ],
+        "curve": [
+          [
+            0,
+            1
+          ],
+          [
+            1,
+            0.65
+          ]
+        ],
+        "op": "multiply"
+      }
+    ],
+    "stroke": {
+      "smoothing": "stabilizer",
+      "stabilizer": 6,
+      "catchUp": true,
+      "taper": {
+        "start": {
+          "target": "/size",
+          "px": 8,
+          "endpointMultiplier": 0
+        },
+        "end": {
+          "target": "/size",
+          "fraction": 0.12,
+          "endpointMultiplier": 0
+        }
+      }
+    },
+    "extensions": {
+      "clip-studio.maximum-overlap.v1": {
+        "value": true,
+        "impact": "appearance"
+      }
+    }
+  }
+}

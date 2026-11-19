@@ -156,6 +156,8 @@ export function createBrushTools(options: {
       const added = options.library.add({
         name,
         settings: presetSettings(saved, groups),
+        derivedFrom: source?.id,
+        paintbrush: source?.paintbrush,
         resourceIds: source?.resourceIds ?? []
       });
       setState({

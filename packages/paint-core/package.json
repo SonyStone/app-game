@@ -22,6 +22,8 @@
     "@app-game/solid-gpu": "workspace:*",
     "@solid-primitives/timer": "catalog:",
     "@solidjs/web": "catalog:",
+    "fflate": "catalog:",
+    "jsonc-parser": "catalog:",
     "solid-js": "catalog:",
     "typegpu": "^0.11.4",
     "zod": "^4.4.3",
