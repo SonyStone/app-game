@@ -1,6 +1,7 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, createUniqueId, Show, untrack } from 'solid-js';
+import { SettingsSplit } from '../../shared/ui/SettingsList';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryPane, CategorySidebar, createCategoryChoice } from './BrushCategories';
@@ -12,9 +13,10 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * Brush Studio. In landscape, three columns: the brush's name, a stroke preview and the categories; the chosen
  * category's rows; and a drawing pad (the caller's `pad`) taking the remaining half, with Cancel and Done at its top
  * right. In portrait the pad lies across the top and the two columns share the space under it. Narrower than 700 px,
- * one part shows at a time: the categories, a category's rows, or the pad. The chosen category's settings lie on a
- * raised surface, and its row in the category list is joined to that surface and travels to the next category chosen
- * (`SettingsList`); in the narrow layout the rows stay plain, each opening its page.
+ * one part shows at a time: the categories, a category's rows, or the pad. The categories and the chosen category's
+ * settings share one plate, a hairline between them (`SettingsSplit`); the chosen category lies on an accent pill that
+ * slides to the next one chosen (`SettingsList`). Where the plate is too narrow for both, about 500 px, the categories
+ * and a category's settings become two screens, each row opening its page and a way back above the settings.
  *
  * It shows the same categories, rows, statuses and sections as `BrushEditor`, with each number
  * row on two lines: its label and its value in a pill that can be dragged or tapped to type, then a slider across the
@@ -24,9 +26,10 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * Besides the editor's theme properties (`--surface`, `--ink`, `--muted`, `--line`, `--accent`), the studio reads
  * these from its host, each falling back to the studio's own look: `--studio-ground` behind the columns;
  * `--studio-column` and `--studio-column-ink`, `--studio-column-quiet` for the category and settings columns and the
- * text on them, `--studio-gap` around and between them and `--studio-column-radius`; `--studio-raised` for the
- * settings' surface and the chosen category joined to it; `--studio-icon`, `--studio-icon-ink`, `--studio-hover` and
- * `--studio-pressed` for the category rows, and `--studio-mark`, `--studio-mark-ink` for the chosen one's icon tile; `--studio-plate` under the
+ * text on them, `--studio-gap` around and between them, `--studio-column-radius` and `--studio-divider`, the hairline
+ * between them; `--studio-icon`, `--studio-icon-ink`, `--studio-hover` and `--studio-pressed` for the category rows,
+ * and `--studio-selected`, `--studio-selected-ink` and `--studio-selected-quiet` for the chosen one's pill and text;
+ * `--studio-plate` under the
  * buttons over the pad; `--studio-tile`, `--studio-tile-ink` and `--studio-tile-radius` for its controls;
  * `--studio-chosen`, `--studio-chosen-ink` and `--studio-chosen-ring` for the chosen category and option and a switch
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
@@ -71,7 +74,10 @@ export function BrushStudio(props: {
   /** Whether the pen's page is shown rather than the chosen category's. */
   const [penShown, setPenShown] = createSignal(untrack(() => !!props.startOnPen));
   const penTitleId = createUniqueId();
-  /** Below 700 px wide, which part is shown: the category list, the chosen category's rows or the pad. */
+  /**
+   * Which part is shown where one shows at a time: the category list or the chosen category's rows where the plate is
+   * narrow, and also the pad below 700 px.
+   */
   const [view, setView] = createSignal<'list' | 'detail' | 'pad'>(untrack(penShown) ? 'detail' : 'list');
   const [root, setRoot] = createSignal<HTMLElement>();
   createEffect(root, (element) => (element ? watchTapTargets(element) : undefined));
@@ -79,39 +85,44 @@ export function BrushStudio(props: {
   return (
     <section ref={setRoot} class={styles.studioRoot} aria-label="Brush studio">
       <div class={[styles.frame, styles.studio]} data-view={view()}>
-        <div class={styles.studioSheet}>
-          <div class={styles.studioSide}>
-            <div class={styles.studioHead}>
-              <h1 class={styles.studioName}>{props.name ?? 'Brush studio'}</h1>
-              <div class={styles.studioPreview}>{props.preview}</div>
-            </div>
-            <CategorySidebar
-              class={styles.studioList}
-              categories={categories()}
-              chosen={chosen()}
-              brush={props.brush}
-              onChoose={(category) => {
-                choose(category);
-                setPenShown(false);
-                setView('detail');
-              }}
-              extra={
-                props.penStatus === undefined
-                  ? undefined
-                  : {
-                      items: [
-                        { id: penEntry, label: 'Pressure', icon: 'pressure', trailing: props.penStatus, group: 'pen' }
-                      ],
-                      groups: [{ id: 'pen', label: 'Pen' }],
-                      selected: penShown() ? penEntry : undefined,
-                      onSelect: () => {
-                        setPenShown(true);
-                        setView('detail');
+        <SettingsSplit
+          class={styles.studioSheet}
+          view={view() === 'detail' ? 'detail' : 'list'}
+          list={
+            <div class={styles.studioSide}>
+              <div class={styles.studioHead}>
+                <h1 class={styles.studioName}>{props.name ?? 'Brush studio'}</h1>
+                <div class={styles.studioPreview}>{props.preview}</div>
+              </div>
+              <CategorySidebar
+                class={styles.studioList}
+                categories={categories()}
+                chosen={chosen()}
+                brush={props.brush}
+                onChoose={(category) => {
+                  choose(category);
+                  setPenShown(false);
+                  setView('detail');
+                }}
+                extra={
+                  props.penStatus === undefined
+                    ? undefined
+                    : {
+                        items: [
+                          { id: penEntry, label: 'Pressure', icon: 'pressure', trailing: props.penStatus, group: 'pen' }
+                        ],
+                        groups: [{ id: 'pen', label: 'Pen' }],
+                        selected: penShown() ? penEntry : undefined,
+                        onSelect: () => {
+                          setPenShown(true);
+                          setView('detail');
+                        }
                       }
-                    }
-              }
-            />
-          </div>
+                }
+              />
+            </div>
+          }
+        >
           <Show
             when={penShown() && props.penStatus !== undefined}
             fallback={
@@ -135,7 +146,7 @@ export function BrushStudio(props: {
               {props.penPane}
             </section>
           </Show>
-        </div>
+        </SettingsSplit>
         <div class={styles.studioPad} role="region" aria-label="Drawing pad">
           {props.pad}
         </div>

@@ -27,20 +27,22 @@
   white-space: nowrap;
 }
 
+/* The sets beside the brushes (`SettingsSplit`), a hairline between them. */
 .columns {
-  display: grid;
-  grid-template-columns: 150px 1fr;
+  --settings-split-list: 150px;
+  --settings-split-line: 0.5px solid var(--brush-library-line, var(--pc-hairline));
+
   height: var(--brush-library-height, min(440px, calc(100vh - var(--pc-bar-height) - 120px)));
   min-height: 200px;
   border-top: 0.5px solid var(--brush-library-line, var(--pc-hairline));
   color: var(--brush-library-ink, var(--pc-label));
+}
 
-  /* The sidebar look: two plates, the chosen set joined to the brushes' plate. */
-  &[data-sidebar] {
-    overflow: hidden;
-    border-top: 0;
-    border-radius: var(--brush-library-radius, 12px);
-  }
+/* The sidebar look: one plate, the sets in a Settings sidebar, a 1 px hairline before the brushes. */
+.sidebar {
+  --settings-split-line: 1px solid var(--brush-library-line, var(--pc-hairline));
+
+  border-top: 0;
 }
 
 .sets,
@@ -50,28 +52,37 @@
   overscroll-behavior: contain;
 }
 
+/* The brushes under the way back to the sets, which shows only where the two are two screens. */
+.brushPane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  background: var(--brush-library-pane, transparent);
+
+  > :first-child {
+    padding: 4px 12px 0 14px;
+  }
+}
+
 .brushes {
   display: flex;
+  grid-row: 2;
   flex-direction: column;
   gap: 2px;
   padding: 8px;
-  background: var(--brush-library-pane, transparent);
 }
 
 /* The sets as Procreate draws them: plain names with their counts, the chosen one on a blue pill. */
 .sets {
   --settings-list-ink: var(--brush-library-ink, var(--pc-label));
   --settings-list-quiet: var(--brush-library-quiet, var(--pc-secondary));
-  --settings-list-join: none;
-  --settings-list-selected-pill: var(--brush-library-chosen, var(--pc-blue));
+  --settings-list-selected: var(--brush-library-chosen, var(--pc-blue));
   --settings-list-selected-ink: var(--brush-library-ink, var(--pc-label));
   --settings-list-selected-quiet: rgb(255 255 255 / 0.8);
   --settings-list-icon-size: 0px;
   --settings-list-icon-gap: 0px;
   --settings-list-row-start: 10px;
-  --settings-list-join-radius: 6px;
   --settings-list-radius: 8px;
-  --settings-list-pill-end: 0px;
   --settings-list-hover: transparent;
   --settings-list-pressed: rgb(255 255 255 / 0.08);
   --settings-list-focus: var(--brush-library-chosen, var(--pc-blue));
@@ -81,35 +92,25 @@
   --settings-list-weight: 400;
 
   padding-block: 8px;
-  border-right: 0.5px solid var(--brush-library-line, var(--pc-hairline));
   background: var(--brush-library-sets, rgb(0 0 0 / 0.14));
 
-  /* The sidebar look: each set on its icon tile, the chosen one joined to the brushes in their plate's color. */
-  [data-sidebar] > & {
-    --settings-list-join: block;
-    --settings-list-selected: var(--brush-library-pane, var(--pc-card-solid));
-    --settings-list-selected-pill: transparent;
-    --settings-list-selected-ink: var(--brush-library-ink, var(--pc-label));
-    --settings-list-selected-quiet: var(--brush-library-quiet, var(--pc-secondary));
+  /* The sidebar look: each set on its icon tile, the chosen one on an accent pill in white. */
+  .sidebar > & {
+    --settings-list-selected-ink: #ffffff;
     --settings-list-icon: var(--brush-library-icon, rgb(255 255 255 / 0.9));
     --settings-list-icon-ink: var(--brush-library-icon-ink, #24262c);
-    --settings-list-mark: var(--brush-library-mark, var(--brush-library-chosen, var(--pc-blue)));
-    --settings-list-mark-ink: #ffffff;
     --settings-list-icon-size: 26px;
     --settings-list-icon-gap: 10px;
     --settings-list-row-start: 7px;
-    --settings-list-join-radius: 12px;
     --settings-list-radius: 9px;
-    --settings-list-pill-end: 12px;
     --settings-list-hover: rgb(255 255 255 / 0.07);
     --settings-list-pressed: rgb(255 255 255 / 0.14);
-    --settings-list-inset: 6px 0;
+    --settings-list-inset: 6px;
     --settings-list-text: 13px;
     --settings-list-small: 11px;
     --settings-list-weight: 500;
 
     padding-block: 6px;
-    border-right: 0;
   }
 }
 
@@ -136,7 +137,7 @@
     cursor: progress;
   }
 
-  [data-sidebar] & {
+  .sidebar & {
     border-radius: 9px;
   }
 }

@@ -45,7 +45,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("chooses the box's family in a joined sidebar, shows only its parts, and keeps the choice while the box closes", () => {
+it("chooses the box's family in a sidebar, shows only its parts, and keeps the choice while the box closes", () => {
   const { services } = owned(createTestServices);
   const sheet = owned(() => createSheet(() => 768));
   const kits = owned(createKits);
@@ -78,7 +78,9 @@ it("chooses the box's family in a joined sidebar, shows only its parts, and keep
   expect(rows().map((row) => [row.dataset.item, row.textContent])).toEqual(
     families.map((family) => [family.id, `${family.title}${family.kinds.length}`])
   );
-  expect(sidebar().querySelector('svg [data-join="fill"]')).not.toBeNull();
+  // The chosen family lies on the list's one sliding pill; nothing joins it to the parts.
+  expect(sidebar().firstElementChild!.getAttribute('aria-hidden')).toBe('true');
+  expect(sidebar().querySelector('[data-join]')).toBeNull();
   expect(
     rows()
       .filter((row) => row.getAttribute('aria-current') === 'page')
@@ -102,7 +104,57 @@ it("chooses the box's family in a joined sidebar, shows only its parts, and keep
   expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
 });
 
-it('shows the brush sets as a joined sidebar in LEGO and as pills in Procreate, the chosen set listing its brushes', () => {
+it("makes the box's families and a family's parts two screens, a family opening its parts under a way back", () => {
+  const { services } = owned(createTestServices);
+  const sheet = owned(() => createSheet(() => 768));
+  const kits = owned(createKits);
+  sheet.to('middle');
+  flush();
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartsTray
+        presets={services.presets.all}
+        sheet={sheet}
+        kits={kits}
+        over={false}
+        onLift={vi.fn()}
+        onLiftKit={vi.fn()}
+        onReset={vi.fn()}
+        ref={vi.fn()}
+        benchRef={vi.fn()}
+        kitsRef={vi.fn()}
+        overKits={false}
+        flashKit={undefined}
+      />
+    </LegoServicesContext>
+  ));
+  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Families of parts"]')!;
+  // The split holds the list, then the family's parts; which one a narrow box shows is its `data-view`.
+  const split = () => sidebar().parentElement!;
+  const pane = () => split().children[1] as HTMLElement;
+  expect(split().dataset.view).toBe('list');
+  expect(pane().tagName).toBe('SECTION');
+
+  sidebar().querySelector<HTMLButtonElement>('[data-item="Color"]')!.click();
+  flush();
+  expect(split().dataset.view).toBe('detail');
+  expect(pane().getAttribute('aria-label')).toBe('Color');
+  const back = [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Families')!;
+  expect(back.parentElement!.textContent).toBe('FamiliesColor');
+
+  // The screen chosen stays while the box closes and opens.
+  sheet.to('closed');
+  flush();
+  sheet.to('middle');
+  flush();
+  expect(split().dataset.view).toBe('detail');
+  [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Families')!.click();
+  flush();
+  expect(split().dataset.view).toBe('list');
+  expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
+});
+
+it('shows the brush sets as a sidebar in LEGO and as pills in Procreate, the chosen set listing its brushes', () => {
   const { services } = owned(createTestServices);
   const [brush, other] = builtInPresets;
   services.tools.preset = createSignal(other!.id)[0];
@@ -120,7 +172,8 @@ it('shows the brush sets as a joined sidebar in LEGO and as pills in Procreate, 
       option.getAttribute('aria-selected')
     ]);
 
-  expect(sets().parentElement!.hasAttribute('data-sidebar')).toBe(true);
+  expect(sets().parentElement!.className).toMatch(/sidebar/);
+  expect(sets().parentElement!.dataset.view).toBe('list');
   // The library opens on the set of the brush in use, with that brush marked.
   expect(sets().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('basic');
   expect(brushes()).toEqual([
@@ -133,6 +186,15 @@ it('shows the brush sets as a joined sidebar in LEGO and as pills in Procreate, 
   expect(sets().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('recent');
   expect(brushes()).toEqual([[brush!.name, 'false']]);
 
+  // Where the library is narrow, the set opens its brushes as a screen of their own, under a way back to the sets.
+  const pane = sets().parentElement!.children[1] as HTMLElement;
+  expect(sets().parentElement!.dataset.view).toBe('detail');
+  const back = [...pane.querySelectorAll('button')].find((button) => button.textContent === 'Sets')!;
+  expect(back.parentElement!.textContent).toBe('SetsRecent');
+  back.click();
+  flush();
+  expect(sets().parentElement!.dataset.view).toBe('list');
+
   document.body.replaceChildren();
   mount(() => (
     <BrushLibrary
@@ -144,7 +206,7 @@ it('shows the brush sets as a joined sidebar in LEGO and as pills in Procreate, 
       onChoose={vi.fn()}
     />
   ));
-  expect(sets().parentElement!.hasAttribute('data-sidebar')).toBe(false);
+  expect(sets().parentElement!.className).not.toMatch(/sidebar/);
   expect(sets().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('basic');
 });
 

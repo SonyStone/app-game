@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
-import { SettingsList } from '../../shared/ui/SettingsList';
+import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
 import type { SketchIconName } from '../../shared/ui/SketchIcon';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
@@ -18,9 +18,10 @@ import { opaqueData } from './partStorage';
  * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside the parts, where a
  * part dropped is put away, and apart from them the kits as live previews, the user's with a delete button and a name
  * to tap and rename, where a part, group or panel dropped is kept as a kit (the workbench above both in a narrow
- * view). The parts are chosen by family in a Settings-style sidebar (`SettingsList`) joined to the chosen family's
- * parts, each with its name; the box opens on the family chosen last, Tools at first. While it is sunk, the strip it
- * leaves puts away what is dropped on it.
+ * view). The parts are chosen by family in a Settings-style sidebar (`SettingsList`) beside the chosen family's
+ * parts, each with its name (`SettingsSplit`); where the parts' box is too narrow for both, the families and a family's
+ * parts are two screens with a way back. The box opens on the family and screen chosen last, Tools and the families
+ * at first. While it is sunk, the strip it leaves puts away what is dropped on it.
  */
 export function PartsTray(props: {
   presets: LegoServices['presets']['all'];
@@ -46,6 +47,8 @@ export function PartsTray(props: {
   const [pane, setPane] = createSignal<HTMLElement>();
   const [shelf, setShelf] = createSignal<HTMLElement>();
   const [familyId, setFamilyId] = createSignal('Tools');
+  /** The screen shown where the families and the parts are two screens. */
+  const [view, setView] = createSignal<'list' | 'detail'>('list');
   const families = () => partFamilies(props.presets);
   const family = () => families().find((candidate) => candidate.id === familyId()) ?? families()[0]!;
   const split = createSplit();
@@ -134,33 +137,44 @@ export function PartsTray(props: {
         />
         <div class={styles.trayShelves}>
           <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
+            <SettingsSplit
+              class={styles.boxSplit}
+              view={view()}
+              list={
+                <SettingsList
+                  class={styles.boxFamilies}
+                  label="Families of parts"
+                  items={families().map((candidate) => ({
+                    id: candidate.id,
+                    label: candidate.title,
+                    icon: familyIcons[candidate.id] ?? 'tools',
+                    trailing: String(candidate.kinds.length)
+                  }))}
+                  selected={family().id}
+                  onSelect={(id) => {
+                    setFamilyId(id);
+                    setView('detail');
+                  }}
+                />
+              }
+            >
+              <section ref={setPane} class={styles.boxPane} aria-label={family().title}>
+                <SettingsBack label="Families" title={family().title} onBack={() => setView('list')} />
+                <div class={styles.trayItems}>
+                  <For each={family().kinds}>
+                    {(kind) => (
+                      <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
+                    )}
+                  </For>
+                </div>
+                <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
+                  Reset board
+                </button>
+              </section>
+            </SettingsSplit>
             <Show when={props.over}>
               <span class={[styles.zoneLabel, styles.dropNote]}>Drop to put it away</span>
             </Show>
-            <SettingsList
-              class={styles.boxFamilies}
-              label="Families of parts"
-              items={families().map((candidate) => ({
-                id: candidate.id,
-                label: candidate.title,
-                icon: familyIcons[candidate.id] ?? 'tools',
-                trailing: String(candidate.kinds.length)
-              }))}
-              selected={family().id}
-              onSelect={setFamilyId}
-            />
-            <section ref={setPane} class={styles.boxPane} aria-label={family().title}>
-              <div class={styles.trayItems}>
-                <For each={family().kinds}>
-                  {(kind) => (
-                    <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
-                  )}
-                </For>
-              </div>
-              <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
-                Reset board
-              </button>
-            </section>
           </div>
           <div
             class={styles.splitter}

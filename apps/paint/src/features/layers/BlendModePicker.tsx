@@ -11,7 +11,7 @@ import styles from './LayersPanel.module.css';
  * list of the modes, each with what it does to two overlapping circles, rendered with the same composite as the
  * canvas, so that a mode can be chosen by its look rather than its name. The list is a plain Settings list
  * (`SettingsRows`): one row per mode with its circles on the row's tile, the current mode on a pill with its tile
- * ringed in the mark color; a host colors it through the list's `--settings-list-*` properties on `blendList`. It
+ * ringed in the pill's ink; a host colors it through the list's `--settings-list-*` properties on `blendList`. It
  * closes on a choice, Escape or a press outside, window resize or ancestor scroll; the arrow keys, Home and End move
  * through it.
  */

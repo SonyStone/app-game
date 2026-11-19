@@ -8,8 +8,8 @@
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
-  /* The raised surface a Settings-style sidebar's chosen row joins, as the brush studio's settings lie on. */
-  --lego-raised: rgb(74 78 89);
+  /* The hairline between a Settings-style sidebar and its detail on one dark plate. */
+  --lego-divider: rgb(255 255 255 / 0.1);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
 
   background: #faf8f4;
@@ -376,25 +376,27 @@
 }
 
 /*
- * The brush library in a popup, in LEGO's colors: its title and file commands on the popup's plate, the sets as a
- * Settings-style sidebar on the darkest plate joined to the brushes on the raised one, as in the brush studio.
+ * The brush library in a popup, in LEGO's colors: its title and file commands, then the sets as a Settings-style
+ * sidebar beside the brushes, all on the popup's plate, as in the brush studio. Narrower than 400 px, the sets and a
+ * set's brushes are two screens.
  */
 .brushesCard {
-  --brush-library-sets: rgb(24 25 29);
-  --brush-library-pane: var(--lego-raised);
+  --brush-library-sets: transparent;
+  --brush-library-pane: transparent;
   --brush-library-chosen: var(--lego-accent);
   --brush-library-ink: #ffffff;
   --brush-library-quiet: rgb(255 255 255 / 0.62);
-  --brush-library-line: transparent;
+  --brush-library-line: var(--lego-divider);
   --brush-library-icon: var(--lego-tile);
   --brush-library-icon-ink: var(--lego-ink);
   --brush-library-disabled: rgb(255 255 255 / 0.35);
-  --brush-library-radius: 12px;
   --brush-library-height: min(440px, calc(70vh - 64px));
+  --settings-split-back: var(--lego-accent);
 
+  container: brush-library / inline-size;
   display: flex;
   flex-direction: column;
-  width: min(470px, 80vw);
+  width: min(470px, calc(100vw - 32px));
   color: #ffffff;
 
   header {
@@ -403,9 +405,25 @@
   }
 }
 
+/* Narrow, the sets and a set's brushes are two screens, and the title goes over the file commands. */
+@container brush-library (width < 400px) {
+  .brushesCard > * {
+    --settings-split: narrow;
+  }
+
+  .brushesCard header {
+    flex-wrap: wrap;
+    padding-top: 8px;
+
+    h2 {
+      flex-basis: 100%;
+    }
+  }
+}
+
 /*
  * The rows of LEGO's plain lists and menus, such as the file commands, in the colors of the brush studio's sidebar:
- * white type, light icon tiles, the chosen row on a quiet pill with its tile lit in the accent.
+ * white type, light icon tiles, the chosen row on an accent pill, a pressed one on a quiet pill.
  */
 .settingsRows {
   --settings-list-ink: #ffffff;
@@ -414,9 +432,8 @@
   --settings-list-icon-ink: var(--lego-ink);
   --settings-list-hover: rgb(255 255 255 / 0.07);
   --settings-list-pressed: rgb(255 255 255 / 0.14);
-  --settings-list-selected-pill: rgb(255 255 255 / 0.12);
-  --settings-list-mark: var(--lego-accent);
-  --settings-list-mark-ink: #ffffff;
+  --settings-list-selected: var(--lego-accent);
+  --settings-list-selected-ink: #ffffff;
   --settings-list-focus: var(--lego-accent);
   --settings-list-inset: 0;
 }
@@ -903,6 +920,8 @@
   left: 0;
   /* Over the session's floating windows (900); popups and the carried part stay over it. */
   z-index: 920;
+  /* Sized by its left and right edges and its height, set as it is pulled. */
+  container: parts-tray / size;
   display: grid;
   grid-template-rows: 24px minmax(0, 1fr);
   overflow: hidden;
@@ -978,8 +997,8 @@
   padding: 4px 12px 12px;
 }
 
-/* A narrow view has no room beside the workbench: the parts go under it. */
-@media (max-width: 760px) {
+/* A narrow box has no room beside the workbench: the parts go under it. */
+@container parts-tray (width < 760px) {
   .trayContent {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(150px, 45%) minmax(0, 1fr);
@@ -988,6 +1007,17 @@
 
   .splitter[data-axis='x'] {
     display: none;
+  }
+}
+
+/* A narrow box at its middle stop on a phone: a lower workbench and kits, so the parts keep some room. */
+@container parts-tray (width < 760px) and (height < 460px) {
+  .trayContent {
+    grid-template-rows: minmax(110px, 32%) minmax(0, 1fr);
+  }
+
+  .trayContent .trayShelves {
+    grid-template-rows: minmax(0, 1fr) 12px minmax(72px, var(--kits-height, 38%));
   }
 }
 
@@ -1032,6 +1062,7 @@
 
 /* Beside the workbench, the parts over the kits: two boxes, one that puts away what is dropped, one that keeps it. */
 .trayShelves {
+  container: box-shelves / inline-size;
   display: grid;
   grid-template-rows: minmax(0, 1fr) 12px minmax(110px, var(--kits-height, 38%));
   min-height: 0;
@@ -1056,12 +1087,13 @@
 }
 
 /*
- * The parts: their families in a sidebar on the sheet's ground, joined to the chosen family's parts on a raised pane,
- * in the brush studio's colors. The list and the pane scroll on their own.
+ * The parts: their families in a sidebar beside the chosen family's parts, on one plate with a hairline between them
+ * (`SettingsSplit`), in the brush studio's colors. The list and the parts scroll on their own. Narrower than 380 px,
+ * the families and a family's parts are two screens.
  */
 .trayBody {
   position: relative;
-  grid-template-columns: clamp(112px, 34%, 160px) minmax(0, 1fr);
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   align-content: stretch;
   justify-items: stretch;
   gap: 0;
@@ -1090,6 +1122,18 @@
   white-space: nowrap;
 }
 
+.boxSplit {
+  --settings-split-list: clamp(112px, 34%, 160px);
+  --settings-split-line: 1px solid var(--lego-divider);
+  --settings-split-back: var(--lego-accent);
+}
+
+@container box-shelves (width < 380px) {
+  .trayBody {
+    --settings-split: narrow;
+  }
+}
+
 .boxFamilies {
   --settings-list-ink: #ffffff;
   --settings-list-quiet: rgb(255 255 255 / 0.62);
@@ -1097,11 +1141,10 @@
   --settings-list-icon-ink: var(--lego-ink);
   --settings-list-hover: rgb(255 255 255 / 0.07);
   --settings-list-pressed: rgb(255 255 255 / 0.14);
-  --settings-list-selected: var(--lego-raised);
-  --settings-list-mark: var(--lego-accent);
-  --settings-list-mark-ink: #ffffff;
+  --settings-list-selected: var(--lego-accent);
+  --settings-list-selected-ink: #ffffff;
   --settings-list-focus: var(--lego-accent);
-  --settings-list-inset: 6px 0;
+  --settings-list-inset: 6px;
 
   min-height: 0;
   padding-block: 6px;
@@ -1118,8 +1161,7 @@
   padding: 10px 12px 12px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: 10px;
-  background: var(--lego-raised);
+  color: #ffffff;
   touch-action: pan-y;
 }
 
@@ -1442,13 +1484,13 @@
   }
 }
 
-/* The chosen family's parts, on the raised plate the box's sidebar joins them to. */
+/* The chosen family's parts, on a popup's plate. */
 .spawnCard {
   position: absolute;
   max-width: 340px;
   padding: 10px 12px 12px;
   border-radius: 12px;
-  background: var(--lego-raised);
+  background: rgb(36 38 44);
   color: #ffffff;
   box-shadow: var(--lego-shadow);
 }
@@ -1919,21 +1961,17 @@
   --line: color-mix(in srgb, var(--lego-ink) 14%, transparent);
   --studio-ground: #faf8f5;
   --studio-gap: 8px;
-  /*
-   * The sheet under the categories is the darkest plate and the settings' surface the lightest one that still carries
-   * the parts' light tiles, so the chosen category, in the surface's color, reads as cut out of the sheet.
-   */
-  --studio-column: rgb(24 25 29 / 0.97);
+  --studio-column: var(--lego-plate);
   --studio-column-ink: #ffffff;
   --studio-column-quiet: rgb(255 255 255 / 0.62);
   --studio-column-radius: 12px;
-  --studio-raised: var(--lego-raised);
+  --studio-divider: var(--lego-divider);
   --studio-icon: var(--lego-tile);
   --studio-icon-ink: var(--lego-ink);
   --studio-hover: rgb(255 255 255 / 0.07);
   --studio-pressed: rgb(255 255 255 / 0.14);
-  --studio-mark: var(--lego-accent);
-  --studio-mark-ink: #ffffff;
+  --studio-selected: var(--lego-accent);
+  --studio-selected-ink: #ffffff;
   --studio-plate: var(--lego-plate);
   --studio-tile: var(--lego-tile);
   --studio-tile-ink: var(--lego-ink);
