@@ -31,6 +31,8 @@ import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
 import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
 import { StudioSettingRow } from './StudioSettingRow';
+import { createTileLook } from './tileLook';
+import { TileLookSwitch } from './TileLookSwitch';
 
 /**
  * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
@@ -82,6 +84,14 @@ export function LegoStudio(
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
+  /** TEMPORARY: the tile look trial's choice, applied to the whole editor; see `tileLook.ts`. */
+  const tileLook = createTileLook();
+  const tileLookClasses = () => {
+    const { look, squircle } = tileLook.look();
+    return [look !== 'A' && styles.fusedLook, look === 'C' && styles.mutedLook, squircle && styles.squircleLook]
+      .filter(Boolean)
+      .join(' ');
+  };
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
@@ -195,8 +205,9 @@ export function LegoStudio(
     <LegoServicesContext value={services}>
       <PaintEditor
         session={session}
-        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
+        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLookClasses()}`}
         style={{
+          '--lego-radius': `${tileLook.look().radius}px`,
           '--card-scale': `${card().scale}`,
           '--card-x': `${card().x}px`,
           '--card-y': `${card().y}px`,
@@ -275,6 +286,7 @@ export function LegoStudio(
             )}
           </Show>
           <div class={styles.controls}>
+            <TileLookSwitch look={tileLook.look()} onChange={tileLook.change} />
             <Show when={props.experimentsHref}>
               {(href) => (
                 <a class={styles.editButton} href={href()}>

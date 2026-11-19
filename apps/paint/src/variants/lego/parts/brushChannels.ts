@@ -43,6 +43,7 @@ export const brushChannels: readonly ValueChannel[] = [
       return [
         {
           id: `brush:${setting.id}`,
+          group: 'brush-values',
           label: brushSettingName(category, setting),
           short: brushSettingName(category, setting),
           unit: setting.unit,

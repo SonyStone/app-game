@@ -20,6 +20,7 @@ export const colorParts = [
   definePart({
     kind: 'color:swatch',
     family: 'color',
+    group: 'colors',
     section: 'Color',
     label: 'Swatch',
     owned: { parts: swatchPanelParts },
@@ -37,6 +38,7 @@ export const colorParts = [
   definePart({
     kind: 'color:wheel',
     family: 'color',
+    group: 'color-pickers',
     section: 'Color',
     label: 'Picker',
     looks: { looks: wheelLooks, auto: autoWheelLook },
@@ -62,6 +64,7 @@ export const colorParts = [
   definePart({
     kind: 'color:pair',
     family: 'color',
+    group: 'colors',
     section: 'Color',
     label: 'Fore/back',
     needs: (s, f) => {
@@ -78,10 +81,11 @@ export const colorParts = [
     },
     View: PairPart
   }),
-  definePart({ kind: 'color:hex', family: 'color', section: 'Color', label: 'Hex', needs: colorInput, View: HexPart }),
+  definePart({ kind: 'color:hex', family: 'color', group: 'colors', section: 'Color', label: 'Hex', needs: colorInput, View: HexPart }),
   definePart({
     kind: 'color:history',
     family: 'color',
+    group: 'colors',
     section: 'Color',
     label: 'History',
     needs: (s, f) =>
@@ -98,6 +102,7 @@ export const colorParts = [
   definePart({
     kind: 'color:palette',
     family: 'color',
+    group: 'colors',
     section: 'Color',
     label: 'Palette',
     needs: (s, f) =>
@@ -111,6 +116,7 @@ export const colorParts = [
   definePart({
     kind: 'color:harmony',
     family: 'color',
+    group: 'color-pickers',
     section: 'Color',
     label: 'Harmony',
     needs: guides,
@@ -119,6 +125,7 @@ export const colorParts = [
   definePart({
     kind: 'color:mask',
     family: 'color',
+    group: 'color-pickers',
     section: 'Color',
     label: 'Gamut mask',
     needs: guides,

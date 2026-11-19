@@ -30,6 +30,43 @@ export type PartBinding = {
 };
 
 /**
+ * The parts that belong together on a plate, finer than a definition's `family`: neighbouring parts of one group fuse
+ * into one block where the tile look fuses them (see `fusion.ts`). Every kind has exactly one group.
+ *
+ * - `brush`: what the pen draws with: a brush preset, the brush library, Brush settings.
+ * - `tools`: what a stroke does instead of painting: eraser, lasso, fill, transform, local undo.
+ * - `aids`: what shapes a stroke as it is drawn: symmetry, QuickShape.
+ * - `pen`: the pen's own pressure: its curve and its calibration.
+ * - `history`: undo and redo.
+ * - `file`: the file commands.
+ * - `colors`: the color itself and colors to take: swatch, fore/back, hex, history, palette, mixing.
+ * - `color-pickers`: pickers and what shapes them: the picker, harmony, gamut mask.
+ * - `color-channels`: one channel of the color each: hue, saturation, brightness, lightness.
+ * - `brush-values`: one number of the brush each: size, opacity and every brush studio setting.
+ * - `layer-props`: the active layer's own settings: name, blend mode, layer opacity.
+ * - `layer-order`: lock, clip, up, down, merge down.
+ * - `layer-manage`: add, duplicate, delete.
+ * - `layer-list`: the list of layers.
+ * - `layer-blending`: how the document mixes its colors (Smooth color).
+ */
+export type PartGroup =
+  | 'brush'
+  | 'tools'
+  | 'aids'
+  | 'pen'
+  | 'history'
+  | 'file'
+  | 'colors'
+  | 'color-pickers'
+  | 'color-channels'
+  | 'brush-values'
+  | 'layer-props'
+  | 'layer-order'
+  | 'layer-manage'
+  | 'layer-list'
+  | 'layer-blending';
+
+/**
  * Defines inert registry data. `needs` runs only when mounted under PartFrame, and may create owned memos.
  * It must not start subscriptions, timers, uploads or worker requests itself. Views receive only selected props.
  * Document-engine resources belong to explicitly mounted live views and must be absent in previews. Previews may
@@ -41,6 +78,8 @@ export function definePart<N extends object, P extends object = N>(spec: {
   studioOnly?: boolean;
   kind: string;
   family: 'color' | 'value' | 'action' | 'preset';
+  /** The parts this one fuses with when they lie side by side. */
+  group: PartGroup;
   label: string;
   icon?: SketchIconName;
   section: 'Tools' | 'Color' | 'Values' | 'Brushes' | 'Layers';
@@ -75,5 +114,5 @@ export function definePart<N extends object, P extends object = N>(spec: {
 /** The uniform registry entry erases props only after `definePart` has checked needs against its view. */
 export type PartDefinition = Pick<
   ReturnType<typeof definePart>,
-  'studioOnly' | 'kind' | 'family' | 'label' | 'icon' | 'section' | 'looks' | 'owned' | 'hasPopup' | 'render'
+  'studioOnly' | 'kind' | 'family' | 'group' | 'label' | 'icon' | 'section' | 'looks' | 'owned' | 'hasPopup' | 'render'
 >;

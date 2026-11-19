@@ -430,7 +430,7 @@
   overflow: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--line-color);
-  border-radius: 8px;
+  border-radius: var(--studio-menu-radius, 8px);
   background: var(--surface-color);
   color: var(--ink-color);
   box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
@@ -444,7 +444,7 @@
   gap: 8px;
   min-height: var(--target);
   padding: 0 10px 0 6px;
-  border-radius: 6px;
+  border-radius: var(--studio-menu-item-radius, 6px);
 
   &[aria-selected='true'] {
     background: var(--selected);
@@ -620,6 +620,7 @@
   min-height: 0;
   overflow: hidden;
   border-radius: var(--studio-column-radius, 0);
+  corner-shape: var(--studio-corner-shape, round);
   background: var(--sheet-color);
   color: var(--column-ink);
 }
@@ -1065,7 +1066,7 @@
   min-width: 220px;
   padding: 6px;
   border: 1px solid var(--line-color, #dedede);
-  border-radius: 10px;
+  border-radius: var(--studio-menu-radius, 10px);
   background: var(--surface-color, #f8f8f8);
   color: var(--ink-color, #444);
   box-shadow: 0 6px 24px rgb(0 0 0 / 18%);
@@ -1076,7 +1077,7 @@
     gap: 10px;
     min-height: var(--target, 44px);
     padding: 0 12px;
-    border-radius: 6px;
+    border-radius: var(--studio-menu-item-radius, 6px);
   }
 }
 

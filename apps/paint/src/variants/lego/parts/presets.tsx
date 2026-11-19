@@ -9,6 +9,7 @@ import { definePart, type PartBinding } from './definition';
 export const presetPart = definePart({
   kind: 'preset:*',
   family: 'preset',
+  group: 'brush',
   section: 'Brushes',
   label: 'Brush',
   icon: 'brush',

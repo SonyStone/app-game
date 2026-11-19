@@ -44,7 +44,8 @@ import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { kindLabel, lookOf, partDefinition, partLooks } from './parts';
+import { isLarge, joinsAttribute, partJoins, sameCells } from './fusion';
+import { kindLabel, lookOf, partDefinition, partGroup, partLooks } from './parts';
 import type { Popup } from './parts/definition';
 import { BlockView, PartsTray } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
@@ -295,6 +296,14 @@ export function BoardView(props: {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
   };
+  /**
+   * The ids of the carried parts, one per line: a string, so what reads it reruns when a carry starts or ends, not
+   * as the pointer moves.
+   */
+  const carriedIds = createMemo(() => {
+    const current = lifted();
+    return current?.carried ? [current.id, ...(current.block?.parts.map((part) => part.id) ?? [])].join('\n') : '';
+  });
 
   // Two fingers pull the box up or down while editing; the second one landing drops what the first one began.
   createTwoFingerSheet({
@@ -541,6 +550,16 @@ export function BoardView(props: {
   function PanelView(entryProps: { entry: { panel: Panel; frame: ReturnType<typeof panelFrame> } }) {
     const panel = () => entryProps.entry.panel;
     const frame = () => entryProps.entry.frame;
+    // The sides each part fuses along, from the parts' cells alone: recomputed as parts move, never per frame. A
+    // carried part's landing place fuses with nothing, nor does a part that failed to load.
+    const fusing = createMemo(
+      () => {
+        const carried = new Set(carriedIds().split('\n'));
+        return panel().parts.filter((part) => !carried.has(part.id) && !part[partData]?.invalid);
+      },
+      { equals: sameCells }
+    );
+    const joins = createMemo(() => partJoins(fusing(), partGroup));
     return (
       <div
         class={[styles.panel, panel().owner !== undefined && styles.owned]}
@@ -601,14 +620,13 @@ export function BoardView(props: {
           <For each={panel().parts} keyed={(part) => part.id}>
             {(part) => {
               // The lifted part, or a carried block's parts, show only where they would land.
-              const isLifted = () =>
-                lifted()?.carried === true &&
-                (lifted()?.id === part().id ||
-                  lifted()?.block?.parts.some((inBlock) => inBlock.id === part().id) === true);
+              const isLifted = () => isCarried(part().id);
               return (
                 <div
                   class={styles.part}
                   data-part={part().id}
+                  data-joins={joinsAttribute(joins().get(part().id))}
+                  data-large={isLarge(part().span) ? '' : undefined}
                   data-lifted={isLifted() ? '' : undefined}
                   data-open={chain().has(part().id) ? '' : undefined}
                   data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
@@ -671,6 +689,15 @@ export function BoardView(props: {
           </Show>
         </div>
       </div>
+    );
+  }
+
+  /** Whether part `id` is carried, alone or in a block, and shows only where it would land. */
+  function isCarried(id: string) {
+    const current = lifted();
+    return (
+      current?.carried === true &&
+      (current.id === id || current.block?.parts.some((inBlock) => inBlock.id === id) === true)
     );
   }
 

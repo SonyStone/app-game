@@ -1,5 +1,5 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
 import type { SketchIconName } from '../../shared/ui/SketchIcon';
@@ -9,7 +9,8 @@ import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { boxSections, kindLabel, lookOf } from './parts';
+import { isLarge, joinsAttribute, partJoins } from './fusion';
+import { boxSections, kindLabel, lookOf, partGroup } from './parts';
 import { opaqueData } from './partStorage';
 
 /**
@@ -484,12 +485,15 @@ function KitName(props: { name: string; onRename: (name: string) => void }) {
  */
 export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }) {
   const bounds = () => partsBounds(props.parts);
+  const joins = createMemo(() => partJoins(props.parts, partGroup));
 
   return (
     <For each={props.parts} keyed={(part) => part.id}>
       {(part) => (
         <div
           class={styles.part}
+          data-joins={joinsAttribute(joins().get(part().id))}
+          data-large={isLarge(part().span) ? '' : undefined}
           style={{
             left: `${(part().cell.column - bounds().column) * pitch}px`,
             top: `${(part().cell.row - bounds().row) * pitch}px`,
@@ -525,7 +529,11 @@ function KitPreview(props: { parts: readonly Part[]; cells: number }) {
   return (
     <div
       class={styles.kitPlate}
-      style={{ width: `${size().width * scale() + 8}px`, height: `${size().height * scale() + 8}px` }}
+      style={{
+        width: `${size().width * scale() + 8}px`,
+        height: `${size().height * scale() + 8}px`,
+        '--kit-scale': `${scale()}`
+      }}
     >
       <div
         class={styles.kitScaled}

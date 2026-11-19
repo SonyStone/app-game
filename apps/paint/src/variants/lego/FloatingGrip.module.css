@@ -26,7 +26,7 @@
   left: calc(50% - 15px);
   width: 30px;
   height: 4px;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.7) 1px, transparent 1.5px) 0 0 / 6px 4px;
+  background: radial-gradient(circle, var(--lego-plate-ink, #ffffff) 1px, transparent 1.5px) 0 0 / 6px 4px;
   opacity: 0.3;
   pointer-events: none;
 }

@@ -29,6 +29,7 @@ export const penPressureKind = 'value:pen-pressure-curve';
 export const pressureCurvePart = definePart({
   kind: penPressureKind,
   family: 'value',
+  group: 'pen',
   section: 'Tools',
   label: curveLabel,
   icon: 'pressure',
