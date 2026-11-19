@@ -3,10 +3,86 @@ import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
 import {
   brushSchema,
   versionOneDefaults as defaults,
+  parseDocument,
+  patch,
+  patchList,
   type BrushDocument
 } from '@app-game/paint-core/paintbrush/document';
 import { z } from 'zod';
 import type { BrushPreset } from './brushPresets';
+
+/** Materializes the runtime settings from a round preset's saved document. */
+export function readRoundPreset<T extends BrushPreset>(
+  preset: T,
+  text = nativePresetText(preset)
+): T & { nativeDocument: string } {
+  const doc = parseDocument(text, brushSchema);
+  const resolved = resolveNative(doc);
+  if (resolved.status !== 'supported') {
+    throw new Error(resolved.reasons.join(', '));
+  }
+
+  if (doc.id !== preset.id || resolved.ref) {
+    throw new Error('Expected a round document for ' + preset.id);
+  }
+
+  return { ...preset, nativeDocument: text, settings: resolved.settings };
+}
+
+/** Serializes saved groups while preserving opaque fields and exact JSON numbers from imported files. */
+export function nativePresetText(preset: BrushPreset, resources?: BrushDocument['resources']): string {
+  const kept = preset.paintbrush;
+  const current = nativeDocument(preset, resources);
+  let text = JSON.stringify(current);
+  if (kept) {
+    const original = parseDocument(kept.text, brushSchema);
+    const baseline = nativeDocument(
+      { ...preset, settings: kept.baseline, id: original.id, name: original.name, derivedFrom: original.derivedFrom },
+      resources
+    );
+    const key = original.definition.sequence.tips[0]!;
+    for (const generated of [current, baseline]) {
+      const name = generated.definition.sequence.tips[0]!;
+      if (key !== name) {
+        generated.definition.tips = { [key]: generated.definition.tips[name]! };
+        generated.definition.sequence.tips = [key];
+      }
+    }
+    text = kept.text;
+    function change(before: unknown, after: unknown, path: string[]) {
+      if (after === undefined || JSON.stringify(before) === JSON.stringify(after)) {
+        return;
+      }
+      const target = path.reduce<unknown>(
+        (node, key) =>
+          node && typeof node === 'object' && Object.hasOwn(node, key)
+            ? (node as Record<string, unknown>)[key]
+            : undefined,
+        original
+      );
+      if (path.join('/') === 'definition/dynamics' && Array.isArray(target) && Array.isArray(after)) {
+        text = patchList(
+          text,
+          path,
+          after.map((binding) => {
+            const keep = target.findIndex((previous) => previous.target === binding.target);
+            return keep >= 0 ? { keep } : { add: binding };
+          })
+        );
+        return;
+      }
+      if (target && typeof target === 'object' && after && typeof after === 'object' && !Array.isArray(after)) {
+        for (const [key, value] of Object.entries(after)) {
+          change((before as Record<string, unknown> | undefined)?.[key], value, [...path, key]);
+        }
+        return;
+      }
+      text = patch(text, '/' + path.map((key) => key.replace(/~/g, '~0').replace(/\//g, '~1')).join('/'), after);
+    }
+    change(baseline, current, []);
+  }
+  return text;
+}
 
 /** Converts saved groups, including explicit engine overrides, into version-one definition paths. */
 export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['resources']): BrushDocument {

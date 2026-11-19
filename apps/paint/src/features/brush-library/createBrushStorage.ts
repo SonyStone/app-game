@@ -98,7 +98,8 @@ export function createBrushStorage(options: {
           legacy &&
           (!isStoredPreset(old) ||
             old.abrDocument ||
-            !old.abrSource ||
+            old.nativeDocument ||
+            !!old.abrSource !== !!legacy.abrSource ||
             old.name !== legacy.name ||
             old.created !== legacy.created ||
             JSON.stringify(restorePreset(old).settings) !== JSON.stringify(legacy.settings))

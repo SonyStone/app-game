@@ -2,13 +2,13 @@ import type { BrushResource } from '@app-game/abr-paint/resources';
 import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
 import { assetId, encodePng } from '@app-game/paint-core/paintbrush/asset';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
-import { brushSchema, parseDocument, patch, patchList, singleManifest } from '@app-game/paint-core/paintbrush/document';
+import { singleManifest } from '@app-game/paint-core/paintbrush/document';
 import { photoshopExtensions } from './abrDocument';
 import { hostExtension, syncAbrPreset } from './abrHost';
 import { prepareDocument } from './abrPresetDocument';
 import type { BrushPreset } from './brushPresets';
 import type { BrushLibrary } from './createBrushLibrary';
-import { nativeDocument, resolveNative } from './nativeDocument';
+import { nativePresetText, resolveNative } from './nativeDocument';
 
 /** Original single-brush manifest, JSON and binary companions, suitable for IndexedDB structured clone. */
 export type RetainedBrush = {
@@ -54,55 +54,7 @@ export async function exportPaintbrush(preset: BrushPreset, images: readonly Bru
     }
     resources = { tip: { format: 'r8', width: image.width, height: image.height, sha256 } };
   }
-  const current = nativeDocument(preset, resources);
-  let text = JSON.stringify(current);
-  if (kept) {
-    const original = parseDocument(kept.text, brushSchema);
-    const baseline = nativeDocument(
-      { ...preset, settings: kept.baseline, id: original.id, name: original.name, derivedFrom: original.derivedFrom },
-      resources
-    );
-    const key = original.definition.sequence.tips[0]!;
-    for (const generated of [current, baseline]) {
-      const name = generated.definition.sequence.tips[0]!;
-      if (key !== name) {
-        generated.definition.tips = { [key]: generated.definition.tips[name]! };
-        generated.definition.sequence.tips = [key];
-      }
-    }
-    text = kept.text;
-    function change(before: unknown, after: unknown, path: string[]) {
-      if (after === undefined || JSON.stringify(before) === JSON.stringify(after)) {
-        return;
-      }
-      const target = path.reduce<unknown>(
-        (node, key) =>
-          node && typeof node === 'object' && Object.hasOwn(node, key)
-            ? (node as Record<string, unknown>)[key]
-            : undefined,
-        original
-      );
-      if (path.join('/') === 'definition/dynamics' && Array.isArray(target) && Array.isArray(after)) {
-        text = patchList(
-          text,
-          path,
-          after.map((binding) => {
-            const keep = target.findIndex((previous) => previous.target === binding.target);
-            return keep >= 0 ? { keep } : { add: binding };
-          })
-        );
-        return;
-      }
-      if (target && typeof target === 'object' && after && typeof after === 'object' && !Array.isArray(after)) {
-        for (const [key, value] of Object.entries(after)) {
-          change((before as Record<string, unknown> | undefined)?.[key], value, [...path, key]);
-        }
-        return;
-      }
-      text = patch(text, '/' + path.map((key) => key.replace(/~/g, '~0').replace(/\//g, '~1')).join('/'), after);
-    }
-    change(baseline, current, []);
-  }
+  const text = preset.nativeDocument ?? nativePresetText(preset, resources);
   return writeArchive(manifest, new Map([[file, text]]), entries);
 }
 

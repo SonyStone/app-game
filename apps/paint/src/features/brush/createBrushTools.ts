@@ -15,6 +15,7 @@ import {
   type PresetGroup
 } from '../brush-library';
 import { patchAbrValues } from '../brush-library/abrDocument';
+import { readRoundPreset } from '../brush-library/nativeDocument';
 
 /**
  * Owns the active tool and the brush settings captured by the next stroke. The brush and the eraser each use a preset
@@ -46,7 +47,7 @@ export function createBrushTools(options: {
   >();
   const clear = options.clear ?? clearRoundBrush;
   // Commands build on the last written state, so several commands in one event compose.
-  const [state, setState, currentState] = createImmediateSignal<ToolState>(initialState());
+  const [state, publish, currentState] = createImmediateSignal<ToolState>(documentSlots(initialState()));
   const brush = createMemo(() => toolBrush(state(), state().slot));
   const currentBrush = () => toolBrush(currentState(), currentState().slot);
   /** Changes are saved once the stored state has been read, so the initial state never overwrites it. */
@@ -254,6 +255,35 @@ export function createBrushTools(options: {
     }
   };
 
+  function setState(next: ToolState) {
+    publish(documentSlots(next, currentState()));
+  }
+
+  /** Keep the resolved brush for stroke start and for older readers of the stored state. */
+  function documentSlots(next: ToolState, previous?: ToolState): ToolState {
+    const slots = { ...next.slots };
+    for (const slot of brushSlots) {
+      const entry = slots[slot];
+      if (previous?.slots[slot] === entry || (entry.brush.engine && entry.brush.engine.id !== 'round')) {
+        continue;
+      }
+      const preset = { id: entry.preset, name: slot, settings: entry.brush, resourceIds: [] };
+      try {
+        const resolved = readRoundPreset(preset);
+        slots[slot] = {
+          preset: entry.preset,
+          brush: { ...entry.brush, ...resolved.settings },
+          nativeDocument: resolved.nativeDocument
+        };
+      } catch (cause) {
+        options.onError?.('Could not convert ' + slot + ' slot: ' + String(cause));
+        slots[slot] = { preset: entry.preset, brush: entry.brush };
+      }
+    }
+
+    return { ...next, slots };
+  }
+
   function documentEdit(id: string) {
     const edit = documentEdits.get(id);
     if (edit && edit.base !== options.library.find(id)?.abrDocument) {
@@ -380,7 +410,7 @@ export function createBrushTools(options: {
     }
     persisting = true;
     if (currentState() === initial) {
-      const restored = restoredState(stored, options.library.find);
+      const restored = restoredState(stored, options.library.find, options.onError);
       if (restored) {
         for (const slot of brushSlots) {
           const entry = restored.slots[slot];
@@ -441,7 +471,7 @@ type ToolState = {
   /** The brush tool whose brush the next stroke uses: the active tool, or the last brush tool while lassoing. */
   slot: BrushSlot;
   /** Each brush tool's preset and current brush; the brush's colors are unused, see `colors`. */
-  slots: Record<BrushSlot, { preset: string; brush: Brush }>;
+  slots: Record<BrushSlot, { preset: string; brush: Brush; nativeDocument?: string }>;
   eraserMode: EraserMode;
   /** Settings changed on the fly, by preset id. */
   changes: Record<string, Partial<Brush>>;
@@ -499,7 +529,11 @@ function storedPresetIds(stored: unknown): string[] {
  * refer to resources that are gone. Changes of other presets are kept without checking them, since those presets are
  * not loaded yet.
  */
-function restoredState(stored: unknown, find: (id: string) => BrushPreset | undefined): ToolState | undefined {
+function restoredState(
+  stored: unknown,
+  find: (id: string) => BrushPreset | undefined,
+  onError?: (message: string) => void
+): ToolState | undefined {
   if (!isRecord(stored) || stored.version !== 2 || !isRecord(stored.slots) || !isRecord(stored.colors)) {
     return undefined;
   }
@@ -520,6 +554,23 @@ function restoredState(stored: unknown, find: (id: string) => BrushPreset | unde
           brush: { ...brush, engine: preset.settings.engine, tool: preset.settings.tool ?? 'brush' }
         }
       : defaultSlot(slot, brush, find);
+    if (
+      preset &&
+      (!preset.settings.engine || preset.settings.engine.id === 'round') &&
+      typeof entry.nativeDocument === 'string'
+    ) {
+      try {
+        const resolved = readRoundPreset(preset, entry.nativeDocument);
+        slots[slot].brush = {
+          ...slots[slot].brush,
+          ...resolved.settings,
+          engine: preset.settings.engine,
+          tool: preset.settings.tool ?? 'brush'
+        };
+      } catch (cause) {
+        onError?.('Could not restore ' + slot + ' slot: ' + String(cause));
+      }
+    }
   }
 
   const tool =

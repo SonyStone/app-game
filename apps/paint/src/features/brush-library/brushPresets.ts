@@ -1,6 +1,8 @@
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 
+import { readRoundPreset } from './nativeDocument';
+
 /**
  * A named brush: its engine and the settings groups it carries, and the ids of the images its engine needs. The images
  * themselves load separately, only when the preset is used; see `BrushLibrary.resources`. Choosing a preset replaces
@@ -19,6 +21,8 @@ export type BrushPreset = {
   abrSource?: BrushAsset;
   /** Editable Photoshop document and the coverage it references, including dormant effects. */
   abrDocument?: string;
+  /** Saved round-brush document. Settings are its runtime projection and legacy fallback. */
+  nativeDocument?: string;
   assetIds?: readonly string[];
   /** Single-brush manifest and opaque companions retained on Photoshop archive import. */
   abrArchive?: Pick<NonNullable<BrushPreset['paintbrush']>, 'file' | 'manifest' | 'entries'>;
@@ -107,22 +111,24 @@ export function applyPreset(
 }
 
 /** Presets that ship with Paint, before the user's own presets. */
-export const builtInPresets: readonly BrushPreset[] = [
-  {
-    id: 'builtin:soft-round',
-    name: 'Soft round',
-    settings: presetSettings(defaultBrush(), defaultPresetGroups),
-    resourceIds: [],
-    builtIn: true
-  },
-  {
-    id: 'builtin:eraser',
-    name: 'Eraser',
-    settings: presetSettings({ ...defaultBrush(), tool: 'eraser' }, defaultPresetGroups),
-    resourceIds: [],
-    builtIn: true
-  }
-];
+export const builtInPresets: readonly BrushPreset[] = (
+  [
+    {
+      id: 'builtin:soft-round',
+      name: 'Soft round',
+      settings: presetSettings(defaultBrush(), defaultPresetGroups),
+      resourceIds: [],
+      builtIn: true
+    },
+    {
+      id: 'builtin:eraser',
+      name: 'Eraser',
+      settings: presetSettings({ ...defaultBrush(), tool: 'eraser' }, defaultPresetGroups),
+      resourceIds: [],
+      builtIn: true
+    }
+  ] satisfies BrushPreset[]
+).map((preset) => readRoundPreset(preset));
 
 /** Tip identity, replaced only by choosing another preset. */
 const fixedKeys = new Set<keyof Brush>(['engine', 'tool']);
