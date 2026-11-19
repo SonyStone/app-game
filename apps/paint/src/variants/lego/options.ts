@@ -18,11 +18,7 @@ export const optionsKey = 'paint.lego.options';
  */
 export const cellRange = { min: 24, max: 52, step: 2 } as const;
 
-/**
- * The cell a device starts with while the user has not chosen one and the host names none: the 28 px chosen with a
- * pen on the tablet, on every device for now. A phone used with a finger may later start larger; this is the one
- * place to decide that from the device.
- */
+/** The starting cell on every device when neither a stored choice nor a host size is available. */
 export function deviceCell() {
   return defaultCell;
 }

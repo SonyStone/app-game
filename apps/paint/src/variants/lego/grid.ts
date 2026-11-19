@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'solid-js';
 import type { Span } from './board';
 
-/** The cell edge in CSS pixels a device starts with: the size the user chose with a pen on the tablet (2026-11-19). */
-export const defaultCell = 28;
+/** The cell edge in CSS pixels for a fresh device. Layouts fit at 28 px, the smallest size found comfortable with a pen. */
+export const defaultCell = 32;
 /**
  * The cell the first layouts were made at. Plate radii keep their share of it at every size (18 px at 44), boards
  * stored before cells were counted keep their positions in its pitch, and a press area stays this large.

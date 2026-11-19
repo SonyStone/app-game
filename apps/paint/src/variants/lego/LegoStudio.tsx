@@ -65,7 +65,7 @@ export function LegoStudio(
   props: PaintVariantProps & {
     /**
      * The grid's cell edge in CSS pixels while the user has not chosen one: the grid size the user picks in Options,
-     * kept on the device, wins over it, and without either the device's default (`deviceCell`, 28 px) applies. A
+     * kept on the device, wins over it, and without either the device's default (`deviceCell`) applies. A
      * value that is not a positive number counts as absent.
      */
     cellSize?: number;

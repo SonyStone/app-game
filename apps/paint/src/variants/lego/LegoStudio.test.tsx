@@ -15,6 +15,7 @@ import type { EngineHandlers } from '../../features/engine/openPaintTransport';
 import type { PaintSession } from '../../features/session';
 import type { LegoServices } from './LegoServices';
 import { LegoStudio } from './LegoStudio';
+import { createGrid, defaultCell } from './grid';
 import { boxSections, partDefinition } from './parts';
 
 const wiring = vi.hoisted(() => ({
@@ -472,7 +473,7 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   storeParts(['action:brush-editor']);
   // A full-screen layout, so the board maps the drop to a place on it.
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
-  mount();
+  mount(28);
   const dialog = openStudio();
   const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
   expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
@@ -587,7 +588,7 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
       }
     })
   );
-  mount();
+  mount(28);
   const calibration = wiring.session!.pressureCalibration;
   expect(calibration.calibration()).toBeUndefined();
   const dialog = openStudio();
@@ -637,7 +638,7 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
   expect(calibration.curve().points[1]!.y).toBe(0.7);
   expect(board().querySelector('[data-point="1"]')!.getAttribute('aria-label')).toContain('brush 70%');
 
-  // The page's grip knows the curve is on the board, and puts another there at four by four.
+  // The page's grip knows the curve is on the board, and puts another there at six by six with 28 px cells.
   const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Pen pressure onto the board (on the board)"]')!;
   grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   flush();
@@ -937,7 +938,7 @@ it("Escape in a studio row's keypad closes the keypad and keeps the studio open"
 
 it("Enter on a studio row's grip puts the part on the board without dragging", () => {
   storeParts(['action:brush-editor']);
-  mount();
+  mount(28);
   const dialog = openStudio();
   const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
   grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
@@ -1000,16 +1001,16 @@ it('opens Options from its part and from the File menu, and closes it with Done,
 it("lays the grid out anew at once as Options' grid size changes, and keeps the size on the device", () => {
   storeParts(['action:options']);
   mount();
-  expect(editorStyle('--lego-cell')).toBe('28px');
+  expect(editorStyle('--lego-cell')).toBe(`${defaultCell}px`);
   const sheet = openOptions();
   const setting = sheet.querySelector<HTMLElement>('[data-part-kind="value:grid-size"]')!;
-  expect(setting.textContent).toContain('28px');
+  expect(setting.textContent).toContain(`${defaultCell}px`);
   // The sample of real parts lies in the section.
   const sample = sheet.querySelector<HTMLElement>('[data-grid-sample]')!;
   expect(sample.querySelectorAll('[data-part-kind]')).toHaveLength(7);
   const sampleWidth = () =>
     (sample.querySelector('[data-part-kind="value:size"]')!.parentElement!.parentElement as HTMLElement).style.width;
-  expect(sampleWidth()).toBe('124px');
+  expect(sampleWidth()).toBe(`${createGrid(() => defaultCell).length(4)}px`);
 
   typeValue(setting, '40');
   expect(editorStyle('--lego-cell')).toBe('40px');
@@ -1033,13 +1034,13 @@ it("lays the grid out anew at once as Options' grid size changes, and keeps the 
 it.each([
   { stored: { 'paint.lego.options': '{"cell":36}' }, cell: '36px', kept: '{"cell":36}' },
   {
-    stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true,"cellSize":32}' },
-    cell: '32px',
-    kept: '{"cell":32}'
+    stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true,"cellSize":28}' },
+    cell: '28px',
+    kept: '{"cell":28}'
   },
-  { stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true}' }, cell: '28px', kept: '{}' },
-  { stored: { 'paint.lego.options': '{not json' }, cell: '28px', kept: '{not json' },
-  { stored: { 'paint.lego.options': '{"cell":"big"}' }, cell: '28px', kept: '{"cell":"big"}' },
+  { stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true}' }, cell: `${defaultCell}px`, kept: '{}' },
+  { stored: { 'paint.lego.options': '{not json' }, cell: `${defaultCell}px`, kept: '{not json' },
+  { stored: { 'paint.lego.options': '{"cell":"big"}' }, cell: `${defaultCell}px`, kept: '{"cell":"big"}' },
   {
     stored: { 'paint.lego.options': '{"cell":30}', 'paint.lego.tile-look': '{"cellSize":44}' },
     cell: '30px',
@@ -1066,20 +1067,20 @@ it('starts at the host cell, or the default, when storage refuses every read and
   vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
     throw new DOMException('Denied', 'SecurityError');
   });
-  dispose = render(() => <LegoStudio cellSize={32} />, document.body);
+  dispose = render(() => <LegoStudio cellSize={38} />, document.body);
   flush();
-  expect(editorStyle('--lego-cell')).toBe('32px');
+  expect(editorStyle('--lego-cell')).toBe('38px');
   dispose();
   dispose = undefined;
   flush();
   document.body.replaceChildren();
   mount();
-  expect(editorStyle('--lego-cell')).toBe('28px');
+  expect(editorStyle('--lego-cell')).toBe(`${defaultCell}px`);
 });
 
 it("lets the user's stored grid size win over the host's cell", () => {
   localStorage.setItem('paint.lego.options', '{"cell":44}');
-  dispose = render(() => <LegoStudio cellSize={32} />, document.body);
+  dispose = render(() => <LegoStudio cellSize={38} />, document.body);
   flush();
   expect(editorStyle('--lego-cell')).toBe('44px');
 });
@@ -1220,8 +1221,8 @@ function pointer(target: EventTarget, type: string, x: number, y: number) {
 }
 
 /** Mounts the actual variant, including its storage callbacks, session and notices. */
-function mount() {
-  dispose = render(() => <LegoStudio />, document.body);
+function mount(cellSize?: number) {
+  dispose = render(() => <LegoStudio cellSize={cellSize} />, document.body);
   flush();
 }
 
@@ -1272,14 +1273,14 @@ it('relays a host cell change to mounted parts, captions and corners while keepi
   expect(localStorage.getItem('paint.lego')).toBe(board);
 });
 
-it('starts at 28 px cells, with the plate radius the same share of the cell', () => {
+it('starts at the default cell size, with the plate radius the same share of the cell', () => {
   storeParts(['action:undo']);
   mount();
   const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
   const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
-  expect(editor.style.getPropertyValue('--lego-cell')).toBe('28px');
-  expect(tile.style.width).toBe('60px');
-  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 28) / 44);
+  expect(editor.style.getPropertyValue('--lego-cell')).toBe(`${defaultCell}px`);
+  expect(tile.style.width).toBe(`${createGrid(() => defaultCell).length(2)}px`);
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * defaultCell) / 44);
 });
 
 it('composes the default board at 28 px with every caption the 44 px board showed, in less room', () => {
@@ -1292,7 +1293,7 @@ it('composes the default board at 28 px with every caption the 44 px board showe
   localStorage.clear();
   document.body.replaceChildren();
 
-  mount();
+  mount(28);
   const after = boardText();
   for (const [id, text] of before) {
     expect(after.get(id), id).toContain(text);
@@ -1306,7 +1307,7 @@ it('composes the default board at 28 px with every caption the 44 px board showe
 it('opens a board stored before the 28 px cells as it was stored, with no part missing, broken or overlapping', () => {
   const stored = JSON.stringify({ version: 5, board: boardAt44 });
   localStorage.setItem('paint.lego', stored);
-  mount();
+  mount(28);
   expect(document.querySelector('[aria-label^="Missing part"], [aria-label^="Broken part"]')).toBeNull();
   expect(localStorage.getItem('paint.lego')).toBe(stored);
   for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {

@@ -178,7 +178,7 @@ const part = (id: string, kind: string, column: number, row: number, columns: nu
  * The ready kits, each one of the library's color panels taken apart: Procreate's Colors (the pair, the Classic
  * square and sliders, history and palette), the OKLCH wheel (disk, lightness, harmony, gamut mask), the Desktop
  * color panel (pair and hex, the triangle, H/S/V numbers, history), and the panel a new swatch opens. They are
- * composed for the default 28 px cell, each named part as long as its name needs.
+ * composed for a 28 px cell, each named part as long as its name needs.
  */
 const readyKits: Kit[] = [
   layersKit,
