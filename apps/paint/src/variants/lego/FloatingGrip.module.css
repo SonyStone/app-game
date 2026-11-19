@@ -13,13 +13,13 @@
 }
 
 /*
- * The press area reaches 10 px above the plate, so with the 14 px band it is 24 px tall across the plate's whole
- * width, and never covers the first row of parts. It draws nothing.
+ * The press area reaches 14 px above the plate, so with the 14 px band it is 28 px tall across the plate's whole
+ * width, as tall as a cell of the default size, and never covers the first row of parts. It draws nothing.
  */
 .grip::before {
   content: '';
   position: absolute;
-  inset: -10px 0 0;
+  inset: -14px 0 0;
 }
 
 .grip:active {
