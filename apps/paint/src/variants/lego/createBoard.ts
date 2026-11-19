@@ -71,11 +71,12 @@ function swatchPanel(owner: string): Board['panels'][number] {
 }
 
 /**
- * The board a first visit sees: on the left everything a sketch, a fill and layers take (a brush, the brush library,
- * the eraser, the lasso, the fill and the transform, undo and redo with the size, the layers and the local undo) and
- * the file commands; the
- * color across the top (a swatch opening its panel of pickers, hue and brightness) and the size and opacity standing
- * on the right, in a mix of sizes that shows how a part changes as it grows.
+ * The board a first visit sees, composed for the default 28 px cell: on the left everything a sketch, a fill and
+ * layers take, the brush group on top (the brush, the brush library and Brush settings, undo and redo and the size
+ * beside them), the tools under it (the eraser, the lasso, the local undo, the fill and the transform) beside the file
+ * commands; the color across the top (a swatch opening its panel of pickers, hue and brightness) and the size and
+ * opacity standing on the right, in a mix of sizes that shows how a part changes as it grows. A part with a name is
+ * as long as its name needs; a button without one keeps a single cell.
  */
 export const defaultBoard: Board = {
   panels: [
@@ -84,34 +85,34 @@ export const defaultBoard: Board = {
       at: { x: 0.02, y: 0.12 },
       parts: [
         { id: 'soft', kind: 'preset:builtin:soft-round', cell: { column: 0, row: 0 }, span: { columns: 3, rows: 2 } },
+        { id: 'undo', kind: 'action:undo', cell: { column: 3, row: 0 }, span: { columns: 1, rows: 1 } },
+        { id: 'redo', kind: 'action:redo', cell: { column: 3, row: 1 }, span: { columns: 1, rows: 1 } },
         { id: 'brushes', kind: 'action:brushes', cell: { column: 0, row: 2 }, span: { columns: 3, rows: 1 } },
-        { id: 'eraser', kind: 'action:eraser', cell: { column: 0, row: 3 }, span: { columns: 3, rows: 1 } },
-        { id: 'lasso', kind: 'action:lasso', cell: { column: 0, row: 4 }, span: { columns: 1, rows: 1 } },
-        { id: 'fill', kind: 'action:fill', cell: { column: 1, row: 4 }, span: { columns: 1, rows: 1 } },
-        { id: 'transform', kind: 'action:transform', cell: { column: 2, row: 4 }, span: { columns: 1, rows: 1 } },
-        { id: 'undo', kind: 'action:undo', cell: { column: 0, row: 5 }, span: { columns: 1, rows: 1 } },
-        { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 5 }, span: { columns: 1, rows: 1 } },
-        { id: 'size-knob', kind: 'value:size', cell: { column: 2, row: 5 }, span: { columns: 1, rows: 1 } },
-        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
-        { id: 'brush-editor', kind: 'action:brush-editor', cell: { column: 0, row: 8 }, span: { columns: 3, rows: 1 } },
-        { id: 'file', kind: 'action:file', cell: { column: 0, row: 7 }, span: { columns: 3, rows: 1 } }
+        { id: 'size-knob', kind: 'value:size', cell: { column: 3, row: 2 }, span: { columns: 1, rows: 1 } },
+        { id: 'brush-editor', kind: 'action:brush-editor', cell: { column: 0, row: 3 }, span: { columns: 4, rows: 1 } },
+        { id: 'eraser', kind: 'action:eraser', cell: { column: 0, row: 4 }, span: { columns: 3, rows: 1 } },
+        { id: 'lasso', kind: 'action:lasso', cell: { column: 3, row: 4 }, span: { columns: 1, rows: 1 } },
+        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 5 }, span: { columns: 4, rows: 1 } },
+        { id: 'file', kind: 'action:file', cell: { column: 0, row: 6 }, span: { columns: 2, rows: 1 } },
+        { id: 'fill', kind: 'action:fill', cell: { column: 2, row: 6 }, span: { columns: 1, rows: 1 } },
+        { id: 'transform', kind: 'action:transform', cell: { column: 3, row: 6 }, span: { columns: 1, rows: 1 } }
       ]
     },
     {
       id: 'colors',
       at: { x: 0.3, y: 0.02 },
       parts: [
-        { id: 'color', kind: 'color:swatch', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 2 } },
-        { id: 'hue', kind: 'value:hue', cell: { column: 2, row: 0 }, span: { columns: 5, rows: 1 } },
-        { id: 'brightness', kind: 'value:brightness', cell: { column: 2, row: 1 }, span: { columns: 5, rows: 1 } }
+        { id: 'color', kind: 'color:swatch', cell: { column: 0, row: 0 }, span: { columns: 3, rows: 2 } },
+        { id: 'hue', kind: 'value:hue', cell: { column: 3, row: 0 }, span: { columns: 6, rows: 1 } },
+        { id: 'brightness', kind: 'value:brightness', cell: { column: 3, row: 1 }, span: { columns: 6, rows: 1 } }
       ]
     },
     {
       id: 'stroke',
       at: { x: 0.95, y: 0.3 },
       parts: [
-        { id: 'size', kind: 'value:size', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 4 } },
-        { id: 'opacity', kind: 'value:opacity', cell: { column: 1, row: 0 }, span: { columns: 1, rows: 4 } }
+        { id: 'size', kind: 'value:size', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 5 } },
+        { id: 'opacity', kind: 'value:opacity', cell: { column: 1, row: 0 }, span: { columns: 1, rows: 5 } }
       ]
     },
     swatchPanel('color'),

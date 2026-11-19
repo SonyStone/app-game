@@ -341,7 +341,8 @@ it('session color commands keep picker and mixing-palette policies distinct', ()
 it('disables symmetry until the restored document accepts commands, including after a renderer failure', async () => {
   storeParts(['action:symmetry', 'action:symmetry']);
   const saved = JSON.parse(localStorage.getItem('paint.lego')!);
-  saved.board.panels[0].parts[1].span = { columns: 2, rows: 2 };
+  // Three cells wide and two high: room for the list of modes under the toggle at the default cell.
+  saved.board.panels[0].parts[1].span = { columns: 3, rows: 2 };
   localStorage.setItem('paint.lego', JSON.stringify(saved));
   mount();
   const session = wiring.session!;
@@ -438,7 +439,8 @@ it("shows the brush's stroke preview above the studio's categories", () => {
 it('a studio row and the board part of one setting are the same control and show one value', () => {
   storeParts(['action:brush-editor', 'value:brush:flow']);
   const saved = JSON.parse(localStorage.getItem('paint.lego')!);
-  saved.board.panels[0].parts[1].span = { columns: 4, rows: 1 };
+  // As long as the studio's row, so both show the name beside the value.
+  saved.board.panels[0].parts[1].span = { columns: 6, rows: 1 };
   localStorage.setItem('paint.lego', JSON.stringify(saved));
   mount();
   const dialog = openStudio();
@@ -485,8 +487,10 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   expect(dialog.hasAttribute('data-away')).toBe(false);
   const landed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]')!;
   expect(landed).not.toBeNull();
-  expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
-  expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('44px');
+  // Just long enough for its name beside its value chip, one cell high: five cells for "Flow" and "100%".
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('28px');
+  expect(landed.querySelector('[role="slider"]')!.textContent).toMatch(/^Flow\d+%$/);
   expect(button('Edit')).toBeDefined();
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
@@ -575,7 +579,7 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
                 id: 'curve',
                 kind: 'value:brush:pressure-curve',
                 cell: { column: 0, row: 1 },
-                span: { columns: 4, rows: 4 }
+                span: { columns: 6, rows: 6 }
               }
             ]
           }
@@ -713,7 +717,7 @@ it("shows the pen's raw pressure on the pad as a dot on every copy of the curve,
                 id: 'curve',
                 kind: 'value:pen-pressure-curve',
                 cell: { column: 0, row: 1 },
-                span: { columns: 4, rows: 4 }
+                span: { columns: 6, rows: 6 }
               }
             ]
           }
@@ -811,7 +815,7 @@ it('opens the studio on the Pen page from the Pressure calibration part, never t
 it("measures from the board's curve in the studio, on its pad, and Cancel brings back the curve it opened with", () => {
   storeParts(['action:brush-editor', 'value:pen-pressure-curve']);
   const stored = JSON.parse(localStorage.getItem('paint.lego')!);
-  stored.board.panels[0].parts[1].span = { columns: 4, rows: 4 };
+  stored.board.panels[0].parts[1].span = { columns: 6, rows: 6 };
   stored.board.panels[0].parts[1].cell = { column: 0, row: 1 };
   localStorage.setItem('paint.lego', JSON.stringify(stored));
   mount();
@@ -940,7 +944,7 @@ it("Enter on a studio row's grip puts the part on the board without dragging", (
   flush();
   const placed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]');
   expect(placed).not.toBeNull();
-  expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
+  expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
   expect(placed!.closest('[data-panel]')!.getAttribute('data-panel')).not.toBe('test-panel');
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
@@ -1059,19 +1063,167 @@ function openBox() {
 
 it('relays a host cell change to mounted parts, captions and corners while keeping the stored board', () => {
   storeParts(['action:brush-editor']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[0].span = { columns: 3, rows: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
   const [cell, setCell] = createSignal(44);
   dispose = render(() => <LegoStudio cellSize={cell()} />, document.body);
   flush();
   const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
   const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
   const board = localStorage.getItem('paint.lego');
-  expect(tile.style.width).toBe('92px');
-  expect(tile.textContent).toContain('Brush settings');
+  expect(tile.style.width).toBe('140px');
+  expect(tile.textContent).toBe('Brush settings');
+  // Narrower, the name gives way to the short one where only that fits, then to the icon alone.
   setCell(32);
   flush();
   expect(document.querySelector('[data-part="test-0"]')).toBe(tile);
+  expect(tile.style.width).toBe('104px');
+  expect(tile.textContent).toBe('Settings');
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 32) / 44);
+  setCell(20);
+  flush();
   expect(tile.style.width).toBe('68px');
-  expect(tile.textContent).not.toContain('Brush settings');
-  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo(18 * 32 / 44);
+  expect(tile.textContent).toBe('');
   expect(localStorage.getItem('paint.lego')).toBe(board);
 });
+
+it('starts at 28 px cells, with the plate radius the same share of the cell', () => {
+  storeParts(['action:undo']);
+  mount();
+  const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
+  const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
+  expect(editor.style.getPropertyValue('--lego-cell')).toBe('28px');
+  expect(tile.style.width).toBe('60px');
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 28) / 44);
+});
+
+it('composes the default board at 28 px with every caption the 44 px board showed, in less room', () => {
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 5, board: boardAt44 }));
+  dispose = render(() => <LegoStudio cellSize={44} />, document.body);
+  flush();
+  const before = boardText();
+  const roomBefore = plateArea();
+  dispose();
+  localStorage.clear();
+  document.body.replaceChildren();
+
+  mount();
+  const after = boardText();
+  for (const [id, text] of before) {
+    expect(after.get(id), id).toContain(text);
+  }
+
+  // At 44 px the names showed; the parts that carry them did not shrink to icons.
+  expect([...before.values()].join(' ')).toContain('Brush settings');
+  expect(plateArea()).toBeLessThan(roomBefore * 0.65);
+});
+
+it('opens a board stored before the 28 px cells as it was stored, with no part missing, broken or overlapping', () => {
+  const stored = JSON.stringify({ version: 5, board: boardAt44 });
+  localStorage.setItem('paint.lego', stored);
+  mount();
+  expect(document.querySelector('[aria-label^="Missing part"], [aria-label^="Broken part"]')).toBeNull();
+  expect(localStorage.getItem('paint.lego')).toBe(stored);
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
+    const rects = [...panel.querySelectorAll<HTMLElement>('[data-part]')].map((part) => {
+      const [left, top, width, height] = ['left', 'top', 'width', 'height'].map((side) =>
+        parseFloat(part.style.getPropertyValue(side))
+      );
+      return { left: left!, top: top!, right: left! + width!, bottom: top! + height! };
+    });
+    for (const [index, a] of rects.entries()) {
+      expect(a.right).toBeLessThanOrEqual(parseFloat(panel.style.width));
+      for (const b of rects.slice(index + 1)) {
+        expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
+      }
+    }
+  }
+
+  // Where the text fits, the captions are back: three cells of 28 px name the eraser and shorten Brush settings.
+  const text = boardText();
+  expect(text.get('eraser')).toBe('Eraser');
+  expect(text.get('brush-editor')).toBe('Settings');
+  expect(text.get('brightness')).toMatch(/^B\d+%$/);
+});
+
+/** Each part's text on the board, by its id. */
+function boardText() {
+  return new Map(
+    [...document.querySelectorAll<HTMLElement>('[data-panel] [data-part]')].map((part) => [
+      part.getAttribute('data-part')!,
+      part.textContent ?? ''
+    ])
+  );
+}
+
+/** The area in square CSS pixels the board's plates take. */
+function plateArea() {
+  return [...document.querySelectorAll<HTMLElement>('[data-panel]')].reduce(
+    (sum, panel) => sum + parseFloat(panel.style.width) * parseFloat(panel.style.height),
+    0
+  );
+}
+
+/** The default board as it was composed for 44 px cells, before 2026-11-19. */
+const boardAt44 = (() => {
+  const part = (id: string, kind: string, column: number, row: number, columns = 1, rows = 1, look?: string) => ({
+    id,
+    kind,
+    cell: { column, row },
+    span: { columns, rows },
+    ...(look ? { looks: { [`${columns}x${rows}`]: look } } : {})
+  });
+  return {
+    panels: [
+      {
+        id: 'tools',
+        at: { x: 0.02, y: 0.12 },
+        parts: [
+          part('soft', 'preset:builtin:soft-round', 0, 0, 3, 2),
+          part('brushes', 'action:brushes', 0, 2, 3),
+          part('eraser', 'action:eraser', 0, 3, 3),
+          part('lasso', 'action:lasso', 0, 4),
+          part('fill', 'action:fill', 1, 4),
+          part('transform', 'action:transform', 2, 4),
+          part('undo', 'action:undo', 0, 5),
+          part('redo', 'action:redo', 1, 5),
+          part('size-knob', 'value:size', 2, 5),
+          part('local-undo', 'action:local-undo', 0, 6, 3),
+          part('brush-editor', 'action:brush-editor', 0, 8, 3),
+          part('file', 'action:file', 0, 7, 3)
+        ]
+      },
+      {
+        id: 'colors',
+        at: { x: 0.3, y: 0.02 },
+        parts: [
+          part('color', 'color:swatch', 0, 0, 2, 2),
+          part('hue', 'value:hue', 2, 0, 5),
+          part('brightness', 'value:brightness', 2, 1, 5)
+        ]
+      },
+      {
+        id: 'stroke',
+        at: { x: 0.95, y: 0.3 },
+        parts: [part('size', 'value:size', 0, 0, 1, 4), part('opacity', 'value:opacity', 1, 0, 1, 4)]
+      },
+      {
+        id: 'layers-panel',
+        at: { x: 0.17, y: 0.5 },
+        floating: true,
+        parts: [
+          part('layers-name', 'layers:name', 0, 0, 5),
+          part('layers-blend', 'layers:blend', 0, 1, 3),
+          part('layers-opacity', 'value:layer-opacity', 3, 1, 2, 1, 'number'),
+          ...['lock', 'clip', 'up', 'down', 'merge-down'].map((kind, column) =>
+            part(`layers-${kind}`, `layer:${kind}`, column, 2)
+          ),
+          part('layers-list', 'layers:list', 0, 3, 5, 5, 'wide'),
+          ...['add', 'duplicate', 'delete'].map((kind, column) => part(`layers-${kind}`, `layer:${kind}`, column, 8)),
+          part('layers-smooth', 'layers:smooth-color', 3, 8, 2)
+        ]
+      }
+    ]
+  };
+})();

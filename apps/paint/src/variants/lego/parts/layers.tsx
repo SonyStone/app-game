@@ -1,10 +1,21 @@
 import { createMemo, merge, onSettled, Show } from 'solid-js';
-import { BlendModePicker } from '../../../features/layers/BlendModePicker';
+import { blendModeLabel, BlendModePicker } from '../../../features/layers/BlendModePicker';
 import { layerCommand, LayerList, LayerName, type LayerCommand } from '../../../features/layers/LayerControls';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import styles from '../LayerParts.module.css';
 import type { LegoServices } from '../LegoServices';
+import { anyRoom, lookFits, type LookSpec } from '../looks';
+import { fits, fitsLines, type TextStyle } from '../textFit';
 import { definePart, type PartBinding } from './definition';
+
+/**
+ * The layer list's looks: rows wrapped under their name, and wide rows from where a row has room for its eye, its
+ * thumbnail, a name and its grip side by side. Declared before the definitions, which read it as they are made.
+ */
+const listLooks: readonly LookSpec[] = [
+  { id: 'narrow', label: 'Narrow', min: anyRoom },
+  { id: 'wide', label: 'Wide', min: { width: 136, height: 0 } }
+];
 
 /** Ordinary LEGO views of shared layer state. Only the mounted list acquires thumbnails, outside preview. */
 export const layerParts = [
@@ -15,13 +26,7 @@ export const layerParts = [
     section: 'Layers',
     label: 'Layer list',
     icon: 'book',
-    looks: {
-      looks: [
-        { id: 'narrow', label: 'Narrow', min: { columns: 1, rows: 1 } },
-        { id: 'wide', label: 'Wide', min: { columns: 3, rows: 1 } }
-      ],
-      auto: (span) => (span.columns >= 3 ? 'wide' : 'narrow')
-    },
+    looks: { looks: listLooks, auto: (room) => (lookFits(listLooks[1]!, room) ? 'wide' : 'narrow') },
     needs: (s, f) =>
       merge(layerNeeds(s, f), {
         get narrow() {
@@ -85,7 +90,7 @@ export const layerParts = [
           return linear();
         },
         get compact() {
-          return f.width < 92;
+          return !fits(blendModeLabel(mode()), blendStyle, f.width - blendChrome);
         },
         onChange: f.command((blend: Parameters<typeof BlendModePicker>[0]['mode']) =>
           s.layers.action({
@@ -111,7 +116,7 @@ export const layerParts = [
         return s.layers.state().linearBlending;
       },
       get wide() {
-        return f.width >= 92;
+        return labelFits('Smooth color', f);
       },
       onPress: f.command(() => s.layers.blending(!s.layers.state().linearBlending))
     }),
@@ -130,6 +135,25 @@ export const layerParts = [
     )
   })
 ];
+
+/**
+ * Whether a layer button's `label` fits beside its icon (see `.action` in `LayerParts.module.css`): on as many lines
+ * as the part's height holds, breaking between words.
+ */
+function labelFits(label: string, frame: Pick<PartBinding, 'width' | 'height'>) {
+  const lines = Math.floor((frame.height - 2 * layerButtonPadding) / (layerLabelStyle.size * layerLabelLine));
+  return fitsLines(label, layerLabelStyle, frame.width - layerButtonChrome, lines);
+}
+
+const layerLabelStyle: TextStyle = { size: 11 };
+const layerLabelLine = 1.1;
+const layerButtonPadding = 4;
+/** The pixels a layer button's padding, its 20 px icon and the gap take beside its label. */
+const layerButtonChrome = 2 * layerButtonPadding + 20 + 6;
+
+/** How the blend mode button sets its name, and the pixels its padding, the 24 px preview and the gap take. */
+const blendStyle: TextStyle = { size: 13 };
+const blendChrome = 2 * 4 + 24 + 6;
 
 /** Add, duplicate and delete manage the layers; the others order and combine the active layer. */
 function layerCommandGroup(command: LayerCommand) {
@@ -158,7 +182,7 @@ function commandPart(command: LayerCommand) {
         return layerCommand(command, s.layers.state(), s.layers.ready());
       },
       get wide() {
-        return f.width >= 92;
+        return labelFits(layerCommand(command, s.layers.state(), s.layers.ready()).label, f);
       },
       onPress: f.command(() => s.layers.action(layerCommand(command, s.layers.state(), s.layers.ready()).action))
     }),

@@ -19,10 +19,18 @@ it.each([44, 32])('round trips cells, snaps a resize and frames a plate at %i px
   });
 });
 
-it('uses the default for an absent or invalid host size', () => {
+it('uses the 28 px default for an absent or invalid host size', () => {
   for (const size of [undefined, 0, -8, NaN, Infinity]) {
-    expect(createGrid(() => size).cell()).toBe(44);
+    expect(createGrid(() => size).cell()).toBe(28);
   }
+});
+
+it('measures a part in pixels and finds the least span for a room at any cell size', () => {
+  const grid = createGrid(() => 28);
+  expect(grid.room({ columns: 4, rows: 1 })).toEqual({ width: 124, height: 28 });
+  expect(grid.minimumSpan({ width: 140, height: 0 })).toEqual({ columns: 5, rows: 1 });
+  expect(grid.minimumSpan({ width: 124, height: 28 })).toEqual({ columns: 4, rows: 1 });
+  expect(createGrid(() => 44).minimumSpan({ width: 140, height: 140 })).toEqual({ columns: 3, rows: 3 });
 });
 
 it('keeps a four-cell look choice until its controls fit again', () => {
@@ -45,14 +53,18 @@ it('keeps reference cell and pitch literals out of editor geometry', () => {
     const source = readFileSync(here + name, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/[^\n]*/g, '');
-    // RGB channels, the reference declaration and pressure-graph sampling are independent of layout.
+    // RGB channels, the reference declaration, pressure-graph sampling and the rooms in CSS pixels that looks need,
+    // whatever the cell, are independent of the grid's cells.
     const code = source
-      .replace(/(?:>=|<) (?:92|140|188)\b|Math.max\(92,|\? 92 :/g, '')
       .replace(/rgba?\([^)]*\)/g, '')
+      .replace(/\{ width: \d+, height: \d+ \}/g, '')
       .replace('const referenceCell = 44;', '')
       .replace('width: 236, Picker: Triangle', '')
       .replace('const pictureSamples = 48;', '');
-    return /(?<![\w.#])(?:(?:44|48|92|140|188|236|284)(?:px)?|(?:36|40)px)\b/.test(code) ? [name] : [];
+    // Captions follow their text, not the cell size (see `textFit.ts`).
+    return /(?<![\w.#])(?:(?:44|48|92|140|188|236|284)(?:px)?|(?:36|40)px)\b|cell\(\) >= referenceCell/.test(code)
+      ? [name]
+      : [];
   });
   expect(offenders).toEqual([]);
 });

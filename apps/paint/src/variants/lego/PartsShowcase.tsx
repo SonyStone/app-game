@@ -2,7 +2,7 @@ import { createMemo, createSignal, For } from 'solid-js';
 import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
 import { cellGap, maxSpan, type Span } from './board';
 import { attachCataloguePreview, createCatalogueFixture } from './createCatalogueFixture';
-import { referenceCell, useGrid } from './grid';
+import { createGrid, referenceCell, useGrid } from './grid';
 import { LegoServicesContext } from './LegoServices';
 import lego from './LegoStudio.module.css';
 import { lookFits } from './looks';
@@ -21,7 +21,8 @@ export function PartsShowcase() {
     catalogueSpecimens(
       fixture.presets[0]!.id,
       columns() && rows() ? { columns: columns(), rows: rows() } : undefined,
-      true
+      true,
+      grid
     )
   );
 
@@ -124,29 +125,37 @@ export function PartsShowcase() {
   );
 }
 
-/** All kind/look pairs, optionally at representative size steps. Uses the board look chooser's fit predicate. */
-export function catalogueSpecimens(presetId: string, span?: Span, sizeSteps = false) {
+/**
+ * All kind/look pairs, optionally at representative size steps on `grid`. Uses the board look chooser's fit
+ * predicate. The natural sizes are those of the default cell.
+ */
+export function catalogueSpecimens(
+  presetId: string,
+  span?: Span,
+  sizeSteps = false,
+  grid: Pick<ReturnType<typeof createGrid>, 'minimumSpan' | 'room'> = createGrid(() => undefined)
+) {
   return partDefinitions.flatMap((definition) =>
     (definition.looks?.looks ?? [undefined]).flatMap((look) => {
-      const minimum = look?.min ?? { columns: 1, rows: 1 };
+      const minimum = look ? grid.minimumSpan(look.min) : { columns: 1, rows: 1 };
       const natural =
         definition.kind === 'color:wheel'
-          ? { columns: 5, rows: 5 }
+          ? { columns: 7, rows: 7 }
           : definition.family === 'value'
-            ? { columns: 4, rows: 1 }
+            ? { columns: 6, rows: 1 }
             : definition.family === 'action'
-              ? { columns: 3, rows: 2 }
-              : { columns: 4, rows: 2 };
+              ? { columns: 4, rows: 2 }
+              : { columns: 6, rows: 3 };
       const candidates = span
         ? [span]
         : sizeSteps
           ? [minimum, { columns: 2, rows: 1 }, { columns: 2, rows: 2 }, natural]
-          : [look?.min ?? { columns: 2, rows: 2 }];
+          : [look ? minimum : { columns: 2, rows: 2 }];
       const seen = new Set<string>();
       return candidates
         .filter((size) => {
           const key = `${size.columns}x${size.rows}`;
-          if (seen.has(key) || (look && !lookFits(look, size))) {
+          if (seen.has(key) || (look && !lookFits(look, grid.room(size)))) {
             return false;
           }
 

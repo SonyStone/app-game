@@ -5,10 +5,11 @@ import { hsvToHex, luminance, type Hsv } from '../../../features/color/hsv';
 import { pressHandlers, type Press } from '../../../shared/ui/pressHandlers';
 import { ScrubNumber } from '../../../shared/ui/ScrubNumber';
 import { geometricFraction, geometricValue } from '../../procreate/sliderScale';
-import { referenceCell, useGrid } from '../grid';
+import { useGrid, type createGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
-import type { LookSpec } from '../looks';
+import { anyRoom, type LookSpec } from '../looks';
+import { fitText, textWidth, widestText, type TextStyle } from '../textFit';
 import { brushChannels } from './brushChannels';
 import { definePart, type PartBinding, type PartGroup } from './definition';
 import { LevelPicker, moveLevelFocus, NumberKeypad, unitSuffix, ValueEntryCard, type ValueLevel } from './ValueEntry';
@@ -16,12 +17,25 @@ import { LevelPicker, moveLevelFocus, NumberKeypad, unitSuffix, ValueEntryCard, 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
 export type ValueKind = (typeof channels)[number]['id'] | `brush:${string}`;
 
-/** Shared looks resolved by looks.ts, independently of the channel's app binding. */
+/**
+ * Shared looks resolved by looks.ts, independently of the channel's app binding. A slider needs `sliderLength` along
+ * either side, so that its thumb has somewhere to travel: two cells at every cell size the trial offers, one never.
+ */
 const looks: readonly LookSpec[] = [
-  { id: 'knob', label: 'Knob', min: { columns: 1, rows: 1 } },
-  { id: 'slider', label: 'Slider', min: { columns: 2, rows: 1 }, fits: (span) => span.columns >= 2 || span.rows >= 2 },
-  { id: 'number', label: 'Number', min: { columns: 1, rows: 1 } }
+  { id: 'knob', label: 'Knob', min: anyRoom },
+  {
+    id: 'slider',
+    label: 'Slider',
+    min: { width: sliderLength(), height: 0 },
+    fits: lookFitsSlider
+  },
+  { id: 'number', label: 'Number', min: anyRoom }
 ];
+
+/** The least length in CSS pixels along which a value shows as a slider. */
+function sliderLength() {
+  return 56;
+}
 
 /** A channel's complete read/write, range and presentation contract. Adding a value needs only one spec. */
 export type ValueChannel = {
@@ -194,19 +208,27 @@ export function defineValuePart(channel: ValueChannel) {
     section: channel.section ?? 'Values',
     studioOnly: channel.studioOnly,
     label: channel.label,
-    looks: { looks, auto: (span) => (span.columns === 1 && span.rows === 1 ? 'knob' : 'slider') },
+    looks: { looks, auto: (room) => (lookFitsSlider(room) ? 'slider' : 'knob') },
     needs: (services, frame) => valueNeeds(services, frame, channel),
     View: ValuePart,
     popup: {
       needs: (services, frame) => valueNeeds(services, frame, channel),
       View: (props) => (
         <div class={styles.popupSlider}>
-          <ValuePart {...props} look="slider" span={{ columns: 5, rows: 1 }} />
+          <ValuePart {...props} look="slider" span={popupSliderSpan} />
         </div>
       )
     }
   });
 }
+
+/** Whether a value part with `room` is long enough for a slider. */
+function lookFitsSlider(room: { width: number; height: number }) {
+  return Math.max(room.width, room.height) >= sliderLength();
+}
+
+/** The span a value's popup slider shows at, as `.popupSlider` lays it out: room for the longest name and its value. */
+const popupSliderSpan = { columns: 7, rows: 1 };
 
 /** The LEGO look translates cells into the controlled input's orientation and captions. */
 function ValuePart(props: ReturnType<typeof valueNeeds>) {
@@ -219,7 +241,21 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
   }
   const width = () => size()?.width || grid.length(props.span.columns);
   const height = () => size()?.height || grid.length(props.span.rows);
-  const longSide = () => Math.max(width(), height());
+  const vertical = () => props.span.rows > props.span.columns;
+  // A new value re-decides the captions only when its text takes another width.
+  const widths = createMemo(() => valueTextWidths(props.texts), { equals: sameWidths });
+  const captions = createMemo(() =>
+    valueCaptions({
+      width: width(),
+      height: height(),
+      vertical: vertical(),
+      cell: grid.cell(),
+      label: props.label,
+      short: props.short,
+      unit: props.unit,
+      widths: widths()
+    })
+  );
   return (
     <div
       ref={setElement}
@@ -235,17 +271,118 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
     >
       <ValueControl
         {...props}
-        vertical={props.span.rows > props.span.columns}
-        caption={width() >= 92 ? (width() >= 140 ? props.label : props.short) : undefined}
-        unit={width() >= 92 ? props.unit : undefined}
-        sliderCaption={
-          grid.cell() >= referenceCell || longSide() >= 85 + props.label.length * 8 ? props.label : props.short
-        }
-        named={longSide() >= 140}
+        vertical={vertical()}
+        caption={captions().caption}
+        unit={captions().unit ? props.unit : undefined}
+        sliderCaption={captions().sliderCaption}
+        chip={captions().chip}
+        knobText={captions().bareKnob ? props.knobNumber : props.text}
       />
     </div>
   );
 }
+
+/**
+ * What a value part shows in its room, each decided by whether its text fits (see `textFit.ts`), never by a size
+ * threshold. `widths` are those of the widest texts the value takes (see `valueTextWidths`).
+ *
+ * - Number look: the field must hold the widest number. Beside it the caption shows the full name when it fits, the
+ *   short name when only that does, and none otherwise; the unit shows when it fits too. Without a caption the field
+ *   takes the compact type and padding.
+ * - Slider look, along its long side: the value chip shows whenever the chip with the widest text fits between the
+ *   label's paddings, so the number never vanishes while its chip fits; the name shows beside it, full or short, when
+ *   both fit with the gap between them.
+ * - Knob look: the value with its unit when that fits the knob's face, the number alone otherwise.
+ */
+export function valueCaptions(part: {
+  width: number;
+  height: number;
+  vertical: boolean;
+  /** The cell edge in CSS pixels, which sizes the knob's face. */
+  cell: number;
+  label: string;
+  short: string;
+  unit: string;
+  widths: ReturnType<typeof valueTextWidths>;
+}) {
+  const unit = unitSuffix(part.unit);
+  const unitWidth = unit ? widestText([unit], unitStyle) + unitPadding : 0;
+  const full = numberBorder + part.widths.number;
+  const caption = fitText(
+    part.width - 2 * numberPadding - numberGap - full - unitWidth,
+    numberCaptionStyle,
+    part.label,
+    part.short
+  );
+  const compactRoom = part.width - 2 * compactPadding - numberBorder - 2 * compactInset - part.widths.compactNumber;
+
+  const length = part.vertical ? part.height : part.width;
+  const padding = part.vertical ? verticalLabelPadding : labelPadding;
+  const chipWidth = Math.max(chipMinimum, part.widths.chip + chipInset);
+  const chip = chipWidth + 2 * padding + 1 <= length;
+  const sliderCaption = chip
+    ? fitText(length - 2 * padding - chipWidth - labelGap - captionInset, sliderCaptionStyle, part.label, part.short)
+    : undefined;
+
+  const face = Math.min(knobFace, part.cell - knobInset);
+
+  return {
+    caption,
+    unit: caption !== undefined ? unit !== '' : unit !== '' && compactRoom - unitWidth >= 1,
+    chip,
+    sliderCaption,
+    bareKnob: part.widths.knob + 1 > face
+  };
+}
+
+/**
+ * The widths in CSS pixels of the widest of `texts` a value can show (see `valueTexts`): as its chip and its knob set
+ * them, and its bare numbers in the number look's full and compact type.
+ */
+export function valueTextWidths(texts: ReturnType<typeof valueTexts>) {
+  return {
+    chip: widestText(texts.chip, chipStyle),
+    knob: widestText(texts.chip, knobStyle),
+    number: widestText(texts.numbers, numberStyle),
+    compactNumber: widestText(texts.numbers, compactNumberStyle)
+  };
+}
+
+function sameWidths(a: ReturnType<typeof valueTextWidths>, b: ReturnType<typeof valueTextWidths>) {
+  return a.chip === b.chip && a.knob === b.knob && a.number === b.number && a.compactNumber === b.compactNumber;
+}
+
+/** How the number look sets its caption, number and unit (see `.number`, `.numberCaption` and `ScrubNumber`). */
+const numberCaptionStyle: TextStyle = { size: 12, weight: 600 };
+const numberStyle: TextStyle = { size: 13, tabular: true };
+const compactNumberStyle: TextStyle = { size: 11, tabular: true };
+const unitStyle: TextStyle = { size: 11 };
+const numberPadding = 4;
+const numberGap = 2;
+const compactPadding = 2;
+const compactInset = 1;
+const numberBorder = 2;
+const unitPadding = 8;
+
+/** The length of a value chip that holds the widest of `texts`. */
+function chipLength(texts: readonly string[]) {
+  return Math.max(chipMinimum, widestText(texts, chipStyle) + chipInset);
+}
+
+/** How a slider sets its name and value chip (see `.sliderLabel` and `.valueChip`). */
+const sliderCaptionStyle: TextStyle = { size: 13, weight: 600 };
+const chipStyle: TextStyle = { size: 13, weight: 600, tabular: true };
+const labelPadding = 10;
+const verticalLabelPadding = 8;
+const labelGap = 16;
+const captionInset = 10;
+const chipInset = 16;
+const chipMinimum = 30;
+
+/** How a knob sets its value on its face (see `.knob`): a circle of at most `knobFace`, `knobInset` inside the cell. */
+const knobStyle: TextStyle = { size: 12, weight: 600 };
+const knobFace = 32;
+const knobInset = 4;
 
 /**
  * Controlled knob, slider or scrub field. Input callbacks edit live; commit records the settled edit; cancel
@@ -262,8 +399,11 @@ function ValueControl(
     vertical: boolean;
     caption?: string;
     unit?: string;
-    sliderCaption: string;
-    named: boolean;
+    sliderCaption?: string;
+    /** Whether the slider shows its value chip; see `valueCaptions`. */
+    chip: boolean;
+    /** What the knob's face shows. */
+    knobText: string;
   }
 ) {
   let start = 0;
@@ -384,7 +524,7 @@ function ValueControl(
               }}
               {...scrub}
             >
-              <span>{props.text}</span>
+              <span>{props.knobText}</span>
             </div>
           }
         >
@@ -407,7 +547,7 @@ function ValueControl(
             <span class={styles.fill} />
             <Show when={props.levels}>{(levels) => <LevelTicks levels={levels()} vertical={props.vertical} />}</Show>
             <span class={styles.thumb} />
-            <Show when={props.named}>
+            <Show when={props.chip}>
               <span class={styles.sliderLabel}>
                 <span>{props.sliderCaption}</span>
                 <span
@@ -500,6 +640,7 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
   const snap = (next: number) =>
     channel.levels?.reduce((best, level) => (Math.abs(level.value - next) < Math.abs(best.value - next) ? level : best))
       .value ?? next;
+  const formatted = (of: number) => formatValue(channel, of);
   let start: { value: number; hsv: Hsv; color: string };
   let captured: ReturnType<NonNullable<ValueChannel['capture']>> | undefined;
   const write = (next: number, hsv: Hsv) => {
@@ -557,10 +698,18 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     scale: channel.scale,
     wrap: channel.wrap,
     get text() {
-      return active()
-        ? (channel.format?.(roundedValue(value(), channel.step)) ??
-            `${roundedValue(value(), channel.step)}${unitSuffix(channel.unit)}`)
-        : '—';
+      return active() ? formatted(value()) : '—';
+    },
+    /** The value without its unit, which a knob too small for the unit shows. */
+    get knobNumber() {
+      return active() ? `${roundedValue(value(), channel.step)}` : '—';
+    },
+    /**
+     * The texts the value can show, which its captions make room for: as the chip shows them, and as bare numbers
+     * in the number look, at the current value and both ends of its range.
+     */
+    get texts() {
+      return valueTexts(channel, active() ? [value(), min(), max()] : undefined);
     },
     get color() {
       return channel.colored ? color.value() : undefined;
@@ -595,6 +744,47 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
     }),
     onOpen: (anchor: Element) => frame.onPopup(anchor, { kind: 'part', partKind: frame.kind })
   };
+}
+
+/** `value` as `channel`'s chip and knob show it. */
+function formatValue(channel: ValueChannel, value: number) {
+  const rounded = roundedValue(value, channel.step);
+  return channel.format?.(rounded) ?? `${rounded}${unitSuffix(channel.unit)}`;
+}
+
+/**
+ * The texts a value of `channel` can show, which its captions make room for: as the chip shows `values` (its current
+ * value and both ends of its range), and as bare numbers in the number look; a dash for a value that does not apply.
+ */
+function valueTexts(channel: ValueChannel, values: readonly number[] | undefined) {
+  return {
+    chip: values ? values.map((value) => formatValue(channel, value)) : ['—'],
+    numbers: values ? values.map((value) => `${roundedValue(value, channel.step)}`) : ['—']
+  };
+}
+
+/**
+ * The span of a one-row slider of the value part `kind` just long enough to show its full name beside its value
+ * chip, as a part lifted from the brush studio takes; `undefined` for a kind that is no value part.
+ */
+export function namedSliderSpan(
+  kind: string,
+  services: LegoServices,
+  minimumSpan: ReturnType<typeof createGrid>['minimumSpan']
+) {
+  const channel = ([...channels, ...brushChannels] as readonly ValueChannel[]).find(
+    (candidate) => `value:${candidate.id}` === kind
+  );
+  if (!channel) {
+    return undefined;
+  }
+
+  const active = channel.active?.(services) ?? true;
+  const ends = [channel.minimum?.(services) ?? channel.min, channel.max(services)];
+  const { chip } = valueTexts(channel, active ? [channel.read(services), ...ends] : undefined);
+  const length =
+    2 * labelPadding + captionInset + labelGap + chipLength(chip) + textWidth(channel.label, sliderCaptionStyle) + 1;
+  return { columns: minimumSpan({ width: length, height: 0 }).columns, rows: 1 };
 }
 
 function gradient(stops: readonly string[]) {

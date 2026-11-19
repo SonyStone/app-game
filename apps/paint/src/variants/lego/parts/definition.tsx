@@ -2,6 +2,7 @@ import type { JSX } from '@solidjs/web';
 import type { Component } from 'solid-js';
 import type { SketchIconName } from '../../../shared/ui/SketchIcon';
 import type { Panel, Span } from '../board';
+import type { Room } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import type { LookSpec } from '../looks';
 
@@ -15,6 +16,8 @@ export type Popup = { kind: 'part'; partKind: string } | { kind: 'looks'; id: st
 export type PartBinding = {
   /** Available tile width in CSS pixels. */
   readonly width: number;
+  /** Available tile height in CSS pixels. */
+  readonly height: number;
   kind: string;
   span: Span;
   look: string;
@@ -87,7 +90,8 @@ export function definePart<N extends object, P extends object = N>(spec: {
   section: 'Tools' | 'Color' | 'Values' | 'Brushes' | 'Layers';
   /** Composition supplied once when a new owner is taken from the box or spawn menu. */
   owned?: Pick<Panel, 'parts'>;
-  looks?: { looks: readonly LookSpec[]; auto: (span: Span) => string };
+  /** The looks the part can take and the one it takes by itself in a part with `room`. */
+  looks?: { looks: readonly LookSpec[]; auto: (room: Room) => string };
   needs: (services: LegoServices, frame: PartBinding) => N;
   View: Component<N>;
   popup?: { needs: (services: LegoServices, frame: PartBinding) => P; View: Component<P> };

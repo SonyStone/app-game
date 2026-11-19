@@ -31,6 +31,7 @@ import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
 import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
+import { namedSliderSpan } from './parts/values';
 import { StudioSettingRow } from './StudioSettingRow';
 import { createTileLook } from './tileLook';
 import { TileLookSwitch } from './TileLookSwitch';
@@ -59,7 +60,7 @@ import { TileLookSwitch } from './TileLookSwitch';
  */
 export function LegoStudio(
   props: PaintVariantProps & {
-    /** Positive grid cell edge in CSS pixels. A stored trial size takes precedence. */
+    /** Positive grid cell edge in CSS pixels, `defaultCell` (28) when absent. A stored trial size takes precedence. */
     cellSize?: number;
     /** Host-owned installation, offline status and build identity in the File menu. */
     applicationControls?: JSX.Element;
@@ -117,6 +118,8 @@ export function LegoStudio(
       setAbrViewer('open');
     }
   );
+  /** A setting's part as it leaves the studio: a slider with room for its full name and value. */
+  const liftedSpan = (kind: string) => namedSliderSpan(kind, services, grid.minimumSpan) ?? studioPartSpan;
   const closeStudio = () => {
     setPenMeasuring(false);
     setStudioOpen(false);
@@ -344,8 +347,8 @@ export function LegoStudio(
                       look="slider"
                       label={brushSettingName(category, setting)}
                       onBoard={onBoard(kind)}
-                      onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
-                      onPlace={() => boardControls()?.place(kind, studioPartSpan)}
+                      onLift={(event) => boardControls()?.lift(event, kind, liftedSpan(kind))}
+                      onPlace={() => boardControls()?.place(kind, liftedSpan(kind))}
                     />
                   );
                 }}
@@ -379,10 +382,13 @@ export function LegoStudio(
 const cardMargin = 16;
 
 /**
- * The span of a number's part lifted from the brush studio, and the span it shows at in its row: four cells across, as
- * a slider shows its name and value.
+ * The span a number's part shows at in its studio row, where it fills the row whatever its span: a slider one cell
+ * high. A part lifted from the row takes the span its name and value need (`namedSliderSpan`).
  */
-const studioPartSpan: Span = { columns: 4, rows: 1 };
+const studioPartSpan: Span = { columns: 6, rows: 1 };
 
-/** The span the pen pressure curve's part shows at on the studio's Pen page: a large graph, its name above it. */
-const studioCurveSpan: Span = { columns: 8, rows: 6 };
+/**
+ * The span the pen pressure curve's part shows at on the studio's Pen page: a large graph with its name and buttons
+ * above it, at least 380 by 316 CSS pixels at the default cell.
+ */
+const studioCurveSpan: Span = { columns: 12, rows: 10 };

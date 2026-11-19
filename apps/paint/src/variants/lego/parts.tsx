@@ -1,4 +1,5 @@
 import type { Part } from './board';
+import type { Room } from './grid';
 import type { LegoServices } from './LegoServices';
 import { resolveLook } from './looks';
 import { actionParts } from './parts/actions';
@@ -63,8 +64,8 @@ export const boxSections = ['Tools', 'Color', 'Values', 'Layers'].map((title) =>
     .map((definition) => definition.kind)
 }));
 
-/** Resolves the part's chosen or automatic look using the shared look resolver. */
-export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>, room = part.span) {
+/** Resolves the look of `part`, which has `room` (see `Grid.room`), using the shared look resolver. */
+export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>, room: Room) {
   const options = partLooks(part.kind);
   return options && resolveLook(part.looks, part.span, options.looks, options.auto(room), room);
 }

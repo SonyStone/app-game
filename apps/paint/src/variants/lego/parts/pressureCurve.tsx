@@ -4,10 +4,11 @@ import { createSignal, Show } from 'solid-js';
 import { pressHandlers } from '../../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import type { Span } from '../board';
-import { useGrid } from '../grid';
+import { referenceCell, useGrid, type Room } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
-import type { LookSpec } from '../looks';
+import { anyRoom, lookFits, type LookSpec } from '../looks';
+import { fits, type TextStyle } from '../textFit';
 import { definePart, type PartBinding } from './definition';
 import { NumberKeypad, ValueEntryCard } from './ValueEntry';
 
@@ -21,9 +22,9 @@ export const penPressureKind = 'value:pen-pressure-curve';
  * The pen's pressure curve as a part: the device's calibration, which every brush receives pressure through, edited
  * on the same free-point graph as the Pen pressure window (`PressureCurveEditor`). Every copy, on the board and in the
  * brush studio's Pen page, edits the one curve, so they always agree; edits apply at once to the next stroke. From
- * {@link pressureCurveMinimum} up it is the graph, from four rows with its name and two buttons above it: Measure
- * (the three calibration steps, which run on the brush studio's Pen page, opening the studio there if needed) and
- * Reset (the straight line). Smaller, it is a small picture of the curve that opens the graph in a popup. A tap on a
+ * {@link pressureCurveMinimum} up it is the graph; where a head still leaves the graph that much room, two buttons
+ * above it, Measure (the three calibration steps, which run on the brush studio's Pen page, opening the studio there
+ * if needed) and Reset (the straight line), with its name before them where the name fits. Smaller, it is a small picture of the curve that opens the graph in a popup. A tap on a
  * point's value above the graph opens the keypad for it. While a pen presses the studio's pad or the graph, a dot
  * shows its raw pressure on the curve, over a histogram of the pressures drawn on the pad.
  */
@@ -35,12 +36,8 @@ export const pressureCurvePart = definePart({
   label: curveLabel,
   icon: 'pressure',
   looks: {
-    looks: [
-      { id: 'icon', label: 'Picture', min: { columns: 1, rows: 1 } },
-      { id: 'curve', label: 'Curve', min: pressureCurveMinimum() }
-    ] satisfies readonly LookSpec[],
-    auto: (span) =>
-      span.columns >= pressureCurveMinimum().columns && span.rows >= pressureCurveMinimum().rows ? 'curve' : 'icon'
+    looks: curveLooks(),
+    auto: (room) => (lookFits(curveLooks()[1]!, room) ? 'curve' : 'icon')
   },
   needs: curveNeeds,
   View: PressureCurvePart,
@@ -54,13 +51,33 @@ export const pressureCurvePart = definePart({
   }
 });
 
-/** The span a curve takes on the board when it is lifted from the studio: room for its points and its buttons. */
-export const pressureCurveSpan: Span = { columns: 4, rows: 4 };
+/**
+ * The span a curve takes on the board when it is lifted from the studio: room for its points, its buttons and its
+ * name, 188 CSS pixels square at the default cell.
+ */
+export const pressureCurveSpan: Span = { columns: 6, rows: 6 };
 
-/** The smallest span the graph shows at: three cells each way, where the pen can still tell its points apart. */
-export function pressureCurveMinimum(): Span {
-  return { columns: 3, rows: 3 };
+/** The smallest room the graph shows at, where the pen can still tell its points apart. */
+export function pressureCurveMinimum(): Room {
+  return { width: 140, height: 140 };
 }
+
+/** The curve's looks: a picture of it, and the graph. */
+function curveLooks(): readonly LookSpec[] {
+  return [
+    { id: 'icon', label: 'Picture', min: anyRoom },
+    { id: 'curve', label: 'Curve', min: pressureCurveMinimum() }
+  ];
+}
+
+/**
+ * How `.curveHead` lays out: two `referenceCell` press areas less 8 px as buttons, 4 px apart and from the top, the
+ * caption 10 px in from the left in the editor's semibold type.
+ */
+const curveButton = referenceCell - 8;
+const curveHeadHeight = 4 + curveButton;
+const curveHeadChrome = 10 + 2 * (4 + curveButton) + 4;
+const curveCaptionStyle: TextStyle = { size: 13, weight: 600 };
 
 /** The graph, or the small picture of the curve that opens it, and the keypad a point's value opens. */
 function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
@@ -84,9 +101,13 @@ function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
           </div>
         }
       >
-        <Show when={grid.length(props.span.rows) >= 188}>
+        <Show when={grid.length(props.span.rows) - curveHeadHeight >= pressureCurveMinimum().height}>
           <div class={styles.curveHead}>
-            <span class={styles.curveCaption}>{props.label}</span>
+            <span class={styles.curveCaption}>
+              <Show when={fits(props.label, curveCaptionStyle, grid.length(props.span.columns) - curveHeadChrome)}>
+                {props.label}
+              </Show>
+            </span>
             <button
               type="button"
               class={styles.curveButton}

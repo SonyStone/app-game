@@ -1,5 +1,5 @@
 import { createSignal } from 'solid-js';
-import { referenceCell } from './grid';
+import { defaultCell, referenceCell } from './grid';
 
 /**
  * TEMPORARY, a trial: the corners of LEGO's plates and tiles, switched for the whole editor by a developer control
@@ -9,7 +9,8 @@ import { referenceCell } from './grid';
  * `radius` is the one number every corner derives from: a plate's corner in CSS pixels at the reference cell size; a tile's is it less the
  * plate's padding, and so on inwards (see `LegoStudio.module.css`). `squircle` draws every corner with
  * `corner-shape: squircle` where the browser has it, its radii grown so a corner reads as round as the arc `radius`
- * names. The look is kept per device and never in the board.
+ * names. `cellSize` is the cell edge the trial sets, an even number from 28 to 44 CSS pixels; absent, the editor uses
+ * its own (`defaultCell`, 28). The look is kept per device and never in the board.
  */
 export type TileLook = { cellSize?: number; radius: number; squircle: boolean };
 
@@ -69,7 +70,7 @@ function normalTileLook(look: TileLook): TileLook {
 
   return {
     ...(typeof look.cellSize === 'number' && Number.isFinite(look.cellSize)
-      ? { cellSize: Math.min(referenceCell, Math.max(28, Math.round(look.cellSize / 2) * 2)) }
+      ? { cellSize: Math.min(referenceCell, Math.max(defaultCell, Math.round(look.cellSize / 2) * 2)) }
       : {}),
     radius: Math.max(radiusRange.min, Math.min(radiusRange.max, radius)),
     squircle: look.squircle === true

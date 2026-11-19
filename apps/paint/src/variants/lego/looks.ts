@@ -1,4 +1,5 @@
 import { findPart, replacePanel, type Board, type Part, type Span } from './board';
+import type { Room } from './grid';
 
 /**
  * Looks: one part, many ways to show it. A part's kind says what it does (the color); a look says how it shows at a
@@ -7,38 +8,42 @@ import { findPart, replacePanel, type Board, type Part, type Span } from './boar
  */
 
 /**
- * A look a part can take: `min` is the smallest span it fits, and `fits` decides for looks that fit more shapes than
- * every span from `min` up, such as a slider, which needs two cells along either side.
+ * A look a part can take: `min` is the smallest room in CSS pixels it fits, whatever the cell size, and `fits` decides
+ * for looks that fit more shapes than every room from `min` up, such as a slider, which needs length along either
+ * side.
  */
-export type LookSpec = { id: string; label: string; min: Span; fits?: (span: Span) => boolean };
+export type LookSpec = { id: string; label: string; min: Room; fits?: (room: Room) => boolean };
+
+/** The `min` of a look that fits any part, one cell or more. */
+export const anyRoom: Room = { width: 0, height: 0 };
 
 /** The key a look chosen at `span` is kept under in `Part.looks`. */
 export function spanKey(span: Span) {
   return `${span.columns}x${span.rows}`;
 }
 
-/** Whether `look` fits a part of `span`. */
-export function lookFits(look: LookSpec, span: Span) {
-  return look.fits ? look.fits(span) : fits(look.min, span);
+/** Whether `look` fits a part with `room`. */
+export function lookFits(look: LookSpec, room: Room) {
+  return look.fits ? look.fits(room) : look.min.width <= room.width && look.min.height <= room.height;
 }
 
-/** Whether a look of at least `min` fits in `span`. */
-export function fits(min: Span, span: Span) {
-  return min.columns <= span.columns && min.rows <= span.rows;
+/** Whether a part of `span` covers `at` both ways. */
+function covers(span: Span, at: Span) {
+  return at.columns <= span.columns && at.rows <= span.rows;
 }
 
 /**
- * The look a part of `span` shows. Of the looks chosen at sizes up to `span` both ways that still fit it, the one
- * chosen at the largest size wins, as Android shows a widget's largest layout its size admits: a look chosen at 2×2
- * also shows at 3×3 until something else is chosen there. Without such a choice the part shows `auto`.
+ * The look a part of `span` with `room` shows. Of the looks chosen at sizes up to `span` both ways that still fit its
+ * room, the one chosen at the largest size wins, as Android shows a widget's largest layout its size admits: a look
+ * chosen at 2×2 also shows at 3×3 until something else is chosen there. Without such a choice the part shows `auto`.
  */
-export function resolveLook(chosen: Part['looks'], span: Span, looks: readonly LookSpec[], auto: string, room = span) {
+export function resolveLook(chosen: Part['looks'], span: Span, looks: readonly LookSpec[], auto: string, room: Room) {
   let best: { id: string; area: number; columns: number } | undefined;
 
   for (const [key, id] of Object.entries(chosen ?? {})) {
     const at = parseSpanKey(key);
     const look = looks.find((candidate) => candidate.id === id);
-    if (!at || !look || !fits(at, span) || !lookFits(look, room)) {
+    if (!at || !look || !covers(span, at) || !lookFits(look, room)) {
       continue;
     }
 

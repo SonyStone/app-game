@@ -3,10 +3,21 @@ import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
-import { referenceCell, useGrid } from '../grid';
+import { useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
+import { anyRoom, lookFits, type LookSpec } from '../looks';
+import { fitText, type TextStyle } from '../textFit';
 import { definePart, type PartBinding, type PartGroup } from './definition';
+
+/**
+ * Symmetry's looks: the toggle, and with room for a list of the modes under it, wide enough for "Horizontal" and two
+ * rows high, the toggle and that list. Declared before the definitions, which read it as they are made.
+ */
+const symmetryLooks: readonly LookSpec[] = [
+  { id: 'button', label: 'Button', min: anyRoom },
+  { id: 'modes', label: 'Modes', min: { width: 88, height: 56 } }
+];
 
 /** Single-command definitions. Each binding reads only the capability needed by its button. */
 export const actionParts = [
@@ -57,13 +68,7 @@ export const actionParts = [
     section: 'Tools',
     label: 'Symmetry',
     icon: 'symmetry',
-    looks: {
-      looks: [
-        { id: 'button', label: 'Button', min: { columns: 1, rows: 1 } },
-        { id: 'modes', label: 'Modes', min: { columns: 2, rows: 2 } }
-      ],
-      auto: (span) => (span.columns >= 2 && span.rows >= 2 ? 'modes' : 'button')
-    },
+    looks: { looks: symmetryLooks, auto: (room) => (lookFits(symmetryLooks[1]!, room) ? 'modes' : 'button') },
     needs: (s, f) => ({
       get span() {
         return f.span;
@@ -120,9 +125,15 @@ export const actionParts = [
   }))
 ];
 
-/** Controlled action look. Its callback owns command policy; the view only sizes and labels the button. */
+/**
+ * Controlled action look. Its callback owns command policy; the view only sizes and labels the button. Beside the
+ * icon it names the action (or its status) when the name fits the room the button leaves it, the short name when only
+ * that fits, and nothing otherwise.
+ */
 function ActionPart(props: {
   label: string;
+  /** A shorter name, shown when the label does not fit. */
+  short?: string;
   icon: SketchIconName;
   span: Span;
   active?: boolean;
@@ -131,6 +142,13 @@ function ActionPart(props: {
   status?: string;
 }) {
   const grid = useGrid();
+  const name = () =>
+    fitText(
+      grid.length(props.span.columns) - actionChrome,
+      actionNameStyle,
+      props.status ?? props.label,
+      props.status ? undefined : props.short
+    );
   return (
     <button
       type="button"
@@ -146,17 +164,20 @@ function ActionPart(props: {
         name={props.icon}
         size={Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10)}
       />
-      <Show
-        when={
-          grid.length(props.span.columns) >=
-          (grid.cell() >= referenceCell ? 92 : Math.max(92, 34 + (props.status ?? props.label).length * 6))
-        }
-      >
-        <span class={styles.name}>{props.status ?? props.label}</span>
-      </Show>
+      <Show when={name()}>{(shown) => <span class={styles.name}>{shown()}</span>}</Show>
     </button>
   );
 }
+
+/** How `.action` sets a name: its type, and the pixels its padding, the 20 px icon and the gap take beside it. */
+const actionNameStyle: TextStyle = { size: 11, weight: 600, letterSpacing: -0.25 };
+const actionChrome = 2 * 4 + 20 + 6;
+
+/** Shorter names of the actions whose names are long, shown where only these fit. */
+const shortNames: Readonly<Record<string, string>> = {
+  'brush-editor': 'Settings',
+  pressure: 'Pressure'
+};
 
 function action<N extends object, P extends object = N>(
   id: string,
@@ -181,6 +202,7 @@ function action<N extends object, P extends object = N>(
       merge(
         {
           label,
+          short: shortNames[id],
           icon,
           get span() {
             return frame.span;

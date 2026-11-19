@@ -8,6 +8,7 @@ import { LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { partDefinition } from './parts';
 import type { PartBinding, PartMode, Popup } from './parts/definition';
+import { fits, type TextStyle } from './textFit';
 
 /**
  * Common host for board parts, ghosts, box/kit previews, chooser looks and popups. Owns failure isolation and mode,
@@ -55,7 +56,16 @@ export function PartFrame(props: {
             title={`${props.kind ?? 'Part'} failed. Tap to retry.`}
             onClick={reset}
           >
-            <Show when={!props.span || grid.length(props.span.columns) >= 92} fallback={<SketchIcon name="reset" />}>
+            <Show
+              when={
+                !props.span ||
+                (grid.length(props.span.rows) >= 3 * brokenLine &&
+                  ['Broken part', props.kind ?? '', 'Retry'].every((line) =>
+                    fits(line, brokenStyle, grid.length(props.span!.columns) - 4)
+                  ))
+              }
+              fallback={<SketchIcon name="reset" />}
+            >
               <span>Broken part</span>
               <span>{props.kind}</span>
               <span>Retry</span>
@@ -86,6 +96,9 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
   const frame: PartBinding = {
     get width() {
       return grid.length(frame.span.columns);
+    },
+    get height() {
+      return grid.length(frame.span.rows);
     },
     get kind() {
       return props.kind ?? '';
@@ -144,9 +157,13 @@ export function MissingPart(props: { kind: string; span?: Span }) {
       title={`Missing part: ${props.kind}`}
     >
       ?
-      <Show when={!props.span || grid.length(props.span.columns) >= 92}>
+      <Show when={!props.span || fits(props.kind, brokenStyle, grid.length(props.span.columns) - 4)}>
         <span>{props.kind}</span>
       </Show>
     </span>
   );
 }
+
+/** How `.brokenPart` sets its lines: 10 px type, 2 px padding, and the height a line takes with its gap. */
+const brokenStyle: TextStyle = { size: 10 };
+const brokenLine = 15;
