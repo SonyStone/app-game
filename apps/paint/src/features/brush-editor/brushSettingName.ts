@@ -2,7 +2,7 @@ import { abrCategories } from './abrSchema';
 import { brushCategories, numberSettings as numbersOf, type BrushCategory, type BrushSetting } from './schema';
 
 /**
- * The name a number or curve setting has as a part alone on the board, unique across Paint's and ABR's settings (a setting both
+ * The name a number setting has as a part alone on the board, unique across Paint's and ABR's settings (a setting both
  * schemas share counts once). A name from {@link boardNames} comes first; otherwise a Paint setting keeps its label, and
  * an ABR setting takes the shortest of its label, its section and label ("Size jitter"), and its category, section
  * and label that no other setting has.
@@ -35,7 +35,6 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
  * or reads awkwardly ("Scattering scatter amount").
  */
 const boardNames: Record<string, string> = {
-  'pressure-curve': 'Pressure curve',
   'pressure-minimum': 'Pressure minimum',
   'pressure-maximum': 'Pressure maximum',
   'pressure-firmness': 'Pressure firmness',

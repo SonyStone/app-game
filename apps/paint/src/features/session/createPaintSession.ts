@@ -42,7 +42,7 @@ import { createNativeShell, saveFile } from '../native-shell';
 import { createPalmRejection, createPalmRejectionSettings } from '../palm-rejection';
 import { createPenHover } from '../pen-hover';
 import { createPerformanceMonitor } from '../performance';
-import { createPressureCalibration } from '../pressure-calibration';
+import { createPenPressureProbe, createPressureCalibration } from '../pressure-calibration';
 import { createQuickShape } from '../quickshape';
 import { radialLayout } from '../radial-menu';
 import { createInputRecorder } from '../recording';
@@ -273,6 +273,7 @@ export function createPaintSession(options: {
   const coolorus = createCoolorusSettings();
   const windows = createSessionWindows();
   const pressureCalibration = createPressureCalibration();
+  const penPressure = createPenPressureProbe();
   const viewOptions = createViewOptions({ ready: engine.canEdit, send: engine.send });
   const drawingFolder = createDrawingFolder({
     status: () => engine.paging().storage?.folder,
@@ -465,6 +466,8 @@ export function createPaintSession(options: {
      * and widens a brush's default pressure range (`strokeBrush`), so it acts on the strokes of every variant.
      */
     pressureCalibration,
+    /** The pen's raw pressure on the canvases where the curve is edited, such as the brush studio's drawing pad. */
+    penPressure,
     /** Held strokes becoming shapes, with their settings; see `QuickShapeSettings` and the hint in `StageOverlays`. */
     quickShape,
     canvasInput,

@@ -1,5 +1,6 @@
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { createDocument } from '@app-game/paint-core/document';
+import { identityPressureCurve, isIdentityPressureCurve, type PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { ok } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 import { vi } from 'vitest';
@@ -17,6 +18,7 @@ export function createTestServices() {
   const recent = createRecentColors();
   const setColor = vi.fn((color: string) => setBrush((current) => ({ ...current, color })));
   const errors = vi.fn();
+  const [penCurve, setPenCurve] = createSignal<PressureCurve>();
   const services: LegoServices = {
     brushEditor: {
       channelBrush: createChannelBrush(brush),
@@ -61,6 +63,15 @@ export function createTestServices() {
     },
     quickShape: { enabled: createMemo(() => true), toggle: vi.fn() },
     windows: { isOpen: () => false, toggle: vi.fn() },
+    pen: {
+      curve: () => penCurve() ?? identityPressureCurve,
+      calibrated: () => !!penCurve(),
+      marker: () => undefined,
+      measured: () => [],
+      save: vi.fn((curve: PressureCurve) => setPenCurve(isIdentityPressureCurve(curve) ? undefined : curve)),
+      reset: vi.fn(() => setPenCurve(undefined)),
+      measure: vi.fn()
+    },
     presets: {
       all: () => [],
       resources: vi.fn(async () => ok([])),

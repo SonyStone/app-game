@@ -4,16 +4,14 @@ import { createMemo, createSignal, createUniqueId, For, onSettled, Show } from '
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import { PressureCurveEditor } from './PressureCurveEditor';
-import type { BrushSetting, ChoiceSetting, CurveSetting, NumberSetting, ToggleSetting } from './schema';
+import type { BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
 import { Slider } from './Slider';
 
 /**
  * One generated row of the brush editor for `setting`, which the caller has already found applicable. A row whose
  * setting is not `enabled` keeps its place and shows its value, greyed, and takes no presses. Every change is sent
  * at once as the patch the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
- * all; a longer one shows the chosen option in a single row that opens the list. A curve is its graph
- * (`PressureCurveEditor`).
+ * all; a longer one shows the chosen option in a single row that opens the list.
  */
 export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
   // A row is made once per setting, so its kind never changes under it.
@@ -24,8 +22,6 @@ export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChang
     <NumberRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.kind === 'toggle' ? (
     <ToggleRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
-  ) : setting.kind === 'curve' ? (
-    <CurveRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : setting.options.length > inlineChoiceLimit ? (
     <MenuRow setting={setting} brush={props.brush} enabled={enabled()} onChange={props.onChange} />
   ) : (
@@ -141,46 +137,6 @@ function ToggleRow(props: RowProps & { setting: ToggleSetting }) {
       </span>
       <Label setting={setting} />
     </button>
-  );
-}
-
-/**
- * The curve's graph across the row: each handle writes its own number setting, in percent, as a number row does.
- * A press the browser cancels puts the stroke back as it was when the press began.
- */
-function CurveRow(props: RowProps & { setting: CurveSetting }) {
-  const setting = props.setting;
-  let before: Brush | undefined;
-  const fraction = (number: NumberSetting) => number.read(props.brush) / 100;
-  const write = (number: NumberSetting, value: number) => {
-    const brush = props.brush;
-    const patch = number.write(brush, value);
-    if (number.read({ ...brush, ...patch }) !== number.read(brush)) {
-      props.onChange(patch);
-    }
-  };
-
-  return (
-    <div class={styles.curveRow} data-kind="curve" data-disabled={props.enabled ? undefined : ''}>
-      <PressureCurveEditor
-        class={styles.curveEditor}
-        label={setting.label}
-        minimum={fraction(setting.minimum)}
-        maximum={fraction(setting.maximum)}
-        firmness={fraction(setting.firmness)}
-        disabled={!props.enabled}
-        onStart={() => (before = props.brush)}
-        onInput={(handle, value) => write(setting[handle], value * 100)}
-        onCommit={() => (before = undefined)}
-        onCancel={() => {
-          if (before) {
-            props.onChange({ stroke: before.stroke });
-          }
-
-          before = undefined;
-        }}
-      />
-    </div>
   );
 }
 

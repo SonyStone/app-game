@@ -28,7 +28,7 @@ import { PartFrame } from './PartFrame';
 import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
-import { pressureCurveSpan } from './parts/pressureCurve';
+import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
 import { StudioSettingRow } from './StudioSettingRow';
 
 /**
@@ -47,9 +47,10 @@ import { StudioSettingRow } from './StudioSettingRow';
  * parts right there (see `BoardView`). The board is kept per device.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
- * setting there is its value part itself, and the pressure curve its curve part (`StudioSettingRow`); a row's grip
- * lifts a new part of it onto the board, in edit mode or not; the studio gets out of the way while the part is carried
- * and comes back once it lands.
+ * setting there is its value part itself, and the Pen page the pen pressure curve's part (`StudioSettingRow`); a
+ * row's grip lifts a new part of it onto the board, in edit mode or not; the studio gets out of the way while the part
+ * is carried and comes back once it lands. The curve's Measure runs the calibration steps on the studio's Pen page
+ * while the studio is open, and in the Pen pressure window otherwise.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
@@ -77,13 +78,23 @@ export function LegoStudio(
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
+  /** Whether the studio's Pen page runs the calibration steps. */
+  const [penMeasuring, setPenMeasuring] = createSignal(false);
   const services = createLegoServices(
     session,
     () => setStudioOpen(true),
     () =>
       studioOpen() ||
-      board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-')))
+      board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-'))),
+    () => (studioOpen() ? setPenMeasuring(true) : session.windows.open('pressure'))
   );
+  const closeStudio = () => {
+    setPenMeasuring(false);
+    setStudioOpen(false);
+  };
+  /** Whether a part of `kind` lies on the board, outside the workbench. */
+  const onBoard = (kind: string) =>
+    board.board().panels.some((panel) => !panel.bench && panel.parts.some((part) => currentKind(part.kind) === kind));
   const kits = createKits(reportSavingError);
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);
@@ -106,7 +117,7 @@ export function LegoStudio(
     closePanel() {
       // Escape and the Android back gesture close the studio first, keeping its changes, as Done does.
       if (studioOpen()) {
-        setStudioOpen(false);
+        closeStudio();
         return true;
       }
 
@@ -282,26 +293,33 @@ export function LegoStudio(
                   return undefined;
                 }
 
-                const curve = setting.kind === 'curve';
-                const span = curve ? pressureCurveSpan : studioPartSpan;
                 return (
                   <StudioSettingRow
                     kind={kind}
-                    span={curve ? studioCurveSpan : studioPartSpan}
-                    look={curve ? 'curve' : 'slider'}
-                    tall={curve}
+                    span={studioPartSpan}
+                    look="slider"
                     label={brushSettingName(category, setting)}
-                    onBoard={board
-                      .board()
-                      .panels.some(
-                        (panel) => !panel.bench && panel.parts.some((part) => currentKind(part.kind) === kind)
-                      )}
-                    onLift={(event) => boardControls()?.lift(event, kind, span)}
-                    onPlace={() => boardControls()?.place(kind, span)}
+                    onBoard={onBoard(kind)}
+                    onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
+                    onPlace={() => boardControls()?.place(kind, studioPartSpan)}
                   />
                 );
               }}
-              onClose={() => setStudioOpen(false)}
+              penPane={
+                <StudioSettingRow
+                  kind={penPressureKind}
+                  span={studioCurveSpan}
+                  look="curve"
+                  tall
+                  label="Pen pressure"
+                  onBoard={onBoard(penPressureKind)}
+                  onLift={(event) => boardControls()?.lift(event, penPressureKind, pressureCurveSpan)}
+                  onPlace={() => boardControls()?.place(penPressureKind, pressureCurveSpan)}
+                />
+              }
+              measuring={penMeasuring()}
+              onMeasuring={setPenMeasuring}
+              onClose={closeStudio}
             />
           </Show>
           <SessionNotices session={session} />
@@ -320,5 +338,5 @@ const cardMargin = 16;
  */
 const studioPartSpan: Span = { columns: 4, rows: 1 };
 
-/** The span the pressure curve's part shows at in its studio row: a large graph, its name above it. */
+/** The span the pen pressure curve's part shows at on the studio's Pen page: a large graph, its name above it. */
 const studioCurveSpan: Span = { columns: 8, rows: 6 };

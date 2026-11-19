@@ -97,19 +97,13 @@ it('takes the whole row of a switch, a choice option and a category as its press
 it('shows a greyed row with its value, announces it disabled and ignores presses', () => {
   const { brush, editor, category, click, slider } = mount();
   click(category('Stroke correction'));
-  // At Smoothing 0 nothing trails, so catch-up does not apply; the pressure curve applies to smoothed strokes only.
+  // At Smoothing 0 nothing trails, so catch-up does not apply.
   expect(slider('Smoothing').getAttribute('aria-disabled')).toBe('false');
   expect(slider('Smoothing').getAttribute('aria-valuenow')).toBe('0');
   const catchUp = editor().querySelector<HTMLButtonElement>('[role="switch"]')!;
   expect(catchUp.disabled).toBe(true);
   const before = brush();
   catchUp.click();
-  flush();
-  click(category('Pressure curve'));
-  const handle = editor().querySelector<HTMLElement>('[data-curve-handle="minimum"]')!;
-  expect(handle.getAttribute('aria-disabled')).toBe('true');
-  expect(handle.getAttribute('aria-valuenow')).toBe('5');
-  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   flush();
   expect(brush()).toBe(before);
 });
@@ -218,8 +212,8 @@ it('greys an ABR row while its control gives it no effect, ignores presses on it
       ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => `${name} ${label}`)
     ])
   );
-  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map((control) =>
-    document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
+  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map(
+    (control) => document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
   );
   const shown = [...new Set(labels)].map((label) =>
     [...label.childNodes]
@@ -286,7 +280,7 @@ it('depends on no hover', () => {
 
 it('leaves out a category with no rows for the brush, as Brush tip for an ABR preset', () => {
   const { categories } = mount({ ...defaultBrush(), engine: { id: 'abr', settings: {} } });
-  expect(categories()).toEqual(['Painting', 'Stroke correction', 'Pressure curve']);
+  expect(categories()).toEqual(['Painting', 'Stroke correction']);
 });
 
 it('shows no explanatory text in a category: only its title, status, headings, labels and values', () => {
@@ -408,7 +402,6 @@ it('names each category button by its category and describes it by its status, a
     '32 px · 100%',
     'Soft round · 65%',
     'Pressure → Size',
-    'Off',
     'Off'
   ]);
   const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
@@ -419,9 +412,9 @@ it('shows a tapped category alone and goes back to the list in the narrow layout
   const { editor, category, click } = mount();
   const frame = editor().firstElementChild!;
   expect(frame.getAttribute('data-view')).toBe('list');
-  click(category('Pressure curve'));
+  click(category('Stroke correction'));
   expect(frame.getAttribute('data-view')).toBe('detail');
-  expect(editor().querySelector('h2')!.textContent).toBe('Pressure curve');
+  expect(editor().querySelector('h2')!.textContent).toBe('Stroke correction');
   click([...editor().querySelectorAll('button')].find((button) => button.textContent === 'All categories')!);
   expect(frame.getAttribute('data-view')).toBe('list');
 });

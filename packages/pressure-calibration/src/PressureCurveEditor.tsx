@@ -6,6 +6,7 @@ import {
   type PressureCurve,
   type PressurePoint
 } from '@app-game/paint-core/pressureCurve';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import styles from './PressureCalibration.module.css';
 
@@ -20,23 +21,59 @@ import styles from './PressureCalibration.module.css';
  * - a focused point moves by 1% with the arrow keys (10% with Shift); Delete or Backspace removes an inner one.
  *
  * Every change reports a normalized curve through `onChange`, while dragging too. `marker`, the raw pressure of a pen
- * touching the test canvas, shows as a dot running along the curve. The dashed diagonal is the uncalibrated pen.
- * There are no Bézier handles: on a tablet they would double the small targets.
+ * touching a canvas the host watches, shows as a dot running along the curve; while a pen presses the graph itself,
+ * the dot follows that pen. The dashed diagonal is the uncalibrated pen. There are no Bézier handles: on a tablet they
+ * would double the small targets.
+ *
+ * The graph draws at its element's own size, one unit to a CSS pixel, so points and their reach keep their size on a
+ * small graph; unmeasured it is 480 × 260. By default it is as wide as its parent at that ratio; a host that sets its
+ * height (with `aspect-ratio: auto`) gets a graph of any shape. Its margins shrink on a small graph.
+ *
+ * Colors and sizes come from custom properties, each with a fallback: `--ink` (the curve, points, text), `--muted`,
+ * `--surface` (the graph and the points' fill), `--line` (the border), `--accent` (the pen dot and a focused point),
+ * `--curve-point` (a point's radius, 6px), `--curve-point-fill` and `--curve-point-ink` (its fill and ring, the
+ * surface and the ink), `--curve-reach` (how far from a point a press takes it, 22px; read at each press),
+ * `--curve-marker` and `--curve-marker-fill` (the pen dot's radius, 7px, and color, the accent), `--curve-text` (the readout's size, 12px) and `--curve-readout` (`none`
+ * hides the readout, as on a small graph).
  */
 export function PressureCurveEditor(props: {
   curve: PressureCurve;
   /** Raw pressures measured during calibration, for the histogram; none draws no bars. */
   measured?: readonly number[];
-  /** Raw pressure of the pen touching the test canvas now; nothing shows without it. */
+  /** Raw pressure of the pen touching the host's canvas now; nothing shows without it, unless a pen presses the graph. */
   marker?: number | undefined;
   /** Receives the changed curve, already normalized. */
   onChange: (curve: PressureCurve) => void;
+  /**
+   * Makes the shown point's two values taps that offer number entry, for a host with a keypad: called with the value
+   * and the element showing it, to anchor the entry to. With it, the readout shows values only, without the hint
+   * that tells how points are added or removed.
+   */
+  onEntry?: (entry: PointEntry, anchor: Element) => void;
+  /** Added to the graph's own class, for a host's size. */
+  class?: string;
 }) {
-  let svg!: SVGSVGElement;
+  const [svg, setSvg] = createSignal<SVGSVGElement>();
+  // Environments without ResizeObserver, as jsdom, draw at the fallback size.
+  const measuredSize = typeof ResizeObserver === 'function' ? createElementSize(svg) : unmeasured;
+  /** The graph's size and margins in its units, which are its CSS pixels once measured. */
+  const frame = createMemo(() => {
+    const width = measuredSize.width ?? 0;
+    const height = measuredSize.height ?? 0;
+    const size = width >= 1 && height >= 1 ? { width, height } : fallbackSize;
+    const margin = Math.max(14, Math.min(28, Math.floor(Math.min(size.width, size.height) * 0.11)));
+    return { ...size, margin, top: Math.max(margin, readoutRoom) };
+  });
+  const x = (raw: number) => frame().margin + raw * (frame().width - 2 * frame().margin);
+  const y = (value: number) =>
+    frame().height - frame().margin - value * (frame().height - frame().margin - frame().top);
   /** The point being dragged and the pointer dragging it; `removing` while it is off the graph. */
   const [drag, setDrag] = createSignal<{ index: number; pointerId: number; removing: boolean }>();
   /** The point last pressed or focused, whose values the readout shows. */
   const [active, setActive] = createSignal<number>();
+  /** Raw pressure of a pen pressing the graph itself. */
+  const [penOnGraph, setPenOnGraph] = createSignal<number>();
+  const marker = () => props.marker ?? penOnGraph();
   /** The last press on a point, for telling a double tap. */
   let lastTap: { index: number; time: number } | undefined;
   const map = createMemo(() => pressureMapping(props.curve));
@@ -55,28 +92,46 @@ export function PressureCurveEditor(props: {
       const raw = step / 160;
       return `${step ? 'L' : 'M'}${x(raw)},${y(map()(raw))}`;
     }).join('');
-  const readout = () => {
-    const marker = props.marker;
-    if (marker !== undefined && drag() === undefined) {
-      return `Pen ${percent(marker)}% → brush ${percent(map()(marker))}%`;
+  const readout = (): Readout => {
+    const pen = marker();
+    if (pen !== undefined && drag() === undefined) {
+      return { kind: 'pen', pen, brush: map()(pen) };
     }
 
-    const point = points()[active() ?? -1];
+    const index = active() ?? -1;
+    const point = points()[index];
     if (!point) {
-      return 'Drag a point; tap the curve to add one';
+      return { kind: 'hint', text: props.onEntry ? '' : 'Drag a point; tap the curve to add one' };
     }
 
-    return drag()?.removing ? 'Let go to remove the point' : `Pen ${percent(point.x)}% → brush ${percent(point.y)}%`;
+    if (drag()?.removing) {
+      return { kind: 'hint', text: props.onEntry ? '' : 'Let go to remove the point' };
+    }
+
+    return { kind: 'point', index, pen: point.x, brush: point.y };
+  };
+  /** The point the readout shows, whose values may open number entry. */
+  const shownPoint = () => {
+    const shown = readout();
+    return shown.kind === 'point' ? shown : undefined;
+  };
+  /** The readout as plain text, when it shows no point. */
+  const readoutText = () => {
+    const shown = readout();
+    return shown.kind === 'hint'
+      ? shown.text
+      : shown.kind === 'pen'
+        ? `Pen ${percent(shown.pen)}% → brush ${percent(shown.brush)}%`
+        : '';
   };
   const change = (next: readonly PressurePoint[]) => props.onChange(normalizePressureCurve({ points: next }));
   /** Moves point `index` to raw `to`, kept between its neighbours and with the output never falling. */
   const move = (index: number, to: PressurePoint) => {
     const all = points();
-    const before = all[index - 1];
-    const after = all[index + 1];
+    const { pen, brush } = pointBounds(all, index);
     const next = {
-      x: round(Math.max(before ? before.x + pointGap : 0, Math.min(after ? after.x - pointGap : 1, to.x))),
-      y: round(Math.max(before?.y ?? 0, Math.min(after?.y ?? 1, to.y)))
+      x: round(Math.max(pen.min, Math.min(pen.max, to.x))),
+      y: round(Math.max(brush.min, Math.min(brush.max, to.y)))
     };
     const current = all[index]!;
     if (next.x !== current.x || next.y !== current.y) {
@@ -89,27 +144,67 @@ export function PressureCurveEditor(props: {
       setActive(undefined);
     }
   };
+  /** Offers number entry for one value of point `index`, anchored to `anchor`. */
+  const enter = (index: number, axis: PointEntry['axis'], anchor: Element) => {
+    const point = points()[index];
+    if (!point || !props.onEntry) {
+      return;
+    }
+
+    const bounds = pointBounds(points(), index)[axis];
+    props.onEntry(
+      {
+        axis,
+        label: axis === 'pen' ? 'Pen' : 'Brush',
+        value: percent(axis === 'pen' ? point.x : point.y),
+        min: Math.ceil(bounds.min * 100),
+        max: Math.floor(bounds.max * 100),
+        set: (value) => {
+          const current = points()[index];
+          if (current) {
+            move(index, axis === 'pen' ? { x: value / 100, y: current.y } : { x: current.x, y: value / 100 });
+          }
+        }
+      },
+      anchor
+    );
+  };
   /** A pointer's position in graph units and in raw pressure and output. */
   const locate = (event: PointerEvent) => {
-    const rect = svg.getBoundingClientRect();
-    const scale = width / rect.width;
+    const rect = svg()!.getBoundingClientRect();
+    const scale = frame().width / rect.width;
     const left = (event.clientX - rect.left) * scale;
     const top = (event.clientY - rect.top) * scale;
-    return { left, top, raw: { x: (left - margin) / plot, y: (height - margin - top) / span } };
+    const { width, height, margin } = frame();
+    return {
+      left,
+      top,
+      raw: { x: (left - margin) / (width - 2 * margin), y: (height - margin - top) / (height - margin - frame().top) }
+    };
+  };
+  const followPen = (event: PointerEvent) => {
+    if (event.pointerType === 'pen') {
+      setPenOnGraph(Math.max(0, Math.min(1, event.pressure)));
+    }
   };
 
   return (
     <svg
-      ref={svg}
-      class={styles.chart}
-      viewBox={`0 0 ${width} ${height}`}
+      ref={setSvg}
+      class={[styles.chart, props.class]}
+      viewBox={`0 0 ${frame().width} ${frame().height}`}
       role="group"
       aria-label="Pressure curve"
       onPointerDown={(event) => {
-        if (drag() || (event.pointerType === 'mouse' && event.button !== 0)) {
+        if (
+          drag() ||
+          (event.pointerType === 'mouse' && event.button !== 0) ||
+          (event.target instanceof Element && event.target.closest('[data-entry]'))
+        ) {
           return;
         }
 
+        followPen(event);
         const { left, top, raw } = locate(event);
         const hit = nearestPoint(points(), left, top);
         let index: number | undefined;
@@ -133,23 +228,28 @@ export function PressureCurveEditor(props: {
         }
 
         event.preventDefault();
-        svg.setPointerCapture(event.pointerId);
+        svg()!.setPointerCapture(event.pointerId);
         setDrag({ index, pointerId: event.pointerId, removing: false });
         setActive(index);
       }}
       onPointerMove={(event) => {
+        if (event.buttons & 1) {
+          followPen(event);
+        }
+
         const current = drag();
         if (current?.pointerId !== event.pointerId) {
           return;
         }
 
         const { left, top, raw } = locate(event);
+        const { width, height, margin } = frame();
         const inner = current.index > 0 && current.index < points().length - 1;
         const removing =
           inner &&
           (left < margin - removeDistance ||
             left > width - margin + removeDistance ||
-            top < margin - removeDistance ||
+            top < frame().top - removeDistance ||
             top > height - margin + removeDistance);
         if (removing !== current.removing) {
           setDrag({ ...current, removing });
@@ -160,6 +260,7 @@ export function PressureCurveEditor(props: {
         }
       }}
       onPointerUp={(event) => {
+        setPenOnGraph(undefined);
         const current = drag();
         if (current?.pointerId === event.pointerId) {
           setDrag(undefined);
@@ -168,7 +269,16 @@ export function PressureCurveEditor(props: {
           }
         }
       }}
-      onPointerCancel={() => setDrag(undefined)}
+      onPointerCancel={() => {
+        setPenOnGraph(undefined);
+        setDrag(undefined);
+      }}
+      onPointerLeave={() => {
+        // A pen pressing on into the graph from outside and lifting outside it sends the graph no pointerup.
+        if (!drag()) {
+          setPenOnGraph(undefined);
+        }
+      }}
     >
       <For each={bars()} keyed={false}>
         {(share, index) => (
@@ -176,7 +286,7 @@ export function PressureCurveEditor(props: {
             class={styles.bar}
             x={x(index / bins) + 0.5}
             y={y(share() * 0.9)}
-            width={plot / bins - 1}
+            width={Math.max(0, (frame().width - 2 * frame().margin) / bins - 1)}
             height={y(0) - y(share() * 0.9)}
           />
         )}
@@ -184,8 +294,8 @@ export function PressureCurveEditor(props: {
       <path class={styles.frame} d={`M${x(0)},${y(1)}V${y(0)}H${x(1)}`} />
       <path class={styles.identity} d={`M${x(0)},${y(0)}L${x(1)},${y(1)}`} />
       <path class={styles.curve} d={path()} />
-      <Show when={props.marker}>
-        {(marker) => <circle class={styles.marker} cx={x(marker())} cy={y(map()(marker()))} r={7} />}
+      <Show when={marker() !== undefined}>
+        <circle class={styles.marker} cx={x(marker()!)} cy={y(map()(marker()!))} r={7} />
       </Show>
       {/* Index-keyed, so a point's element survives the curve being replaced on every move of a drag. */}
       <For each={points()} keyed={false}>
@@ -223,10 +333,29 @@ export function PressureCurveEditor(props: {
           </g>
         )}
       </For>
-      <text class={styles.readout} x={x(0) + 6} y={margin - 8}>
-        {readout()}
+      <text class={styles.readout} x={x(0) + 6} y={frame().top - 8}>
+        <Show when={shownPoint()} fallback={readoutText()}>
+          {(point) => (
+            <>
+              {'Pen '}
+              <ReadoutValue
+                text={`${percent(point().pen)}%`}
+                label="Pen pressure"
+                entry={!!props.onEntry}
+                onEnter={(anchor) => enter(point().index, 'pen', anchor)}
+              />
+              {' → brush '}
+              <ReadoutValue
+                text={`${percent(point().brush)}%`}
+                label="Brush pressure"
+                entry={!!props.onEntry}
+                onEnter={(anchor) => enter(point().index, 'brush', anchor)}
+              />
+            </>
+          )}
+        </Show>
       </text>
-      <text class={styles.axis} x={x(1)} y={height - 6} text-anchor="end">
+      <text class={styles.axis} x={x(1)} y={frame().height - 6} text-anchor="end">
         pen
       </text>
       <text class={styles.axis} x={x(0) - 6} y={y(1) + 4} text-anchor="end">
@@ -247,7 +376,7 @@ export function PressureCurveEditor(props: {
       after <= 0 ||
       raw - all[after - 1]!.x < pointGap ||
       all[after]!.x - raw < pointGap ||
-      Math.abs(top - y(map()(raw))) > curveReach
+      Math.abs(top - y(map()(raw))) > Math.max(curveReach, reach())
     ) {
       return undefined;
     }
@@ -255,18 +384,81 @@ export function PressureCurveEditor(props: {
     change([...all.slice(0, after), { x: round(raw), y: round(map()(raw)) }, ...all.slice(after)]);
     return after;
   }
+
+  /** The point within reach of a press at graph position (`left`, `top`), the nearest if several. */
+  function nearestPoint(all: readonly PressurePoint[], left: number, top: number) {
+    const within = reach();
+    let best: { index: number; distance: number } | undefined;
+    all.forEach((point, index) => {
+      const distance = Math.hypot(x(point.x) - left, y(point.y) - top);
+      if (distance <= within && (!best || distance < best.distance)) {
+        best = { index, distance };
+      }
+    });
+    return best?.index;
+  }
+
+  /** Graph units around a point that a press takes it from: the host's `--curve-reach`, or {@link hitRadius}. */
+  function reach() {
+    const element = svg();
+    const given = element ? parseFloat(getComputedStyle(element).getPropertyValue('--curve-reach')) : NaN;
+    return Number.isFinite(given) && given > 0 ? given : hitRadius;
+  }
 }
 
-/** The point within reach of a press at graph position (`left`, `top`), the nearest if several. */
-function nearestPoint(points: readonly PressurePoint[], left: number, top: number) {
-  let best: { index: number; distance: number } | undefined;
-  points.forEach((point, index) => {
-    const distance = Math.hypot(x(point.x) - left, y(point.y) - top);
-    if (distance <= hitRadius && (!best || distance < best.distance)) {
-      best = { index, distance };
-    }
-  });
-  return best?.index;
+/**
+ * One value of a curve point offered for number entry (`PressureCurveEditor`'s `onEntry`): the point's raw pen
+ * pressure or the brush pressure it gives, in whole percent, with the bounds its neighbours leave it. `set` moves the
+ * point to a new value, kept within those bounds.
+ */
+export type PointEntry = {
+  axis: 'pen' | 'brush';
+  /** "Pen" or "Brush". */
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  set: (value: number) => void;
+};
+
+/** What the readout above the graph shows. */
+type Readout =
+  | { kind: 'hint'; text: string }
+  | { kind: 'pen'; pen: number; brush: number }
+  | { kind: 'point'; index: number; pen: number; brush: number };
+
+/** A value in the readout; with `entry`, a tap or Enter on it calls `onEnter` with it. */
+function ReadoutValue(props: { text: string; label: string; entry: boolean; onEnter: (anchor: Element) => void }) {
+  return (
+    <Show when={props.entry} fallback={props.text}>
+      <tspan
+        class={styles.entry}
+        data-entry
+        role="button"
+        tabindex="0"
+        aria-label={`${props.label} ${props.text}`}
+        onClick={(event) => props.onEnter(event.currentTarget)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            props.onEnter(event.currentTarget);
+          }
+        }}
+      >
+        {props.text}
+      </tspan>
+    </Show>
+  );
+}
+
+/** Where point `index` of `points` may go: between its neighbours, with the output never falling. */
+function pointBounds(points: readonly PressurePoint[], index: number) {
+  const before = points[index - 1];
+  const after = points[index + 1];
+  return {
+    pen: { min: before ? before.x + pointGap : 0, max: after ? after.x - pointGap : 1 },
+    brush: { min: before?.y ?? 0, max: after?.y ?? 1 }
+  };
 }
 
 function percent(value: number) {
@@ -278,11 +470,11 @@ function round(value: number) {
   return Math.round(value * 1000) / 1000;
 }
 
-const width = 480;
-const height = 260;
-const margin = 28;
-const plot = width - 2 * margin;
-const span = height - 2 * margin;
+/** The graph's size before it is measured, as in a test environment. */
+const fallbackSize = { width: 480, height: 260 };
+const unmeasured = { width: null, height: null };
+/** Graph units above the plot for the readout's line. */
+const readoutRoom = 24;
 const bins = 40;
 /** Graph units around a point that a press takes it from, about a fingertip on a tablet. */
 const hitRadius = 22;
@@ -292,11 +484,3 @@ const curveReach = 26;
 const removeDistance = 24;
 /** Milliseconds between two presses on a point that remove it. */
 const doubleTapMs = 350;
-
-function x(raw: number) {
-  return margin + raw * plot;
-}
-
-function y(value: number) {
-  return height - margin - value * span;
-}

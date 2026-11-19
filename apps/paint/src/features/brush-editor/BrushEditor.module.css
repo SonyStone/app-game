@@ -209,21 +209,6 @@
   margin-top: 6px;
 }
 
-/* The pressure curve's graph across the row, in the editor's colors; see `PressureCurveEditor`. */
-.curveRow {
-  display: grid;
-  height: var(--curve-height, 280px);
-  max-width: 460px;
-}
-
-.curveEditor {
-  --curve-ground: var(--raised);
-  --curve-line: var(--line-color);
-  --curve-ink: var(--ink-color);
-  --curve-handle: var(--accent-color);
-  --curve-handle-ink: var(--surface-color);
-}
-
 .label {
   min-width: 0;
   overflow-wrap: anywhere;

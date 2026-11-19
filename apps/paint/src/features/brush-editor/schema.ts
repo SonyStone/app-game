@@ -76,34 +76,12 @@ export type ChoiceOption = {
   label: string;
 };
 
-/**
- * The pen's pressure curve: three number settings edited together on one graph, pen pressure across and the pressure
- * the brush gets up, as `calibratePressure` maps it. Each keeps its own ID, bounds, step and writes, so it also stands
- * alone, as a part on the LEGO board does. All three are in percent: `minimum` and `maximum` of the pen's raw pressure
- * that map to none and to full, and `firmness` the curve's exponent, 100 for a straight line.
- */
-export type CurveSetting = SettingBase & {
-  kind: 'curve';
-  /** Raw pressure that maps to zero; its upper bound keeps it below `maximum`. */
-  minimum: NumberSetting;
-  /** Raw pressure that maps to one; its lower bound keeps it above `minimum`. */
-  maximum: NumberSetting;
-  /** The exponent, above 100 needing a firmer press. */
-  firmness: NumberSetting;
-};
-
 /** Discriminated control definition for generated editors and standalone controls. */
-export type BrushSetting = NumberSetting | ToggleSetting | ChoiceSetting | CurveSetting;
+export type BrushSetting = NumberSetting | ToggleSetting | ChoiceSetting;
 
-/** The number settings among `settings`, a curve's three in its place, in order. */
+/** The number settings among `settings`, in order. */
 export function numberSettings(settings: readonly BrushSetting[]): NumberSetting[] {
-  return settings.flatMap((setting) =>
-    setting.kind === 'number'
-      ? [setting]
-      : setting.kind === 'curve'
-        ? [setting.minimum, setting.maximum, setting.firmness]
-        : []
-  );
+  return settings.filter((setting) => setting.kind === 'number');
 }
 
 /** Ordered editor section with a live summary. */
@@ -215,56 +193,57 @@ export const brushCategories: readonly BrushCategory[] = [
       return level === 0 ? 'Off' : String(level);
     },
     settings: [smoothingSetting(), catchUpSetting()]
-  },
-  {
-    id: 'pressure-curve',
-    label: 'Pressure curve',
-    group: 'advanced',
-    applies: always,
-    status: (b) =>
-      calibratesPressure(b) ? `${Math.round(b.stroke.minimum * 100)}–${Math.round(b.stroke.maximum * 100)}%` : 'Off',
-    settings: [
-      {
-        id: 'pressure-curve',
-        label: 'Pressure curve',
-        kind: 'curve',
-        applies: always,
-        enabled: calibratesPressure,
-        minimum: strokePercent(
-          'pressure-minimum',
-          'Minimum',
-          'minimum',
-          () => 0,
-          (b) => Math.round(b.stroke.maximum * 100) - 1
-        ),
-        maximum: strokePercent(
-          'pressure-maximum',
-          'Maximum',
-          'maximum',
-          (b) => Math.round(b.stroke.minimum * 100) + 1,
-          () => 100
-        ),
-        firmness: strokePercent(
-          'pressure-firmness',
-          'Firmness',
-          'firmness',
-          () => 10,
-          () => 500,
-          5
-        )
-      }
-    ]
   }
 ];
 
 /**
- * Finds a setting regardless of the current engine or stroke mode, also one of a curve's three; unknown IDs return
- * undefined.
+ * The brush's own pressure range and firmness (`StrokeSettings.minimum`, `maximum` and `firmness`, Leonardo's power
+ * curve), as a category the editors no longer show: the pen's pressure curve, one for every brush, replaced it in the
+ * brush studio (2026-11-19). The engine still applies the three in the modes `calibratesPressure` names, and parts
+ * stored on a board before keep editing them through these settings. While the pen is calibrated, the defaults
+ * (5%, 80%, 100%) reach strokes as a straight 0% to 100% (see `createPressureCalibration`'s `strokeBrush`).
+ */
+export const legacyPressureCategory: BrushCategory = {
+  id: 'pressure-curve',
+  label: 'Pressure curve',
+  group: 'advanced',
+  applies: always,
+  status: (b) =>
+    calibratesPressure(b) ? `${Math.round(b.stroke.minimum * 100)}–${Math.round(b.stroke.maximum * 100)}%` : 'Off',
+  settings: [
+    strokePercent(
+      'pressure-minimum',
+      'Minimum',
+      'minimum',
+      () => 0,
+      (b) => Math.round(b.stroke.maximum * 100) - 1
+    ),
+    strokePercent(
+      'pressure-maximum',
+      'Maximum',
+      'maximum',
+      (b) => Math.round(b.stroke.minimum * 100) + 1,
+      () => 100
+    ),
+    strokePercent(
+      'pressure-firmness',
+      'Firmness',
+      'firmness',
+      () => 10,
+      () => 500,
+      5
+    )
+  ]
+};
+
+/**
+ * Finds a setting regardless of the current engine or stroke mode, also one of {@link legacyPressureCategory}'s;
+ * unknown IDs return undefined.
  */
 export function getBrushSetting(id: string): BrushSetting | undefined {
-  const settings = brushCategories.flatMap((category) => category.settings);
-
-  return settings.find((setting) => setting.id === id) ?? numberSettings(settings).find((setting) => setting.id === id);
+  return [...brushCategories, legacyPressureCategory]
+    .flatMap((category) => category.settings)
+    .find((setting) => setting.id === id);
 }
 
 /**

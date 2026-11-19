@@ -49,3 +49,16 @@
   border-bottom: 1px solid var(--line, #dedede);
   color: var(--danger, #b3261e);
 }
+
+/* The pad's wrapper, which the pen pressure probe watches; it adds no box of its own. */
+.padSurface {
+  display: contents;
+}
+
+/* The calibration steps on the pen's page, on a tile of the studio's colors. */
+.measure {
+  max-width: 600px;
+  border-radius: var(--studio-tile-radius, 8px);
+  background: var(--surface, #ffffff);
+  color: var(--ink, #444444);
+}

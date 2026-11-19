@@ -82,9 +82,11 @@
   color: var(--warning, #8a5a00);
 }
 
+/* As wide as its parent at the editor's default ratio; a host may set any height, with `aspect-ratio: auto`. */
 .chart {
   display: block;
   width: calc(100% - 28px);
+  aspect-ratio: 480 / 260;
   margin: 12px 14px 0;
   background: var(--surface, #fff);
   border: 1px solid var(--line, #dedede);
@@ -179,26 +181,43 @@
 
 .hit {
   fill: transparent;
+  r: var(--curve-reach, 22px);
 }
 
 .handle {
-  fill: var(--surface, #fff);
-  stroke: var(--ink, #2b3238);
+  r: var(--curve-point, 6px);
+  fill: var(--curve-point-fill, var(--surface, #fff));
+  stroke: var(--curve-point-ink, var(--ink, #2b3238));
   stroke-width: 2;
 }
 
 /* The pen pressure dot that runs along the curve while the pen touches the test canvas. */
 .marker {
-  fill: var(--accent, #237aab);
+  r: var(--curve-marker, 7px);
+  fill: var(--curve-marker-fill, var(--accent, #237aab));
   stroke: var(--surface, #fff);
   stroke-width: 2;
   pointer-events: none;
 }
 
 .readout {
-  font-size: 12px;
+  display: var(--curve-readout, inline);
+  font-size: var(--curve-text, 12px);
   fill: var(--ink, #444);
   font-variant-numeric: tabular-nums;
+}
+
+/* A readout value that opens number entry: the accent, underlined, as a link to its keypad. */
+.entry {
+  fill: var(--accent, #237aab);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+  outline: none;
+
+  &:focus-visible {
+    text-decoration-thickness: 2px;
+  }
 }
 
 .note {

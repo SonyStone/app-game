@@ -12,6 +12,7 @@ import type { EngineHandlers } from '../../features/engine/openPaintTransport';
 import type { PaintSession } from '../../features/session';
 import type { LegoServices } from './LegoServices';
 import { LegoStudio } from './LegoStudio';
+import { boxSections, partDefinition } from './parts';
 
 const wiring = vi.hoisted(() => ({
   session: undefined as PaintSession | undefined,
@@ -492,26 +493,177 @@ it('the slider of a studio row moves the value but never lifts a part', () => {
   expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
 });
 
-it('a studio row of a setting that does not apply now shows the part inactive and takes no edits', () => {
-  storeParts(['action:brush-editor']);
+it("keeps old boards' pressure minimum, maximum and firmness parts working, active only with smoothing", () => {
+  storeParts(['action:brush-editor', 'value:brush:pressure-minimum', 'value:brush:pressure-firmness']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[1].span = { columns: 4, rows: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
   mount();
-  const dialog = openStudio();
-  category(dialog, 'Pressure curve');
-  // At Smoothing 0 strokes are not calibrated, so the curve's part is unlit and its handles take nothing.
-  const part = dialog.querySelector('[data-part-kind="value:brush:pressure-curve"]')!;
-  expect(part.querySelector('[data-inactive]')).not.toBeNull();
-  const handle = part.querySelector<HTMLElement>('[data-curve-handle="minimum"]')!;
-  expect(handle.getAttribute('aria-disabled')).toBe('true');
+  const part = () => document.querySelector('[data-part-kind="value:brush:pressure-minimum"]')!;
+  const slider = () => part().querySelector<HTMLElement>('[role="slider"]')!;
+  // At Smoothing 0 strokes do not use the brush's own range: the part loads, unlit, and takes nothing.
+  expect(part().querySelector('[data-inactive]')).not.toBeNull();
   const before = wiring.session!.brush().stroke;
-  pointer(handle, 'pointerdown', 0, 0);
-  pointer(handle, 'pointermove', 40, 0);
-  pointer(handle, 'pointerup', 40, 0);
-  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-  flush();
+  pointer(slider(), 'pointerdown', 0.5, 0);
+  pointer(slider(), 'pointerup', 0.5, 0);
   expect(wiring.session!.brush().stroke).toEqual(before);
+
+  wiring.session!.tools.updateBrush({ stroke: { ...before, mode: 'stabilizer', stabilizer: 4 } });
+  flush();
+  expect(part().querySelector('[data-inactive]')).toBeNull();
+  pointer(slider(), 'pointerdown', 0.5, 0);
+  pointer(slider(), 'pointerup', 0.5, 0);
+  expect(wiring.session!.brush().stroke.minimum).not.toBe(before.minimum);
+  expect(document.querySelector('[data-part-kind="value:brush:pressure-firmness"] [role="slider"]')).not.toBeNull();
+
+  // The studio no longer offers them, nor a brush pressure curve.
+  const dialog = openStudio();
+  expect([...dialog.querySelectorAll('nav button')].map((element) => element.textContent).join()).not.toMatch(
+    /Pressure curve/
+  );
+  expect(dialog.querySelector('[aria-label^="Drag Pressure minimum"]')).toBeNull();
 });
 
-it("keeps the studio's pressure curve and the board's in sync, both ways, and lifts the curve at four by four", () => {
+it("edits the pen's curve in the studio's Pen page and on the board as one, and Cancel restores it", () => {
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version: 2,
+      board: {
+        panels: [
+          {
+            id: 'test-panel',
+            at: { x: 12, y: 12 },
+            parts: [
+              {
+                id: 'settings',
+                kind: 'action:brush-editor',
+                cell: { column: 0, row: 0 },
+                span: { columns: 2, rows: 1 }
+              },
+              // Stored before the brush's three-handle curve became the pen's: it loads as the pen's curve.
+              {
+                id: 'curve',
+                kind: 'value:brush:pressure-curve',
+                cell: { column: 0, row: 1 },
+                span: { columns: 4, rows: 4 }
+              }
+            ]
+          }
+        ]
+      }
+    })
+  );
+  mount();
+  const calibration = wiring.session!.pressureCalibration;
+  expect(calibration.calibration()).toBeUndefined();
+  const dialog = openStudio();
+  const entry = penEntry(dialog);
+  expect(entry.textContent).toContain('Off');
+  entry.click();
+  flush();
+  const studio = () => dialog.querySelector('[data-pen-pane] svg[aria-label="Pressure curve"]')!;
+  const board = () =>
+    [...document.querySelectorAll('[data-panel] svg[aria-label="Pressure curve"]')].find(
+      (element) => !dialog.contains(element)
+    )!;
+  const points = (graph: Element) => graph.querySelectorAll('[data-point]').length;
+  expect(dialog.querySelector('[data-pen-pane] h2')!.textContent).toBe('Pen pressure');
+  expect([points(studio()), points(board())]).toEqual([2, 2]);
+
+  // A key in the studio moves the pen's last point, and the board's graph shows it.
+  studio()
+    .querySelector('[data-point="1"]')!
+    .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', shiftKey: true, bubbles: true }));
+  flush();
+  expect(calibration.curve().points[1]).toEqual({ x: 0.9, y: 1 });
+  expect(board().querySelector('[data-point="1"]')!.getAttribute('aria-label')).toContain('pen 90%');
+  expect(entry.textContent).toContain('2 points');
+
+  // A press on the board's curve adds a point, which the studio's graph shows; strokes map through it at once.
+  graphPointer(board(), 'pointerdown', 0.45, 0.5);
+  graphPointer(board(), 'pointerup', 0.45, 0.5);
+  expect([points(studio()), points(board())]).toEqual([3, 3]);
+  expect(entry.textContent).toContain('3 points');
+  expect(calibration.mapPressure(0.45)).toBeCloseTo(calibration.curve().points[1]!.y, 3);
+
+  // A point's value in the studio opens the keypad; what it commits moves the point on the board too.
+  studio().querySelector('[data-point="1"]')!.dispatchEvent(new FocusEvent('focus'));
+  flush();
+  const brushValue = studio().querySelector<SVGElement>('[data-entry][aria-label^="Brush pressure"]')!;
+  brushValue.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  flush();
+  const keypad = dialog.querySelector<HTMLElement>('[popover][role="dialog"]')!;
+  expect(keypad.getAttribute('aria-label')).toBe('Brush');
+  for (const key of ['7', '0']) {
+    keypad.querySelector<HTMLButtonElement>(`[data-key="${key}"]`)!.click();
+    flush();
+  }
+  [...keypad.querySelectorAll('button')].find((element) => element.textContent === 'OK')!.click();
+  flush();
+  expect(calibration.curve().points[1]!.y).toBe(0.7);
+  expect(board().querySelector('[data-point="1"]')!.getAttribute('aria-label')).toContain('brush 70%');
+
+  // The page's grip knows the curve is on the board, and puts another there at four by four.
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Pen pressure onto the board (on the board)"]')!;
+  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  flush();
+  const placed = [...document.querySelectorAll<HTMLElement>('[data-panel] [data-part-kind="value:pen-pressure-curve"]')]
+    .map((element) => element.closest<HTMLElement>('[data-part]')!)
+    .filter((part) => part.closest('[data-panel]')!.getAttribute('data-panel') !== 'test-panel');
+  expect(placed).toHaveLength(1);
+  expect([placed[0]!.style.width, placed[0]!.style.height]).toEqual(['188px', '188px']);
+
+  // Cancel puts the pen back as it was when the studio opened: uncalibrated.
+  click('Cancel');
+  expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBeNull();
+  expect(calibration.calibration()).toBeUndefined();
+  expect(points(board())).toBe(2);
+});
+
+it("keeps the pen's curve on Done, and Cancel returns to the curve the studio opened with", () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const calibration = wiring.session!.pressureCalibration;
+  const opened = {
+    points: [
+      { x: 0.05, y: 0 },
+      { x: 0.5, y: 0.6 },
+      { x: 0.9, y: 1 }
+    ]
+  };
+  calibration.save(opened);
+  flush();
+  let dialog = openStudio();
+  expect(penEntry(dialog).textContent).toContain('3 points');
+  penEntry(dialog).click();
+  flush();
+  const graph = () => dialog.querySelector('[data-pen-pane] svg[aria-label="Pressure curve"]')!;
+  const nudge = () => {
+    graph()
+      .querySelector('[data-point="1"]')!
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, bubbles: true }));
+    flush();
+  };
+  nudge();
+  expect(calibration.curve().points[1]!.y).toBe(0.7);
+  click('Done');
+  expect(calibration.curve().points[1]!.y).toBe(0.7);
+
+  dialog = openStudio();
+  penEntry(dialog).click();
+  flush();
+  nudge();
+  expect(calibration.curve().points[1]!.y).toBe(0.8);
+  // Reset makes the pen uncalibrated at once; Cancel brings back the curve Done kept.
+  dialog.querySelector<HTMLButtonElement>('[aria-label="Reset pen pressure"]')!.click();
+  flush();
+  expect(calibration.calibration()).toBeUndefined();
+  click('Cancel');
+  expect(calibration.curve().points[1]!.y).toBe(0.7);
+});
+
+it("shows the pen's raw pressure on the pad as a dot on every copy of the curve, and its strokes as a histogram", () => {
   localStorage.setItem(
     'paint.lego',
     JSON.stringify({
@@ -530,7 +682,7 @@ it("keeps the studio's pressure curve and the board's in sync, both ways, and li
               },
               {
                 id: 'curve',
-                kind: 'value:brush:pressure-curve',
+                kind: 'value:pen-pressure-curve',
                 cell: { column: 0, row: 1 },
                 span: { columns: 4, rows: 4 }
               }
@@ -541,59 +693,67 @@ it("keeps the studio's pressure curve and the board's in sync, both ways, and li
     })
   );
   mount();
-  wiring.session!.tools.updateBrush({
-    stroke: { ...wiring.session!.brush().stroke, mode: 'stabilizer', stabilizer: 4 }
-  });
-  flush();
   const dialog = openStudio();
-  category(dialog, 'Pressure curve');
-  const studio = dialog.querySelector('[data-part-kind="value:brush:pressure-curve"]')!;
-  const board = [...document.querySelectorAll('[data-part-kind="value:brush:pressure-curve"]')].find(
-    (element) => !dialog.contains(element)
-  )!;
-  const handle = (root: Element, name: string) => root.querySelector<HTMLElement>(`[data-curve-handle="${name}"]`)!;
-
-  // A key in the studio moves the board's handle too.
-  handle(studio, 'minimum').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  penEntry(dialog).click();
   flush();
-  expect(wiring.session!.brush().stroke.minimum).toBeCloseTo(0.06);
-  expect(handle(board, 'minimum').getAttribute('aria-valuenow')).toBe('6');
+  const markers = () => document.querySelectorAll('svg[aria-label="Pressure curve"] circle[class*="marker"]').length;
+  const bars = () =>
+    [...dialog.querySelectorAll('[data-pen-pane] svg[aria-label="Pressure curve"] rect')].filter(
+      (bar) => Number(bar.getAttribute('height')) > 0
+    ).length;
+  expect([markers(), bars()]).toEqual([0, 0]);
+  // jsdom lays nothing out, so the pad draws no canvas of its own: a canvas stands in for its paper.
+  const paper = document.createElement('canvas');
+  dialog.querySelector('[aria-label="Drawing pad"] > div')!.append(paper);
+  const pen = (type: string, extra: Record<string, unknown>) => {
+    const event = new MouseEvent(type, { bubbles: true });
+    for (const [key, value] of Object.entries({ pointerId: 7, pointerType: 'pen', ...extra })) {
+      Object.defineProperty(event, key, { value });
+    }
 
-  // A drag on the board's maximum, half the graph's width, moves the studio's; the maximum stops at full.
-  const plot = handle(board, 'maximum').parentElement!;
-  plot.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 100, right: 100, bottom: 100 }) as DOMRect;
-  pointer(handle(board, 'maximum'), 'pointerdown', 0, 0);
-  pointer(handle(board, 'maximum'), 'pointermove', 50, 0);
-  pointer(handle(board, 'maximum'), 'pointerup', 50, 0);
-  expect(wiring.session!.brush().stroke.maximum).toBe(1);
-  expect(handle(studio, 'maximum').getAttribute('aria-valuenow')).toBe('100');
-
-  // The firmness chip opens the keypad for firmness in the studio, and the board shows what it commits.
-  const chip = handle(studio, 'firmness').lastElementChild!;
-  pointer(chip, 'pointerdown', 0, 0);
-  pointer(chip, 'pointerup', 0, 0);
-  const keypad = dialog.querySelector<HTMLElement>('[popover][role="dialog"]')!;
-  expect(keypad.getAttribute('aria-label')).toBe('Pressure firmness');
-  for (const key of ['2', '0', '0']) {
-    keypad.querySelector<HTMLButtonElement>(`[data-key="${key}"]`)!.click();
+    paper.dispatchEvent(event);
     flush();
-  }
-  [...keypad.querySelectorAll('button')].find((element) => element.textContent === 'OK')!.click();
-  flush();
-  expect(wiring.session!.brush().stroke.firmness).toBe(2);
-  expect(handle(board, 'firmness').textContent).toBe('200%');
+  };
+  pen('pointerdown', { pressure: 0.4, timeStamp: 0, buttons: 1 });
+  expect(markers()).toBe(2);
+  const samples = Array.from({ length: 50 }, (_, index) => ({ timeStamp: index * 4, pressure: 0.4, buttons: 1 }));
+  pen('pointermove', { ...samples.at(-1), getCoalescedEvents: () => samples });
+  pen('pointerup', { pressure: 0, timeStamp: 200 });
+  expect(markers()).toBe(0);
+  expect(bars()).toBe(1);
 
-  // The studio row's grip knows a curve is on the board, and puts another there at four by four.
-  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Pressure curve onto the board (on the board)"]')!;
-  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  // A new visit starts with an empty histogram.
+  click('Done');
+  const again = openStudio();
+  penEntry(again).click();
   flush();
-  const placed = [
-    ...document.querySelectorAll<HTMLElement>('[data-panel] [data-part-kind="value:brush:pressure-curve"]')
-  ]
-    .map((element) => element.closest<HTMLElement>('[data-part]')!)
-    .filter((part) => part.closest('[data-panel]')!.getAttribute('data-panel') !== 'test-panel');
-  expect(placed).toHaveLength(1);
-  expect([placed[0]!.style.width, placed[0]!.style.height]).toEqual(['188px', '188px']);
+  expect(
+    [...again.querySelectorAll('[data-pen-pane] svg[aria-label="Pressure curve"] rect')].filter(
+      (bar) => Number(bar.getAttribute('height')) > 0
+    )
+  ).toHaveLength(0);
+});
+
+it('runs the calibration steps on the Pen page from its Measure button, and offers the curve in the box', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  penEntry(dialog).click();
+  flush();
+  dialog.querySelector<HTMLButtonElement>('[aria-label="Measure pen pressure"]')!.click();
+  flush();
+  const pane = dialog.querySelector('[data-pen-pane]')!;
+  expect(pane.querySelector('[aria-current="step"]')?.textContent).toContain('As usual');
+  expect(wiring.session!.windows.isOpen('pressure')).toBe(false);
+  [...pane.querySelectorAll('button')].find((element) => element.textContent === 'Cancel')!.click();
+  flush();
+  expect(pane.querySelector('[aria-current="step"]')).toBeNull();
+  expect(pane.querySelector('svg[aria-label="Pressure curve"]')).not.toBeNull();
+  click('Done');
+
+  const tools = boxSections.find((section) => section.id === 'Tools')!.kinds;
+  expect(tools.indexOf('value:pen-pressure-curve')).toBe(tools.indexOf('action:pressure') + 1);
+  expect(partDefinition('value:brush:pressure-curve')?.kind).toBe('value:pen-pressure-curve');
 });
 
 it("Escape in a studio row's keypad closes the keypad and keeps the studio open", () => {
@@ -648,6 +808,28 @@ function category(dialog: HTMLElement, name: string) {
   [...dialog.querySelectorAll<HTMLElement>('nav button')]
     .find((element) => element.textContent?.includes(name))!
     .click();
+  flush();
+}
+
+/** The sidebar entry of the pen's page in the studio's "Pen" group. */
+function penEntry(dialog: HTMLElement) {
+  const entry = [...dialog.querySelectorAll<HTMLElement>('nav button')].find(
+    (element) => element.querySelector('span span')?.textContent === 'Pressure'
+  );
+  expect(entry).toBeDefined();
+  return entry!;
+}
+
+/**
+ * A pen event on a pressure curve's graph at raw pressure `raw` and output `value`, the graph laid out at its own
+ * 480 × 260 units, as an unmeasured graph is drawn.
+ */
+function graphPointer(graph: Element, type: string, raw: number, value: number) {
+  (graph as SVGSVGElement).getBoundingClientRect = () => ({ left: 0, top: 0, width: 480, height: 260 }) as DOMRect;
+  (graph as SVGSVGElement).setPointerCapture = () => undefined;
+  const event = new MouseEvent(type, { clientX: 28 + raw * 424, clientY: 232 - value * 204, bubbles: true, button: 0 });
+  Object.defineProperties(event, { pointerId: { value: 3 }, pointerType: { value: 'pen' }, pressure: { value: 0.5 } });
+  graph.dispatchEvent(event);
   flush();
 }
 
