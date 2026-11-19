@@ -1,7 +1,7 @@
 import type { Part } from './board';
 
 /**
- * What a new swatch opens: the disc over hue, saturation and brightness, and the history below, for the default
+ * What a new swatch opens: the disc over hue, saturation and brightness, and the history below, composed for a
  * 28 px cell: six cells across, as the sliders need for their names beside their values.
  */
 export const swatchPanelParts: Part[] = [

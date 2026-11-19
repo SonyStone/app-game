@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, it } from 'vitest';
 import { frameAt, nearestCell, spanAfter, type Part } from './board';
-import { createGrid } from './grid';
+import { createGrid, defaultCell } from './grid';
 import { lookOf } from './parts';
 
 it.each([44, 32])('round trips cells, snaps a resize and frames a plate at %i px', (cell) => {
@@ -19,9 +19,9 @@ it.each([44, 32])('round trips cells, snaps a resize and frames a plate at %i px
   });
 });
 
-it('uses the 28 px default for an absent or invalid host size', () => {
+it('uses the default cell for an absent or invalid host size', () => {
   for (const size of [undefined, 0, -8, NaN, Infinity]) {
-    expect(createGrid(() => size).cell()).toBe(28);
+    expect(createGrid(() => size).cell()).toBe(defaultCell);
   }
 });
 

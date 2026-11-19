@@ -1,7 +1,7 @@
 import type { Part } from './board';
 
 /**
- * The ready Layers floating composition, for the default 28 px cell: the name, the blend mode with the opacity as a
+ * The ready Layers floating composition, for a 28 px cell: the name, the blend mode with the opacity as a
  * number, the ordering buttons, the list, and the buttons that manage layers with Smooth color, each named part as
  * long as its name needs. Also used by defaults and version 3 migrations.
  */

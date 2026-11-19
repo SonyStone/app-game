@@ -1,6 +1,7 @@
 import { expect, it } from 'vitest';
 import { floatingGripHeight, frameAt, panelFrame, putPanel, removePart, type Board, type Panel } from './board';
-import { cellGap, referenceCell } from './grid';
+import { defaultBoard } from './createBoard';
+import { cellGap, defaultCell, referenceCell } from './grid';
 import { canDropParts, openChain, visiblePanels } from './windows';
 
 const pitch = referenceCell + cellGap;
@@ -17,6 +18,37 @@ const plate = (id: string, owner?: string): Panel => ({
   owner,
   at: { x: 0.2, y: 0.2 },
   parts: [tile(`${id}-part`)]
+});
+
+it.each([
+  { width: 1646, height: 1029 },
+  { width: 1029, height: 1646 }
+])('keeps default plates separate and on screen at $width × $height', (tablet) => {
+  // Opening the parts box scales the entire board card. Its layout still uses the full tablet dimensions.
+  for (const editing of [false, true]) {
+    const plates = visiblePanels(defaultCell + cellGap, defaultBoard, undefined, editing, tablet);
+    for (const [
+      index,
+      {
+        panel,
+        frame: { rect }
+      }
+    ] of plates.entries()) {
+      const right = rect.left + rect.width;
+      const bottom = rect.top + rect.height;
+      expect(rect.left, panel.id).toBeGreaterThanOrEqual(0);
+      expect(rect.top, panel.id).toBeGreaterThanOrEqual(0);
+      expect(right, panel.id).toBeLessThanOrEqual(tablet.width);
+      expect(bottom, panel.id).toBeLessThanOrEqual(tablet.height);
+
+      for (const other of plates.slice(index + 1)) {
+        const b = other.frame.rect;
+        const separate =
+          right <= b.left || b.left + b.width <= rect.left || bottom <= b.top || b.top + b.height <= rect.top;
+        expect(separate, `${panel.id} overlaps ${other.panel.id}`).toBe(true);
+      }
+    }
+  }
 });
 
 it('shows all floating panels in every mode while folders still use one open chain', () => {

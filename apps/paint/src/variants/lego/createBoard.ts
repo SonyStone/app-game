@@ -71,7 +71,7 @@ function swatchPanel(owner: string): Board['panels'][number] {
 }
 
 /**
- * The board a first visit sees, composed for the default 28 px cell: on the left everything a sketch, a fill and
+ * The board a first visit sees, composed for a 28 px cell: on the left everything a sketch, a fill and
  * layers take, the brush group on top (the brush, the brush library and Brush settings, undo and redo and the size
  * beside them), the tools under it (the eraser, the lasso, the local undo, the fill and the transform) beside the file
  * commands; the color across the top (a swatch opening its panel of pickers, hue and brightness) and the size and

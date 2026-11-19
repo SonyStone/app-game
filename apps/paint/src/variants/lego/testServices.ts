@@ -8,6 +8,7 @@ import { createColorWheelSettings, hexToWheel, wheelToHex } from '../../features
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv } from '../../features/color/hsv';
 import { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
+import { defaultCell } from './grid';
 import { createChannelBrush, type LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
 
@@ -19,7 +20,7 @@ export function createTestServices() {
   const setColor = vi.fn((color: string) => setBrush((current) => ({ ...current, color })));
   const errors = vi.fn();
   const [penCurve, setPenCurve] = createSignal<PressureCurve>();
-  const [gridCell, setGridCell] = createSignal(28);
+  const [gridCell, setGridCell] = createSignal(defaultCell);
   const services: LegoServices = {
     brushEditor: {
       channelBrush: createChannelBrush(brush),
