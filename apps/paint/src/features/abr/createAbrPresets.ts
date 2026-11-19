@@ -25,12 +25,17 @@ export function createAbrPresets(options: {
    * Converts an ABR brush chosen in the viewer and applies it. Unsupported preset settings are returned as an
    * `invalid-preset` error; see `usePreset` for the upload.
    */
-  async function useBrush(asset: BrushAsset): Promise<Result<void, PaintError>> {
-    const { prepareAbrBrush } = await import('@app-game/abr-paint/preset');
-    const prepared = Result.fromThrowable(prepareAbrBrush, (cause) =>
-      brushError('invalid-preset', errorMessage(cause), cause)
-    )(asset);
-    return prepared.isErr() ? err(prepared.error) : usePreset(prepared.value, `abr:${asset.id}`, asset);
+  async function useBrush(asset: BrushAsset, source = 'abr:' + asset.id): Promise<Result<void, PaintError>> {
+    try {
+      const { convertAbr } = await import('../brush-library/abrPresetDocument');
+      const { preset, resources } = await convertAbr(asset);
+      if (!options.canChange()) {
+        return err(engineError('busy', 'Wait for Paint to finish the current operation.'));
+      }
+      return options.choose(await options.library.importPreset({ ...preset, source }, resources));
+    } catch (cause) {
+      return err(brushError('invalid-preset', errorMessage(cause), cause));
+    }
   }
 
   /**
@@ -42,6 +47,10 @@ export function createAbrPresets(options: {
       return err(engineError('busy', 'Wait for Paint to finish the current operation.'));
     }
 
+    if (abrSource) {
+      return useBrush(abrSource, source);
+    }
+
     if (!next.resources[0]) {
       return err(brushError('invalid-preset', 'The preset has no primary tip.'));
     }
@@ -50,7 +59,6 @@ export function createAbrPresets(options: {
       {
         name: next.name,
         source,
-        ...(abrSource ? { abrSource } : {}),
         settings: { engine: next.engine, tool: 'brush', ...abrSettings(next) }
       },
       next.resources

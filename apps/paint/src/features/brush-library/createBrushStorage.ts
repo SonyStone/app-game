@@ -1,5 +1,5 @@
-import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import type { BrushResource } from '@app-game/abr-paint/resources';
+import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { onCleanup } from 'solid-js';
 import { brushError, type PaintError } from '../../shared/errors';
 import type { BrushPreset } from './brushPresets';
@@ -67,7 +67,10 @@ export function createBrushStorage(options: {
     readPresets(): Promise<StoredPreset[]> {
       return read('Saved brushes could not be read.', [], async (database) => {
         const records = await request<unknown[]>(database.transaction('presets').objectStore('presets').getAll());
-        return records.filter(isStoredPreset).map(restorePreset).sort((left, right) => left.created - right.created);
+        return records
+          .filter(isStoredPreset)
+          .map(restorePreset)
+          .sort((left, right) => left.created - right.created);
       });
     },
     /** The stored images with `ids`, in order; `undefined` when any of them is missing or cannot be read. */
@@ -80,15 +83,36 @@ export function createBrushStorage(options: {
     },
     /**
      * Adds or replaces a preset together with images it uses that are not stored yet, in one transaction. Resolves
-     * whether the write succeeded.
+     * whether the write succeeded. A migration also checks that the legacy record still exists and is current.
      */
-    putPreset(preset: StoredPreset, resources: readonly BrushResource[] = []): Promise<boolean> {
-      return write(['presets', 'resources'], (transaction) => {
-        transaction.objectStore('presets').put(preset);
+    async putPreset(
+      preset: StoredPreset,
+      resources: readonly BrushResource[] = [],
+      legacy?: StoredPreset
+    ): Promise<boolean> {
+      let current = true;
+      const committed = await write(['presets', 'resources'], async (transaction) => {
+        const presets = transaction.objectStore('presets');
+        const old = await request<unknown>(presets.get(preset.id));
+        if (
+          legacy &&
+          (!isStoredPreset(old) ||
+            old.abrDocument ||
+            !old.abrSource ||
+            old.name !== legacy.name ||
+            old.created !== legacy.created ||
+            JSON.stringify(restorePreset(old).settings) !== JSON.stringify(legacy.settings))
+        ) {
+          current = false;
+          return;
+        }
+        presets.put(preset);
         for (const resource of resources) {
           transaction.objectStore('resources').put(resource, resource.id);
         }
+        await releaseUnused(transaction, old, preset);
       });
+      return committed && current;
     },
     /** Commits an imported set and all its native tip images in one transaction. */
     putPresets(presets: readonly StoredPreset[], resources: readonly BrushResource[]) {
@@ -107,13 +131,7 @@ export function createBrushStorage(options: {
         const presets = transaction.objectStore('presets');
         const deleted = await request<unknown>(presets.get(id));
         presets.delete(id);
-        const remaining = await request<unknown[]>(presets.getAll());
-        const used = new Set(remaining.filter(isStoredPreset).flatMap((preset) => preset.resourceIds));
-        for (const resource of isStoredPreset(deleted) ? deleted.resourceIds : []) {
-          if (!used.has(resource)) {
-            transaction.objectStore('resources').delete(resource);
-          }
-        }
+        await releaseUnused(transaction, deleted);
       });
     },
     /** Resolves when the writes queued so far have finished, whether or not they succeeded. */
@@ -261,4 +279,24 @@ function isResource(value: unknown): value is BrushResource {
 
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && ArrayBuffer.isView(record.pixels);
+}
+
+async function releaseUnused(transaction: IDBTransaction, deleted: unknown, replacement?: StoredPreset) {
+  if (!isStoredPreset(deleted)) {
+    return;
+  }
+  const retained = new Set([...(replacement?.resourceIds ?? []), ...(replacement?.assetIds ?? [])]);
+  const discarded = [...deleted.resourceIds, ...(deleted.assetIds ?? [])].filter((id) => !retained.has(id));
+  if (!discarded.length) {
+    return;
+  }
+  const remaining = await request<unknown[]>(transaction.objectStore('presets').getAll());
+  const used = new Set(
+    remaining.filter(isStoredPreset).flatMap((preset) => [...preset.resourceIds, ...(preset.assetIds ?? [])])
+  );
+  for (const resource of discarded) {
+    if (!used.has(resource)) {
+      transaction.objectStore('resources').delete(resource);
+    }
+  }
 }

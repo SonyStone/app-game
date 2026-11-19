@@ -3,6 +3,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { PaintVariantProps } from '..';
+import { AbrViewerDialog } from '../../features/abr';
 import { brushSettingName } from '../../features/brush-editor/brushSettingName';
 import { BrushStudioDialog } from '../../features/brush/BrushStudioDialog';
 import {
@@ -83,6 +84,7 @@ export function LegoStudio(
   const board = createBoard(reportSavingError);
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
+  const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
   const services = createLegoServices(
     session,
     () => {
@@ -101,6 +103,10 @@ export function LegoStudio(
         setStudioOnPen(true);
         setStudioOpen(true);
       }
+    },
+    () => {
+      setPopup(undefined);
+      setAbrViewer('open');
     }
   );
   const closeStudio = () => {
@@ -296,6 +302,15 @@ export function LegoStudio(
               {editing() ? 'Done' : 'Edit'}
             </button>
           </div>
+          <Show when={abrViewer() !== undefined}>
+            <AbrViewerDialog
+              open={abrViewer() === 'open'}
+              close={() => setAbrViewer('closed')}
+              mixing={session.brush().mixing}
+              onMixingChange={(mixing) => session.tools.updateBrush({ mixing })}
+              onUseBrush={session.presets.useBrush}
+            />
+          </Show>
           <Show when={studioOpen()}>
             <BrushStudioDialog
               class={styles.brushStudio}

@@ -40,6 +40,7 @@ export const actionParts = [
       get disabled() {
         return !s.layers.ready();
       },
+      onImport: s.presets.openAbr && f.command(s.presets.openAbr),
       onImportFile: f.command(s.presets.importFile),
       onExportFile: f.command(s.presets.exportFile),
       onChoose: f.command(s.presets.use)

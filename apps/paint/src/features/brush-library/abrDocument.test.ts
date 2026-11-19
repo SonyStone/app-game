@@ -5,12 +5,17 @@ import { degrees, initAbr, percent, pixels, readLibrary } from '@app-game/abr-pa
 import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
 import { assetId, encodePng } from '@app-game/paint-core/paintbrush/asset';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
+import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { createRoot } from 'solid-js';
 import { expect, it } from 'vitest';
 import { softRoundCandidate } from '../../../tests/fixtures/softRound';
 import { abrDocument, photoshopExtensions, resolveAbr } from './abrDocument';
+import { convertAbr, coverageMap } from './abrPresetDocument';
+import { createBrushLibrary } from './createBrushLibrary';
 import { resolveNative } from './nativeDocument';
+import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
 
 await initAbr();
 
@@ -94,7 +99,14 @@ it.each(directories)(
           rejectedPresets++;
           continue;
         }
-        const { document, assets } = await roundTrip(await abrDocument(brush));
+        const imported = await convertAbr(brush);
+        const library = createRoot(() => createBrushLibrary({}));
+        const bytes = await exportPaintbrush({ ...imported.preset, id: brush.id }, imported.resources);
+        expect(await importPaintbrush(bytes, library)).toEqual([]);
+        const restored = library.find(brush.id)!;
+        expect(restored.settings).toEqual(imported.preset.settings);
+        const document = parseDocument(restored.abrDocument!, brushSchema);
+        const assets = coverageMap((await library.assets(restored))._unsafeUnwrap());
         await compare(await resolveAbr(document, assets), baseline);
         const rawKind = brush.preset.tip?.kind ?? 'computed';
         const kind = rawKind === 'naturalMedia' ? (brush.preset.tip?.dtipsType ? 'airbrush' : 'erodible') : rawKind;

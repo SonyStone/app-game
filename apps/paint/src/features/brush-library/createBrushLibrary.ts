@@ -2,6 +2,7 @@ import type { BrushResource } from '@app-game/abr-paint/resources';
 import { err, ok, type Result } from 'neverthrow';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { brushError, type PaintError } from '../../shared/errors';
+import { syncAbrPreset } from './abrHost';
 import { builtInPresets, type BrushPreset } from './brushPresets';
 import type { BrushStorage, StoredPreset } from './createBrushStorage';
 
@@ -11,7 +12,7 @@ import type { BrushStorage, StoredPreset } from './createBrushStorage';
  * is used, keeping recently used images in memory within `imageBudget`. Changes apply at once and are written to
  * `storage` in the background; images not yet written stay in memory regardless of the budget.
  *
- * The library knows nothing about brush engines: a preset's engine settings and images are opaque here.
+ * Loading a legacy Photoshop preset converts its descriptor and images before publishing it.
  * Must be created within a Solid owner.
  */
 export function createBrushLibrary(options: {
@@ -20,12 +21,15 @@ export function createBrushLibrary(options: {
     Partial<Pick<BrushStorage, 'putPresets'>>;
   /** Bytes of stored images kept in memory after use. Default 64 MiB. */
   imageBudget?: number;
+  onError?: (error: PaintError) => void;
 }) {
   // Several commands in one event, such as import and select, must see each other's presets.
   const [known, setKnown, latestKnown] = createImmediateSignal<ReadonlyMap<string, StoredPreset>>(new Map());
   /** Presets deleted in this session, so that late reads do not bring them back. */
   const removed = new Set<string>();
   const images = createImageCache(options.imageBudget ?? 64 * 1024 * 1024);
+  const migrations = new Map<string, Promise<void>>();
+  let importQueue: Promise<unknown> = Promise.resolve();
   let listing: Promise<void> | undefined;
 
   return {
@@ -44,7 +48,7 @@ export function createBrushLibrary(options: {
 
       const stored = await options.storage.readPreset(id);
       if (stored && !removed.has(id) && !latestKnown().has(id)) {
-        remember(stored);
+        await loadStored(stored);
       }
 
       return find(id);
@@ -54,16 +58,9 @@ export function createBrushLibrary(options: {
      * The images of `preset`, from memory or storage. Fails with a `storage` error when an image is missing, for
      * example after the browser cleared site data.
      */
-    async resources(preset: BrushPreset): Promise<Result<BrushResource[], PaintError>> {
-      const missing = preset.resourceIds.filter((id) => !images.has(id));
-      const stored = missing.length > 0 ? await options.storage?.readResources(missing) : [];
-      stored?.forEach((resource) => images.put(resource, true));
-      const resources = preset.resourceIds.flatMap((id) => images.get(id) ?? []);
-      images.trim();
-      return resources.length === preset.resourceIds.length
-        ? ok(resources)
-        : err(brushError('storage', `The images of “${preset.name}” are missing. Import the brush again.`));
-    },
+    resources,
+    /** All coverage referenced by the editable document, including disabled sampler roles. */
+    assets: (preset: BrushPreset) => resources(preset, preset.assetIds ?? []),
     add,
     /** Publishes a complete validated batch only after its IndexedDB transaction commits. */
     async addImported(batch: readonly { preset: BrushPreset; resources: readonly BrushResource[] }[]) {
@@ -75,12 +72,12 @@ export function createBrushLibrary(options: {
       for (const item of batch) {
         const input = item.preset;
         const copy = input.id.startsWith('builtin:') || ids.has(input.id) || Object.hasOwn(Object.prototype, input.id);
-        const preset = {
+        const preset = syncAbrPreset({
           ...input,
           id: copy ? crypto.randomUUID() : input.id,
           derivedFrom: copy ? input.id : input.derivedFrom,
           created: created++
-        };
+        });
         presets.push(preset);
         ids.add(preset.id);
         for (const image of item.resources) {
@@ -106,25 +103,50 @@ export function createBrushLibrary(options: {
      * importing an edited brush again does not duplicate it. Reads the preset list to find that import.
      */
     async importPreset(
-      preset: Omit<BrushPreset, 'id' | 'builtIn' | 'resourceIds'> & { source: string },
+      preset: Omit<BrushPreset, 'id' | 'builtIn' | 'resourceIds'> & { source: string; resourceIds?: readonly string[] },
       resources: readonly BrushResource[]
     ): Promise<BrushPreset> {
-      await loadAll();
-      const resourceIds = resources.map(({ id }) => id);
-      const existing = [...latestKnown().values()].find((candidate) => candidate.source === preset.source);
-      if (!existing) {
-        return add({ ...preset, resourceIds }, resources);
-      }
+      // A second conversion of the same source must see the first committed entry.
+      const pending = importQueue.then(importOne);
+      importQueue = pending.catch(() => undefined);
+      return pending;
 
-      const replaced = { ...preset, resourceIds, id: existing.id, created: existing.created };
-      store(replaced, resources);
-      return withoutCreated(replaced);
+      async function importOne() {
+        await loadAll();
+        const resourceIds = preset.resourceIds ?? resources.map(({ id }) => id);
+        const existing = [...latestKnown().values()].find((candidate) => candidate.source === preset.source);
+        const imported = syncAbrPreset({
+          ...preset,
+          resourceIds,
+          id: existing?.id ?? crypto.randomUUID(),
+          created: existing?.created ?? Math.max(Date.now(), ...[...latestKnown().values()].map((p) => p.created + 1))
+        });
+        if (!preset.abrDocument) {
+          store(imported, resources);
+          return withoutCreated(imported);
+        }
+        if (options.storage && !(await options.storage.putPreset(imported, resources))) {
+          throw new Error('Imported brush could not be saved');
+        }
+        for (const image of resources) {
+          images.put(image, !!options.storage);
+        }
+        images.trim();
+        if (!removed.has(imported.id)) {
+          remember(imported);
+        }
+        return withoutCreated(imported);
+      }
     },
     /** Renames a loaded user preset or replaces its settings; built-in presets and unknown ids are ignored. */
-    update(id: string, patch: Partial<Pick<BrushPreset, 'name' | 'settings'>>) {
+    update(
+      id: string,
+      patch: Partial<Pick<BrushPreset, 'name' | 'settings' | 'abrDocument' | 'resourceIds'>>,
+      resources: readonly BrushResource[] = []
+    ) {
       const existing = latestKnown().get(id);
       if (existing) {
-        store({ ...existing, ...patch });
+        store(syncAbrPreset({ ...existing, ...patch }, !!patch.settings), resources);
       }
     },
     /** Deletes a user preset; built-in presets are ignored. Its images are deleted when no other preset uses them. */
@@ -137,13 +159,34 @@ export function createBrushLibrary(options: {
       options.storage?.deletePreset(id);
       const existing = latestKnown().get(id);
       if (existing) {
-        images.release(existing.resourceIds);
         const next = new Map(latestKnown());
         next.delete(id);
+        if (!options.storage) {
+          const used = new Set([...next.values()].flatMap((p) => [...p.resourceIds, ...(p.assetIds ?? [])]));
+          for (const key of [...existing.resourceIds, ...(existing.assetIds ?? [])]) {
+            if (!used.has(key)) {
+              images.forget(key);
+            }
+          }
+        }
         setKnown(next);
       }
     }
   };
+
+  async function resources(
+    preset: BrushPreset,
+    ids = preset.resourceIds
+  ): Promise<Result<BrushResource[], PaintError>> {
+    const missing = ids.filter((id) => !images.has(id));
+    const stored = missing.length > 0 ? await options.storage?.readResources(missing) : [];
+    stored?.forEach((resource) => images.put(resource, true));
+    const resources = ids.flatMap((id) => images.get(id) ?? []);
+    images.trim();
+    return resources.length === ids.length
+      ? ok(resources)
+      : err(brushError('storage', `The images of “${preset.name}” are missing. Import the brush again.`));
+  }
 
   /** A built-in or loaded preset, including presets added earlier in the current event. */
   function find(id: string): BrushPreset | undefined {
@@ -158,7 +201,10 @@ export function createBrushLibrary(options: {
   function add(preset: Omit<BrushPreset, 'id' | 'builtIn'>, resources: readonly BrushResource[] = []): BrushPreset {
     const latest = Math.max(0, ...[...latestKnown().values()].map(({ created }) => created));
     // Strictly increasing, so presets created within one millisecond keep their order.
-    const added = { ...preset, id: crypto.randomUUID(), created: Math.max(Date.now(), latest + 1) };
+    const added = syncAbrPreset(
+      { ...preset, id: crypto.randomUUID(), created: Math.max(Date.now(), latest + 1) },
+      true
+    );
     store(added, resources);
     return withoutCreated(added);
   }
@@ -168,11 +214,62 @@ export function createBrushLibrary(options: {
     listing ??= (async () => {
       for (const preset of (await options.storage?.readPresets()) ?? []) {
         if (!removed.has(preset.id) && !latestKnown().has(preset.id)) {
-          remember(preset);
+          await loadStored(preset);
         }
       }
     })();
     return listing;
+  }
+
+  async function loadStored(record: StoredPreset) {
+    if (!record.abrDocument && record.abrSource) {
+      const pending = migrations.get(record.id);
+      if (pending) {
+        return pending;
+      }
+      const converting = migrate(record);
+      migrations.set(record.id, converting);
+      try {
+        await converting;
+      } finally {
+        migrations.delete(record.id);
+      }
+    } else {
+      remember(record);
+    }
+  }
+
+  async function migrate(record: StoredPreset) {
+    try {
+      const { convertAbr } = await import('./abrPresetDocument');
+      const { preset, resources } = await convertAbr(record.abrSource!, record.settings);
+      const converted = syncAbrPreset(
+        { ...record, ...preset, name: record.name, settings: { ...record.settings, engine: preset.settings.engine } },
+        true
+      );
+      if (removed.has(record.id) || latestKnown().has(record.id)) {
+        return;
+      }
+      if (await options.storage!.putPreset(converted, resources, record)) {
+        record = converted;
+      } else {
+        const latest = await options.storage!.readPreset(record.id);
+        if (!latest) {
+          return;
+        }
+        record = latest;
+        if (!record.abrDocument) {
+          throw new Error('Conversion could not be saved');
+        }
+      }
+    } catch (cause) {
+      options.onError?.(
+        brushError('invalid-preset', 'Could not convert “' + record.name + '”: ' + String(cause), cause)
+      );
+    }
+    if (!removed.has(record.id) && !latestKnown().has(record.id)) {
+      remember(record);
+    }
   }
 
   function remember(preset: StoredPreset) {
@@ -207,7 +304,7 @@ function withoutCreated(preset: BrushPreset & { created?: number }): BrushPreset
 function createImageCache(budget: number) {
   const entries = new Map<string, { resource: BrushResource; evictable: boolean }>();
 
-  return { has: (id: string) => entries.has(id), get, put, release, trim };
+  return { forget: (id: string) => entries.delete(id), has: (id: string) => entries.has(id), get, put, release, trim };
 
   /** The image with `id`, marking it as the most recently used. */
   function get(id: string): BrushResource | undefined {

@@ -1,5 +1,5 @@
 import { isBlockEraser } from '@app-game/abr-brush/blockEraser';
-import { descriptorRgbColor, record } from '@app-game/abr-brush/form';
+import { descriptorRgbColor, formValuesToBrush, record, type BrushFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset, BrushTipImage } from '@app-game/abr-brush/library';
 import { brushPreviewResources, decodePreviewResources } from '@app-game/abr-brush/resources';
 import { featureFields, settingGroups } from '@app-game/abr-brush/settings-fields';
@@ -11,8 +11,12 @@ import { assetId, type Coverage } from '@app-game/paint-core/paintbrush/asset';
 import {
   brushSchema,
   versionOneDefaults as defaults,
+  parseDocument,
+  patch,
   type BrushDocument
 } from '@app-game/paint-core/paintbrush/document';
+
+import { hostExtension } from './abrHost';
 
 type Definition = BrushDocument['definition'];
 
@@ -203,7 +207,7 @@ export async function resolveAbr(document: BrushDocument, assets: ReadonlyMap<st
     throw new Error('The ABR sampler cannot apply document bindings or taper');
   }
   for (const [id, ext] of Object.entries(d.extensions ?? {})) {
-    if (ext.impact !== 'metadata' && !photoshopExtensions.includes(id)) {
+    if (ext.impact !== 'metadata' && id !== hostExtension && !photoshopExtensions.includes(id)) {
       throw new Error('Unsupported ABR extension: ' + id);
     }
   }
@@ -298,6 +302,94 @@ export async function resolveAbr(document: BrushDocument, assets: ReadonlyMap<st
     ...(stroke ? { stroke } : {}),
     ...(d.mixing ? { mixing: d.mixing } : {})
   };
+}
+
+/** Applies the studio's changed descriptor fields at their document addresses. */
+export function patchAbrValues(text: string, values: BrushFormValues) {
+  const doc = parseDocument(text, brushSchema);
+  const d = doc.definition;
+  const key = d.sequence.tips[0]!;
+  const primary = d.tips[key]!;
+  const before = descriptorFrom(d, primary);
+  const asset: BrushAsset = {
+    id: doc.id,
+    name: doc.name,
+    preset: { kind: 'brush', sourceId: doc.id, ...before },
+    resources: [],
+    source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+  };
+  const after = formValuesToBrush(asset, values).preset;
+  function set(path: string[], value: unknown) {
+    let node = d as Record<string, unknown>;
+    const address = ['definition'];
+    for (const [i, part] of path.entries()) {
+      address.push(part);
+      if (i === path.length - 1 || !node[part]) {
+        const nested = path.slice(i + 1).reduceRight<unknown>((child, name) => ({ [name]: child }), value);
+        node[part] = nested;
+        text = patch(text, '/' + address.map((k) => k.replace(/~/g, '~0').replace(/\//g, '~1')).join('/'), nested);
+        return;
+      }
+      node = record(node[part]);
+    }
+  }
+  for (const [path, group] of new Map([
+    ...fields,
+    ...['diameter', 'angle', 'spacing', 'hardness', 'roundness'].map((k) => ['tip.' + k, 'tip'] as const)
+  ])) {
+    const read = (obj: unknown) => path.split('.').reduce<unknown>((node, k) => record(node)[k], obj);
+    const value = read(after);
+    if (value === undefined || JSON.stringify(value) === JSON.stringify(read(before))) {
+      continue;
+    }
+    const dest = auxiliaryFields.get(path);
+    if (path === 'tip.diameter') {
+      set(['size'], value);
+    } else if (path === 'tip.spacing') {
+      fraction(['placement', 'spacing'], path, group, Number(value));
+    } else if (['tip.angle', 'tip.hardness', 'tip.roundness'].includes(path)) {
+      if (path === 'tip.angle') {
+        set(['tips', key, 'angleDeg'], value);
+      } else {
+        fraction(['tips', key, path.slice(4)], path, group, Number(value));
+      }
+    } else if (dest && (dest.section === 'texture' ? d.texture : d.dual)) {
+      const section = dest.section === 'tips/secondary' ? ['tips', d.dual!.tip] : [dest.section];
+      if (dest.fraction) {
+        fraction([...section, dest.key], path, group, Number(value));
+      } else {
+        set([...section, dest.key], value);
+      }
+    } else if (path === 'toolOptions.flow' || path === 'toolOptions.opacity') {
+      fraction(['transfer', path.slice('toolOptions.'.length)], path, group, Number(value));
+    } else {
+      const section = path === 'textureBlendMode' ? 'texture' : path === 'dualBrush.blendMode' ? 'dual' : undefined;
+      if (section && d[section]?.blend) {
+        const { blend, ...remaining } = d[section]!;
+        set([section], remaining);
+      }
+      setExtension(group, path, value);
+    }
+  }
+  return text;
+
+  function fraction(address: string[], path: string, group: string, value: number) {
+    const scaled = value / 100;
+    set(address, scaled);
+    const residual = value - scaled * 100;
+    const field = path + '.roundoff';
+    if (residual || record(d.extensions?.[extensionId(group)]?.value)[field] !== undefined) {
+      setExtension(group, field, residual);
+    }
+  }
+
+  function setExtension(group: string, path: string, value: unknown) {
+    const id = extensionId(group);
+    if (!d.extensions?.[id]) {
+      set(['extensions', id], { impact: 'appearance', value: {} });
+    }
+    set(['extensions', id, 'value', path], value);
+  }
 }
 
 /** Reconstructs the editable Photoshop fields. Standard sections take precedence over extension values. */
