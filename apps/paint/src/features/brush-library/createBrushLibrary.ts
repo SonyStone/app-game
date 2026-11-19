@@ -13,7 +13,8 @@ import { readRoundPreset } from './nativeDocument';
  * is used, keeping recently used images in memory within `imageBudget`. Changes apply at once and are written to
  * `storage` in the background; images not yet written stay in memory regardless of the budget.
  *
- * Loading a legacy round or Photoshop preset converts it once before publishing it. A failed conversion keeps the original.
+ * Loading a legacy preset converts it once before publishing it. Sampled presets read their coverage during conversion.
+ * A failed conversion keeps the original settings and images.
  * Must be created within a Solid owner.
  */
 export function createBrushLibrary(options: {
@@ -29,6 +30,8 @@ export function createBrushLibrary(options: {
   /** Presets deleted in this session, so that late reads do not bring them back. */
   const removed = new Set<string>();
   const images = createImageCache(options.imageBudget ?? 64 * 1024 * 1024);
+  // Retain legacy image references when a migrated preset is subsequently renamed or saved.
+  const sampledOriginals = new Map<string, Pick<BrushPreset, 'settings' | 'resourceIds'>>();
   const migrations = new Map<string, Promise<void>>();
   let importQueue: Promise<unknown> = Promise.resolve();
   let listing: Promise<void> | undefined;
@@ -133,6 +136,7 @@ export function createBrushLibrary(options: {
           images.put(image, !!options.storage);
         }
         images.trim();
+        sampledOriginals.delete(imported.id);
         if (!removed.has(imported.id)) {
           remember(imported);
         }
@@ -157,6 +161,7 @@ export function createBrushLibrary(options: {
       }
 
       removed.add(id);
+      sampledOriginals.delete(id);
       options.storage?.deletePreset(id);
       const existing = latestKnown().get(id);
       if (existing) {
@@ -247,6 +252,10 @@ export function createBrushLibrary(options: {
   }
 
   async function loadStored(record: StoredPreset) {
+    if (record.sampledDocument) {
+      remember(materializeSampled(record));
+      return;
+    }
     if (record.nativeDocument) {
       try {
         remember(readRoundPreset(record, record.nativeDocument));
@@ -258,7 +267,7 @@ export function createBrushLibrary(options: {
       }
       return;
     }
-    if (!record.abrDocument && (record.abrSource || isRound(record))) {
+    if (!record.abrDocument && (record.abrSource || isRound(record) || record.settings.engine?.id === 'textured')) {
       const pending = migrations.get(record.id);
       if (pending) {
         return pending;
@@ -292,6 +301,12 @@ export function createBrushLibrary(options: {
           },
           true
         );
+      } else if (record.settings.engine?.id === 'textured') {
+        const { convertSampled } = await import('./abrPresetDocument');
+        const images = await options.storage!.readResources(record.resourceIds);
+        const item = await convertSampled(record, images ?? []);
+        converted = { ...record, sampledDocument: item.preset };
+        resources = item.resources;
       } else {
         converted = readRoundPreset(record);
       }
@@ -301,13 +316,13 @@ export function createBrushLibrary(options: {
       // Keep the original round settings in storage for older readers, even for sparse presets.
       const stored = converted.nativeDocument ? { ...converted, settings: record.settings } : converted;
       if (await options.storage!.putPreset(stored, resources, record)) {
-        record = converted;
+        record = materializeSampled(converted);
       } else {
         const latest = await options.storage!.readPreset(record.id);
         if (!latest) {
           return;
         }
-        record = latest;
+        record = materializeSampled(latest);
         if (!record.abrDocument && !record.nativeDocument) {
           throw new Error('Conversion could not be saved');
         }
@@ -320,6 +335,15 @@ export function createBrushLibrary(options: {
     }
   }
 
+  function materializeSampled(record: StoredPreset): StoredPreset {
+    const { sampledDocument, ...original } = record;
+    if (!sampledDocument) {
+      return original;
+    }
+    sampledOriginals.set(record.id, { settings: record.settings, resourceIds: record.resourceIds });
+    return { ...original, ...sampledDocument };
+  }
+
   function remember(preset: StoredPreset) {
     setKnown(new Map(latestKnown()).set(preset.id, preset));
   }
@@ -328,7 +352,18 @@ export function createBrushLibrary(options: {
   function store(preset: StoredPreset, resources: readonly BrushResource[] = []) {
     remember(preset);
     resources.forEach((resource) => images.put(resource, false));
-    void options.storage?.putPreset(preset, resources).then((written) => {
+    const original = sampledOriginals.get(preset.id);
+    const { abrDocument, settings, resourceIds, assetIds } = preset;
+    const record =
+      original && abrDocument
+        ? {
+            ...preset,
+            ...original,
+            abrDocument: undefined,
+            sampledDocument: { abrDocument, settings, resourceIds, assetIds }
+          }
+        : preset;
+    void options.storage?.putPreset(record, resources).then((written) => {
       if (written) {
         images.release(resources.map(({ id }) => id));
       }

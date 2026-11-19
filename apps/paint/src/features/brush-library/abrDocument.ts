@@ -17,6 +17,7 @@ import {
 } from '@app-game/paint-core/paintbrush/document';
 
 import { hostExtension } from './abrHost';
+import { isPaintPressureBinding } from './nativeDocument';
 
 type Definition = BrushDocument['definition'];
 
@@ -200,14 +201,24 @@ export async function abrDocument(asset: BrushAsset, host: Partial<Pick<Brush, '
  */
 export async function resolveAbr(document: BrushDocument, assets: ReadonlyMap<string, Coverage>) {
   const d = document.definition;
-  if (d.sequence.tips.length !== 1 || d.placement?.law !== 'photoshop-v1') {
-    throw new Error('Expected one primary tip with Photoshop placement');
+  const paintPlacement = (d.placement?.law ?? defaults.placement.law) === 'paint-distance-v1';
+  if (d.sequence.tips.length !== 1 || (!paintPlacement && d.placement?.law !== 'photoshop-v1')) {
+    throw new Error('Expected one primary tip with Paint or Photoshop placement');
   }
-  if (d.dynamics?.length || d.stroke?.taper) {
+  if (
+    d.dynamics?.some((binding) => !paintPlacement || !isPaintPressureBinding(binding)) ||
+    new Set(d.dynamics?.map((binding) => binding.target)).size !== (d.dynamics?.length ?? 0) ||
+    d.stroke?.taper
+  ) {
     throw new Error('The ABR sampler cannot apply document bindings or taper');
   }
   for (const [id, ext] of Object.entries(d.extensions ?? {})) {
-    if (ext.impact !== 'metadata' && id !== hostExtension && !photoshopExtensions.includes(id)) {
+    if (
+      ext.impact !== 'metadata' &&
+      id !== hostExtension &&
+      !(paintPlacement && id === 'paint.native-settings.v1') &&
+      !photoshopExtensions.includes(id)
+    ) {
       throw new Error('Unsupported ABR extension: ' + id);
     }
   }
@@ -465,6 +476,24 @@ function descriptorFrom(d: Definition, primary: Definition['tips'][string]) {
         .match(/../g)!
         .map((byte) => parseInt(byte, 16));
       write('toolOptions.' + key + 'Color', { kind: 'RGBC', red, green, blue });
+    }
+  }
+  if ((d.placement?.law ?? defaults.placement.law) === 'paint-distance-v1') {
+    const tool = record(source.toolOptions);
+    tool.smoothing ??= false;
+    if (d.dynamics?.some((binding) => binding.target === '/size') && source.shapeDynamicsEnabled === undefined) {
+      source.shapeDynamicsEnabled = true;
+      write('sizeDynamics.control', 2);
+      source.minimumDiameter = 4;
+    }
+    if (d.dynamics?.some((binding) => binding.target === '/transfer/flow') && source.transferEnabled === undefined) {
+      source.transferEnabled = true;
+      write('flowDynamics.control', 2);
+    }
+    const native = record(d.extensions?.['paint.native-settings.v1']?.value);
+    const angle = record(record(native.engine).settings).angle;
+    if (primary.angleDeg === undefined && typeof angle === 'number') {
+      write('tip.angle', (angle * 180) / Math.PI);
     }
   }
   return source;

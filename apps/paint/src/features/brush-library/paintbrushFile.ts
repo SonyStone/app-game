@@ -93,11 +93,13 @@ export async function importPaintbrush(bytes: Uint8Array, library: BrushLibrary)
       rejected.push(brush.view.name + ': ' + brush.compatibility.reasons.join(', '));
       continue;
     }
-    if (brush.view.definition.placement?.law === 'photoshop-v1') {
+    const result = resolveNative(brush.view);
+    const primary = definition.tips[definition.sequence.tips[0]!]!;
+    if (definition.placement?.law === 'photoshop-v1' || primary.kind === 'sampled') {
       try {
         const reasons = compatibility(
           legacyTool ? { ...brush.view, definition: { ...definition, tool: 'brush' } } : brush.view,
-          [...photoshopExtensions, hostExtension]
+          [...photoshopExtensions, hostExtension, 'paint.native-settings.v1']
         ).reasons.filter((reason) => !reason.endsWith(': photoshop.unresolved-sample'));
         if (reasons.length) {
           throw new Error(reasons.join(', '));
@@ -127,18 +129,9 @@ export async function importPaintbrush(bytes: Uint8Array, library: BrushLibrary)
       }
       continue;
     }
-    const result = resolveNative(brush.view);
     if (result.status !== 'supported') {
       rejected.push(brush.view.name + ': ' + result.reasons.join(', '));
       continue;
-    }
-    const images: BrushResource[] = [];
-    if (result.ref) {
-      const id = result.ref.sha256;
-      const image = archive.assets.get(id)!;
-      const engine = result.settings.engine!;
-      engine.settings = { ...(engine.settings as object), tipId: id };
-      images.push({ ...image, id, format: 'r8unorm' });
     }
     const manifest = manifestFor(i);
     const companions = new Map(entries);
@@ -164,9 +157,9 @@ export async function importPaintbrush(bytes: Uint8Array, library: BrushLibrary)
         settings: result.settings,
         paintbrush: retained,
         derivedFrom: brush.view.derivedFrom,
-        resourceIds: images.map((image) => image.id)
+        resourceIds: []
       },
-      resources: images
+      resources: []
     });
   }
   if (accepted.length) {

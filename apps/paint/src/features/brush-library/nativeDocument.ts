@@ -1,3 +1,4 @@
+import { featureFields } from '@app-game/abr-brush/settings-fields';
 import type { Brush } from '@app-game/paint-core/brush';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
 import {
@@ -17,12 +18,12 @@ export function readRoundPreset<T extends BrushPreset>(
   text = nativePresetText(preset)
 ): T & { nativeDocument: string } {
   const doc = parseDocument(text, brushSchema);
-  const resolved = resolveNative(doc);
-  if (resolved.status !== 'supported') {
+  const resolved = chooseRenderPath(doc);
+  if (resolved.path !== 'round' || resolved.status !== 'supported') {
     throw new Error(resolved.reasons.join(', '));
   }
 
-  if (doc.id !== preset.id || resolved.ref) {
+  if (doc.id !== preset.id) {
     throw new Error('Expected a round document for ' + preset.id);
   }
 
@@ -112,8 +113,8 @@ export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['r
   }
   if (b.pressureSize !== undefined || b.pressureFlow !== undefined) {
     definition.dynamics = [
-      ...(b.pressureSize ? [pressure('/size')] : []),
-      ...(b.pressureFlow ? [pressure('/transfer/flow')] : [])
+      ...(b.pressureSize ? [pressureBinding('/size')] : []),
+      ...(b.pressureFlow ? [pressureBinding('/transfer/flow')] : [])
     ];
     apply.push('/dynamics');
   }
@@ -162,11 +163,30 @@ export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['r
   });
 }
 
+/** Synchronous decision shared by round tool slots and document preparation, before reading any coverage. */
+export function chooseRenderPath(doc: BrushDocument) {
+  const native = resolveNative(doc);
+  if (native.status === 'supported' && !native.ref) {
+    return { path: 'round' as const, status: native.status, reasons: [], settings: native.settings };
+  }
+  const reasons = native.status === 'supported' ? ['Sampled tip'] : native.reasons;
+  return { path: 'abr' as const, reasons };
+}
+
 /** Returns native fields only when every appearance-affecting operation can be reproduced. */
-export function resolveNative(doc: BrushDocument) {
-  const result = compatibility(doc, [nativeId]);
-  const reasons = result.reasons;
+export function resolveNative(
+  doc: BrushDocument
+):
+  | Extract<ReturnType<typeof paintDocumentFields>, { status: 'supported' }>
+  | { status: 'approximate' | 'unavailable'; reasons: string[]; settings?: undefined; ref?: undefined } {
   const d = doc.definition;
+  const inactive = Object.entries(d.extensions ?? {}).flatMap(([id, extension]) => {
+    const field = featureSwitches.get(id);
+    const payload = extension.value;
+    return field && payload && typeof payload === 'object' && Reflect.get(payload, field) === false ? [id] : [];
+  });
+  const result = compatibility(doc, [nativeId, ...inactive]);
+  const reasons = result.reasons;
   if (result.status !== 'unavailable' && !['brush', 'eraser'].includes(d.tool)) {
     return { status: 'unavailable' as const, reasons: ['Unsupported native marking tool: ' + d.tool] };
   }
@@ -180,13 +200,16 @@ export function resolveNative(doc: BrushDocument) {
   if (!['round', 'sampled'].includes(tip.kind)) {
     reasons.push('Unsupported tip geometry: ' + tip.kind);
   }
+  if (tip.kind === 'round' && (tip.roundness ?? 1) !== 1) {
+    reasons.push('Non-circular round tip');
+  }
   if (d.placement && d.placement.law !== 'paint-distance-v1') {
     reasons.push('Placement law: ' + d.placement.law);
   }
-  if (d.texture) {
+  if (d.texture && d.texture.enabled !== false) {
     reasons.push('Texture: ' + (d.texture.blend ?? d.texture.resource));
   }
-  if (d.dual) {
+  if (d.dual && d.dual.enabled !== false) {
     reasons.push('Dual brush: ' + d.dual.tip);
   }
   if (d.stroke?.taper) {
@@ -194,14 +217,7 @@ export function resolveNative(doc: BrushDocument) {
   }
   const targets = new Set<string>();
   for (const binding of d.dynamics ?? []) {
-    if (
-      !['/size', '/transfer/flow'].includes(binding.target) ||
-      binding.input !== 'pressure' ||
-      binding.op !== 'multiply' ||
-      JSON.stringify(binding.domain) !== '[0,1]' ||
-      JSON.stringify(binding.curve) !== '[[0,0],[1,1]]' ||
-      targets.has(binding.target)
-    ) {
+    if (!isPaintPressureBinding(binding) || targets.has(binding.target)) {
       reasons.push(binding.input + ' binding on ' + binding.target);
     }
     targets.add(binding.target);
@@ -217,7 +233,10 @@ export function resolveNative(doc: BrushDocument) {
     '/stroke',
     '/mixing',
     '/color',
-    '/extensions/' + nativeId
+    '/extensions/' + nativeId,
+    ...inactive.map((id) => '/extensions/' + id),
+    ...(d.dual?.enabled === false ? ['/dual'] : []),
+    ...(d.texture?.enabled === false ? ['/texture'] : [])
   ];
   for (const path of doc.apply ?? []) {
     if (!paths.includes(path)) {
@@ -227,6 +246,21 @@ export function resolveNative(doc: BrushDocument) {
   if (doc.apply && !['/tool', '/tips', '/sequence', '/placement'].every((path) => doc.apply!.includes(path))) {
     reasons.push('Native presets always apply the tip group');
   }
+  const fields = paintDocumentFields(doc);
+  if (fields.status !== 'supported') {
+    return { status: fields.status, reasons: [...reasons, ...fields.reasons] };
+  }
+  if (result.status === 'unavailable' || reasons.length) {
+    return { status: result.status === 'unavailable' ? ('unavailable' as const) : ('approximate' as const), reasons };
+  }
+  return fields;
+}
+
+/** Projects the included Paint host groups. Renderer eligibility is checked separately by each adapter. */
+export function paintDocumentFields(doc: BrushDocument) {
+  const d = doc.definition;
+  const tip = d.tips[d.sequence.tips[0]!]!;
+  const targets = new Set(d.dynamics?.map((binding) => binding.target));
   const colors = z
     .object({
       foreground: z
@@ -241,18 +275,15 @@ export function resolveNative(doc: BrushDocument) {
     .strict()
     .safeParse(d.color ?? {});
   if (!colors.success) {
-    reasons.push('Unsupported brush colors');
+    return { status: 'approximate' as const, reasons: ['Unsupported brush colors'] };
   }
   const ref = tip.kind === 'sampled' ? doc.resources?.[tip.resource!] : undefined;
   if (tip.kind === 'sampled' && ref?.format !== 'r8') {
     return { status: 'unavailable' as const, reasons: ['Missing usable r8 tip: ' + tip.resource] };
   }
-  if (result.status === 'unavailable' || reasons.length) {
-    return { status: result.status === 'unavailable' ? ('unavailable' as const) : ('approximate' as const), reasons };
-  }
   const uses = (path: string) => !doc.apply || doc.apply.includes(path);
   const settings: Partial<Brush> = {
-    tool: d.tool as Brush['tool'],
+    tool: d.tool === 'eraser' ? 'eraser' : 'brush',
     hardness: tip.hardness ?? 1,
     spacing: d.placement?.spacing ?? defaults.placement.spacing
   };
@@ -282,7 +313,7 @@ export function resolveNative(doc: BrushDocument) {
   if (uses('/mixing')) {
     settings.mixing = (d.mixing ?? defaults.mixing) as Brush['mixing'];
   }
-  if (uses('/color') && colors.success) {
+  if (uses('/color')) {
     if (colors.data.foreground) {
       settings.color = colors.data.foreground;
     }
@@ -320,6 +351,18 @@ export function resolveNative(doc: BrushDocument) {
   return { status: 'supported' as const, settings, ref };
 }
 
+const featureSwitches = new Map(
+  Object.entries(featureFields).map(([name, field]) => [
+    'photoshop.' +
+      name
+        .slice(3)
+        .replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())
+        .slice(1) +
+      '.v1',
+    field.path
+  ])
+);
+
 const nativeId = 'paint.native-settings.v1';
 const nativeFields = z.object({
   keys: z.array(z.string()),
@@ -341,7 +384,8 @@ function engineSettings(id: string) {
     .strict();
 }
 
-function pressure(target: string): NonNullable<BrushDocument['definition']['dynamics']>[number] {
+/** Identity pressure binding used by Paint's diameter and flow controls. */
+export function pressureBinding(target: string): NonNullable<BrushDocument['definition']['dynamics']>[number] {
   return {
     target,
     input: 'pressure',
@@ -352,4 +396,15 @@ function pressure(target: string): NonNullable<BrushDocument['definition']['dyna
     ],
     op: 'multiply'
   };
+}
+
+/** Both renderers translate these identity pressure bindings on size and flow. */
+export function isPaintPressureBinding(binding: ReturnType<typeof pressureBinding>) {
+  return (
+    ['/size', '/transfer/flow'].includes(binding.target) &&
+    binding.input === 'pressure' &&
+    binding.op === 'multiply' &&
+    JSON.stringify(binding.domain) === '[0,1]' &&
+    JSON.stringify(binding.curve) === '[[0,0],[1,1]]'
+  );
 }

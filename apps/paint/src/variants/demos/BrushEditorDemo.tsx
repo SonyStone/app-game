@@ -16,6 +16,7 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
+import { brushError } from '../../shared/errors';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditorDemo.module.css';
@@ -31,9 +32,7 @@ import { createDemoStart } from './createDemoStart';
  * with a drawing pad (`DrawingPad`) on a scratch document of its own, so the panel and the studio can be compared.
  * Its Cancel returns to the brush as it was when the studio opened, and closes it.
  *
- * Brushes, in the top bar, opens the app's preset list to switch between round, textured and ABR presets, whose
- * editors differ. ABR brushes are imported there through the ABR viewer; Paint has no importer that makes textured
- * presets, so the demo adds a generated one to its own library.
+ * Brushes opens the preset library and ABR viewer. The demo includes a generated grain tip beside the round presets.
  *
  * The navigation puck, opened by a pen's side button or a stray button state while the pen hovers, covers the window
  * with a layer that closes it on the next press. The panel and the controls over the drawing lie above that layer, and
@@ -44,7 +43,9 @@ export function BrushEditorDemo(props: PaintVariantProps) {
   const session = createPaintSession({ storageName: 'paint-demo-brush-editor' });
   const { camera, engine, ready, tools, brush, library, uploads, presets, mixer, colorPicker } = session;
   createDemoStart(session, {});
-  void addTexturedSample(library);
+  void addTexturedSample(library).catch((cause) => {
+    session.setError(brushError('invalid-preset', 'Could not load the grain sample: ' + String(cause), cause));
+  });
   const [studioOpen, setStudioOpen] = createSignal(false);
   // Escape and the Android back gesture close the studio, keeping its changes.
   session.createShortcuts({
@@ -248,14 +249,18 @@ async function addTexturedSample(library: BrushLibrary) {
   }
 
   const tip = grainTip(96);
-  await library.importPreset(
+  const name = 'Grain (textured sample)';
+  const { convertSampled } = await import('../../features/brush-library/abrPresetDocument');
+  const sample = await convertSampled(
     {
-      name: 'Grain (textured sample)',
-      source,
+      id: source,
+      name,
+      resourceIds: [tip.id],
       settings: { tool: 'brush', size: 48, spacing: 0.15, engine: { id: 'textured', settings: { tipId: tip.id } } }
     },
     [tip]
   );
+  await library.importPreset({ ...sample.preset, name, source }, sample.resources);
 }
 
 /** A `size`-pixel grayscale disc that fades towards its edge and is broken up by fixed noise. */

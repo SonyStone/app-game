@@ -10,6 +10,7 @@ import { applyPreset, builtInPresets, presetSettings } from './brushPresets';
 import { createBrushLibrary } from './createBrushLibrary';
 import { nativeDocument, resolveNative } from './nativeDocument';
 import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
+import { resolveDocument } from './resolveDocument';
 
 function fixture(name: string) {
   return readFileSync(
@@ -38,15 +39,15 @@ it.each([
   if (archive.status !== 'editable') {
     throw new Error(archive.reason);
   }
-  const native = resolveNative(archive.brushes[0]!.view);
-  expect(native.status).toBe('supported');
-  if (native.status !== 'supported') {
-    throw new Error(native.reasons.join(', '));
-  }
-  expect(native.settings).toEqual(preset.settings);
   const host = { ...defaultBrush(), color: '#77aacc', opacity: 0.72 };
+  const resolved = await resolveDocument(archive.brushes[0]!.view, archive.assets, host);
+  expect(resolved.path).toBe('round');
+  if (!resolved.brush) {
+    throw new Error(resolved.reasons.join(', '));
+  }
+  expect(resolved.settings).toEqual(preset.settings);
   const before = createStrokeSampler(applyPreset(host, preset));
-  const after = createStrokeSampler(applyPreset(host, { ...preset, settings: native.settings }));
+  const after = createStrokeSampler(resolved.brush);
   const samples = Array.from({ length: 5 }, (_, i) => ({ x: i * 5, y: i, pressure: 0.04 + i * 0.01, time: i * 10 }));
   expect(after.add(samples.slice(0, 1)).concat(after.add(samples.slice(1, 3)))).toEqual(
     before.add(samples.slice(0, 3))

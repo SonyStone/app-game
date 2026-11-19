@@ -1,11 +1,13 @@
 import { brushFormSchema, formValuesToBrush } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import type { BrushResource } from '@app-game/abr-paint/resources';
-import type { Coverage } from '@app-game/paint-core/paintbrush/asset';
+import { assetId, type Coverage } from '@app-game/paint-core/paintbrush/asset';
 import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
-import { abrDocument, resolveAbr } from './abrDocument';
-import { hostExtension, hostSettings } from './abrHost';
+import { abrDocument } from './abrDocument';
+import { syncAbrPreset } from './abrHost';
 import type { BrushPreset } from './brushPresets';
+import { nativePresetText } from './nativeDocument';
+import { resolveDocument } from './resolveDocument';
 
 /** Converts viewer input, folding any saved descriptor edits into the retained document. */
 export async function convertAbr(asset: BrushAsset, saved?: BrushPreset['settings']) {
@@ -20,24 +22,11 @@ export async function convertAbr(asset: BrushAsset, saved?: BrushPreset['setting
 /** Separates active GPU resources from all coverage needed to edit and export this document. */
 export async function prepareDocument(text: string, assets: ReadonlyMap<string, Coverage>) {
   const document = parseDocument(text, brushSchema);
-  const prepared = await resolveAbr(document, assets);
-  const { engine, size, spacing, color, backgroundColor, opacity, flow, stroke, mixing } = prepared;
-  const defaults = Object.fromEntries(
-    Object.entries({
-      engine,
-      tool: 'brush',
-      size,
-      spacing,
-      color,
-      backgroundColor,
-      opacity,
-      flow,
-      stroke,
-      mixing
-    }).filter(([, value]) => value !== undefined)
-  ) as BrushPreset['settings'];
-  const host = document.definition.extensions?.[hostExtension];
-  const settings = host ? { ...hostSettings.parse(host.value), engine } : defaults;
+  const resolved = await resolveDocument(document, assets);
+  if (!resolved.prepared) {
+    throw new Error(resolved.reasons.join(', '));
+  }
+  const { prepared, settings } = resolved;
   const images = new Map(prepared.resources.map((r) => [r.id, r]));
   const assetIds = [...new Set(Object.values(document.resources ?? {}).map((ref) => ref.sha256))];
   for (const id of assetIds) {
@@ -60,11 +49,36 @@ export async function prepareDocument(text: string, assets: ReadonlyMap<string, 
 }
 
 /** Resolves an edited document against the coverage loaded from the library. */
-export function resolveAbrText(text: string, images: readonly BrushResource[]) {
-  return resolveAbr(parseDocument(text, brushSchema), coverageMap(images));
+export async function resolveAbrText(text: string, images: readonly BrushResource[]) {
+  const resolved = await resolveDocument(parseDocument(text, brushSchema), coverageMap(images));
+  if (!resolved.prepared) {
+    throw new Error(resolved.reasons.join(', '));
+  }
+  return resolved.prepared;
 }
 
 /** Reads coverage by digest for the ABR document resolver. */
 export function coverageMap(images: readonly BrushResource[]) {
   return new Map(images.map((image) => [image.id, image]));
+}
+
+/** Converts legacy sampled coverage to an archive resource while retaining the preset's included host groups. */
+export async function convertSampled(preset: BrushPreset, images: readonly BrushResource[]) {
+  const tipId = (preset.settings.engine?.settings as { tipId?: string } | undefined)?.tipId;
+  const image = images.find((candidate) => candidate.id === tipId);
+  if (!image) {
+    throw new Error('Missing native tip: ' + tipId);
+  }
+  const sha256 = await assetId(image);
+  const text = nativePresetText(preset, { tip: { format: 'r8', width: image.width, height: image.height, sha256 } });
+  const item = await prepareDocument(text, new Map([[sha256, image]]));
+  const { settings, resourceIds, assetIds } = item.preset;
+  const synced = syncAbrPreset(
+    { ...preset, abrDocument: text, settings: { ...preset.settings, engine: settings.engine } },
+    true
+  );
+  return {
+    preset: { abrDocument: synced.abrDocument, settings: synced.settings, resourceIds, assetIds },
+    resources: item.resources
+  };
 }
