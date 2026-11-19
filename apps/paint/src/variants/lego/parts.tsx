@@ -1,8 +1,10 @@
+import { replacedSettings } from '../../features/brush-editor/schema';
 import type { Part } from './board';
 import type { Room } from './grid';
 import type { LegoServices } from './LegoServices';
 import { resolveLook } from './looks';
 import { actionParts } from './parts/actions';
+import { brushSettingKind } from './parts/brushChannels';
 import { colorParts } from './parts/colors';
 import type { PartDefinition } from './parts/definition';
 import { layerParts } from './parts/layers';
@@ -46,12 +48,17 @@ const outsideParts: readonly PartDefinition[] = [...brushValueParts, gridSizePar
 /**
  * Kinds of parts the brush studio once offered, by the kind that replaced them. The stabilizer's level and Leonardo's
  * stabilization became the one Smoothing level; a stored part keeps its kind and shows Smoothing. The brush's
- * three-handle pressure curve became the pen's own curve (2026-11-19).
+ * three-handle pressure curve became the pen's own curve (2026-11-19). A Photoshop preset's own Size, Spacing,
+ * Hardness, Opacity and Flow became the rows every brush shares, in the same units (`replacedSettings`): its Size
+ * and Opacity are the board's Size and Opacity.
  */
 const replacedKinds: Readonly<Record<string, string>> = {
   'value:brush:stabilizer-level': 'value:brush:smoothing',
   'value:brush:stabilization': 'value:brush:smoothing',
-  'value:brush:pressure-curve': penPressureKind
+  'value:brush:pressure-curve': penPressureKind,
+  ...Object.fromEntries(
+    Object.entries(replacedSettings).map(([old, current]) => [`value:brush:${old}`, brushSettingKind(current)])
+  )
 };
 
 /** The kind a stored part's `kind` is now: the one that replaced it, or itself. */

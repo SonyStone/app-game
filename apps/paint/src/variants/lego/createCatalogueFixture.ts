@@ -1,14 +1,17 @@
 import type { PressureCurve } from '@app-game/paint-core/pressureCurve';
+import { ok } from 'neverthrow';
 import { createMemo, createSignal } from 'solid-js';
 import { fourLayers, seededDocument } from '../../component-canvas/seededLayers';
 import { createBrushTools, maxBrushSize } from '../../features/brush';
 import { builtInPresets, createBrushLibrary, type BrushPreset } from '../../features/brush-library';
 import type { PreviewAttachment } from '../../features/brush-library/previewAttachment';
+import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import { hexToWheel, wheelToHex, type ColorWheelSettings } from '../../features/color-wheel';
 import { hexToHsv } from '../../features/color/hsv';
 import type { CoolorusSettings } from '../../features/coolorus-wheel';
+import type { PaintSession } from '../../features/session';
 import type { PaintError } from '../../shared/errors';
-import { createChannelBrush, type LegoServices } from './LegoServices';
+import type { LegoServices } from './LegoServices';
 import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
 
@@ -58,15 +61,13 @@ export function createCatalogueFixture() {
   };
   const services: LegoServices = {
     brushEditor: {
-      channelBrush: createChannelBrush(tools.brush),
-      open: () => {},
-      edited: createMemo(() => tools.brush()),
-      categories: createMemo(() => undefined),
-      editError: createMemo(() => ''),
-      resources: () => [],
-      update: async (patch) => {
-        tools.updateBrush(patch);
-      }
+      ...createBrushSettingsEditor({
+        tools,
+        brush: tools.brush,
+        library: { find: (id: string) => presets.find((preset) => preset.id === id) ?? library.find(id) },
+        engine: { putResources: async () => ok(undefined) }
+      } as unknown as PaintSession),
+      open: () => {}
     },
     brush: {
       size: createMemo(() => tools.brush().size),

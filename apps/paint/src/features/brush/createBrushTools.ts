@@ -3,7 +3,7 @@ import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { createEffect, createMemo, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import {
   applyPreset,
@@ -43,10 +43,9 @@ export function createBrushTools(options: {
    */
   clear?: (brush: Brush) => Brush | undefined;
 }) {
-  const documentEdits = new Map<
-    string,
-    { base: string | undefined; engine: Brush['engine']; abrDocument: string; resources: readonly BrushResource[] }
-  >();
+  const documentEdits = new Map<string, DocumentEdit>();
+  /** Changes whenever `documentEdits` does, for readers of `documentText`. */
+  const [editsChanged, setEditsChanged] = createSignal(0, { ownedWrite: true });
   const clear = options.clear ?? clearRoundBrush;
   // Commands build on the last written state, so several commands in one event compose.
   const [state, publish, currentState] = createImmediateSignal<ToolState>(documentSlots(initialState()));
@@ -96,9 +95,24 @@ export function createBrushTools(options: {
       return toolBrush(currentState(), 'eraser');
     },
     updateBrush,
-    /** Holds the accepted edit until Save or Save As, including its newly generated masks. */
+    /**
+     * Holds the accepted edit of the preset `id`'s document until Save or Save As, including its newly generated masks:
+     * any brush's, a round brush's with a Photoshop group on or dormant too. `engine` is what the document resolved to,
+     * absent for Paint's round renderer.
+     */
     setDocumentEdit(id: string, abrDocument: string, engine: Brush['engine'], resources: readonly BrushResource[]) {
-      documentEdits.set(id, { base: options.library.find(id)?.abrDocument, abrDocument, engine, resources });
+      editDocument(id, { base: options.library.find(id)?.abrDocument, abrDocument, engine, resources });
+    },
+    /** The accepted document edit of the preset `id`, if any; see `setDocumentEdit`. */
+    documentEdit,
+    /** The text of the preset `id`'s accepted document edit, if any; reactive. */
+    documentText(id: string) {
+      editsChanged();
+      return documentEdit(id)?.abrDocument;
+    },
+    /** Puts back `edit`, as `documentEdit` gave it, or no edit at all. */
+    restoreDocumentEdit(id: string, edit: DocumentEdit | undefined) {
+      editDocument(id, edit);
     },
     editedResources: (id: string) => documentEdit(id)?.resources,
     /**
@@ -143,7 +157,7 @@ export function createBrushTools(options: {
         return;
       }
 
-      documentEdits.delete(id);
+      editDocument(id, undefined);
       const changes = without(current.changes, id);
       const slots = { ...current.slots };
       for (const slot of brushSlots) {
@@ -171,7 +185,7 @@ export function createBrushTools(options: {
         },
         edit?.resources
       );
-      documentEdits.delete(preset.id);
+      editDocument(preset.id, undefined);
       setState({ ...current, changes: without(current.changes, preset.id) });
     },
     /**
@@ -185,10 +199,11 @@ export function createBrushTools(options: {
       const source = options.library.find(current.slots[presetSlot(current)].preset);
       const edit = source && documentEdit(source.id);
       const settings = presetSettings(saved, groups);
-      let document = saved.engine?.id === 'abr' ? (edit?.abrDocument ?? source?.abrDocument) : undefined;
+      // A round brush's document edit carries its Photoshop groups, switched on or dormant, into the copy.
+      let document = edit?.abrDocument ?? (saved.engine?.id === 'abr' ? source?.abrDocument : undefined);
       // Clear-mode erasing overrides the runtime blend without changing the source preset.
       // A standalone copy needs the same mode in its editable Photoshop tool options.
-      if (document && settings.engine) {
+      if (document && settings.engine?.id === 'abr') {
         const abr = settings.engine.settings as AbrBrushSettings;
         if (abr.blendMode === 'Cler' && abr.values.tool.type !== 'ErTl' && abr.values.tool.mode !== 'Cler') {
           const values = { ...abr.values, tool: { ...abr.values.tool, mode: 'Cler' } };
@@ -219,7 +234,7 @@ export function createBrushTools(options: {
     },
     /** Deletes a user preset and its changes; tools using it stop using it, see `abandonPreset`. */
     deletePreset(id: string) {
-      documentEdits.delete(id);
+      editDocument(id, undefined);
       options.library.remove(id);
       abandonPreset(id);
       const current = currentState();
@@ -305,6 +320,17 @@ export function createBrushTools(options: {
     }
 
     return { ...next, slots };
+  }
+
+  /** Sets or removes the document edit of `id`, telling the readers of `documentText`. */
+  function editDocument(id: string, edit: DocumentEdit | undefined) {
+    if (edit) {
+      documentEdits.set(id, edit);
+    } else {
+      documentEdits.delete(id);
+    }
+
+    setEditsChanged((count) => count + 1);
   }
 
   function documentEdit(id: string) {
@@ -415,17 +441,17 @@ export function createBrushTools(options: {
       }
       try {
         const preset = await options.library.load(id);
-        if (!preset?.abrDocument || draft.base !== preset.abrDocument) {
+        if (!preset || draft.base !== preset.abrDocument) {
           continue;
         }
         const images = await options.library.assets(preset);
         if (images.isErr()) {
           throw new Error(images.error.message);
         }
-        const { resolveAbrText } = await import('../brush-library/abrPresetDocument');
-        const { engine, resources } = await resolveAbrText(draft.abrDocument, images.value);
+        const { resolveDraft } = await import('../brush-library/abrPresetDocument');
+        const { engine, resources } = await resolveDraft(draft.abrDocument, images.value);
         if (currentState() === initial) {
-          documentEdits.set(id, { base: preset.abrDocument, abrDocument: draft.abrDocument, engine, resources });
+          editDocument(id, { base: preset.abrDocument, abrDocument: draft.abrDocument, engine, resources });
         }
       } catch (error) {
         options.onError?.('Could not restore brush edits: ' + String(error));
@@ -508,6 +534,14 @@ export function createBrushTools(options: {
     options.storage?.writeState({ ...value, slots, ...(documentEdits.size && { documentEdits: documents }) });
   }
 }
+
+/** An accepted edit of a preset's document; see `setDocumentEdit`. `base` is the saved document it edits. */
+type DocumentEdit = {
+  base: string | undefined;
+  engine: Brush['engine'];
+  abrDocument: string;
+  resources: readonly BrushResource[];
+};
 
 /** The erasing version of a round or textured brush: the same tip, erasing with `tool: 'eraser'`. */
 export function clearRoundBrush(brush: Brush): Brush {

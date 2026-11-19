@@ -1,139 +1,279 @@
-import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import type { BrushAsset } from '@app-game/abr-brush/library';
+import { initAbr, pixels } from '@app-game/abr-parser';
+import { defaultBrush } from '@app-game/paint-core/brush';
+import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { describe, expect, it } from 'vitest';
+import { convertAbr } from '../brush-library/abrPresetDocument';
+import { builtInPresets } from '../brush-library/brushPresets';
+import { roundDocumentText } from '../brush-library/documentSettings';
+import { resolveDocument } from '../brush-library/resolveDocument';
+import { brushView, type BrushView } from './brushView';
 import {
   brushCategories,
-  brushSettingsDiffer,
   getBrushSetting,
-  snapshotBrushSettings,
+  numberSettings,
+  replacedSettings,
+  type BrushSetting,
   type NumberSetting
-} from './index';
-import { numberSettings } from './schema';
+} from './schema';
 
-const modes: StrokeSettings['mode'][] = ['none', 'studio', 'normal', 'smooth', 'stabilizer'];
-const brushes: [string, Brush][] = [
-  ['round', defaultBrush()],
-  ['textured', { ...defaultBrush(), engine: { id: 'textured', settings: {} } }],
-  ['abr', { ...defaultBrush(), engine: { id: 'abr', settings: {} } }]
-];
+await initAbr();
 
-describe('brush editor schema', () => {
-  it('has unique kebab-case IDs and finds every setting, including hidden ones', () => {
+const source: BrushAsset = {
+  id: 'test',
+  name: 'Test',
+  preset: { kind: 'brush', sourceId: 'one', tip: { kind: 'computed', diameter: pixels(30) } },
+  resources: [],
+  source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+};
+
+/** Soft round's view, as the studio opens it. */
+function softRound(stroke: Partial<StrokeSettings> = {}): BrushView {
+  const live = { ...defaultBrush(), stroke: normalizeStrokeSettings({ ...defaultBrush().stroke, ...stroke }) };
+  return brushView(roundDocumentText(builtInPresets[0], live), live);
+}
+
+/** A computed Photoshop preset's view, as imported. */
+async function photoshop(): Promise<BrushView> {
+  const { preset } = await convertAbr(source);
+  return brushView(preset.abrDocument, { ...defaultBrush(), ...preset.settings });
+}
+
+/** The view after a row wrote `text`, as the studio shows it while the edit resolves. */
+function after(view: BrushView, text: string) {
+  return brushView(text, view.brush);
+}
+
+/** The rows of the registry that apply to `view`, by category, each with whether it is enabled. */
+function rows(view: BrushView) {
+  return Object.fromEntries(
+    brushCategories
+      .filter((category) => category.applies(view))
+      .map((category) => [
+        category.id,
+        category.settings
+          .filter((setting) => setting.applies(view))
+          .map((setting) => (setting.enabled(view) ? setting.id : `(${setting.id})`))
+      ])
+  );
+}
+
+const switches = ['scattering', 'texture', 'dualBrush', 'colorDynamics', 'transfer', 'brushPose'] as const;
+
+describe('the brush studio registry', () => {
+  it('has unique IDs and finds every setting, and every replaced ID by its replacement', () => {
     const settings = brushCategories.flatMap((category) => category.settings);
     expect(new Set(settings.map((setting) => setting.id)).size).toBe(settings.length);
-    expect(new Set(brushCategories.map((category) => category.id)).size).toBe(4);
-    expect(brushCategories.map((category) => category.group)).toEqual(['basics', 'basics', 'basics', 'advanced']);
-    expect(brushCategories.map((category) => category.id)).not.toContain('pressure-curve');
+    expect(brushCategories.map((category) => category.id)).toEqual([
+      'painting',
+      'brush-tip',
+      'shapeDynamics',
+      'transfer',
+      'scattering',
+      'texture',
+      'dualBrush',
+      'colorDynamics',
+      'brushPose',
+      'stroke-correction',
+      'bristle',
+      'erodible'
+    ]);
     for (const setting of settings) {
-      expect(setting.id).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
       expect(getBrushSetting(setting.id)).toBe(setting);
     }
+    for (const [old, current] of Object.entries(replacedSettings)) {
+      expect(settings.some((setting) => setting.id === old)).toBe(false);
+      expect(getBrushSetting(old)).toBe(getBrushSetting(current));
+    }
     expect(getBrushSetting('missing')).toBeUndefined();
-    expect(getBrushSetting('stabilizer-level')).toBeUndefined();
   });
 
-  for (const [engine, original] of brushes) {
-    for (const mode of modes) {
-      it(`${engine}/${mode} preserves engine applicability and mode enablement`, () => {
-        const brush = { ...original, stroke: { ...original.stroke, mode } };
-        expect(brushCategories.filter((category) => category.applies(brush)).map((category) => category.id)).toEqual(
-          engine === 'abr'
-            ? ['painting', 'stroke-correction']
-            : ['painting', 'brush-tip', 'dynamics', 'stroke-correction']
-        );
-        const rows = brushCategories
-          .flatMap((category) => category.settings)
-          .filter((setting) => setting.applies(brush));
-        expect(rows.map((row) => row.id)).toEqual([
-          'size',
-          'opacity',
-          'flow',
-          'color-mixing',
-          ...(engine === 'round' ? ['hardness'] : engine === 'textured' ? ['spacing'] : []),
-          ...(engine === 'abr' ? [] : ['pressure-size', 'pressure-flow']),
-          'smoothing',
-          'catch-up'
-        ]);
-        // An ABR preset smooths by itself in the Leonardo modes and Studio, so only the stabilizer trails.
-        const trails = engine === 'abr' ? mode === 'stabilizer' : ['normal', 'smooth', 'stabilizer'].includes(mode);
-        for (const row of rows) {
-          const enabled = row.id === 'catch-up' ? trails : true;
-          expect(row.enabled(brush), row.id).toBe(enabled);
-        }
-      });
+  it('shows a plain round brush every Photoshop group, switched off but for its pressure on size', () => {
+    const view = softRound();
+    const shown = rows(view);
+    expect(Object.keys(shown)).toEqual([
+      'painting',
+      'brush-tip',
+      'shapeDynamics',
+      'transfer',
+      'scattering',
+      'texture',
+      'dualBrush',
+      'colorDynamics',
+      'brushPose',
+      'stroke-correction'
+    ]);
+    expect(shown.painting).toEqual([
+      'size',
+      'abr-tool-mode',
+      'opacity',
+      'flow',
+      'color-mixing',
+      'abr-tool-pressureOverridesOpacity',
+      'abr-tool-pressureOverridesSize'
+    ]);
+    expect(shown['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
+    // Soft round's size follows pressure: Paint's pressure binding reads as Shape dynamics under Pen pressure.
+    expect(view.values.useShapeDynamics).toBe(true);
+    expect(view.values.shapeDynamics).toMatchObject({ sizeControl: 2, minimumDiameter: 4 });
+    for (const id of switches) {
+      const category = brushCategories.find((c) => c.id === id)!;
+      expect(category.status(view), id).toBe('Off');
+      expect(category.settings[0]!.read(view), id).toBe(false);
+      expect(
+        category.settings.slice(1).every((setting) => !setting.enabled(view)),
+        id
+      ).toBe(true);
     }
-  }
+    expect(view.photoshopPath).toBe(false);
+  });
 
-  for (const [engine, brush] of brushes) {
-    for (const setting of numberSettings(brushCategories.flatMap((category) => category.settings))) {
-      it(`${engine}/${setting.id} clamps, rounds, and round-trips UI units`, () => {
-        const readWrite = (value: number) => setting.read({ ...brush, ...setting.write(brush, value) });
-        expect(readWrite(-Infinity)).toBeCloseTo(setting.min(brush));
-        expect(readWrite(Infinity)).toBeCloseTo(setting.max(brush));
-        const value = Math.ceil(setting.min(brush) / setting.step) * setting.step + setting.step;
-        expect(readWrite(value)).toBeCloseTo(value);
-        expect(readWrite(value + setting.step * 0.4)).toBeCloseTo(value);
-        expect(readWrite(value + setting.step * 0.6)).toBeCloseTo(value + setting.step);
-        const patch = setting.write(brush, value);
-        if (patch.stroke) {
-          expect(patch.stroke).toEqual(normalizeStrokeSettings(patch.stroke));
-        }
-        expect(brush).toEqual(
-          engine === 'round' ? defaultBrush() : { ...defaultBrush(), engine: { id: engine, settings: {} } }
-        );
-      });
-    }
-  }
+  it('shows a Photoshop preset its rows, with the shared ones once', async () => {
+    const view = await photoshop();
+    const shown = rows(view);
+    expect(shown.painting!.slice(0, 5)).toEqual(['size', 'abr-tool-mode', 'opacity', 'flow', 'color-mixing']);
+    expect(shown['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
+    expect(shown.dualBrush![0]).toBe('(abr-dualBrush-useDualBrush)');
+    expect(shown.texture![0]).toBe('(abr-texture-useTexture)');
+    expect(shown['stroke-correction']).toEqual(
+      expect.arrayContaining(['smoothing', 'abr-smoothing-amount', '(abr-smoothing-pulledString)'])
+    );
+    expect(view.photoshopPath).toBe(true);
+  });
 
-  it('normalizes every stroke patch of a switch or a choice', () => {
-    const brush = { ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'stabilizer' as const } };
-    for (const setting of brushCategories.flatMap((category) => category.settings)) {
-      if (setting.kind === 'toggle') {
-        const patch = setting.write(brush, !setting.read(brush));
-        expect(setting.read({ ...brush, ...patch })).toBe(!setting.read(brush));
-        if (patch.stroke) {
-          expect(patch.stroke).toEqual(normalizeStrokeSettings(patch.stroke));
-        }
+  it('moves Soft round to the ABR renderer with scattering, keeps its values dormant when off, and back', async () => {
+    const round = softRound();
+    const use = toggle('abr-scattering-useScattering');
+    const on = after(round, use.write(round, true));
+    expect(on.photoshopPath).toBe(true);
+    expect(await resolveDocument(on.document, new Map(), round.brush)).toMatchObject({ path: 'abr' });
+    const spread = after(on, numeric('abr-scattering-scatter').write(on, 150));
+    expect(numeric('abr-scattering-scatter').read(spread)).toBe(150);
+
+    const off = after(spread, use.write(spread, false));
+    expect(off.photoshopPath).toBe(false);
+    expect(await resolveDocument(off.document, new Map(), round.brush)).toMatchObject({ path: 'round' });
+    expect(numeric('abr-scattering-scatter').read(off)).toBe(150);
+    expect(numeric('abr-scattering-scatter').enabled(off)).toBe(false);
+
+    const again = after(off, use.write(off, true));
+    expect(again.photoshopPath).toBe(true);
+    expect(numeric('abr-scattering-scatter').read(again)).toBe(150);
+  });
+
+  it('keeps Paint’s pressure binding while Shape dynamics says no more than it, and its values dormant when off', () => {
+    const round = softRound();
+    const use = toggle('abr-shapeDynamics-useShapeDynamics');
+    const off = after(round, use.write(round, false));
+    expect(off.photoshopPath).toBe(false);
+    expect(off.brush.pressureSize).toBe(false);
+    expect(off.values.shapeDynamics.sizeControl).toBe(2);
+    const on = after(off, use.write(off, true));
+    expect(on.brush.pressureSize).toBe(true);
+    expect(on.photoshopPath).toBe(false);
+    expect(on.document.definition.extensions?.['photoshop.shape-dynamics.v1']).toBeUndefined();
+    const jitter = after(on, numeric('abr-shapeDynamics-sizeJitter').write(on, 30));
+    expect(jitter.photoshopPath).toBe(true);
+    expect(jitter.values.shapeDynamics).toMatchObject({ sizeJitter: 30, sizeControl: 2, minimumDiameter: 4 });
+    const back = after(jitter, numeric('abr-shapeDynamics-sizeJitter').write(jitter, 0));
+    expect(back.photoshopPath).toBe(false);
+    expect(back.brush.pressureSize).toBe(true);
+  });
+
+  it('returns a round brush to Paint’s renderer when a Photoshop tool value is set back', () => {
+    const round = softRound();
+    const mode = choice('abr-tool-mode');
+    const multiply = after(round, mode.write(round, 'Mltp'));
+    expect(multiply.photoshopPath).toBe(true);
+    expect(after(multiply, mode.write(multiply, 'Nrml')).photoshopPath).toBe(false);
+  });
+
+  it('cannot switch on a group whose image the brush lacks, and shows it as stored', async () => {
+    for (const view of [softRound(), await photoshop()]) {
+      for (const id of ['abr-texture-useTexture', 'abr-dualBrush-useDualBrush']) {
+        const setting = toggle(id);
+        expect(setting.enabled(view), id).toBe(false);
+        expect(setting.read(view), id).toBe(false);
       }
+    }
+    expect(brushCategories.find((c) => c.id === 'texture')!.status(softRound())).toBe('Off');
+  });
+
+  it('writes Paint’s shared settings in one place of each kind of document', async () => {
+    for (const view of [softRound(), await photoshop()]) {
+      const write = (id: string, value: number) => after(view, numeric(id).write(view, value));
+      expect(numeric('size').read(write('size', 64))).toBe(64);
+      expect(numeric('opacity').read(write('opacity', 40))).toBeCloseTo(40);
+      expect(numeric('flow').read(write('flow', 55))).toBeCloseTo(55);
+      expect(numeric('hardness').read(write('hardness', 30))).toBeCloseTo(30);
+      expect(numeric('spacing').read(write('spacing', 20))).toBeCloseTo(20);
+    }
+    const round = softRound();
+    const d = parseDocument(numeric('size').write(round, 64), brushSchema).definition;
+    expect(d.size).toBe(64);
+    const preset = await photoshop();
+    const ps = parseDocument(numeric('size').write(preset, 64), brushSchema).definition;
+    // A Photoshop preset's diameter stays its reference for the second tip; the brush's size is Paint's.
+    expect(ps.size).toBe(preset.document.definition.size);
+    expect((ps.extensions!['paint.abr-host.v1']!.value as { size: number }).size).toBe(64);
+  });
+
+  it('clamps, rounds and round-trips every number row in UI units, for both kinds of brush', async () => {
+    for (const view of [softRound(), await photoshop()]) {
+      for (const setting of numberSettings(brushCategories.flatMap((category) => category.settings))) {
+        if (!setting.applies(view)) {
+          continue;
+        }
+
+        const readWrite = (value: number) => setting.read(after(view, setting.write(view, value)));
+        expect(readWrite(-Infinity), setting.id).toBeCloseTo(setting.min(view));
+        expect(readWrite(Infinity), setting.id).toBeCloseTo(setting.max(view));
+        const value = Math.ceil(setting.min(view) / setting.step) * setting.step + setting.step;
+        expect(readWrite(value), setting.id).toBeCloseTo(value);
+        expect(readWrite(value + setting.step * 0.4), setting.id).toBeCloseTo(value);
+      }
+    }
+  });
+
+  it('round-trips every switch and choice, and rejects unknown options', () => {
+    const view = softRound({ mode: 'stabilizer' });
+    for (const setting of brushCategories.flatMap((category) => category.settings)) {
+      if (!setting.applies(view)) {
+        continue;
+      }
+
+      if (setting.kind === 'toggle') {
+        expect(setting.read(after(view, setting.write(view, !setting.read(view)))), setting.id).toBe(
+          !setting.read(view)
+        );
+      }
+
       if (setting.kind === 'choice') {
         for (const option of setting.options) {
-          const patch = setting.write(brush, option.value);
-          expect(setting.read({ ...brush, ...patch })).toBe(option.value);
-          if (patch.stroke) {
-            expect(patch.stroke).toEqual(normalizeStrokeSettings(patch.stroke));
-          }
+          expect(setting.read(after(view, setting.write(view, option.value))), setting.id).toBe(option.value);
         }
-        expect(() => setting.write(brush, 'invalid')).toThrow(RangeError);
+        expect(() => setting.write(view, 'invalid')).toThrow(RangeError);
       }
     }
   });
 
-  it('provides the panel ranges, steps, units, curves, and named options', () => {
-    const brush = defaultBrush();
-    expect(
-      numberSettings(brushCategories.flatMap((category) => category.settings)).map((setting) => [
-        setting.id,
-        setting.min(brush),
-        setting.max(brush),
-        setting.step,
-        setting.unit
-      ])
-    ).toEqual([
+  it('provides Paint’s ranges, steps, units, curves and named options', () => {
+    const view = softRound();
+    const paint = ['size', 'opacity', 'flow', 'spacing', 'hardness', 'smoothing'].map((id) => {
+      const setting = numeric(id);
+      return [id, setting.min(view), setting.max(view), setting.step, setting.unit];
+    });
+    expect(paint).toEqual([
       ['size', 1, 512, 1, 'px'],
       ['opacity', 1, 100, 1, '%'],
       ['flow', 1, 100, 1, '%'],
-      ['hardness', 0, 100, 1, '%'],
       ['spacing', 1, 1000, 1, '%'],
+      ['hardness', 0, 100, 1, '%'],
       ['smoothing', 0, 22, 1, '']
     ]);
-    expect(numeric('size').max(brushes[2]![1])).toBe(5000);
-    expect(numeric('size').curve?.(brush)).toBeDefined();
-    expect(numeric('spacing').curve?.(brush)).toBeDefined();
-    // Smoothing's levels are plain numbers, the strong ones above 15 in a zone of their own.
-    expect(numeric('smoothing').format).toBeUndefined();
-    expect(numeric('smoothing').levels?.map((level) => level.label)).toEqual(
-      Array.from({ length: 23 }, (_, level) => String(level))
-    );
+    expect(numeric('size').curve?.(view)).toBeDefined();
+    expect(numeric('spacing').curve?.(view)).toBeDefined();
     expect(
       numeric('smoothing')
         .levels?.filter((level) => level.zone)
@@ -160,67 +300,42 @@ describe('brush editor schema', () => {
     }
   });
 
-  it('summarizes painting, tips, pressure, and correction modes', () => {
-    const brush = defaultBrush();
-    const status = (id: string, b = brush) => brushCategories.find((category) => category.id === id)!.status(b);
+  it('summarizes painting, tips and correction modes of a round brush', () => {
+    const status = (id: string, view = softRound()) =>
+      brushCategories.find((category) => category.id === id)!.status(view);
     expect(status('painting')).toBe('32 px · 100%');
     expect(status('brush-tip')).toBe('Soft round · 65%');
-    expect(status('brush-tip', brushes[1]![1])).toBe('Textured tip · 12%');
-    expect(status('brush-tip', brushes[2]![1])).toBe('ABR brush');
-    for (const [pressureSize, pressureFlow, expected] of [
-      [true, true, 'Pressure → Size + Flow'],
-      [true, false, 'Pressure → Size'],
-      [false, true, 'Pressure → Flow'],
-      [false, false, 'Off']
-    ] as const) {
-      expect(status('dynamics', { ...brush, pressureSize, pressureFlow })).toBe(expected);
-    }
-    const expected = ['Off', 'Off', '1', '10', '18'];
-    modes.forEach((mode, index) => {
-      const b = { ...brush, stroke: { ...brush.stroke, mode, stabilizer: 18 } };
-      expect(status('stroke-correction', b)).toBe(expected[index]);
-    });
-  });
-
-  it('snapshots exactly edited fields and supports cancel without restoring tool, engine, or colors', () => {
-    const brush = defaultBrush();
-    const snapshot = snapshotBrushSettings(brush);
-    expect(Object.keys(snapshot).sort()).toEqual(
-      ['size', 'opacity', 'flow', 'mixing', 'hardness', 'spacing', 'pressureSize', 'pressureFlow', 'stroke'].sort()
-    );
-    expect(snapshot.stroke).not.toBe(brush.stroke);
-    expect(brushSettingsDiffer(brush, snapshot)).toBe(false);
-    for (const setting of brushCategories.flatMap((category) => category.settings)) {
-      const patch =
-        setting.kind === 'number'
-          ? setting.write(brush, setting.read(brush) === setting.max(brush) ? setting.min(brush) : setting.max(brush))
-          : setting.kind === 'toggle'
-            ? setting.write(brush, !setting.read(brush))
-            : setting.kind === 'choice'
-              ? setting.write(brush, setting.options.find((option) => option.value !== setting.read(brush))!.value)
-              : {};
-      const edited = { ...brush, ...patch };
-      expect(brushSettingsDiffer(edited, snapshot), setting.id).toBe(true);
-      expect(brushSettingsDiffer({ ...edited, ...snapshot }, snapshot)).toBe(false);
-    }
-    const other = {
-      ...brush,
-      color: '#ffffff',
-      backgroundColor: '#000000',
-      tool: 'eraser' as const,
-      engine: { id: 'abr', settings: {} }
-    };
-    expect(brushSettingsDiffer(other, snapshot)).toBe(false);
-    brush.stroke.normal = 40;
-    expect(snapshot.stroke.normal).toBe(1);
-    expect(brushSettingsDiffer(brush, snapshot)).toBe(true);
+    expect(status('shapeDynamics')).toBe('Pressure');
+    const modes: StrokeSettings['mode'][] = ['none', 'studio', 'normal', 'smooth', 'stabilizer'];
+    expect(modes.map((mode) => status('stroke-correction', softRound({ mode, stabilizer: 18 })))).toEqual([
+      'Off',
+      'Off',
+      '1',
+      '10',
+      '18'
+    ]);
+    // Catch-up applies only while Smoothing trails.
+    expect(toggle('catch-up').enabled(softRound({ mode: 'studio' }))).toBe(false);
+    expect(toggle('catch-up').enabled(softRound({ mode: 'stabilizer' }))).toBe(true);
   });
 });
 
 function numeric(id: string): NumberSetting {
+  return find(id, 'number') as NumberSetting;
+}
+
+function toggle(id: string) {
+  return find(id, 'toggle') as Extract<BrushSetting, { kind: 'toggle' }>;
+}
+
+function choice(id: string) {
+  return find(id, 'choice') as Extract<BrushSetting, { kind: 'choice' }>;
+}
+
+function find(id: string, kind: BrushSetting['kind']) {
   const setting = getBrushSetting(id);
-  if (setting?.kind !== 'number') {
-    throw new Error(`Expected number setting ${id}`);
+  if (setting?.kind !== kind) {
+    throw new Error(`Expected ${kind} setting ${id}`);
   }
 
   return setting;

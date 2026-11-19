@@ -1,15 +1,19 @@
+import type { BrushResource } from '@app-game/abr-paint/resources';
+import type { Brush } from '@app-game/paint-core/brush';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { createDocument } from '@app-game/paint-core/document';
 import { identityPressureCurve, isIdentityPressureCurve, type PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { ok } from 'neverthrow';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, type Accessor, type Setter } from 'solid-js';
 import { vi } from 'vitest';
+import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import { createColorWheelSettings, hexToWheel, wheelToHex } from '../../features/color-wheel';
 import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv } from '../../features/color/hsv';
 import { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
+import type { PaintSession } from '../../features/session';
 import { defaultCell } from './grid';
-import { createChannelBrush, type LegoServices } from './LegoServices';
+import type { LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
 
 /** Fake narrow capabilities for frame/definition tests. No PaintSession mock or GPU engine is required. */
@@ -22,17 +26,7 @@ export function createTestServices() {
   const [penCurve, setPenCurve] = createSignal<PressureCurve>();
   const [gridCell, setGridCell] = createSignal(defaultCell);
   const services: LegoServices = {
-    brushEditor: {
-      channelBrush: createChannelBrush(brush),
-      open: () => {},
-      edited: createMemo(() => brush()),
-      categories: createMemo(() => undefined),
-      editError: createMemo(() => ''),
-      resources: () => [],
-      update: async (patch) => {
-        setBrush((current) => ({ ...current, ...patch }));
-      }
-    },
+    brushEditor: { ...createBrushEditor(brush, setBrush), open: () => {} },
     brush: {
       size: createMemo(() => brush().size),
       opacity: createMemo(() => brush().opacity),
@@ -106,4 +100,30 @@ export function createTestServices() {
     run: (command: () => unknown) => runPartCommand({ setError: errors }, command)
   };
   return { services, setBrush, brush, errors };
+}
+
+/**
+ * The real brush settings editor over `brush`, as a session without presets has it: the brush's own document, with
+ * document edits held for the one unnamed preset and published into `brush`.
+ */
+function createBrushEditor(brush: Accessor<Brush>, setBrush: Setter<Brush>) {
+  const [edit, setEdit] = createSignal<ReturnType<PaintSession['tools']['documentEdit']>>(undefined, {
+    ownedWrite: true
+  });
+  const tools = {
+    preset: () => '',
+    documentText: () => edit()?.abrDocument,
+    documentEdit: () => edit(),
+    setDocumentEdit: (_id: string, abrDocument: string, engine: Brush['engine'], resources: readonly BrushResource[]) =>
+      setEdit({ base: undefined, abrDocument, engine, resources }),
+    restoreDocumentEdit: (_id: string, restored: ReturnType<PaintSession['tools']['documentEdit']>) =>
+      setEdit(restored),
+    updateBrush: (patch: Partial<Brush>) => setBrush((current) => ({ ...current, ...patch }))
+  };
+  return createBrushSettingsEditor({
+    tools,
+    brush,
+    library: { find: () => undefined },
+    engine: { putResources: async () => ok(undefined) }
+  } as unknown as PaintSession);
 }

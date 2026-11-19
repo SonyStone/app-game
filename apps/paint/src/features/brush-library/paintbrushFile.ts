@@ -95,7 +95,11 @@ export async function importPaintbrush(bytes: Uint8Array, library: BrushLibrary)
     }
     const result = resolveNative(brush.view);
     const primary = definition.tips[definition.sequence.tips[0]!]!;
-    if (definition.placement?.law === 'photoshop-v1' || primary.kind === 'sampled') {
+    // A round brush with a Photoshop group switched on draws with the ABR renderer, as a Photoshop preset does.
+    const photoshopGroups =
+      result.status !== 'supported' &&
+      Object.keys(definition.extensions ?? {}).some((id) => id.startsWith('photoshop.'));
+    if (definition.placement?.law === 'photoshop-v1' || primary.kind === 'sampled' || photoshopGroups) {
       try {
         const reasons = compatibility(
           legacyTool ? { ...brush.view, definition: { ...definition, tool: 'brush' } } : brush.view,

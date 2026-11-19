@@ -1,16 +1,35 @@
 // @vitest-environment jsdom
-import { brushToFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
+import { initAbr, pixels } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
-import { createSignal, flush } from 'solid-js';
+import { createMemo, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { abrCategories } from './abrSchema';
+import { convertAbr } from '../brush-library/abrPresetDocument';
+import { patchFormValues } from '../brush-library/documentSettings';
 import { rowGroups } from './BrushCategories';
 import { BrushEditor } from './BrushEditor';
 import { BrushStudio } from './BrushStudio';
-import { snapshotBrushSettings, type BrushCategory } from './schema';
+import { brushView, roundBrushView, type BrushView } from './brushView';
 import { inlineChoiceLimit } from './SettingRow';
+
+await initAbr();
+
+/** A computed-tip Photoshop preset, as imported. */
+const imported = await convertAbr({
+  id: 'test',
+  name: 'Test',
+  preset: { kind: 'brush', sourceId: 'one', tip: { kind: 'computed', diameter: pixels(30) } },
+  resources: [],
+  source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+} satisfies BrushAsset);
+
+/** The imported preset's view, with the group `use` switched on. */
+function photoshop(use?: 'useTransfer' | 'useShapeDynamics'): BrushView {
+  const live = { ...defaultBrush(), ...imported.preset.settings };
+  const view = brushView(imported.preset.abrDocument, live);
+  return use ? brushView(patchFormValues(view.text, { ...view.values, [use]: true }), live) : view;
+}
 
 let disposers: (() => void)[] = [];
 afterEach(() => {
@@ -31,14 +50,9 @@ it('shows the same categories, statuses and rows as the panel for a Paint brush'
 });
 
 it('shows the same categories, sections and rows as the panel for an ABR brush', () => {
-  const source = { id: 'test', name: 'Test', preset: { tip: { kind: 'computed', diameter: 30 } }, resources: [] };
-  const values = brushToFormValues(source as unknown as BrushAsset);
-  const abr: Brush = {
-    ...defaultBrush(),
-    engine: { id: 'abr', settings: { values: { ...values, useTransfer: true }, tipId: 'tip' } }
-  };
-  const panel = mount('panel', abr, abrCategories);
-  const studio = mount('studio', abr, abrCategories);
+  const abr = photoshop('useTransfer');
+  const panel = mount('panel', abr);
+  const studio = mount('studio', abr);
   expect(studio.categories()).toEqual(panel.categories());
   expect(studio.categories()).toContain('Transfer');
   for (const name of panel.categories()) {
@@ -73,14 +87,9 @@ it('groups a run of rows by family: sliders, list rows, and each short choice al
 });
 
 it('draws every page as groups of one family each, never across a section heading, for Paint and ABR brushes', () => {
-  const source = { id: 'test', name: 'Test', preset: { tip: { kind: 'computed', diameter: 30 } }, resources: [] };
-  const values = brushToFormValues(source as unknown as BrushAsset);
-  const abr: Brush = {
-    ...defaultBrush(),
-    engine: { id: 'abr', settings: { values: { ...values, useShape: true }, tipId: 'tip' } }
-  };
+  const abr = photoshop('useShapeDynamics');
 
-  for (const studio of [mount('studio', defaultBrush()), mount('studio', abr, abrCategories)]) {
+  for (const studio of [mount('studio', defaultBrush()), mount('studio', abr)]) {
     for (const name of studio.categories()) {
       studio.click(studio.category(name));
       const pane = studio.root().querySelector('section[aria-labelledby]')!;
@@ -110,7 +119,7 @@ it('draws every page as groups of one family each, never across a section headin
   }
 
   // The ABR Shape dynamics page splits its Size section where a slider meets the Control list row.
-  const studio = mount('studio', abr, abrCategories);
+  const studio = mount('studio', abr);
   studio.click(studio.category('Shape dynamics'));
   const size = [...studio.root().querySelectorAll<HTMLElement>('[role="group"]')].find(
     (section) => section.querySelector('h3')?.textContent === 'Size'
@@ -137,7 +146,7 @@ it('gives each number row a value pill that types, beside its label, over a slid
 
 it('discards the changes and closes on Cancel, keeps them and closes on Done', () => {
   const onDone = vi.fn();
-  const studio = mount('studio', defaultBrush(), undefined, onDone);
+  const studio = mount('studio', defaultBrush(), onDone);
   studio.click(studio.button('Done'));
   expect(onDone).toHaveBeenCalledOnce();
   expect(studio.changes).toHaveLength(0);
@@ -163,7 +172,7 @@ it('discards the changes and closes on Cancel, keeps them and closes on Done', (
 });
 
 it('names the edited brush as its title and shows the pad it is given', () => {
-  const studio = mount('studio', defaultBrush(), undefined, () => {}, 'Soft round');
+  const studio = mount('studio', defaultBrush(), () => {}, 'Soft round');
   expect(studio.root().querySelector('h1')!.textContent).toBe('Soft round');
   expect(studio.root().querySelector('[role="region"][aria-label="Drawing pad"] [data-pad]')).not.toBeNull();
 });
@@ -176,7 +185,7 @@ it('switches between the categories, a category and the pad in the narrow layout
   expect(sheet.firstElementChild!.querySelector('nav[aria-label="Brush setting categories"]')).not.toBeNull();
   expect(frame.getAttribute('data-view')).toBe('list');
   expect(sheet.getAttribute('data-view')).toBe('list');
-  studio.click(studio.category('Dynamics'));
+  studio.click(studio.category('Shape dynamics'));
   expect(frame.getAttribute('data-view')).toBe('detail');
   expect(sheet.getAttribute('data-view')).toBe('detail');
   studio.click(studio.button('Pad'));
@@ -184,7 +193,7 @@ it('switches between the categories, a category and the pad in the narrow layout
   studio.click(studio.button('Pad'));
   expect(frame.getAttribute('data-view')).toBe('list');
   expect(sheet.getAttribute('data-view')).toBe('list');
-  studio.click(studio.category('Dynamics'));
+  studio.click(studio.category('Shape dynamics'));
   studio.click(studio.button('All categories'));
   expect(frame.getAttribute('data-view')).toBe('list');
   expect(sheet.getAttribute('data-view')).toBe('list');
@@ -195,7 +204,6 @@ it("puts the host's rows in place of number rows, and keeps its own where the ho
   const studio = mount(
     'studio',
     defaultBrush(),
-    undefined,
     () => {},
     undefined,
     (setting, category) => {
@@ -208,11 +216,14 @@ it("puts the host's rows in place of number rows, and keeps its own where the ho
   const rows = [...studio.root().querySelectorAll('section[aria-labelledby] [data-family] > *')];
   expect(rows.map((row) => row.getAttribute('data-hosted') ?? row.getAttribute('data-kind'))).toEqual([
     'size',
+    null,
     'opacity',
     'number',
-    null
+    null,
+    'toggle',
+    'toggle'
   ]);
-  expect(rows.at(-1)!.getAttribute('role')).toBe('radiogroup');
+  expect(rows.at(-3)!.getAttribute('role')).toBe('radiogroup');
   studio.click(studio.category('Stroke correction'));
   expect(asked.at(-1)).toBe('stroke-correction:smoothing');
   expect(studio.root().querySelector('[data-hosted="smoothing"]')).not.toBeNull();
@@ -221,14 +232,8 @@ it("puts the host's rows in place of number rows, and keeps its own where the ho
 });
 
 it("offers the brush no pressure curve of its own, a Paint brush's or an ABR preset's", () => {
-  const source = { id: 'test', name: 'Test', preset: { tip: { kind: 'computed', diameter: 30 } }, resources: [] };
-  const values = brushToFormValues(source as unknown as BrushAsset);
-  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
-  for (const [brush, categories] of [
-    [defaultBrush(), undefined],
-    [abr, abrCategories]
-  ] as const) {
-    const studio = mount('studio', brush, categories);
+  for (const brush of [defaultBrush(), photoshop()]) {
+    const studio = mount('studio', brush);
     expect(studio.categories().join()).not.toMatch(/pressure curve/i);
     expect(studio.root().querySelector('[data-pen-pane]')).toBeNull();
   }
@@ -236,7 +241,7 @@ it("offers the brush no pressure curve of its own, a Paint brush's or an ABR pre
 
 it("ends the sidebar with the pen's page, apart from the brush, and has Cancel restore it before leaving", () => {
   const steps: string[] = [];
-  const studio = mount('studio', defaultBrush(), undefined, () => steps.push('done'), undefined, undefined, {
+  const studio = mount('studio', defaultBrush(), () => steps.push('done'), undefined, undefined, {
     status: '4 points',
     onCancel: () => steps.push('cancel')
   });
@@ -261,24 +266,25 @@ it("ends the sidebar with the pen's page, apart from the brush, and has Cancel r
 });
 
 /**
- * Renders the panel or the studio over a brush kept by a controlled parent, inside a host element of its own, and
- * reads it as the tests compare it.
+ * Renders the panel or the studio over a brush document kept by a controlled parent, inside a host element of its
+ * own, and reads it as the tests compare it. Cancel returns to the initial document, as the studio's host does.
  */
 function mount(
   kind: 'panel' | 'studio',
-  initial: Brush,
-  categories?: readonly BrushCategory[],
+  initial: Brush | BrushView,
   onDone: () => void = () => {},
   name?: string,
   hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'],
   pen?: { status: string; onCancel: () => void }
 ) {
-  const [brush, setBrush] = createSignal(initial);
-  const baseline = snapshotBrushSettings(initial);
-  const changes: Partial<Brush>[] = [];
-  const onChange = (patch: Partial<Brush>) => {
-    changes.push(patch);
-    setBrush((current) => ({ ...current, ...patch }));
+  const start = 'text' in initial ? initial : roundBrushView(initial);
+  const [text, setText] = createSignal(start.text);
+  const view = createMemo(() => brushView(text(), start.brush));
+  const brush = createMemo(() => view().brush);
+  const changes: string[] = [];
+  const onChange = (next: string) => {
+    changes.push(next);
+    setText(next);
   };
   const host = document.createElement('div');
   document.body.append(host);
@@ -287,22 +293,26 @@ function mount(
       () =>
         kind === 'panel' ? (
           <BrushEditor
-            brush={brush()}
-            baseline={baseline}
-            categories={categories}
+            brush={view()}
+            changed={text() !== start.text}
+            onRevert={() => setText(start.text)}
             onChange={onChange}
             onDone={onDone}
           />
         ) : (
           <BrushStudio
-            brush={brush()}
-            baseline={baseline}
-            categories={categories}
+            brush={view()}
             name={name}
             hostRow={hostRow}
             onChange={onChange}
             onDone={onDone}
-            onCancel={pen?.onCancel}
+            onCancel={() => {
+              if (text() !== start.text) {
+                onChange(start.text);
+              }
+
+              pen?.onCancel();
+            }}
             penStatus={pen?.status}
             penPane={<div data-pen-host />}
             pad={<div data-pad />}

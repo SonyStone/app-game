@@ -1,19 +1,19 @@
-import type { Brush } from '@app-game/paint-core/brush';
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createMemo, createSignal, createUniqueId, For, onSettled, Show } from 'solid-js';
 import { ScrubNumber } from '../../shared/ui/ScrubNumber';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
+import type { BrushView } from './brushView';
 import type { BrushSetting, ChoiceSetting, NumberSetting, ToggleSetting } from './schema';
 import { Slider } from './Slider';
 
 /**
  * One generated row of the brush editor for `setting`, which the caller has already found applicable. A row whose
  * setting is not `enabled` keeps its place and shows its value, greyed, and takes no presses. Every change is sent
- * at once as the patch the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
+ * at once as the document text the setting's `write` returns. A choice of up to {@link inlineChoiceLimit} options shows them
  * all; a longer one shows the chosen option in a single row that opens the list.
  */
-export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChange: (patch: Partial<Brush>) => void }) {
+export function SettingRow(props: { setting: BrushSetting; brush: BrushView; onChange: (text: string) => void }) {
   // A row is made once per setting, so its kind never changes under it.
   const setting = props.setting;
   const enabled = createMemo(() => setting.enabled(props.brush));
@@ -33,7 +33,7 @@ export function SettingRow(props: { setting: BrushSetting; brush: Brush; onChang
 export const inlineChoiceLimit = 3;
 
 /** What every row kind receives besides its setting. */
-type RowProps = { brush: Brush; enabled: boolean; onChange: (patch: Partial<Brush>) => void };
+type RowProps = { brush: BrushView; enabled: boolean; onChange: (text: string) => void };
 
 /**
  * A row's visible label. Inside a section it is short, so assistive technology also hears the section's name, as in
@@ -69,10 +69,9 @@ function NumberRow(props: RowProps & { setting: NumberSetting }) {
     return setting.format ? setting.format(rounded) : `${Number(rounded.toFixed(4))}`;
   });
   const write = (next: number) => {
-    const brush = props.brush;
-    const patch = setting.write(brush, next);
-    if (setting.read({ ...brush, ...patch }) !== setting.read(brush)) {
-      props.onChange(patch);
+    const text = setting.write(props.brush, next);
+    if (text !== props.brush.text) {
+      props.onChange(text);
     }
   };
 
