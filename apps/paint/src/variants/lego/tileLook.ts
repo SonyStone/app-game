@@ -15,11 +15,14 @@ export type TileLook = { radius: number; squircle: boolean };
 /** The look a device without a stored choice gets: the corners as before the trial. */
 export const defaultTileLook: TileLook = { radius: 13, squircle: false };
 
-/** Plate radii to compare: tiles square, tiles as before (7 px), tiles soft (14 px). */
-export const plateRadii = { sharp: 6, today: 13, soft: 20 } as const;
+/**
+ * Plate radii to compare: tiles square, tiles as before (7 px), tiles soft (14 px), and tiles fully rounded with
+ * arcs (22 px, half a cell: a one-cell tile is a circle and a one-cell-high fused row a capsule).
+ */
+export const plateRadii = { sharp: 6, today: 13, soft: 20, full: 28 } as const;
 
 /** The smallest and largest plate radius the switch offers. */
-export const radiusRange = { min: 0, max: 24 } as const;
+export const radiusRange = { min: 0, max: 28 } as const;
 
 /** The key the look is kept under in `localStorage`. */
 export const tileLookKey = 'paint.lego.tile-look';

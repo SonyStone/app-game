@@ -29,7 +29,7 @@ it('falls back to the default for a missing, corrupt or invalid entry', () => {
   expect(readTileLook()).toEqual(defaultTileLook);
 
   localStorage.setItem(tileLookKey, JSON.stringify({ radius: 400, squircle: 'yes' }));
-  expect(readTileLook()).toEqual({ radius: 24, squircle: false });
+  expect(readTileLook()).toEqual({ radius: 28, squircle: false });
 });
 
 it("reads an entry from the trial's first round, keeping its radius and squircle choice", () => {

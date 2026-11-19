@@ -47,8 +47,13 @@ export function TileLookSwitch(props: {
               {(entry) => (
                 <button
                   type="button"
-                  aria-pressed={props.look.radius === entry[1] ? 'true' : 'false'}
-                  onClick={() => props.onChange({ radius: entry[1] })}
+                  aria-pressed={
+                    props.look.radius === entry[1] && !(entry[0] === 'full' && props.look.squircle) ? 'true' : 'false'
+                  }
+                  // Full rounding is a look of plain arcs, so its shortcut also turns squircle corners off.
+                  onClick={() =>
+                    props.onChange(entry[0] === 'full' ? { radius: entry[1], squircle: false } : { radius: entry[1] })
+                  }
                 >
                   <small>{entry[0]}</small>
                 </button>
