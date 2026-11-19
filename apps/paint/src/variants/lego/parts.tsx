@@ -64,9 +64,9 @@ export const boxSections = ['Tools', 'Color', 'Values', 'Layers'].map((title) =>
 }));
 
 /** Resolves the part's chosen or automatic look using the shared look resolver. */
-export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>) {
+export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>, room = part.span) {
   const options = partLooks(part.kind);
-  return options && resolveLook(part.looks, part.span, options.looks, options.auto(part.span));
+  return options && resolveLook(part.looks, part.span, options.looks, options.auto(room), room);
 }
 
 /** The group a kind's part fuses with (see `PartGroup`), `undefined` for a kind no definition knows. */

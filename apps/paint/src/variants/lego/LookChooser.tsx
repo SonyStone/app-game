@@ -1,7 +1,8 @@
 import type { JSX } from '@solidjs/web';
 import { For, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
-import { cellGap, partData, pitch, type Part, type Span } from './board';
+import { partData, type Part, type Span } from './board';
+import { useGrid } from './grid';
 import styles from './LegoStudio.module.css';
 import { lookFits, resolveLook } from './looks';
 import { PartFrame } from './PartFrame';
@@ -17,12 +18,15 @@ export function LookChooser(props: {
   /** Shows `look` at the part's size. */
   onLook: (look: string) => void;
 }) {
+  const grid = useGrid();
   const options = () => (props.part[partData]?.invalid ? undefined : partLooks(props.part.kind));
   const span = () => props.part.span;
   /** What the part shows at this size, chosen here, at a smaller size or automatically. */
   const shown = () => {
     const found = options();
-    return found ? resolveLook(props.part.looks, span(), found.looks, found.auto(span())) : '';
+    return found
+      ? resolveLook(props.part.looks, span(), found.looks, found.auto(grid.room(span())), grid.room(span()))
+      : '';
   };
 
   return (
@@ -35,16 +39,17 @@ export function LookChooser(props: {
           <div class={styles.choices}>
             <For each={found().looks} keyed={(look) => look.id}>
               {(look) => {
-                const fitting = () => lookFits(look(), span());
+                const minimum = () => grid.minimumSpan(look().min);
+                const fitting = () => lookFits(look(), grid.room(span()));
                 return (
                   <Choice
                     label={look().label}
-                    note={fitting() ? undefined : `from ${look().min.columns}×${look().min.rows}`}
+                    note={fitting() ? undefined : `from ${minimum().columns}×${minimum().rows}`}
                     selected={shown() === look().id}
                     disabled={!fitting()}
                     onChoose={() => props.onLook(look().id)}
                   >
-                    <PartPreview kind={props.part.kind} span={fitting() ? span() : look().min} look={look().id} />
+                    <PartPreview kind={props.part.kind} span={fitting() ? span() : minimum()} look={look().id} />
                   </Choice>
                 );
               }}
@@ -87,8 +92,9 @@ function Choice(props: {
 
 /** The part as it would show `look` at `span`, scaled down into a preview and not pressable. */
 function PartPreview(props: { kind: string; span: Span; look: string }) {
-  const width = () => props.span.columns * pitch - cellGap;
-  const height = () => props.span.rows * pitch - cellGap;
+  const grid = useGrid();
+  const width = () => grid.length(props.span.columns);
+  const height = () => grid.length(props.span.rows);
   const scale = () => Math.min(1, previewSize / width(), previewSize / height());
 
   return (

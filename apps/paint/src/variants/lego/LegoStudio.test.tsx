@@ -8,7 +8,7 @@ import { ok } from 'neverthrow';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createEffect, flush, untrack } from 'solid-js';
+import { createEffect, createSignal, flush, untrack } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { hexToWheel } from '../../features/color-wheel';
 import type { EngineHandlers } from '../../features/engine/openPaintTransport';
@@ -1056,3 +1056,22 @@ function openBox() {
   handle.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
   flush();
 }
+
+it('relays a host cell change to mounted parts, captions and corners while keeping the stored board', () => {
+  storeParts(['action:brush-editor']);
+  const [cell, setCell] = createSignal(44);
+  dispose = render(() => <LegoStudio cellSize={cell()} />, document.body);
+  flush();
+  const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
+  const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
+  const board = localStorage.getItem('paint.lego');
+  expect(tile.style.width).toBe('92px');
+  expect(tile.textContent).toContain('Brush settings');
+  setCell(32);
+  flush();
+  expect(document.querySelector('[data-part="test-0"]')).toBe(tile);
+  expect(tile.style.width).toBe('68px');
+  expect(tile.textContent).not.toContain('Brush settings');
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo(18 * 32 / 44);
+  expect(localStorage.getItem('paint.lego')).toBe(board);
+});

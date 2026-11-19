@@ -1,9 +1,11 @@
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { wheelToHex } from '../../../features/color-wheel';
 import { hsvToHex, luminance, type Hsv } from '../../../features/color/hsv';
 import { pressHandlers, type Press } from '../../../shared/ui/pressHandlers';
 import { ScrubNumber } from '../../../shared/ui/ScrubNumber';
 import { geometricFraction, geometricValue } from '../../procreate/sliderScale';
+import { referenceCell, useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
@@ -208,8 +210,19 @@ export function defineValuePart(channel: ValueChannel) {
 
 /** The LEGO look translates cells into the controlled input's orientation and captions. */
 function ValuePart(props: ReturnType<typeof valueNeeds>) {
+  const grid = useGrid();
+  const [element, setElement] = createSignal<HTMLDivElement>();
+  const [size, setSize] = createSignal<DOMRectReadOnly>();
+  // A brush-studio row fills the detail pane. Its width can differ from the part it drops.
+  if (typeof ResizeObserver !== 'undefined') {
+    createResizeObserver(element, (rect) => setSize(rect));
+  }
+  const width = () => size()?.width || grid.length(props.span.columns);
+  const height = () => size()?.height || grid.length(props.span.rows);
+  const longSide = () => Math.max(width(), height());
   return (
     <div
+      ref={setElement}
       class={styles.valueState}
       aria-disabled={props.active ? 'false' : 'true'}
       data-inactive={!props.active ? '' : undefined}
@@ -223,9 +236,12 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
       <ValueControl
         {...props}
         vertical={props.span.rows > props.span.columns}
-        caption={props.span.columns >= 2 ? (props.span.columns >= 3 ? props.label : props.short) : undefined}
-        unit={props.span.columns >= 2 ? props.unit : undefined}
-        named={(props.span.rows > props.span.columns ? props.span.rows : props.span.columns) >= 3}
+        caption={width() >= 92 ? (width() >= 140 ? props.label : props.short) : undefined}
+        unit={width() >= 92 ? props.unit : undefined}
+        sliderCaption={
+          grid.cell() >= referenceCell || longSide() >= 85 + props.label.length * 8 ? props.label : props.short
+        }
+        named={longSide() >= 140}
       />
     </div>
   );
@@ -246,6 +262,7 @@ function ValueControl(
     vertical: boolean;
     caption?: string;
     unit?: string;
+    sliderCaption: string;
     named: boolean;
   }
 ) {
@@ -392,7 +409,7 @@ function ValueControl(
             <span class={styles.thumb} />
             <Show when={props.named}>
               <span class={styles.sliderLabel}>
-                <span>{props.label}</span>
+                <span>{props.sliderCaption}</span>
                 <span
                   class={styles.valueChip}
                   data-value-chip

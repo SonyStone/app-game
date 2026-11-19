@@ -85,7 +85,7 @@ export const layerParts = [
           return linear();
         },
         get compact() {
-          return f.span.columns < 2;
+          return f.width < 92;
         },
         onChange: f.command((blend: Parameters<typeof BlendModePicker>[0]['mode']) =>
           s.layers.action({
@@ -111,7 +111,7 @@ export const layerParts = [
         return s.layers.state().linearBlending;
       },
       get wide() {
-        return f.span.columns >= 2;
+        return f.width >= 92;
       },
       onPress: f.command(() => s.layers.blending(!s.layers.state().linearBlending))
     }),
@@ -158,7 +158,7 @@ function commandPart(command: LayerCommand) {
         return layerCommand(command, s.layers.state(), s.layers.ready());
       },
       get wide() {
-        return f.span.columns >= 2;
+        return f.width >= 92;
       },
       onPress: f.command(() => s.layers.action(layerCommand(command, s.layers.state(), s.layers.ready()).action))
     }),

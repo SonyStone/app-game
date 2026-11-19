@@ -4,6 +4,7 @@ import { createSignal, Show } from 'solid-js';
 import { pressHandlers } from '../../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import type { Span } from '../board';
+import { useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
@@ -63,6 +64,7 @@ export function pressureCurveMinimum(): Span {
 
 /** The graph, or the small picture of the curve that opens it, and the keypad a point's value opens. */
 function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
+  const grid = useGrid();
   const [entry, setEntry] = createSignal<{ entry: PointEntry; anchor: Element }>();
   const open = pressHandlers({
     tap: (press) => props.onOpen(press.target)
@@ -82,7 +84,7 @@ function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
           </div>
         }
       >
-        <Show when={props.span.rows >= 4}>
+        <Show when={grid.length(props.span.rows) >= 188}>
           <div class={styles.curveHead}>
             <span class={styles.curveCaption}>{props.label}</span>
             <button

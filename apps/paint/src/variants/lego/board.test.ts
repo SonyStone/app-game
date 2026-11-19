@@ -1,12 +1,11 @@
 import { expect, it } from 'vitest';
 import {
-  freeSpot,
   frameAt,
+  freeSpot,
   panelFrame,
-  partsBounds,
   panelPadding,
+  partsBounds,
   pinPanels,
-  pitch,
   placeBlock,
   placePart,
   pruneOwned,
@@ -14,6 +13,9 @@ import {
   spanAfter,
   type Part
 } from './board';
+import { cellGap, referenceCell } from './grid';
+
+const pitch = referenceCell + cellGap;
 
 const part = (id: string, column: number, row: number, columns = 1, rows = 1): Part => ({
   id,
@@ -68,6 +70,7 @@ it('sizes a panel to its parts, negative cells included', () => {
 
 it('shifts a panel that would leave the view back in without changing its cells', () => {
   const frame = panelFrame(
+    pitch,
     { id: 'p', at: { x: 1, y: 0.5 }, parts: [part('a', 0, 0, 2, 1)] },
     { width: 800, height: 600 }
   );
@@ -77,8 +80,11 @@ it('shifts a panel that would leave the view back in without changing its cells'
 });
 
 it('snaps a corner drag to whole cells', () => {
-  expect(spanAfter({ columns: 1, rows: 1 }, { x: pitch * 1.6, y: pitch * 0.4 })).toEqual({ columns: 3, rows: 1 });
-  expect(spanAfter({ columns: 2, rows: 2 }, { x: -pitch * 5, y: 0 })).toEqual({ columns: 1, rows: 2 });
+  expect(spanAfter(pitch, { columns: 1, rows: 1 }, { x: pitch * 1.6, y: pitch * 0.4 })).toEqual({
+    columns: 3,
+    rows: 1
+  });
+  expect(spanAfter(pitch, { columns: 2, rows: 2 }, { x: -pitch * 5, y: 0 })).toEqual({ columns: 1, rows: 2 });
 });
 
 it('places a block of parts as one, pushing the parts in its way past the whole block', () => {
@@ -107,13 +113,13 @@ it('drops the panels of parts that are gone, and the panels of the parts on thos
 it('keeps a panel at the view edge still while it grows, and shifts it in only once kept', () => {
   const view = { width: 400, height: 400 };
   const panel = { id: 'p', at: { x: 0.9, y: 0 }, parts: [part('a', 0, 0)] };
-  const { origin } = panelFrame(panel, view);
+  const { origin } = panelFrame(pitch, panel, view);
   const grown = { ...panel, parts: [part('b', 0, 0), part('a', 1, 0)] };
 
-  expect(frameAt(grown, origin).origin).toEqual(origin);
-  expect(panelFrame(grown, view).origin.x).toBeLessThan(origin.x);
+  expect(frameAt(pitch, grown, origin).origin).toEqual(origin);
+  expect(panelFrame(pitch, grown, view).origin.x).toBeLessThan(origin.x);
 
-  const kept = pinPanels({ panels: [grown] }, new Map([['p', origin]]), view);
+  const kept = pinPanels(pitch, { panels: [grown] }, new Map([['p', origin]]), view);
   expect(kept.panels[0]?.at).toEqual({ x: origin.x / view.width, y: origin.y / view.height });
 });
 
@@ -123,14 +129,14 @@ it('finds a free spot for a new plate beside the panels, clear of them and of th
   const part = (id: string): Part => ({ id, kind: 'value:size', cell: { column: 0, row: 0 }, span });
   // One plate at the top left, 4 × 1 cells.
   const board = { panels: [{ id: 'a', at: { x: 22 / 800, y: 22 / 600 }, parts: [part('a1')] }] };
-  const taken = panelFrame(board.panels[0]!, view, false).rect;
-  const at = freeSpot(board, view, span);
+  const taken = panelFrame(pitch, board.panels[0]!, view, false).rect;
+  const at = freeSpot(pitch, board, view, span);
   const plate = { left: at.x * view.width - panelPadding, top: at.y * view.height - panelPadding };
   expect(plate.left >= taken.left + taken.width + 16 || plate.top >= taken.top + taken.height + 16).toBe(true);
   expect(plate.left).toBeGreaterThanOrEqual(16);
   expect(plate.top).toBeGreaterThanOrEqual(16);
   // The workbench and owned panels do not count; an empty board gives the top left.
-  expect(freeSpot({ panels: [{ id: 'b', at: { x: 0, y: 0 }, bench: true, parts: [part('b1')] }] }, view, span)).toEqual(
-    { x: (16 + panelPadding) / 800, y: (16 + panelPadding) / 600 }
-  );
+  expect(
+    freeSpot(pitch, { panels: [{ id: 'b', at: { x: 0, y: 0 }, bench: true, parts: [part('b1')] }] }, view, span)
+  ).toEqual({ x: (16 + panelPadding) / 800, y: (16 + panelPadding) / 600 });
 });

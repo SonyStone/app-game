@@ -6,7 +6,6 @@ import type { PaintSession } from '../../features/session';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import {
   cellGap,
-  cellSize,
   findPart,
   frameAt,
   freeSpot,
@@ -19,7 +18,6 @@ import {
   partData,
   partsBounds,
   pinPanels,
-  pitch,
   placeBlock,
   placePart,
   pruneOwned,
@@ -41,6 +39,7 @@ import type { createSheet } from './createSheet';
 import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { FloatingGrip } from './FloatingGrip';
 import { joinsAttribute, panelEdges, partEdges, partJoins, sameCells } from './fusion';
+import { useGrid } from './grid';
 import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
@@ -100,6 +99,7 @@ export function BoardView(props: {
   /** Receives the board's commands for other surfaces once it is made, and `undefined` when it is disposed. */
   ref?: (controls: BoardControls | undefined) => void;
 }) {
+  const grid = useGrid();
   const [layer, setLayer] = createSignal<HTMLElement>();
   const [box, setBox] = createSignal<HTMLElement>();
   const [drag, setDrag] = createSignal<Drag>();
@@ -174,22 +174,24 @@ export function BoardView(props: {
     height: (benchSize.height ?? 0) / benchScale()
   });
   /** The panels on screen, with where each lies; see `visiblePanels`. */
-  const visible = createMemo(() => visiblePanels(shown(), props.openPanel, props.editing, view(), pinned(drag())));
+  const visible = createMemo(() =>
+    visiblePanels(grid.pitch(), shown(), props.openPanel, props.editing, view(), pinned(drag()))
+  );
   /**
    * How much the workbench is shrunk to show all its parts in its place, which never scrolls: 1 while they fit. It
    * follows the kept bench, not a drag's preview, so the plate keeps still under a carried part.
    */
   const benchScale = createMemo(() => {
-    const used = benchReach(benchOf(props.board.board()));
+    const used = benchReach(grid.pitch(), benchOf(props.board.board()));
     const width = benchSize.width ?? 0;
     const height = benchSize.height ?? 0;
     return Math.min(1, width > 0 ? width / used.width : 1, height > 0 ? height / used.height : 1);
   });
   /** The workbench's studs; they follow its place's size, not what lies on it, so parts keep still on them. */
-  const benchGrid = createMemo(() => benchLayout(benchView()));
+  const benchGrid = createMemo(() => benchLayout(grid.pitch(), benchView()));
   const benchEntry = createMemo(() => {
     const panel = benchOf(shown());
-    return { panel, frame: benchFrame(panel, benchView()) };
+    return { panel, frame: benchFrame(grid.pitch(), panel, benchView()) };
   });
   /** The workbench and the open panels of a swatch on it, with where each lies in its pixels. */
   const benchPanels = createMemo(() => benchVisible(shown(), pinned(drag())));
@@ -210,7 +212,9 @@ export function BoardView(props: {
     const entries = dragged.place === 'bench' ? [benchEntry()] : visible();
     return new Set(
       entries.flatMap(({ panel, frame }) =>
-        panel.parts.filter((part) => overlap(dragged.rect, partRect(part, frame.origin)) > 0).map((part) => part.id)
+        panel.parts
+          .filter((part) => overlap(dragged.rect, partRect(grid.pitch(), part, frame.origin)) > 0)
+          .map((part) => part.id)
       )
     );
   });
@@ -242,7 +246,7 @@ export function BoardView(props: {
   /** Where the selected parts on the board lie together, in its pixels, while nothing is carried. */
   const boardSelectionRect = () => {
     const rects = visible().flatMap(({ panel, frame }) =>
-      panel.parts.filter((part) => selection().has(part.id)).map((part) => partRect(part, frame.origin))
+      panel.parts.filter((part) => selection().has(part.id)).map((part) => partRect(grid.pitch(), part, frame.origin))
     );
     if (rects.length === 0 || lifted()) {
       return undefined;
@@ -269,10 +273,10 @@ export function BoardView(props: {
 
     const bounds = partsBounds(parts);
     return {
-      left: frame.origin.x + bounds.column * pitch - selectionPadding,
-      top: frame.origin.y + bounds.row * pitch - selectionPadding,
-      width: bounds.columns * pitch - cellGap + selectionPadding * 2,
-      height: bounds.rows * pitch - cellGap + selectionPadding * 2
+      left: frame.origin.x + bounds.column * grid.pitch() - selectionPadding,
+      top: frame.origin.y + bounds.row * grid.pitch() - selectionPadding,
+      width: grid.length(bounds.columns) + selectionPadding * 2,
+      height: grid.length(bounds.rows) + selectionPadding * 2
     };
   };
   const chain = () => openChain(props.board.board(), props.openPanel);
@@ -462,7 +466,7 @@ export function BoardView(props: {
     if (current.type !== 'part') {
       const ended = result({ ...current, point });
 
-      props.board.set(current.type === 'resize' ? pinPanels(ended, current.pinned, view()) : ended);
+      props.board.set(current.type === 'resize' ? pinPanels(grid.pitch(), ended, current.pinned, view()) : ended);
       return;
     }
 
@@ -513,7 +517,7 @@ export function BoardView(props: {
       });
     }
 
-    props.board.set(pruneOwned(pinPanels(next, current.pinned, view())));
+    props.board.set(pruneOwned(pinPanels(grid.pitch(), next, current.pinned, view())));
     // What was selected stays so where it landed, to be carried on.
     const kept = props.board.latest();
     setSelected(new Set([...selected()].filter((id) => findPart(kept, id) !== undefined)));
@@ -545,7 +549,7 @@ export function BoardView(props: {
       props.board.set(
         putPanel(board, {
           id: newId('panel'),
-          at: freeSpot(board, view(), span),
+          at: freeSpot(grid.pitch(), board, view(), span),
           parts: [{ id: newId('part'), kind, cell: { column: 0, row: 0 }, span }]
         })
       );
@@ -589,8 +593,8 @@ export function BoardView(props: {
           '--stud-x': `${frame().origin.x - frame().rect.left}px`,
           '--stud-y': `${frame().origin.y - frame().rect.top}px`,
           // The workbench shows studs only over its whole cells.
-          '--studs-width': panel().bench ? `${benchStuds(panel()).columns * pitch}px` : undefined,
-          '--studs-height': panel().bench ? `${benchStuds(panel()).rows * pitch}px` : undefined
+          '--studs-width': panel().bench ? `${benchStuds(panel()).columns * grid.pitch()}px` : undefined,
+          '--studs-height': panel().bench ? `${benchStuds(panel()).rows * grid.pitch()}px` : undefined
         }}
         onPointerDown={(event) => {
           if (!props.editing || event.target !== event.currentTarget) {
@@ -644,10 +648,10 @@ export function BoardView(props: {
                   data-open={chain().has(part().id) ? '' : undefined}
                   data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}
                   style={{
-                    left: `${part().cell.column * pitch}px`,
-                    top: `${part().cell.row * pitch}px`,
-                    width: `${part().span.columns * pitch - cellGap}px`,
-                    height: `${part().span.rows * pitch - cellGap}px`
+                    left: `${part().cell.column * grid.pitch()}px`,
+                    top: `${part().cell.row * grid.pitch()}px`,
+                    width: `${grid.length(part().span.columns)}px`,
+                    height: `${grid.length(part().span.rows)}px`
                   }}
                   onPointerDown={(event) => {
                     if (!props.editing) {
@@ -673,7 +677,7 @@ export function BoardView(props: {
                       kind={part().kind}
                       missing={!!part()[partData]?.invalid}
                       span={part().span}
-                      look={lookOf(part())}
+                      look={lookOf(part(), grid.room(part().span))}
                       onPopup={props.onPopup}
                       open={chain().has(part().id)}
                       onOpen={() => toggle(part().id)}
@@ -690,8 +694,8 @@ export function BoardView(props: {
                 class={styles.corner}
                 aria-label="Resize"
                 style={{
-                  left: `${(part().cell.column + part().span.columns) * pitch - cellGap}px`,
-                  top: `${(part().cell.row + part().span.rows) * pitch - cellGap}px`
+                  left: `${(part().cell.column + part().span.columns) * grid.pitch() - cellGap}px`,
+                  top: `${(part().cell.row + part().span.rows) * grid.pitch() - cellGap}px`
                 }}
                 onPointerDown={(event) => {
                   event.stopPropagation();
@@ -817,8 +821,8 @@ export function BoardView(props: {
             style={{
               left: `${current().point.x - overlay().x - current().grab.x}px`,
               top: `${current().point.y - overlay().y - current().grab.y}px`,
-              width: `${current().span.columns * pitch - cellGap}px`,
-              height: `${current().span.rows * pitch - cellGap}px`,
+              width: `${grid.length(current().span.columns)}px`,
+              height: `${grid.length(current().span.rows)}px`,
               // As large as it will be on the board, held where it was taken.
               'transform-origin': `${current().grab.x}px ${current().grab.y}px`,
               scale: `${ghostScale(current().point) * 1.06}`
@@ -835,7 +839,7 @@ export function BoardView(props: {
                       kind={current().kind}
                       missing={!!current()[partData]?.invalid}
                       span={current().span}
-                      look={lookOf(current())}
+                      look={lookOf(current(), grid.room(current().span))}
                       onPopup={() => {}}
                     />
                   </div>
@@ -980,7 +984,7 @@ export function BoardView(props: {
     const grab =
       from.grab ??
       (from.block || from.spawnAt
-        ? { x: Math.min(offset.x, cellSize / 2), y: Math.min(offset.y, cellSize / 2) }
+        ? { x: Math.min(offset.x, grid.cell() / 2), y: Math.min(offset.y, grid.cell() / 2) }
         : offset);
     setDrag({
       type: 'part',
@@ -1056,8 +1060,8 @@ export function BoardView(props: {
       start: point,
       owned: {
         anchor: {
-          x: host.frame.origin.x + anchor.cell.column * pitch,
-          y: host.frame.origin.y + anchor.cell.row * pitch
+          x: host.frame.origin.x + anchor.cell.column * grid.pitch(),
+          y: host.frame.origin.y + anchor.cell.row * grid.pitch()
         },
         onBench
       }
@@ -1170,7 +1174,7 @@ export function BoardView(props: {
         .filter((part) => selected().has(part.id))
         .map((part) => ({
           part,
-          at: { x: frame.origin.x + part.cell.column * pitch, y: frame.origin.y + part.cell.row * pitch }
+          at: { x: frame.origin.x + part.cell.column * grid.pitch(), y: frame.origin.y + part.cell.row * grid.pitch() }
         }))
     );
     if (chosen.length === 0) {
@@ -1184,14 +1188,14 @@ export function BoardView(props: {
       (parts, { part, at }) =>
         placePart(parts, {
           ...part,
-          cell: { column: Math.round((at.x - left) / pitch), row: Math.round((at.y - top) / pitch) }
+          cell: { column: Math.round((at.x - left) / grid.pitch()), row: Math.round((at.y - top) / grid.pitch()) }
         }),
       []
     );
     const bounds = partsBounds(laid);
     return {
       parts: fromOrigin(laid),
-      origin: { x: left + bounds.column * pitch, y: top + bounds.row * pitch },
+      origin: { x: left + bounds.column * grid.pitch(), y: top + bounds.row * grid.pitch() },
       span: { columns: bounds.columns, rows: bounds.rows },
       ids: chosen.map(({ part }) => part.id)
     };
@@ -1249,7 +1253,7 @@ export function BoardView(props: {
       }
 
       copy = copyOf(block.parts);
-      const at = besideBlock(block.origin, block.span, view());
+      const at = besideBlock(grid.pitch(), block.origin, block.span, view());
       next = { ...board, panels: [...board.panels, { id: newId('panel'), at, parts: copy.parts }] };
     }
 
@@ -1301,7 +1305,7 @@ export function BoardView(props: {
           })),
           panels: []
         },
-        grab: { x: at.x - origin.x - bounds.column * pitch, y: at.y - origin.y - bounds.row * pitch },
+        grab: { x: at.x - origin.x - bounds.column * grid.pitch(), y: at.y - origin.y - bounds.row * grid.pitch() },
         base: putPanel({ ...board, panels: board.panels.filter((other) => !other.bench) }, rest),
         pressed
       }
@@ -1311,8 +1315,8 @@ export function BoardView(props: {
   /** The workbench of `board` and the open chain of a swatch on it; see `visiblePanels`. */
   function benchVisible(board: Board, pins?: ReadonlyMap<string, Point>) {
     const panel = benchOf(board);
-    const bench = { panel, frame: benchFrame(panel, benchView()) };
-    return visiblePanels(board, props.openPanel, props.editing, benchView(), pins, bench);
+    const bench = { panel, frame: benchFrame(grid.pitch(), panel, benchView()) };
+    return visiblePanels(grid.pitch(), board, props.openPanel, props.editing, benchView(), pins, bench);
   }
 
   /** The cells of workbench `panel` that show studs: those that fit its place, and any its parts reach past them. */
@@ -1372,7 +1376,10 @@ export function BoardView(props: {
 
   /** Where each panel on screen has its cell (0, 0) now, to keep it there through a drag; see `frameAt`. */
   function origins(board: Board) {
-    const frames = [...visiblePanels(board, props.openPanel, props.editing, view()), ...benchVisible(board)];
+    const frames = [
+      ...visiblePanels(grid.pitch(), board, props.openPanel, props.editing, view()),
+      ...benchVisible(board)
+    ];
     return new Map(frames.map(({ panel, frame }) => [panel.id, frame.origin]));
   }
 
@@ -1390,7 +1397,7 @@ export function BoardView(props: {
       // From the drag's own board: `benchPanels` follows `shown`, which this computes.
       const inBenchPlace = benchVisible(drag.base).some((entry) => entry.panel.id === panel.id);
       const scale = inBenchPlace ? benchScale() : size.scale;
-      const span = spanAfter(drag.span, {
+      const span = spanAfter(grid.pitch(), drag.span, {
         x: (drag.point.x - drag.start.x) / scale,
         y: (drag.point.y - drag.start.y) / scale
       });
@@ -1405,14 +1412,14 @@ export function BoardView(props: {
     if (drag.owned) {
       const pointer = (drag.owned.onBench ? inBench(drag.point) : undefined) ?? toView(drag.point);
       const offset = {
-        column: Math.round((pointer.x - drag.grab.x - drag.owned.anchor.x) / pitch),
-        row: Math.round((pointer.y - drag.grab.y - drag.owned.anchor.y) / pitch)
+        column: Math.round((pointer.x - drag.grab.x - drag.owned.anchor.x) / grid.pitch()),
+        row: Math.round((pointer.y - drag.grab.y - drag.owned.anchor.y) / grid.pitch())
       };
       return replacePanel(drag.base, panel.id, { ...panel, offset });
     }
 
     const pointer = toView(drag.point);
-    const offset = frameAt(panel, { x: 0, y: 0 }).rect;
+    const offset = frameAt(grid.pitch(), panel, { x: 0, y: 0 }).rect;
     const at = {
       x: (pointer.x - drag.grab.x + (panel.floating ? offset.left : 0)) / size.width,
       y: (pointer.y - drag.grab.y + (panel.floating ? offset.top : 0)) / size.height
@@ -1445,7 +1452,7 @@ export function BoardView(props: {
                   return panel;
                 }
 
-                const { rect } = ownedFrame(panel, anchor, size);
+                const { rect } = ownedFrame(grid.pitch(), panel, anchor, size);
                 return { ...panel, at: { x: rect.left / size.width, y: rect.top / size.height } };
               })
             ]
@@ -1458,12 +1465,12 @@ export function BoardView(props: {
         : placePart(panel.parts, { ...part, cell });
       const before = new Map(panel.parts.map((other) => [other.id, other.cell]));
       const host = { ...panel, parts: placed };
-      const origin = drag.pinned.get(panel.id) ?? panelFrame(host, size).origin;
+      const origin = drag.pinned.get(panel.id) ?? panelFrame(grid.pitch(), host, size).origin;
       const anchor = {
-        left: origin.x + cell.column * pitch,
-        top: origin.y + cell.row * pitch,
-        width: drag.span.columns * pitch - cellGap,
-        height: drag.span.rows * pitch - cellGap
+        left: origin.x + cell.column * grid.pitch(),
+        top: origin.y + cell.row * grid.pitch(),
+        width: grid.length(drag.span.columns),
+        height: grid.length(drag.span.rows)
       };
       return {
         board: withOwned(putPanel(drag.base, host), anchor),
@@ -1480,12 +1487,12 @@ export function BoardView(props: {
       const lifted = {
         left: corner.x,
         top: corner.y,
-        width: drag.span.columns * pitch,
-        height: drag.span.rows * pitch
+        width: drag.span.columns * grid.pitch(),
+        height: drag.span.rows * grid.pitch()
       };
       return entries.reduce<{ entry?: (typeof entries)[number]; area: number }>(
         (best, entry) => {
-          const area = overlap(lifted, grow(entry.frame.rect, pitch / 2));
+          const area = overlap(lifted, grow(entry.frame.rect, grid.pitch() / 2));
           return area > 0 && area >= best.area ? { entry, area } : best;
         },
         { area: 0 }
@@ -1501,10 +1508,13 @@ export function BoardView(props: {
       const owned = benchVisible(drag.base, drag.pinned).filter((entry) => !entry.panel.bench && accepts(entry.panel));
       const into = touched(owned, corner);
       if (into) {
-        return { where: 'bench' as const, ...placeOn(into.panel, nearestCell(into.frame.origin, corner)) };
+        return {
+          where: 'bench' as const,
+          ...placeOn(into.panel, nearestCell(grid.pitch(), into.frame.origin, corner))
+        };
       }
 
-      const nearest = nearestCell(benchGrid().origin, corner);
+      const nearest = nearestCell(grid.pitch(), benchGrid().origin, corner);
       const cell = { column: Math.max(0, nearest.column), row: Math.max(0, nearest.row) };
       return { where: 'bench' as const, ...placeOn(benchOf(drag.base), cell) };
     }
@@ -1525,13 +1535,16 @@ export function BoardView(props: {
     const target = drag.block?.floating
       ? undefined
       : touched(
-          visiblePanels(drag.base, props.openPanel, props.editing, size, drag.pinned).filter((entry) =>
+          visiblePanels(grid.pitch(), drag.base, props.openPanel, props.editing, size, drag.pinned).filter((entry) =>
             accepts(entry.panel)
           ),
           corner
         );
     if (target) {
-      return { where: 'board' as const, ...placeOn(target.panel, nearestCell(target.frame.origin, corner)) };
+      return {
+        where: 'board' as const,
+        ...placeOn(target.panel, nearestCell(grid.pitch(), target.frame.origin, corner))
+      };
     }
 
     const placedAt = { x: corner.x / size.width, y: corner.y / size.height };
@@ -1543,7 +1556,7 @@ export function BoardView(props: {
           ...drag.base,
           panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating }]
         },
-        panelFrame({ id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating }, size).rect
+        panelFrame(grid.pitch(), { id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating }, size).rect
       ),
       key: 'new',
       pushes: false
@@ -1590,7 +1603,7 @@ export function BoardView(props: {
       pointer: drag.pointer,
       point,
       start: drag.start,
-      grab: { x: drag.grab.x - bounds.column * pitch, y: drag.grab.y - bounds.row * pitch },
+      grab: { x: drag.grab.x - bounds.column * grid.pitch(), y: drag.grab.y - bounds.row * grid.pitch() },
       settled: point,
       base: replacePanel(drag.base, panel.id, { ...panel, parts: [] }),
       before: drag.base,
@@ -1684,7 +1697,7 @@ function fromOrigin(parts: readonly Part[]) {
  * size: right of it where there is room, else left, below or above it; right of it, shifted into the view, if
  * nowhere.
  */
-function besideBlock(origin: Point, span: Span, view: { width: number; height: number }) {
+function besideBlock(pitch: number, origin: Point, span: Span, view: { width: number; height: number }) {
   const width = span.columns * pitch - cellGap;
   const height = span.rows * pitch - cellGap;
   const gap = pitch / 2 + panelPadding * 2;
@@ -1745,7 +1758,7 @@ function benchOf(board: Board): Panel {
  * The studs of a workbench place of `size` (before it is shrunk to fit), in the bench's pixels: as many whole
  * `columns` and `rows` of cells as fit with at least `benchMargin` around them, centered, cell (0, 0) at `origin`.
  */
-function benchLayout(size: { width: number; height: number }) {
+function benchLayout(pitch: number, size: { width: number; height: number }) {
   const fit = (length: number) => Math.max(1, Math.floor((length - benchMargin * 2 + cellGap) / pitch));
   const columns = fit(size.width);
   const rows = fit(size.height);
@@ -1760,8 +1773,8 @@ function benchLayout(size: { width: number; height: number }) {
  * Where the workbench `panel` lies in its place of `size`, in the bench's pixels: one plate filling the place edge
  * to edge, as its neighbouring boxes do, with its studs laid out by `benchLayout`, larger if its parts reach further.
  */
-function benchFrame(panel: Panel, size: { width: number; height: number }) {
-  const { origin } = benchLayout(size);
+function benchFrame(pitch: number, panel: Panel, size: { width: number; height: number }) {
+  const { origin } = benchLayout(pitch, size);
   const bounds = partsBounds(panel.parts);
   const reach = (start: number, cells: number) => start * 2 + cells * pitch - cellGap;
   const used =
@@ -1775,7 +1788,7 @@ function benchFrame(panel: Panel, size: { width: number; height: number }) {
 }
 
 /** How far the parts of workbench `panel` reach from its place's top-left, with the margin around its studs. */
-function benchReach(panel: Panel) {
+function benchReach(pitch: number, panel: Panel) {
   if (panel.parts.length === 0) {
     return { width: 0, height: 0 };
   }
@@ -1786,7 +1799,7 @@ function benchReach(panel: Panel) {
 }
 
 /** Where `part` lies on a plate whose cell (0, 0) starts at `origin`. */
-function partRect(part: Part, origin: Point): Rect {
+function partRect(pitch: number, part: Part, origin: Point): Rect {
   return {
     left: origin.x + part.cell.column * pitch,
     top: origin.y + part.cell.row * pitch,

@@ -1,3 +1,5 @@
+import { cellGap, panelPadding } from './grid';
+export { cellGap, panelPadding } from './grid';
 /**
  * The LEGO board: panels lie freely on the drawing, each one a grid of studs, and parts sit on a panel's studs like
  * printed tiles. A part covers any whole number of cells; it never overlaps another part, so placing or growing one
@@ -59,14 +61,6 @@ export type Point = { x: number; y: number };
 export type Cell = { column: number; row: number };
 export type Span = { columns: number; rows: number };
 
-/** Edge of one stud cell in CSS pixels, the size of the smallest part. */
-export const cellSize = 44;
-/** Space between neighbouring cells in CSS pixels. */
-export const cellGap = 4;
-/** Distance from one cell to the next. */
-export const pitch = cellSize + cellGap;
-/** Panel border around its cells in CSS pixels. */
-export const panelPadding = 6;
 /** The largest span of a part in either direction. */
 export const maxSpan = 10;
 /** Height of the grip strip, outside the stud cells. */
@@ -156,8 +150,8 @@ export function partsBounds(parts: readonly Part[]) {
  * its whole box with the padding. A panel partly off screen is shifted back in, so a turned or smaller view never
  * hides parts; its stored `at` is kept. `editing` defaults to true and reserves an empty floating plate's drop area.
  */
-export function panelFrame(panel: Panel, view: { width: number; height: number }, editing = true) {
-  const { rect } = frameAt(panel, { x: 0, y: 0 }, editing);
+export function panelFrame(pitch: number, panel: Panel, view: { width: number; height: number }, editing = true) {
+  const { rect } = frameAt(pitch, panel, { x: 0, y: 0 }, editing);
   const { width, height } = rect;
   const wanted = {
     x: panel.at.x * view.width + (panel.floating ? 0 : rect.left),
@@ -175,7 +169,7 @@ export function panelFrame(panel: Panel, view: { width: number; height: number }
  * a panel being edited stays where it was as it grows or shrinks, so the cells under the pointer keep still.
  * Empty floating plates reserve a drop area by default; pass `false` for their Live strip alone.
  */
-export function frameAt(panel: Panel, origin: Point, editing = true) {
+export function frameAt(pitch: number, panel: Panel, origin: Point, editing = true) {
   const bounds = partsBounds(panel.parts);
   const handle = panel.floating ? floatingGripHeight : 0;
   const rect = {
@@ -195,7 +189,12 @@ export function frameAt(panel: Panel, origin: Point, editing = true) {
  * `board` with each free panel in `origins` kept where its cell (0, 0) starts there, in a view of `view` size; a
  * panel then partly off screen is shifted back in as `panelFrame` shows it.
  */
-export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, view: { width: number; height: number }) {
+export function pinPanels(
+  pitch: number,
+  board: Board,
+  origins: ReadonlyMap<string, Point>,
+  view: { width: number; height: number }
+) {
   return {
     ...board,
     panels: board.panels.map((panel) => {
@@ -204,7 +203,7 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
         return panel;
       }
 
-      const rect = frameAt(panel, origin).rect;
+      const rect = frameAt(pitch, panel, origin).rect;
       return {
         ...panel,
         at: {
@@ -220,8 +219,8 @@ export function pinPanels(board: Board, origins: ReadonlyMap<string, Point>, vie
  * Where a panel owned by a part at `anchor` lies, as `panelFrame` gives it: beside the part (see `besideRect`), inside
  * `view`.
  */
-export function ownedFrame(panel: Panel, anchor: Rect, view: { width: number; height: number }) {
-  const { rect } = frameAt(panel, { x: 0, y: 0 });
+export function ownedFrame(pitch: number, panel: Panel, anchor: Rect, view: { width: number; height: number }) {
+  const { rect } = frameAt(pitch, panel, { x: 0, y: 0 });
   const size = { width: rect.width, height: rect.height };
   const { x: left, y: top } = besideRect(anchor, size, view);
   const origin = { x: left - rect.left, y: top - rect.top };
@@ -268,12 +267,18 @@ export function besideRect(
  * come and go. Returns the panel's `at`, as fractions of the view; the top left corner when no place is free, where
  * the new plate then lies over others.
  */
-export function freeSpot(board: Board, view: { width: number; height: number }, span: Span, margin = 16): Point {
+export function freeSpot(
+  pitch: number,
+  board: Board,
+  view: { width: number; height: number },
+  span: Span,
+  margin = 16
+): Point {
   const width = span.columns * pitch - cellGap + panelPadding * 2;
   const height = span.rows * pitch - cellGap + panelPadding * 2;
   const taken = board.panels
     .filter((panel) => !panel.bench && panel.owner === undefined)
-    .map((panel) => panelFrame(panel, view, false).rect);
+    .map((panel) => panelFrame(pitch, panel, view, false).rect);
   const at = (left: number, top: number) => ({
     x: (left + panelPadding) / view.width,
     y: (top + panelPadding) / view.height
@@ -298,12 +303,12 @@ export function freeSpot(board: Board, view: { width: number; height: number }, 
 }
 
 /** The cell whose top-left corner is nearest to `point`, on a grid whose cell (0, 0) starts at `origin`. */
-export function nearestCell(origin: Point, point: Point): Cell {
+export function nearestCell(pitch: number, origin: Point, point: Point): Cell {
   return { column: Math.round((point.x - origin.x) / pitch), row: Math.round((point.y - origin.y) / pitch) };
 }
 
 /** The span a part dragged by its corner gets after the pointer moved `delta` CSS pixels from `from`. */
-export function spanAfter(from: Span, delta: Point): Span {
+export function spanAfter(pitch: number, from: Span, delta: Point): Span {
   return {
     columns: clampSpan(from.columns + Math.round(delta.x / pitch)),
     rows: clampSpan(from.rows + Math.round(delta.y / pitch))

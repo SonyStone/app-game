@@ -13,6 +13,8 @@ export type Popup = { kind: 'part'; partKind: string } | { kind: 'looks'; id: st
 
 /** Host presentation and guarded callbacks, supplied to a binding under its frame owner. */
 export type PartBinding = {
+  /** Available tile width in CSS pixels. */
+  readonly width: number;
   kind: string;
   span: Span;
   look: string;

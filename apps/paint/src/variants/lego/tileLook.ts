@@ -1,16 +1,17 @@
 import { createSignal } from 'solid-js';
+import { referenceCell } from './grid';
 
 /**
  * TEMPORARY, a trial: the corners of LEGO's plates and tiles, switched for the whole editor by a developer control
  * (`TileLookSwitch`) so they can be compared on the tablet. Remove this and the switch once the corners are chosen,
  * keeping the chosen radius as `--lego-radius` in `LegoStudio.module.css` (and the squircle look, if chosen).
  *
- * `radius` is the one number every corner derives from: a plate's corner in CSS pixels; a tile's is it less the
+ * `radius` is the one number every corner derives from: a plate's corner in CSS pixels at the reference cell size; a tile's is it less the
  * plate's padding, and so on inwards (see `LegoStudio.module.css`). `squircle` draws every corner with
  * `corner-shape: squircle` where the browser has it, its radii grown so a corner reads as round as the arc `radius`
  * names. The look is kept per device and never in the board.
  */
-export type TileLook = { radius: number; squircle: boolean };
+export type TileLook = { cellSize?: number; radius: number; squircle: boolean };
 
 /** The look a device without a stored choice gets: the user's pick from the trial, 18 px plates with squircle corners. */
 export const defaultTileLook: TileLook = { radius: 18, squircle: true };
@@ -67,6 +68,9 @@ function normalTileLook(look: TileLook): TileLook {
   const radius = Number.isFinite(look.radius) ? Math.round(look.radius) : defaultTileLook.radius;
 
   return {
+    ...(typeof look.cellSize === 'number' && Number.isFinite(look.cellSize)
+      ? { cellSize: Math.min(referenceCell, Math.max(28, Math.round(look.cellSize / 2) * 2)) }
+      : {}),
     radius: Math.max(radiusRange.min, Math.min(radiusRange.max, radius)),
     squircle: look.squircle === true
   };

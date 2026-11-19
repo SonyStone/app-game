@@ -374,6 +374,7 @@ it('adds a channel using one spec, including fraction edits, number edits and ex
   } satisfies ValueChannel;
   const definition = defineValuePart(channel);
   const frame: PartBinding = {
+    width: 140,
     open: false,
     kind: 'value:flow',
     span: { columns: 3, rows: 1 },

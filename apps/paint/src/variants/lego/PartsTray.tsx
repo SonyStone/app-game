@@ -3,13 +3,14 @@ import { createEffect, createMemo, createSignal, For, onCleanup, onSettled, Show
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
 import type { SketchIconName } from '../../shared/ui/SketchIcon';
-import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
-import { closedHeight, type createSheet } from './createSheet';
+import { partData, partsBounds, type Part } from './board';
+import { type createSheet } from './createSheet';
+import { joinsAttribute, partJoins } from './fusion';
+import { useGrid } from './grid';
 import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { joinsAttribute, partJoins } from './fusion';
 import { boxSections, kindLabel, lookOf, partGroup } from './parts';
 import { opaqueData } from './partStorage';
 
@@ -44,6 +45,7 @@ export function PartsTray(props: {
   /** The kit to light up and bring into view: one just kept, or the one a kept part or group matched. */
   flashKit: string | undefined;
 }) {
+  const grid = useGrid();
   const [body, setBody] = createSignal<HTMLElement>();
   const [pane, setPane] = createSignal<HTMLElement>();
   const [shelf, setShelf] = createSignal<HTMLElement>();
@@ -54,7 +56,7 @@ export function PartsTray(props: {
   const family = () => families().find((candidate) => candidate.id === familyId()) ?? families()[0]!;
   const split = createSplit();
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
-  const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(closedHeight, props.sheet.height()));
+  const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(grid.pitch(), props.sheet.height()));
 
   // A wheel over the board or the sheet moves its edge, and settles it once the wheel stops; over the parts it first
   // scrolls them, and moves the sheet only past their ends.
@@ -484,6 +486,7 @@ function KitName(props: { name: string; onRename: (name: string) => void }) {
  * miniature.
  */
 export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }) {
+  const grid = useGrid();
   const bounds = () => partsBounds(props.parts);
   const joins = createMemo(() => partJoins(props.parts, partGroup));
 
@@ -494,10 +497,10 @@ export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }
           class={styles.part}
           data-joins={joinsAttribute(joins().get(part().id))}
           style={{
-            left: `${(part().cell.column - bounds().column) * pitch}px`,
-            top: `${(part().cell.row - bounds().row) * pitch}px`,
-            width: `${part().span.columns * pitch - cellGap}px`,
-            height: `${part().span.rows * pitch - cellGap}px`
+            left: `${(part().cell.column - bounds().column) * grid.pitch()}px`,
+            top: `${(part().cell.row - bounds().row) * grid.pitch()}px`,
+            width: `${grid.length(part().span.columns)}px`,
+            height: `${grid.length(part().span.rows)}px`
           }}
         >
           <div class={styles.content} inert>
@@ -507,7 +510,7 @@ export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }
               kind={part().kind}
               missing={!!part()[partData]?.invalid}
               span={part().span}
-              look={lookOf(part())}
+              look={lookOf(part(), grid.room(part().span))}
               onPopup={() => {}}
             />
           </div>
@@ -519,11 +522,13 @@ export function BlockView(props: { parts: readonly Part[]; immediate?: boolean }
 
 /** A kit scaled down to at most `cells` cells either way, on a plate like a panel's. */
 function KitPreview(props: { parts: readonly Part[]; cells: number }) {
+  const grid = useGrid();
   const size = () => {
     const bounds = partsBounds(props.parts);
-    return { width: bounds.columns * pitch - cellGap, height: bounds.rows * pitch - cellGap };
+    return { width: grid.length(bounds.columns), height: grid.length(bounds.rows) };
   };
-  const scale = () => Math.min(1, (props.cells * cellSize) / size().width, (props.cells * cellSize) / size().height);
+  const scale = () =>
+    Math.min(1, (props.cells * grid.cell()) / size().width, (props.cells * grid.cell()) / size().height);
 
   return (
     <div

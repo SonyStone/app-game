@@ -65,7 +65,7 @@
 .layer {
   display: flex;
   align-items: stretch;
-  min-height: 44px;
+  min-height: var(--lego-cell);
   border-bottom: 1px solid color-mix(in srgb, var(--lego-quiet) 20%, transparent);
 
   &.selected {

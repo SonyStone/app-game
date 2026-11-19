@@ -3,6 +3,7 @@ import type { JSX } from '@solidjs/web';
 import { createSignal, Errored, Show, useContext, type Accessor } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { Span } from './board';
+import { useGrid } from './grid';
 import { LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { partDefinition } from './parts';
@@ -34,6 +35,7 @@ export function PartFrame(props: {
   onDone?: () => void;
   children?: JSX.Element;
 }) {
+  const grid = useGrid();
   const [element, setElement] = createSignal<HTMLElement>();
 
   return (
@@ -53,7 +55,7 @@ export function PartFrame(props: {
             title={`${props.kind ?? 'Part'} failed. Tap to retry.`}
             onClick={reset}
           >
-            <Show when={!props.span || props.span.columns >= 2} fallback={<SketchIcon name="reset" />}>
+            <Show when={!props.span || grid.length(props.span.columns) >= 92} fallback={<SketchIcon name="reset" />}>
               <span>Broken part</span>
               <span>{props.kind}</span>
               <span>Retry</span>
@@ -78,9 +80,13 @@ function VisiblePreview(props: { element: Accessor<HTMLElement | undefined>; chi
 
 /** Runs a definition under the mounted frame owner; only this boundary receives app capabilities. */
 function Binding(props: Parameters<typeof PartFrame>[0]) {
+  const grid = useGrid();
   const services = useContext(LegoServicesContext);
   const definition = () => (props.missing ? undefined : partDefinition(props.kind ?? ''));
   const frame: PartBinding = {
+    get width() {
+      return grid.length(frame.span.columns);
+    },
     get kind() {
       return props.kind ?? '';
     },
@@ -88,7 +94,7 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
       return props.span ?? { columns: 1, rows: 1 };
     },
     get look() {
-      return props.look ?? definition()?.looks?.auto(frame.span) ?? '';
+      return props.look ?? definition()?.looks?.auto(grid.room(frame.span)) ?? '';
     },
     get mode() {
       return props.mode ?? 'live';
@@ -129,6 +135,7 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
 
 /** Retains a tile for an unavailable kind or malformed stored record. */
 export function MissingPart(props: { kind: string; span?: Span }) {
+  const grid = useGrid();
   return (
     <span
       class={styles.brokenPart}
@@ -137,7 +144,7 @@ export function MissingPart(props: { kind: string; span?: Span }) {
       title={`Missing part: ${props.kind}`}
     >
       ?
-      <Show when={!props.span || props.span.columns >= 2}>
+      <Show when={!props.span || grid.length(props.span.columns) >= 92}>
         <span>{props.kind}</span>
       </Show>
     </span>
