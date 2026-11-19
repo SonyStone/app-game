@@ -56,14 +56,14 @@ export type ValueChannel = {
   levels?: readonly ValueLevel[];
   /** Unavailable channels stay mounted but cannot receive edits. */
   active?: (services: LegoServices) => boolean;
-  /** Enters the board from the brush studio rather than the box. */
+  /** Left out of the box: enters the board from the brush studio, or shows only on a sheet, as the grid size does. */
   studioOnly?: boolean;
   max: (services: LegoServices) => number;
   read: (services: LegoServices) => number;
   write: (services: LegoServices, value: number, hsv: Hsv) => void;
   colored: boolean;
   /** The parts this channel's part fuses with; see `PartGroup`. */
-  group: Extract<PartGroup, 'color-channels' | 'brush-values' | 'layer-props'>;
+  group: Extract<PartGroup, 'color-channels' | 'brush-values' | 'layer-props' | 'interface'>;
   /** Holds input locally and sends one undoable command at gesture completion. */
   deferred?: boolean;
   /** Captures the target identity at gesture start, so a selection change cannot redirect a pending edit. */

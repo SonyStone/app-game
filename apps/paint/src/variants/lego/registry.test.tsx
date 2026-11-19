@@ -449,7 +449,7 @@ it('imports a brush file and offers export only for the selected native preset',
   expect(button()).toBeUndefined();
 });
 
-it('gives FileMenu only the five file commands and closes it after each selection', () => {
+it('gives FileMenu only the five file commands and Options, and closes it after each selection', () => {
   const { services } = owned(createTestServices);
   const done = vi.fn();
   mount(() => (
@@ -461,7 +461,8 @@ it('gives FileMenu only the five file commands and closes it after each selectio
   for (const [label, command] of [
     ['Save drawing', services.files.download],
     ['Export picture', services.files.png],
-    ['Export layers', services.files.psd]
+    ['Export layers', services.files.psd],
+    ['Options', services.options.open]
   ] as const) {
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
       .find((button) => button.textContent?.includes(label))!
@@ -476,7 +477,7 @@ it('gives FileMenu only the five file commands and closes it after each selectio
     expect(command).toHaveBeenCalledWith(file);
     expect(input.value).toBe('');
   }
-  expect(done).toHaveBeenCalledTimes(5);
+  expect(done).toHaveBeenCalledTimes(6);
 });
 
 it('keeps FileMenu commands and completion inert in preview mode', () => {

@@ -5,7 +5,7 @@ import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { render } from '@solidjs/web';
 import 'fake-indexeddb/auto';
 import { ok } from 'neverthrow';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEffect, createSignal, flush, untrack } from 'solid-js';
@@ -964,6 +964,190 @@ it("marks the chosen category on the sidebar's sliding pill, with no sidebar sty
   expect(dialog.querySelector('nav > span[aria-hidden="true"]:first-child')).not.toBeNull();
   expect(dialog.querySelector('[data-join]')).toBeNull();
 });
+
+it('opens Options from its part and from the File menu, and closes it with Done, Escape and the back gesture', () => {
+  storeParts(['action:options', 'action:file']);
+  mount();
+  expect(optionsSheet()).toBeNull();
+
+  const fromPart = openOptions();
+  expect(fromPart.querySelector('nav[aria-label="Option sections"]')).not.toBeNull();
+  click('Done');
+  expect(optionsSheet()).toBeNull();
+
+  document.querySelector<HTMLButtonElement>('[data-part-kind="action:file"] button')!.click();
+  flush();
+  const entry = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (item) => item.textContent === 'Options'
+  )!;
+  entry.click();
+  flush();
+  // The menu closes as the sheet opens.
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  // The browser's cancel, which Escape inside the modal sheet sends.
+  optionsSheet()!.dispatchEvent(new Event('cancel', { cancelable: true }));
+  flush();
+  expect(optionsSheet()).toBeNull();
+
+  // The page's Escape, the same handler the Android back gesture runs.
+  openOptions();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  flush();
+  expect(optionsSheet()).toBeNull();
+  expect(button('Edit')).toBeDefined();
+});
+
+it("lays the grid out anew at once as Options' grid size changes, and keeps the size on the device", () => {
+  storeParts(['action:options']);
+  mount();
+  expect(editorStyle('--lego-cell')).toBe('28px');
+  const sheet = openOptions();
+  const setting = sheet.querySelector<HTMLElement>('[data-part-kind="value:grid-size"]')!;
+  expect(setting.textContent).toContain('28px');
+  // The sample of real parts lies in the section.
+  const sample = sheet.querySelector<HTMLElement>('[data-grid-sample]')!;
+  expect(sample.querySelectorAll('[data-part-kind]')).toHaveLength(7);
+  const sampleWidth = () =>
+    (sample.querySelector('[data-part-kind="value:size"]')!.parentElement!.parentElement as HTMLElement).style.width;
+  expect(sampleWidth()).toBe('124px');
+
+  typeValue(setting, '40');
+  expect(editorStyle('--lego-cell')).toBe('40px');
+  expect(editorStyle('--lego-radius')).toBe(`${(18 * 40) / 44}px`);
+  expect(setting.textContent).toContain('40px');
+  expect(sampleWidth()).toBe(`${4 * 44 - 4}px`);
+  expect(JSON.parse(localStorage.getItem('paint.lego.options')!)).toEqual({ cell: 40 });
+
+  // Out of range or between steps, a typed size settles within the range on a whole step.
+  typeValue(setting, '99');
+  expect(editorStyle('--lego-cell')).toBe('52px');
+
+  dispose?.();
+  dispose = undefined;
+  flush();
+  document.body.replaceChildren();
+  mount();
+  expect(editorStyle('--lego-cell')).toBe('52px');
+});
+
+it.each([
+  { stored: { 'paint.lego.options': '{"cell":36}' }, cell: '36px', kept: '{"cell":36}' },
+  {
+    stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true,"cellSize":32}' },
+    cell: '32px',
+    kept: '{"cell":32}'
+  },
+  { stored: { 'paint.lego.tile-look': '{"radius":18,"squircle":true}' }, cell: '28px', kept: '{}' },
+  { stored: { 'paint.lego.options': '{not json' }, cell: '28px', kept: '{not json' },
+  { stored: { 'paint.lego.options': '{"cell":"big"}' }, cell: '28px', kept: '{"cell":"big"}' },
+  {
+    stored: { 'paint.lego.options': '{"cell":30}', 'paint.lego.tile-look': '{"cellSize":44}' },
+    cell: '30px',
+    kept: '{"cell":30}'
+  }
+])('starts at the stored grid size: $stored', ({ stored, cell, kept }) => {
+  for (const [key, value] of Object.entries(stored)) {
+    localStorage.setItem(key, value);
+  }
+
+  mount();
+  expect(editorStyle('--lego-cell')).toBe(cell);
+  expect(localStorage.getItem('paint.lego.options')).toBe(kept);
+  // A trial's size is carried over once: its entry goes; once the options are stored, it is not read at all.
+  expect(localStorage.getItem('paint.lego.tile-look')).toBe(
+    'paint.lego.options' in stored ? (stored['paint.lego.tile-look' as keyof typeof stored] ?? null) : null
+  );
+});
+
+it('starts at the host cell, or the default, when storage refuses every read and write', () => {
+  vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+    throw new DOMException('Denied', 'SecurityError');
+  });
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+    throw new DOMException('Denied', 'SecurityError');
+  });
+  dispose = render(() => <LegoStudio cellSize={32} />, document.body);
+  flush();
+  expect(editorStyle('--lego-cell')).toBe('32px');
+  dispose();
+  dispose = undefined;
+  flush();
+  document.body.replaceChildren();
+  mount();
+  expect(editorStyle('--lego-cell')).toBe('28px');
+});
+
+it("lets the user's stored grid size win over the host's cell", () => {
+  localStorage.setItem('paint.lego.options', '{"cell":44}');
+  dispose = render(() => <LegoStudio cellSize={32} />, document.body);
+  flush();
+  expect(editorStyle('--lego-cell')).toBe('44px');
+});
+
+it("makes Options' sections and a section two screens, a section opening under a way back", () => {
+  storeParts(['action:options']);
+  mount();
+  const sheet = openOptions();
+  const list = sheet.querySelector<HTMLElement>('nav[aria-label="Option sections"]')!;
+  const split = list.parentElement!.parentElement!;
+  expect(split.dataset.view).toBe('list');
+  expect([...list.querySelectorAll('[data-item]')].map((row) => row.textContent)).toEqual(['Interface']);
+  expect(list.querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('interface');
+
+  list.querySelector<HTMLButtonElement>('[data-item="interface"]')!.click();
+  flush();
+  expect(split.dataset.view).toBe('detail');
+  const back = [...sheet.querySelectorAll('button')].find((element) => element.textContent === 'Options')!;
+  expect(back.parentElement!.textContent).toBe('OptionsInterface');
+  back.click();
+  flush();
+  expect(split.dataset.view).toBe('list');
+});
+
+it('leaves nothing of the tile look trial but the one-time carry-over of its cell size', () => {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const source = path.resolve(here, '../..');
+  const files = readdirSync(source, { recursive: true, encoding: 'utf8' }).filter(
+    (name) => /\.(css|tsx?)$/.test(name) && !name.includes('.test.')
+  );
+  const mentions = files.filter((name) =>
+    /tile-look|tileLook|TileLook|squircleLook/.test(readFileSync(path.join(source, name), 'utf8'))
+  );
+  // Only the options' carry-over names the trial's key, and reads it only while the options are not stored.
+  expect(mentions).toEqual([path.join('variants', 'lego', 'options.ts')]);
+  expect(readFileSync(path.join(source, mentions[0]!), 'utf8').match(/tile-look/g)).toHaveLength(1);
+});
+
+/** The Options sheet, if open. */
+function optionsSheet() {
+  return document.querySelector<HTMLDialogElement>('dialog[aria-label="Options"]');
+}
+
+/** Opens Options through its part on the board and returns its dialog. */
+function openOptions() {
+  document.querySelector<HTMLButtonElement>('[data-part-kind="action:options"] button')!.click();
+  flush();
+  const sheet = optionsSheet();
+  expect(sheet).not.toBeNull();
+  return sheet!;
+}
+
+/** The editor's inline custom property `name`. */
+function editorStyle(name: string) {
+  return document.querySelector<HTMLElement>('[style*="--lego-cell"]')!.style.getPropertyValue(name);
+}
+
+/** Types `digits` on the keypad of `part`'s value chip, then OK. */
+function typeValue(part: HTMLElement, digits: string) {
+  const chip = part.querySelector<HTMLElement>('[data-value-chip]')!;
+  pointer(chip, 'pointerdown', 0, 0);
+  pointer(chip, 'pointerup', 0, 0);
+  const keypad = document.querySelector<HTMLElement>('[popover][role="dialog"]')!;
+  for (const key of [...digits, 'Enter']) {
+    keypad.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    flush();
+  }
+}
 
 /** Chooses the category named `name` in the studio's sidebar. */
 function category(dialog: HTMLElement, name: string) {

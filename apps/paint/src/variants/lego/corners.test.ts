@@ -2,56 +2,16 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createRoot, flush } from 'solid-js';
-import { afterEach, expect, it } from 'vitest';
-import { createTileLook, defaultTileLook, plateRadii, readTileLook, tileLookKey } from './tileLook';
+import { expect, it } from 'vitest';
+import { plateRadius } from './grid';
 
-afterEach(() => localStorage.clear());
+/** Plate radii the rules are checked at: sharp tiles, the old 13 px, soft tiles and fully rounded ones. */
+const plateRadii = { sharp: 6, today: 13, soft: 20, full: 28 } as const;
 
-it('keeps the chosen look on the device and reads it back', () => {
-  // Changes come from presses, outside any owner, as in the switch.
-  const { look, change, dispose } = createRoot((dispose) => ({ ...createTileLook(), dispose }));
-  expect(look()).toEqual(defaultTileLook);
-
-  change({ radius: plateRadii.soft, squircle: true });
-  flush();
-  expect(look()).toEqual({ radius: 20, squircle: true });
-  dispose();
-
-  expect(JSON.parse(localStorage.getItem(tileLookKey)!)).toEqual({ radius: 20, squircle: true });
-  expect(readTileLook()).toEqual({ radius: 20, squircle: true });
-});
-
-it('falls back to the default for a missing, corrupt or invalid entry', () => {
-  expect(readTileLook()).toEqual(defaultTileLook);
-
-  localStorage.setItem(tileLookKey, '{not json');
-  expect(readTileLook()).toEqual(defaultTileLook);
-
-  localStorage.setItem(tileLookKey, JSON.stringify({ radius: 400, squircle: 'yes' }));
-  expect(readTileLook()).toEqual({ radius: 28, squircle: false });
-});
-
-it("reads an entry from the trial's first round, keeping its radius and squircle choice", () => {
-  localStorage.setItem(tileLookKey, JSON.stringify({ look: 'C', radius: 20, squircle: true, dim: 12 }));
-  expect(readTileLook()).toEqual({ radius: 20, squircle: true });
-});
-
-it('keeps the look for the page when storage refuses the write', () => {
-  const setItem = Storage.prototype.setItem;
-  Storage.prototype.setItem = () => {
-    throw new DOMException('Full', 'QuotaExceededError');
-  };
-
-  try {
-    const { look, change, dispose } = createRoot((dispose) => ({ ...createTileLook(), dispose }));
-    change({ radius: plateRadii.sharp });
-    flush();
-    expect(look().radius).toBe(6);
-    dispose();
-  } finally {
-    Storage.prototype.setItem = setItem;
-  }
+it("keeps a plate's radius 18 px at a 44 px cell and the same share of the cell at every size", () => {
+  expect(plateRadius(44)).toBe(18);
+  expect(plateRadius(28)).toBeCloseTo((18 * 28) / 44, 10);
+  expect(plateRadius(56) / 56).toBeCloseTo(18 / 44, 10);
 });
 
 /**
@@ -113,7 +73,11 @@ it('derives every corner from the plate radius, an inner one being the outer les
 
 it('scales every corner alike for squircles, after the distances are taken off as for arcs', () => {
   const css = stylesheet('LegoStudio');
-  const scale = Number(/\.editor\.squircleLook \{[^}]*--lego-corner-scale:\s*([\d.]+);/.exec(css)![1]);
+  const scale = Number(
+    /@supports \(corner-shape: squircle\) \{\s*\.editor \{\s*--lego-corner-shape: squircle;\s*--lego-corner-scale:\s*([\d.]+);/.exec(
+      css
+    )![1]
+  );
   expect(scale).toBeCloseTo((1 - Math.SQRT1_2) / (1 - 0.5 ** 0.25), 2);
 
   const arcs = cornerTokens(plateRadii.soft);
@@ -124,7 +88,7 @@ it('scales every corner alike for squircles, after the distances are taken off a
 });
 
 /** The LEGO stylesheets. */
-const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase'];
+const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase', 'OptionsSheet'];
 
 it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills', () => {
   const fixed = sheets
@@ -376,12 +340,3 @@ function stylesheet(name: string) {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const source = path.resolve(here, '../..');
 const repository = path.resolve(here, '../../../../..');
-
-it('keeps a device cell override optional when reading and writing trial choices', () => {
-  localStorage.setItem(tileLookKey, JSON.stringify({ radius: 11, squircle: false }));
-  expect(readTileLook()).toEqual({ radius: 11, squircle: false });
-  const trial = createRoot((dispose) => ({ ...createTileLook(), dispose }));
-  trial.change({ cellSize: 32 });
-  expect(readTileLook()).toEqual({ radius: 11, squircle: false, cellSize: 32 });
-  trial.dispose();
-});

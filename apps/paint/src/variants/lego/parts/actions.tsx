@@ -32,6 +32,7 @@ export const actionParts = [
       png: f.command(s.files.png),
       psd: f.command(s.files.psd),
       place: f.command(s.files.place),
+      options: f.command(s.options.open),
       onDone: f.onDone
     }),
     View: FileMenu
@@ -87,6 +88,8 @@ export const actionParts = [
     }),
     View: SymmetryPart
   }),
+  // Opens the Options sheet, the editor's own settings, such as the grid size.
+  action('options', 'interface', 'Options', 'options', (s, f) => ({ onPress: f.command(s.options.open) })),
   action('quickshape', 'aids', 'QuickShape', 'quickshape', (s, f) => ({
     get active() {
       return s.quickShape.enabled();
@@ -173,8 +176,12 @@ function ActionPart(props: {
 const actionNameStyle: TextStyle = { size: 11, weight: 600, letterSpacing: -0.25 };
 const actionChrome = 2 * 4 + 20 + 6;
 
-/** Shorter names of the actions whose names are long, shown where only these fit. */
-const shortNames: Readonly<Record<string, string>> = {
+/**
+ * Shorter names of the actions whose names are long, shown where only these fit. No short name is another part's
+ * name or short name, so two parts never show the same caption: Brush settings is "Settings", the editor's own
+ * settings are "Options".
+ */
+export const shortNames: Readonly<Record<string, string>> = {
   'brush-editor': 'Settings',
   pressure: 'Pressure'
 };

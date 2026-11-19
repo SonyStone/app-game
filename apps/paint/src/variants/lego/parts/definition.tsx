@@ -53,6 +53,7 @@ export type PartBinding = {
  * - `layer-manage`: add, duplicate, delete.
  * - `layer-list`: the list of layers.
  * - `layer-blending`: how the document mixes its colors (Smooth color).
+ * - `interface`: the editor's own options: the Options part and the grid size on its sheet.
  */
 export type PartGroup =
   | 'brush'
@@ -69,7 +70,8 @@ export type PartGroup =
   | 'layer-order'
   | 'layer-manage'
   | 'layer-list'
-  | 'layer-blending';
+  | 'layer-blending'
+  | 'interface';
 
 /**
  * Defines inert registry data. `needs` runs only when mounted under PartFrame, and may create owned memos.
@@ -79,7 +81,7 @@ export type PartGroup =
  * App mutations, including settings/storage writes, always use `frame.command`.
  */
 export function definePart<N extends object, P extends object = N>(spec: {
-  /** Left out of the box: the part enters the board from elsewhere, as from the brush studio. */
+  /** Left out of the box: the part enters the board from elsewhere, as from the brush studio, or shows only on a sheet. */
   studioOnly?: boolean;
   kind: string;
   family: 'color' | 'value' | 'action' | 'preset';

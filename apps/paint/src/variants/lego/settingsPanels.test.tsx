@@ -223,15 +223,16 @@ it("lays the File menu's commands out as Settings rows the arrow keys move throu
     'Place imageNew layer',
     'Save drawing.paint',
     'Export picturePNG',
-    'Export layersPSD'
+    'Export layersPSD',
+    'Options'
   ]);
   expect(items.every((item) => item.hasAttribute('data-item') && item.querySelector('svg'))).toBe(true);
 
   items[0]!.focus();
   items[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(items[5]);
+  items[5]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
   expect(document.activeElement).toBe(items[4]);
-  items[4]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }));
-  expect(document.activeElement).toBe(items[3]);
 });
 
 function owned<T>(create: () => T) {

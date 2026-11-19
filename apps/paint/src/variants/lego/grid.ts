@@ -8,6 +8,8 @@ export const defaultCell = 28;
  * stored before cells were counted keep their positions in its pitch, and a press area stays this large.
  */
 export const referenceCell = 44;
+/** A plate's corner radius in CSS pixels at `referenceCell`, the user's choice (2026-11-19); see `plateRadius`. */
+const referencePlateRadius = 18;
 /** Fixed space between adjacent cells. */
 export const cellGap = 4;
 /** Plate inset around the outermost cells. */
@@ -32,6 +34,14 @@ export function createGrid(requestedCell: () => number | undefined) {
     return { columns: cells(min.width), rows: cells(min.height) };
   };
   return { cell, pitch, length, room, minimumSpan };
+}
+
+/**
+ * A plate's corner radius in CSS pixels at a cell of `cell` pixels: 18 px at the reference 44, the same share of the
+ * cell at every size. Every other corner in the editor derives from it (see `LegoStudio.module.css`).
+ */
+export function plateRadius(cell: number) {
+  return (referencePlateRadius * cell) / referenceCell;
 }
 
 export const GridContext = createContext(createGrid(() => undefined));

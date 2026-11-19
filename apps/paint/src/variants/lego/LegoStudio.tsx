@@ -20,12 +20,14 @@ import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
 import { createSheet } from './createSheet';
 import { FileApplicationControls } from './FileMenu';
-import { cellGap, createGrid, GridContext, referenceCell } from './grid';
+import { cellGap, createGrid, GridContext, plateRadius, referenceCell } from './grid';
 import { createKits } from './kits';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
+import { createLegoOptions, deviceCell } from './options';
+import { OptionsSheet } from './OptionsSheet';
 import { PartFrame } from './PartFrame';
 import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
@@ -33,8 +35,6 @@ import type { Popup } from './parts/definition';
 import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
 import { namedSliderSpan } from './parts/values';
 import { StudioSettingRow } from './StudioSettingRow';
-import { createTileLook } from './tileLook';
-import { TileLookSwitch } from './TileLookSwitch';
 
 /**
  * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
@@ -57,10 +57,17 @@ import { TileLookSwitch } from './TileLookSwitch';
  * is carried and comes back once it lands. Pen pressure lives on the studio's Pen page: the "Pressure calibration"
  * part opens the studio there, and the curve's Measure, on the board or on that page, runs the calibration steps
  * there, drawn on the studio's pad.
+ *
+ * The "Options" part and the File menu's Options open the editor's own settings over everything (`OptionsSheet`),
+ * among them the grid size, which every plate, part and sheet follows at once.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
-    /** Positive grid cell edge in CSS pixels, `defaultCell` (28) when absent. A stored trial size takes precedence. */
+    /**
+     * The grid's cell edge in CSS pixels while the user has not chosen one: the grid size the user picks in Options,
+     * kept on the device, wins over it, and without either the device's default (`deviceCell`, 28 px) applies. A
+     * value that is not a positive number counts as absent.
+     */
     cellSize?: number;
     /** Host-owned installation, offline status and build identity in the File menu. */
     applicationControls?: JSX.Element;
@@ -88,9 +95,12 @@ export function LegoStudio(
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
   const board = createBoard(reportSavingError);
-  /** TEMPORARY: the tile look trial's choice, applied to the whole editor; see `tileLook.ts`. */
-  const tileLook = createTileLook();
-  const grid = createGrid(() => tileLook.look().cellSize ?? props.cellSize);
+  /** The editor's options on this device, read before the first layout. */
+  const options = createLegoOptions();
+  /** The cell: the user's choice, else the host's, else the device's default. */
+  const grid = createGrid(() => options.cell() ?? validCell(props.cellSize) ?? deviceCell());
+  /** Whether the Options sheet covers the screen. */
+  const [optionsOpen, setOptionsOpen] = createSignal(false);
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
@@ -116,6 +126,14 @@ export function LegoStudio(
     () => {
       setPopup(undefined);
       setAbrViewer('open');
+    },
+    {
+      cell: grid.cell,
+      setCell: options.setCell,
+      open: () => {
+        setPopup(undefined);
+        setOptionsOpen(true);
+      }
     }
   );
   /** A setting's part as it leaves the studio: a slider with room for its full name and value. */
@@ -147,7 +165,12 @@ export function LegoStudio(
 
   session.createShortcuts({
     closePanel() {
-      // Escape and the Android back gesture close the studio first, keeping its changes, as Done does.
+      // Escape and the Android back gesture close a sheet first, keeping its changes, as Done does.
+      if (optionsOpen()) {
+        setOptionsOpen(false);
+        return true;
+      }
+
       if (studioOpen()) {
         closeStudio();
         return true;
@@ -207,12 +230,12 @@ export function LegoStudio(
       <LegoServicesContext value={services}>
         <PaintEditor
           session={session}
-          class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLook.look().squircle ? styles.squircleLook : ''}`}
+          class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
           style={{
             '--lego-cell': `${grid.cell()}px`,
             '--lego-gap': `${cellGap}px`,
             '--lego-hit-size': `${referenceCell}px`,
-            '--lego-radius': `${(tileLook.look().radius * grid.cell()) / referenceCell}px`,
+            '--lego-radius': `${plateRadius(grid.cell())}px`,
             '--card-scale': `${card().scale}`,
             '--card-x': `${card().x}px`,
             '--card-y': `${card().y}px`,
@@ -291,7 +314,6 @@ export function LegoStudio(
               )}
             </Show>
             <div class={styles.controls}>
-              <TileLookSwitch cellSize={grid.cell()} look={tileLook.look()} onChange={tileLook.change} />
               <Show when={props.experimentsHref}>
                 {(href) => (
                   <a class={styles.editButton} href={href()}>
@@ -370,12 +392,20 @@ export function LegoStudio(
                 onClose={closeStudio}
               />
             </Show>
+            <Show when={optionsOpen()}>
+              <OptionsSheet onClose={() => setOptionsOpen(false)} />
+            </Show>
             <SessionNotices session={session} />
           </div>
         </PaintEditor>
       </LegoServicesContext>
     </GridContext>
   );
+}
+
+/** `cell` when it is a positive number of pixels, else `undefined`. */
+function validCell(cell: number | undefined) {
+  return cell !== undefined && Number.isFinite(cell) && cell > 0 ? cell : undefined;
 }
 
 /** CSS pixels around the card the drawing shrinks to. */
