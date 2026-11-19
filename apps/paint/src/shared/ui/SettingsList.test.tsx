@@ -2,9 +2,9 @@
 import { render } from '@solidjs/web';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSignal, flush } from 'solid-js';
+import { createSignal, flush, For } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { SettingsList, type SettingsListItem } from './SettingsList';
+import { SettingsList, SettingsRow, SettingsRows, type SettingsListItem } from './SettingsList';
 
 let dispose: (() => void) | undefined;
 const restores: (() => void)[] = [];
@@ -82,13 +82,17 @@ it("insets each row's icon from the row's side as far as from its top, against a
   const css = readFileSync(join(__dirname, 'SettingsList.module.css'), 'utf8');
   const row = /\n\.list \.row \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
   expect(row).toContain('min-height: var(--settings-list-row, 40px);');
-  const tile = Number(/\.icon \{[^}]*?width: (\d+)px/.exec(css)![1]);
-  const inset = Number(/\n\s*padding: 0 .+ 0 (\d+)px;/.exec(row)![1]);
+  const tile = Number(/\.icon \{[^}]*?width: var\(--settings-list-icon-size, (\d+)px\)/.exec(css)![1]);
+  const inset = Number(/\n\s*padding: 0 .+ 0 var\(--settings-list-row-start, (\d+)px\);/.exec(row)![1]);
   expect(inset).toBe((40 - tile) / 2);
-  // The joined shape draws the selected row's ground: the row itself changes only its text color.
-  const selected = /&\[aria-current\] \{([^}]*)\}/.exec(row)?.[1];
+  // The joined shape draws the selected row's ground: the row itself changes only its text color, and the pill
+  // behind it, which a joined list leaves clear.
+  const selected = /&\[data-selected\] \{([^&}]*)/.exec(row)?.[1];
   expect(selected).toContain('color');
   expect(selected).not.toMatch(/padding|margin|grid|background/);
+  expect(
+    /&\[data-selected\] \{[^}]*&::before \{\s*background: var\(--settings-list-selected-pill, transparent\);/.test(row)
+  ).toBe(true);
 });
 
 it('moves the joined shape to the chosen row, at once with reduced motion', () => {
@@ -170,6 +174,77 @@ it('moves the focus with the arrow keys, Home and End; the focused row selects a
   rows[0]!.click();
   flush();
   expect(selected()).toBe('general');
+});
+
+it('lays the same row out in a plain list: options marked selected, menu items without a selection', () => {
+  const [mode, setMode] = createSignal('screen');
+  const run = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => (
+      <>
+        <SettingsList
+          label="Sidebar"
+          items={[{ id: 'general', label: 'General' }]}
+          selected="general"
+          onSelect={vi.fn()}
+        />
+        <SettingsRows role="listbox" label="Modes">
+          <For each={['normal', 'screen']}>
+            {(id) => (
+              <SettingsRow
+                id={id}
+                role="option"
+                label={id}
+                tile={<canvas data-tile={id} />}
+                selected={mode() === id}
+                onSelect={() => setMode(id)}
+              />
+            )}
+          </For>
+        </SettingsRows>
+        <SettingsRows role="menu" label="File">
+          <SettingsRow id="open" role="menuitem" icon="paper" label="Open" trailing=".paint" onSelect={run} />
+          <SettingsRow id="save" role="menuitem" icon="check" label="Save" disabled onSelect={run} />
+          <SettingsRow id="export" role="menuitem" icon="layers" label="Export" onSelect={run} />
+        </SettingsRows>
+      </>
+    ),
+    host
+  );
+  flush();
+  const sidebarRow = host.querySelector<HTMLElement>('nav [data-item="general"]')!;
+  const options = [...host.querySelectorAll<HTMLButtonElement>('[role="listbox"] [role="option"]')];
+  const items = [...host.querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')];
+
+  // One row: the plain lists' rows carry the sidebar's own row class, and their containers its list class.
+  expect(options.every((row) => row.className === sidebarRow.className)).toBe(true);
+  expect(items.every((row) => row.className === sidebarRow.className)).toBe(true);
+  expect(host.querySelector('[role="menu"]')!.className).toContain(host.querySelector('nav')!.className);
+
+  expect(options.map((row) => row.getAttribute('aria-selected'))).toEqual(['false', 'true']);
+  expect(options[1]!.hasAttribute('data-selected')).toBe(true);
+  expect(options[1]!.getAttribute('aria-current')).toBeNull();
+  expect(options[0]!.querySelector('[data-tile="normal"]')).not.toBeNull();
+  options[0]!.click();
+  flush();
+  expect(mode()).toBe('normal');
+  expect(options.map((row) => row.getAttribute('aria-selected'))).toEqual(['true', 'false']);
+
+  expect(items.map((row) => [row.getAttribute('aria-selected'), row.getAttribute('aria-current')])).toEqual([
+    [null, null],
+    [null, null],
+    [null, null]
+  ]);
+  expect(document.getElementById(items[0]!.getAttribute('aria-describedby')!)!.textContent).toBe('.paint');
+
+  // The arrow keys pass over a disabled command.
+  items[0]!.focus();
+  items[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }));
+  expect(document.activeElement).toBe(items[2]);
+  items[2]!.click();
+  expect(run).toHaveBeenCalledOnce();
 });
 
 /** Renders four rows, the second and third under "Basics" and the fourth under "Advanced", with `selected` chosen. */

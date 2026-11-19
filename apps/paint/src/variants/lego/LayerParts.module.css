@@ -190,13 +190,26 @@
   }
 }
 
-.blendList {
-  --layers-surface: var(--lego-tile);
-  --layers-ink: var(--lego-ink);
-  --layers-muted: var(--lego-quiet);
+/*
+ * The modes' list on a popup's plate, as LEGO's other lists: white rows, the current mode on a quiet pill. Two
+ * classes' weight, over the panel's own card.
+ */
+[popover].blendList {
+  --layers-surface: rgb(36 38 44);
+  --layers-ink: #ffffff;
+  --layers-muted: rgb(255 255 255 / 0.62);
   --layers-accent: var(--lego-accent);
-  --layers-line: var(--lego-quiet);
-  --layers-menu-selected: color-mix(in srgb, var(--lego-accent) 16%, var(--lego-tile));
+  --layers-line: transparent;
+  --layers-menu-selected: rgb(255 255 255 / 0.12);
+  --layers-menu-shadow: var(--lego-shadow);
+  --settings-list-selected-ink: #ffffff;
+  --settings-list-hover: rgb(255 255 255 / 0.07);
+  --settings-list-pressed: rgb(255 255 255 / 0.14);
+  --settings-list-text: 13px;
+
+  padding: 8px;
+  border-radius: 14px;
+  font: inherit;
 }
 
 [data-narrow] .layerSelect :is(img, svg) {

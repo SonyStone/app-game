@@ -238,11 +238,21 @@
   }
 }
 
+/* The modes' list: a plain Settings list (`SettingsRows`) on a card under the trigger, in the panel's colors. */
 .blendList {
+  --settings-list-ink: var(--layers-ink, var(--ink, #444));
+  --settings-list-quiet: var(--layers-muted, var(--muted));
+  --settings-list-selected-pill: var(--layers-menu-selected, #e3eef5);
+  --settings-list-selected-ink: var(--layers-accent, var(--accent));
+  --settings-list-mark: var(--layers-accent, var(--accent));
+  --settings-list-focus: var(--layers-accent, var(--accent));
+  --settings-list-inset: 0;
+  --settings-list-text: 12px;
+
   position: fixed;
   inset: auto;
   margin: 0;
-  width: var(--layers-menu-width, 220px);
+  width: var(--layers-menu-width, 180px);
   max-width: calc(100vw - 16px);
   max-height: calc(100dvh - 16px);
   overflow: auto;
@@ -260,36 +270,6 @@
   border-radius: 8px;
   background: var(--layers-surface, #fff);
   box-shadow: var(--layers-menu-shadow, 0 6px 20px #0002);
-
-  > button {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px;
-    border-radius: 6px;
-    text-align: left;
-  }
-
-  > button[aria-selected='true'] {
-    background: var(--layers-menu-selected, #e3eef5);
-    color: var(--layers-accent, var(--accent));
-  }
-
-  span {
-    display: grid;
-    font-size: 12px;
-  }
-
-  small {
-    font-size: 11px;
-    color: var(--layers-muted, var(--muted));
-  }
-
-  canvas {
-    width: 40px;
-    height: 40px;
-    border-radius: 4px;
-  }
 }
 
 /* Opt-in layout for a resizable host; the default panel keeps its viewport cap. */

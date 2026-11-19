@@ -4,15 +4,25 @@ import type { Result } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
-import { SketchIcon } from '../../shared/ui/SketchIcon';
+import { SettingsList } from '../../shared/ui/SettingsList';
+import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushLibrary.module.css';
-import { brushSets, setOf } from './brushSets';
+import { brushSets, setOf, type BrushSet } from './brushSets';
 import { PopoverHeader } from './Popover';
 
 /**
- * Procreate's Brush Library: brush sets in a column on the left, the chosen set's brushes on the right as their names
- * over sample strokes, the brush in use in blue. Choosing a brush applies it and keeps the library open, as in
- * Procreate; choosing a set only browses. The library opens on the set of the brush in use. `+` imports ABR brushes.
+ * Procreate's Brush Library: brush sets in a column on the left (a `SettingsList`), the chosen set's brushes on the
+ * right as their names over sample strokes, the brush in use in blue. Choosing a brush applies it and keeps the
+ * library open, as in Procreate; choosing a set only browses. The library opens on the set of the brush in use. `+`
+ * imports ABR brushes.
+ *
+ * Drawn in the Procreate variant's colors (its `--pc-*` properties) by default. A host restyles it through
+ * `--brush-library-sets` (the sets column's ground), `--brush-library-pane` (the brushes' ground),
+ * `--brush-library-chosen` (the brush in use, and the chosen set's pill in Procreate's look), `--brush-library-ink`,
+ * `--brush-library-quiet`, `--brush-library-line`, `--brush-library-icon` and `--brush-library-icon-ink` (the sets'
+ * icon tiles), `--brush-library-mark` (the chosen set's tile), `--brush-library-disabled` (header commands while
+ * brushes cannot be chosen), `--brush-library-radius` (the columns' corners) and
+ * `--brush-library-height` (the columns' height).
  */
 export function BrushLibrary(props: {
   title: string;
@@ -34,6 +44,11 @@ export function BrushLibrary(props: {
   children?: JSX.Element;
   /** Rows under the columns, such as Mixer Brush commands. */
   footer?: JSX.Element;
+  /**
+   * Draws the sets as the Settings-style sidebar of LEGO's panels, each on its icon tile, the chosen one joined to
+   * the brushes beside it, instead of Procreate's blue pill.
+   */
+  sidebar?: boolean;
 }) {
   let picker: HTMLInputElement | undefined;
   const sets = () => brushSets(props.presets, props.recent);
@@ -96,21 +111,19 @@ export function BrushLibrary(props: {
         </Show>
       </PopoverHeader>
       {props.children}
-      <div class={styles.columns}>
-        <nav class={styles.sets} aria-label="Brush sets">
-          <For each={sets()} keyed={(set) => set.id}>
-            {(set) => (
-              <button
-                class={styles.set}
-                aria-pressed={chosen() === set().id ? 'true' : 'false'}
-                onClick={() => setChosen(set().id)}
-              >
-                <span class={styles.setName}>{set().name}</span>
-                <span class={styles.count}>{set().presets.length}</span>
-              </button>
-            )}
-          </For>
-        </nav>
+      <div class={styles.columns} data-sidebar={props.sidebar ? '' : undefined}>
+        <SettingsList
+          class={styles.sets}
+          label="Brush sets"
+          items={sets().map((set) => ({
+            id: set.id,
+            label: set.name,
+            icon: setIcons[set.id],
+            trailing: String(set.presets.length)
+          }))}
+          selected={chosen()}
+          onSelect={(id) => setChosen(id as BrushSet['id'])}
+        />
         <div class={styles.brushes} role="listbox" aria-label={`${shown()?.name ?? ''} brushes`}>
           <For each={shown()?.presets ?? []} keyed={(preset) => preset.id}>
             {(preset) => (
@@ -146,3 +159,11 @@ export function BrushLibrary(props: {
     </>
   );
 }
+
+/** The sets' icons, on their tiles in the sidebar look. */
+const setIcons: Record<BrushSet['id'], SketchIconName> = {
+  recent: 'localUndo',
+  basic: 'brush',
+  imported: 'folder',
+  mine: 'pencil'
+};
