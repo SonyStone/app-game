@@ -83,7 +83,14 @@ export const brushCategories: readonly BrushCategory[] = [
   photoshopCategory('transfer', 'Transfer', 'basics', 'useTransfer'),
   photoshopCategory('scattering', 'Scattering', 'advanced', 'useScattering'),
   photoshopCategory('texture', 'Texture', 'advanced', 'useTexture', (view) => view.images.pattern),
-  photoshopCategory('dualBrush', 'Dual brush', 'advanced', 'useDualBrush', (view) => view.images.dual),
+  // A computed second tip is generated from its parameters; only a named sampled tip needs its stored image.
+  photoshopCategory(
+    'dualBrush',
+    'Dual brush',
+    'advanced',
+    'useDualBrush',
+    (view) => view.images.dual || !view.values.dualBrush.tipId
+  ),
   photoshopCategory('colorDynamics', 'Color dynamics', 'advanced', 'useColorDynamics'),
   photoshopCategory('brushPose', 'Brush pose', 'advanced', 'useBrushPose'),
   strokeCorrection(),

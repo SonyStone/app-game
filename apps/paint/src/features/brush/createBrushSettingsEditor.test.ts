@@ -344,3 +344,56 @@ it('waits for the edit still resolving, and saves nothing when its images could 
   expect(s.tools.preset()).toBe('builtin:soft-round');
   expect(s.library.presets()).toHaveLength(count);
 });
+
+it('saves a brush with a computed second tip switched on as a copy that survives reload, export and re-import', async () => {
+  const db = crypto.randomUUID();
+  const s = open(db);
+  await s.tools.loaded;
+  const item = await convertAbr(photoshopAsset);
+  const preset = await s.library.importPreset({ ...item.preset, source: 'abr:computed' }, item.resources);
+  for (const id of ['builtin:soft-round', preset.id]) {
+    s.tools.selectPreset(id, 'brush');
+    flush();
+    await studio(s, 'abr-dualBrush-useDualBrush', true);
+    await studio(s, 'abr-dualBrush-diameter', 18);
+    await studio(s, 'abr-dualBrush-hardness', 40);
+    expect(s.tools.brush().engine?.id, id).toBe('abr');
+    const dualId = (s.tools.brush().engine!.settings as AbrBrushSettings).dualId;
+    expect(dualId, id).toBeDefined();
+    expect(s.engine.putResources).toHaveBeenLastCalledWith(
+      expect.arrayContaining([expect.objectContaining({ id: dualId })])
+    );
+    const copy = s.tools.savePresetAs('Dual ' + id);
+    flush();
+    expect(copy.settings.engine?.id, id).toBe('abr');
+    await s.storage.idle();
+
+    const reopened = open(db);
+    const saved = (await reopened.library.load(copy.id))!;
+    // The second tip is generated from its parameters, so the document stores no image for it.
+    const document = parseDocument(saved.abrDocument!, brushSchema);
+    expect(Object.keys(document.definition.resources ?? {}), id).not.toContain('secondary');
+    await reopened.tools.loaded;
+    reopened.tools.selectPreset(copy.id, 'brush');
+    flush();
+    expect(reopened.tools.brush().engine?.id, id).toBe('abr');
+    expect(row(reopened, 'abr-dualBrush-useDualBrush'), id).toBe(true);
+    expect(row(reopened, 'abr-dualBrush-diameter'), id).toBe(18);
+    expect(row(reopened, 'abr-dualBrush-hardness'), id).toBe(40);
+
+    const bytes = await exportPaintbrush(saved, (await reopened.library.assets(saved))._unsafeUnwrap());
+    const other = open(crypto.randomUUID());
+    expect(await importPaintbrush(bytes, other.library)).toEqual([]);
+    const imported = other.library.find(copy.id)!;
+    expect(imported.settings.engine?.id, id).toBe('abr');
+    const resolved = await resolveDocument(
+      parseDocument(imported.abrDocument!, brushSchema),
+      new Map((await other.library.assets(imported))._unsafeUnwrap().map((image) => [image.id, image]))
+    );
+    expect(resolved, id).toMatchObject({ path: 'abr', status: 'supported' });
+    const settings = resolved.settings!.engine!.settings as AbrBrushSettings;
+    expect(settings.values.useDualBrush, id).toBe(true);
+    expect(settings.values.dualBrush, id).toMatchObject({ diameter: 18, hardness: 40 });
+    expect(settings.dualId, id).toBe(dualId);
+  }
+});

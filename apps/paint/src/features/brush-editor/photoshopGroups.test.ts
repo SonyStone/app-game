@@ -132,11 +132,16 @@ describe('generated ABR settings', () => {
     expect(category.settings.every((r) => r.enabled(varied))).toBe(true);
   });
 
-  it('requires a texture pattern and a second tip, and only shows physical groups for physical tips', () => {
+  it('requires a texture pattern, not a stored second tip, and only shows physical groups for physical tips', () => {
     const b = brush();
-    for (const id of ['texture', 'dualBrush']) {
-      expect(brushCategories.find((c) => c.id === id)!.settings.every((r) => !r.enabled(b))).toBe(true);
-    }
+    expect(brushCategories.find((c) => c.id === 'texture')!.settings.every((r) => !r.enabled(b))).toBe(true);
+    const dual = brushCategories.find((c) => c.id === 'dualBrush')!;
+    expect(dual.settings[0]!.enabled(b)).toBe(true);
+    // A named sampled second tip needs its image; nothing can stand in for it.
+    const named = edit(b, 'dualBrush', { tipId: 'missing' });
+    expect(dual.settings.every((r) => !r.enabled(named))).toBe(true);
+    expect(dual.status(edit(named, undefined, { useDualBrush: true }))).toBe('No embedded second tip');
+    expect(dual.settings[0]!.enabled({ ...named, images: { pattern: false, dual: true } })).toBe(true);
     expect(brushCategories.find((c) => c.id === 'bristle')!.applies(b)).toBe(false);
     expect(brushCategories.find((c) => c.id === 'erodible')!.applies(b)).toBe(false);
   });

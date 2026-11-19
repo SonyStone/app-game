@@ -24,7 +24,7 @@ export type BrushView = {
   family: ReturnType<typeof documentFamily>;
   /** Whether the document draws with the ABR (Photoshop) renderer rather than Paint's round one. */
   photoshopPath: boolean;
-  /** Whether the document has the images a texture and a dual brush need; see `documentImages`. */
+  /** Whether the document stores a texture's pattern and a sampled second tip; see `documentImages`. */
   images: ReturnType<typeof documentImages>;
 };
 

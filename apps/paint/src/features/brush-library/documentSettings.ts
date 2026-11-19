@@ -191,14 +191,16 @@ export function patchFormValues(text: string, values: BrushFormValues): string {
 }
 
 /**
- * Whether the document has the image a Photoshop group needs to be switched on: a texture's pattern, a dual brush's
- * second tip. A group without its image is shown but cannot be switched on.
+ * The images the document stores for its Photoshop groups: a texture's pattern, and a sampled second tip for the dual
+ * brush. A texture cannot be switched on without its pattern. A dual brush needs its image only when it names a
+ * sampled second tip; otherwise the ABR resolver generates a computed second tip from its parameters.
  */
 export function documentImages(document: BrushDocument) {
   const d = document.definition;
+  const dual = (d.dual && d.tips[d.dual.tip]?.resource) ?? d.extensions?.['photoshop.dual-brush.v1']?.resources?.[0];
   return {
     pattern: !!d.texture || !!d.extensions?.['photoshop.texture.v1']?.resources?.length,
-    dual: !!d.dual
+    dual: !!dual && !!document.resources?.[dual]
   };
 }
 

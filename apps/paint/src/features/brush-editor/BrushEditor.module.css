@@ -787,9 +787,15 @@
     padding: 0 6px;
   }
 
+  /*
+   * The room the unit takes inside the value pill: 30 px for a short unit such as % or px, about 8 px a letter for a
+   * longer one such as marks, so the value never runs under it. The pill widens by the same amount.
+   */
+  --unit-room: max(30px, calc(12px + var(--unit-chars, 0) * 8px));
+
   /* The value: a field that drags and types (ScrubNumber), drawn as a pill in its 44 px press target. */
   > [data-editing] {
-    --scrub-width: 84px;
+    --scrub-width: calc(54px + var(--unit-room));
 
     grid-area: 1 / 2;
     border: 0;
@@ -821,7 +827,7 @@
   }
 
   &:has(> .unit:not(:empty)) > [data-editing] input {
-    padding-right: 30px;
+    padding-right: var(--unit-room);
   }
 
   > .unit {

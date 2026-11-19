@@ -1,7 +1,8 @@
 import type { BrushAsset } from '@app-game/abr-brush/library';
+import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import { initAbr, pixels } from '@app-game/abr-parser';
 import { defaultBrush } from '@app-game/paint-core/brush';
-import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
+import { brushSchema, parseDocument, patch } from '@app-game/paint-core/paintbrush/document';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { describe, expect, it } from 'vitest';
 import { convertAbr } from '../brush-library/abrPresetDocument';
@@ -134,7 +135,7 @@ describe('the brush studio registry', () => {
     const shown = rows(view);
     expect(shown.painting!.slice(0, 5)).toEqual(['size', 'abr-tool-mode', 'opacity', 'flow', 'color-mixing']);
     expect(shown['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
-    expect(shown.dualBrush![0]).toBe('(abr-dualBrush-useDualBrush)');
+    expect(shown.dualBrush![0]).toBe('abr-dualBrush-useDualBrush');
     expect(shown.texture![0]).toBe('(abr-texture-useTexture)');
     expect(shown['stroke-correction']).toEqual(
       expect.arrayContaining(['smoothing', 'abr-smoothing-amount', '(abr-smoothing-pulledString)'])
@@ -189,15 +190,48 @@ describe('the brush studio registry', () => {
     expect(after(multiply, mode.write(multiply, 'Nrml')).photoshopPath).toBe(false);
   });
 
-  it('cannot switch on a group whose image the brush lacks, and shows it as stored', async () => {
+  it('cannot switch on a texture without its pattern, and shows it as stored', async () => {
     for (const view of [softRound(), await photoshop()]) {
-      for (const id of ['abr-texture-useTexture', 'abr-dualBrush-useDualBrush']) {
-        const setting = toggle(id);
-        expect(setting.enabled(view), id).toBe(false);
-        expect(setting.read(view), id).toBe(false);
-      }
+      const setting = toggle('abr-texture-useTexture');
+      expect(setting.enabled(view)).toBe(false);
+      expect(setting.read(view)).toBe(false);
     }
     expect(brushCategories.find((c) => c.id === 'texture')!.status(softRound())).toBe('Off');
+  });
+
+  it('switches on a dual brush without a stored second tip, which then draws a computed one', async () => {
+    for (const view of [softRound(), await photoshop()]) {
+      expect(view.images.dual).toBe(false);
+      const use = toggle('abr-dualBrush-useDualBrush');
+      expect(use.enabled(view)).toBe(true);
+      const on = after(view, use.write(view, true));
+      expect(on.photoshopPath).toBe(true);
+      expect(rows(on).dualBrush!.filter((id) => id.startsWith('('))).toEqual([]);
+      const soft = after(on, numeric('abr-dualBrush-hardness').write(on, 40));
+      const resolved = await resolveDocument(soft.document, new Map(), view.brush);
+      expect(resolved.path).toBe('abr');
+      const settings = resolved.settings!.engine!.settings as AbrBrushSettings;
+      expect(settings.values.useDualBrush).toBe(true);
+      expect(settings.values.dualBrush.hardness).toBe(40);
+      expect(resolved.resources!.map((image) => image.id)).toContain(settings.dualId);
+
+      const off = after(soft, use.write(soft, false));
+      expect(off.photoshopPath).toBe(view.photoshopPath);
+      expect(numeric('abr-dualBrush-hardness').read(off)).toBe(40);
+    }
+  });
+
+  it('cannot switch on a dual brush whose sampled second tip the document names but lacks', async () => {
+    const view = await photoshop();
+    const named = after(
+      view,
+      patch(view.text, '/definition/extensions/photoshop.dual-brush.v1', {
+        impact: 'appearance',
+        value: { 'dualBrush.tip.sampleId': 'missing' }
+      })
+    );
+    expect(named.values.dualBrush.tipId).toBe('missing');
+    expect(toggle('abr-dualBrush-useDualBrush').enabled(named)).toBe(false);
   });
 
   it('writes Paint’s shared settings in one place of each kind of document', async () => {
