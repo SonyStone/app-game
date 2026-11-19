@@ -97,6 +97,9 @@ const definition = z.looseObject({
     })
     .optional(),
   mixing: name.optional(),
+  /** Colors the brush carries; a preset without them paints with the host's. */
+  color: z.looseObject({ foreground: z.string().optional(), background: z.string().optional() }).optional(),
+  /** Suggestions that never change the intended pixels, such as a preview size. */
   renderHints: z.looseObject({}).optional(),
   extensions: z
     .record(

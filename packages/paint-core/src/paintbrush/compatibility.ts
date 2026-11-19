@@ -70,6 +70,7 @@ const sections = new Set([
   'dual',
   'stroke',
   'mixing',
+  'color',
   'renderHints',
   'extensions'
 ]);

@@ -51,8 +51,8 @@ export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['r
     apply.push('/mixing');
   }
   if (b.color || b.backgroundColor) {
-    definition.renderHints = { color: b.color, backgroundColor: b.backgroundColor };
-    apply.push('/renderHints');
+    definition.color = { foreground: b.color, background: b.backgroundColor };
+    apply.push('/color');
   }
   // Engine overrides and sparse legacy presets distinguish an absent field from a saved default.
   if (
@@ -137,7 +137,7 @@ export function resolveNative(doc: BrushDocument) {
     '/dynamics',
     '/stroke',
     '/mixing',
-    '/renderHints',
+    '/color',
     '/extensions/' + nativeId
   ];
   for (const path of doc.apply ?? []) {
@@ -148,21 +148,21 @@ export function resolveNative(doc: BrushDocument) {
   if (doc.apply && !['/tool', '/tips', '/sequence', '/placement'].every((path) => doc.apply!.includes(path))) {
     reasons.push('Native presets always apply the tip group');
   }
-  const hints = z
+  const colors = z
     .object({
-      color: z
+      foreground: z
         .string()
         .regex(/^#[0-9a-f]{6}$/i)
         .optional(),
-      backgroundColor: z
+      background: z
         .string()
         .regex(/^#[0-9a-f]{6}$/i)
         .optional()
     })
     .strict()
-    .safeParse(d.renderHints ?? {});
-  if (!hints.success) {
-    reasons.push('Unsupported render hints');
+    .safeParse(d.color ?? {});
+  if (!colors.success) {
+    reasons.push('Unsupported brush colors');
   }
   const ref = tip.kind === 'sampled' ? doc.resources?.[tip.resource!] : undefined;
   if (tip.kind === 'sampled' && ref?.format !== 'r8') {
@@ -203,8 +203,14 @@ export function resolveNative(doc: BrushDocument) {
   if (uses('/mixing')) {
     settings.mixing = (d.mixing ?? defaults.mixing) as Brush['mixing'];
   }
-  if (uses('/renderHints')) {
-    Object.assign(settings, hints.data);
+  if (uses('/color') && colors.success) {
+    if (colors.data.foreground) {
+      settings.color = colors.data.foreground;
+    }
+
+    if (colors.data.background) {
+      settings.backgroundColor = colors.data.background;
+    }
   }
   const ext = d.extensions?.[nativeId];
   if (ext && uses('/extensions/' + nativeId)) {

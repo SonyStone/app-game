@@ -1,15 +1,15 @@
+import { createStrokeSampler, defaultBrush } from '@app-game/paint-core/brush';
+import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
+import { brushSchema, parseDocument, patch } from '@app-game/paint-core/paintbrush/document';
 import 'fake-indexeddb/auto';
 import { readFileSync } from 'node:fs';
 import { createRoot } from 'solid-js';
 import { expect, it } from 'vitest';
-import { createStrokeSampler, defaultBrush } from '@app-game/paint-core/brush';
-import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
-import { brushSchema, parseDocument, patch } from '@app-game/paint-core/paintbrush/document';
+import { createBrushTools } from '../brush/createBrushTools';
 import { applyPreset, builtInPresets, presetSettings } from './brushPresets';
 import { createBrushLibrary } from './createBrushLibrary';
 import { nativeDocument, resolveNative } from './nativeDocument';
 import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
-import { createBrushTools } from '../brush/createBrushTools';
 
 function fixture(name: string) {
   return readFileSync(
@@ -53,6 +53,23 @@ it.each([
   );
   expect(after.preview(samples.slice(3))).toEqual(before.preview(samples.slice(3)));
   expect(after.add(samples.slice(3))).toEqual(before.add(samples.slice(3)));
+});
+
+it("carries a preset's own colours in the color section, not as a render hint", () => {
+  const brush = { ...defaultBrush(), color: '#123456', backgroundColor: '#abcdef' };
+  const saved = { id: 'inked', name: 'Inked', settings: presetSettings(brush, ['tip', 'color']), resourceIds: [] };
+  const document = nativeDocument(saved);
+
+  expect(document.definition.color).toEqual({ foreground: '#123456', background: '#abcdef' });
+  expect(document.definition.renderHints).toBeUndefined();
+  expect(document.apply).toContain('/color');
+
+  const native = resolveNative(document);
+  if (native.status !== 'supported') {
+    throw new Error(native.reasons.join(', '));
+  }
+
+  expect(native.settings).toEqual(saved.settings);
 });
 
 it('keeps host size, colours and opacity when only the tip is saved', () => {
