@@ -163,7 +163,7 @@
   height: var(--settings-list-icon-size, 26px);
   margin-right: var(--settings-list-icon-gap, 10px);
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: var(--settings-list-icon-radius, 7px);
   background: var(--settings-list-icon, rgb(0 0 0 / 0.07));
   color: var(--settings-list-icon-ink, inherit);
 

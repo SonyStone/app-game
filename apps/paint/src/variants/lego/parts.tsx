@@ -69,6 +69,11 @@ export function lookOf(part: Pick<Part, 'kind' | 'span' | 'looks'>) {
   return options && resolveLook(part.looks, part.span, options.looks, options.auto(part.span));
 }
 
+/** The group a kind's part fuses with (see `PartGroup`), `undefined` for a kind no definition knows. */
+export function partGroup(kind: string) {
+  return partDefinition(kind)?.group;
+}
+
 /** Available looks and their automatic size choice, absent for parts with a single presentation. */
 export function partLooks(kind: string) {
   return partDefinition(kind)?.looks;

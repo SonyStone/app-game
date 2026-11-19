@@ -8,7 +8,7 @@ import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
 import { brushChannels } from './brushChannels';
-import { definePart, type PartBinding } from './definition';
+import { definePart, type PartBinding, type PartGroup } from './definition';
 import { LevelPicker, moveLevelFocus, NumberKeypad, unitSuffix, ValueEntryCard, type ValueLevel } from './ValueEntry';
 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
@@ -46,6 +46,8 @@ export type ValueChannel = {
   read: (services: LegoServices) => number;
   write: (services: LegoServices, value: number, hsv: Hsv) => void;
   colored: boolean;
+  /** The parts this channel's part fuses with; see `PartGroup`. */
+  group: Extract<PartGroup, 'color-channels' | 'brush-values' | 'layer-props'>;
   /** Holds input locally and sends one undoable command at gesture completion. */
   deferred?: boolean;
   /** Captures the target identity at gesture start, so a selection change cannot redirect a pending edit. */
@@ -66,6 +68,7 @@ export type ValueChannel = {
 const channels = [
   {
     id: 'layer-opacity',
+    group: 'layer-props',
     label: 'Layer opacity',
     short: 'Layer',
     unit: '%',
@@ -84,6 +87,7 @@ const channels = [
   },
   {
     id: 'size',
+    group: 'brush-values',
     label: 'Size',
     short: 'Sz',
     unit: 'px',
@@ -99,6 +103,7 @@ const channels = [
   },
   {
     id: 'opacity',
+    group: 'brush-values',
     label: 'Opacity',
     short: 'Op',
     unit: '%',
@@ -112,6 +117,7 @@ const channels = [
   },
   {
     id: 'hue',
+    group: 'color-channels',
     label: 'Hue',
     short: 'H',
     unit: '°',
@@ -126,6 +132,7 @@ const channels = [
   },
   {
     id: 'saturation',
+    group: 'color-channels',
     label: 'Saturation',
     short: 'S',
     unit: '%',
@@ -138,6 +145,7 @@ const channels = [
   },
   {
     id: 'brightness',
+    group: 'color-channels',
     label: 'Brightness',
     short: 'B',
     unit: '%',
@@ -150,6 +158,7 @@ const channels = [
   },
   {
     id: 'lightness',
+    group: 'color-channels',
     label: 'Lightness',
     short: 'L',
     unit: '%',
@@ -179,6 +188,7 @@ export function defineValuePart(channel: ValueChannel) {
   return definePart({
     kind: `value:${channel.id}`,
     family: 'value',
+    group: channel.group,
     section: channel.section ?? 'Values',
     studioOnly: channel.studioOnly,
     label: channel.label,

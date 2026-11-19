@@ -24,7 +24,8 @@ import { SketchIcon, type SketchIconName } from './SketchIcon';
  *
  * The host styles it through custom properties, each with a fallback: `--settings-list-ink` and
  * `--settings-list-quiet` for the text; `--settings-list-icon` and `--settings-list-icon-ink` for the icon tiles,
- * `--settings-list-icon-size` (26 px; 0 drops the tiles) and `--settings-list-icon-gap` (10 px after them);
+ * `--settings-list-icon-size` (26 px; 0 drops the tiles), `--settings-list-icon-gap` (10 px after them) and
+ * `--settings-list-icon-radius` (7 px);
  * `--settings-list-selected` (the selected row's pill, an accent blue), `--settings-list-selected-ink` (its label,
  * white) and `--settings-list-selected-quiet` (its trailing text); `--settings-list-hover`, `--settings-list-pressed`
  * and `--settings-list-focus`; `--settings-list-row` (row height, 40 px), `--settings-list-radius` (the rows' and the

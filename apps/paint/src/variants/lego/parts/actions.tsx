@@ -5,12 +5,12 @@ import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
-import { definePart, type PartBinding } from './definition';
+import { definePart, type PartBinding, type PartGroup } from './definition';
 
 /** Single-command definitions. Each binding reads only the capability needed by its button. */
 export const actionParts = [
-  action('brush-editor', 'Brush settings', 'sliders', (s, f) => ({ onPress: f.command(s.brushEditor.open) })),
-  action('file', 'File', 'paper', () => ({}), {
+  action('brush-editor', 'brush', 'Brush settings', 'sliders', (s, f) => ({ onPress: f.command(s.brushEditor.open) })),
+  action('file', 'file', 'File', 'paper', () => ({}), {
     needs: (s, f) => ({
       get ready() {
         return s.files.ready();
@@ -24,7 +24,7 @@ export const actionParts = [
     }),
     View: FileMenu
   }),
-  action('brushes', 'Brushes', 'brush', () => ({}), {
+  action('brushes', 'brush', 'Brushes', 'brush', () => ({}), {
     needs: (s, f) => ({
       get presets() {
         return s.presets.all();
@@ -52,6 +52,7 @@ export const actionParts = [
   definePart({
     kind: 'action:symmetry',
     family: 'action',
+    group: 'aids',
     section: 'Tools',
     label: 'Symmetry',
     icon: 'symmetry',
@@ -80,37 +81,37 @@ export const actionParts = [
     }),
     View: SymmetryPart
   }),
-  action('quickshape', 'QuickShape', 'quickshape', (s, f) => ({
+  action('quickshape', 'aids', 'QuickShape', 'quickshape', (s, f) => ({
     get active() {
       return s.quickShape.enabled();
     },
     onPress: f.command(s.quickShape.toggle)
   })),
   // Opens the brush studio on its Pen page, the one place where pen pressure is measured and edited.
-  action('pressure', 'Pressure calibration', 'pressure', (s, f) => ({ onPress: f.command(s.pen.open) })),
+  action('pressure', 'pen', 'Pressure calibration', 'pressure', (s, f) => ({ onPress: f.command(s.pen.open) })),
   tool('eraser', 'Eraser', 'erase'),
   tool('lasso', 'Lasso', 'lasso'),
   tool('fill', 'Fill', 'fill'),
-  action('transform', 'Transform', 'move', (s, f) => ({
+  action('transform', 'tools', 'Transform', 'move', (s, f) => ({
     get active() {
       return s.transform.active();
     },
     onPress: f.command(s.transform.toggle)
   })),
-  action('undo', 'Undo', 'undo', (s, f) => ({
+  action('undo', 'history', 'Undo', 'undo', (s, f) => ({
     get disabled() {
       return !s.history.canUndo();
     },
     onPress: f.command(s.history.undo)
   })),
-  action('redo', 'Redo', 'redo', (s, f) => ({
+  action('redo', 'history', 'Redo', 'redo', (s, f) => ({
     get disabled() {
       return !s.history.canRedo();
     },
     onPress: f.command(s.history.redo)
   })),
   tool('local-undo', 'Local undo', 'localUndo'),
-  action('mixing', 'Mixing', 'picker', (s, f) => ({
+  action('mixing', 'colors', 'Mixing', 'picker', (s, f) => ({
     get active() {
       return s.windows.isOpen('palette');
     },
@@ -152,6 +153,7 @@ function ActionPart(props: {
 
 function action<N extends object, P extends object = N>(
   id: string,
+  group: PartGroup,
   label: string,
   icon: SketchIconName,
   needs: (services: LegoServices, frame: PartBinding) => N,
@@ -163,6 +165,7 @@ function action<N extends object, P extends object = N>(
   return definePart({
     kind: `action:${id}`,
     family: 'action',
+    group,
     section: 'Tools',
     label,
     icon,
@@ -184,7 +187,7 @@ function action<N extends object, P extends object = N>(
 }
 
 function tool(id: Parameters<LegoServices['tools']['toggle']>[0], label: string, icon: SketchIconName) {
-  return action(id, label, icon, (services, frame) => ({
+  return action(id, 'tools', label, icon, (services, frame) => ({
     get active() {
       return services.tools.current() === id;
     },

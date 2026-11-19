@@ -51,7 +51,7 @@
   position: relative;
   padding: 0;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: var(--lego-r-tile);
   background: var(--lego-tile);
   box-shadow: 0 1px 3px #0003;
 }

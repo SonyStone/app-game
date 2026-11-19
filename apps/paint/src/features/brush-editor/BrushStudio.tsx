@@ -31,6 +31,8 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * and `--studio-selected`, `--studio-selected-ink` and `--studio-selected-quiet` for the chosen one's pill and text;
  * `--studio-plate` under the
  * buttons over the pad; `--studio-tile`, `--studio-tile-ink` and `--studio-tile-radius` for its controls;
+ * `--studio-menu-radius` and `--studio-menu-item-radius` for its menus and their rows; `--studio-corner-shape` for the
+ * sheet's corners;
  * `--studio-chosen`, `--studio-chosen-ink` and `--studio-chosen-ring` for the chosen category and option and a switch
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
  *

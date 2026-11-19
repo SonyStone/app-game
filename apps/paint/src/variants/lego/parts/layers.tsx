@@ -11,6 +11,7 @@ export const layerParts = [
   definePart({
     kind: 'layers:list',
     family: 'action',
+    group: 'layer-list',
     section: 'Layers',
     label: 'Layer list',
     icon: 'book',
@@ -51,6 +52,7 @@ export const layerParts = [
   definePart({
     kind: 'layers:name',
     family: 'action',
+    group: 'layer-props',
     section: 'Layers',
     label: 'Layer name',
     icon: 'paper',
@@ -66,6 +68,7 @@ export const layerParts = [
   definePart({
     kind: 'layers:blend',
     family: 'action',
+    group: 'layer-props',
     section: 'Layers',
     label: 'Blend mode',
     icon: 'gradient',
@@ -99,6 +102,7 @@ export const layerParts = [
   definePart({
     kind: 'layers:smooth-color',
     family: 'action',
+    group: 'layer-blending',
     section: 'Layers',
     label: 'Smooth color',
     icon: 'gradient',
@@ -127,6 +131,11 @@ export const layerParts = [
   })
 ];
 
+/** Add, duplicate and delete manage the layers; the others order and combine the active layer. */
+function layerCommandGroup(command: LayerCommand) {
+  return command === 'add' || command === 'duplicate' || command === 'delete' ? 'layer-manage' : 'layer-order';
+}
+
 function commandPart(command: LayerCommand) {
   const labels = {
     add: 'Add layer',
@@ -141,6 +150,7 @@ function commandPart(command: LayerCommand) {
   return definePart({
     kind: `layer:${command}`,
     family: 'action',
+    group: layerCommandGroup(command),
     section: 'Layers',
     label: labels[command],
     needs: (s, f) => ({

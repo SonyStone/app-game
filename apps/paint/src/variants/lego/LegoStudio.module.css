@@ -8,9 +8,42 @@
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
+  /* The empty part of a value's slider or knob. */
+  --lego-track: #dad7d0;
   /* The hairline between a Settings-style sidebar and its detail on one dark plate. */
   --lego-divider: rgb(255 255 255 / 0.1);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
+  /* The dark of the controls over the drawing, such as Edit, which stays dark in every tile look. */
+  --lego-chrome: rgb(36 38 44 / 0.92);
+  /* What lies on a plate between its tiles: the empty plate's note, studs, an unlit part's name and hairline. */
+  --lego-plate-ink: #ffffff;
+  --lego-plate-quiet: rgb(255 255 255 / 0.62);
+  --lego-plate-line: rgb(255 255 255 / 0.2);
+  --lego-plate-raise: rgb(255 255 255 / 0.1);
+  --lego-stud: rgb(255 255 255 / 0.22);
+  --lego-stud-rim: rgb(255 255 255 / 0.07);
+
+  /*
+   * Corners, all from one number: a plate's radius (LegoStudio sets it from the tile look trial, see `tileLook.ts`).
+   * A corner inside another is the outer radius less the distance between the two edges, never below zero, at every
+   * level: plate, then tile (6 px in, the plate's padding), then what lies in a tile (3 px in, as its chips). A
+   * popup, card or bar is a plate; what lies in it is its radius less its padding. Circles and pills stay round:
+   * they are shapes, not corners.
+   */
+  --lego-radius: 13px;
+  --lego-r-plate: var(--lego-radius);
+  --lego-r-tile: max(0px, calc(var(--lego-r-plate) - 6px));
+  --lego-r-inner: max(0px, calc(var(--lego-r-tile) - 3px));
+  /* A tile in a popup, 8 px in. */
+  --lego-r-popup-tile: max(0px, calc(var(--lego-r-plate) - 8px));
+  /* A key on the number entry card, 10 px in. */
+  --lego-r-card-key: max(0px, calc(var(--lego-r-plate) - 10px));
+  /* A button on the selection bar, 4 px in. */
+  --lego-r-bar-button: max(0px, calc(var(--lego-r-plate) - 4px));
+
+  /* The Settings-style lists LEGO shows on its plates and popups: rows 8 px in, their icons 6 px into a row. */
+  --settings-list-radius: var(--lego-r-popup-tile);
+  --settings-list-icon-radius: max(0px, calc(var(--lego-r-popup-tile) - 6px));
 
   background: #faf8f4;
   color: var(--lego-ink);
@@ -50,7 +83,7 @@
 /* A panel: a dark plate the parts lie on. In edit mode its studs show between and under the parts. */
 .panel {
   position: absolute;
-  border-radius: 10px;
+  border-radius: var(--lego-r-plate);
   background: var(--lego-plate);
   box-shadow: var(--lego-shadow);
   pointer-events: auto;
@@ -64,16 +97,11 @@
   touch-action: none;
   cursor: grab;
   background-color: var(--lego-plate);
-  background-image: radial-gradient(
-    circle,
-    rgb(255 255 255 / 0.22) 0 9px,
-    rgb(255 255 255 / 0.07) 10px,
-    transparent 11px
-  );
+  background-image: radial-gradient(circle, var(--lego-stud) 0 9px, var(--lego-stud-rim) 10px, transparent 11px);
   background-size: 48px 48px;
   /* Stud centers on the cells' centers: the cell (0, 0) corner plus half a cell, less half the 48 px tile. */
   background-position: calc(var(--stud-x) - 2px) calc(var(--stud-y) - 2px);
-  outline: 1.5px dashed rgb(255 255 255 / 0.28);
+  outline: 1.5px dashed var(--lego-plate-line);
   outline-offset: 3px;
 }
 
@@ -87,7 +115,7 @@
 /* A part: a flat tile on the studs, its print filling it edge to edge. */
 .part {
   position: absolute;
-  border-radius: 7px;
+  border-radius: var(--lego-r-tile);
   overflow: hidden;
   background: var(--lego-tile);
   transition:
@@ -106,8 +134,8 @@
 
 /* Where the lifted part will land. */
 .part[data-lifted] {
-  background: rgb(255 255 255 / 0.12);
-  outline: 2px dashed rgb(255 255 255 / 0.7);
+  background: var(--lego-plate-raise);
+  outline: 2px dashed var(--lego-plate-quiet);
   outline-offset: -2px;
 }
 
@@ -229,7 +257,7 @@
   touch-action: none;
   font-weight: 600;
   font-size: 12px;
-  background: conic-gradient(var(--lego-accent) var(--fraction), #dad7d0 0);
+  background: conic-gradient(var(--lego-accent) var(--fraction), var(--lego-track) 0);
 
   span {
     display: grid;
@@ -247,7 +275,7 @@
   position: relative;
   touch-action: none;
   cursor: pointer;
-  background: #dad7d0;
+  background: var(--lego-track);
 }
 
 .fill {
@@ -265,7 +293,7 @@
   bottom: 3px;
   left: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
   width: 6px;
-  border-radius: 3px;
+  border-radius: min(3px, var(--lego-r-inner));
   background: #ffffff;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3);
 }
@@ -314,7 +342,7 @@
 
   span {
     padding: 1px 5px;
-    border-radius: 4px;
+    border-radius: var(--lego-r-inner);
     background: rgb(255 255 255 / 0.72);
   }
 }
@@ -370,7 +398,7 @@
   /* Over the session's floating windows (900) too: a popup is what was opened last. */
   z-index: 950;
   padding: 8px;
-  border-radius: 14px;
+  border-radius: var(--lego-r-plate);
   background: rgb(36 38 44);
   box-shadow: var(--lego-shadow);
 }
@@ -456,7 +484,7 @@
   display: grid;
   width: calc(4 * 48px - 4px);
   height: calc(4 * 48px - 4px);
-  border-radius: 7px;
+  border-radius: var(--lego-r-popup-tile);
   overflow: hidden;
   background: var(--lego-tile);
   color: var(--lego-ink);
@@ -467,7 +495,7 @@
   display: grid;
   width: calc(5 * 48px - 4px);
   height: 44px;
-  border-radius: 7px;
+  border-radius: var(--lego-r-popup-tile);
   overflow: hidden;
 }
 
@@ -476,9 +504,9 @@
 .boxButton {
   flex: none;
   padding: 8px 12px;
-  border: 1px solid rgb(255 255 255 / 0.3);
-  border-radius: 8px;
-  background: none;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.12);
   color: #ffffff !important;
   cursor: pointer;
 }
@@ -495,7 +523,7 @@
   padding: 8px 16px;
   border: 0;
   border-radius: 999px;
-  background: var(--lego-plate);
+  background: var(--lego-chrome);
   color: #ffffff !important;
   font-weight: 600;
   text-decoration: none;
@@ -534,7 +562,7 @@
 /* The light card the library's light pickers stand on, in a part or a popup. */
 .pickerSurface {
   padding: 10px;
-  border-radius: 10px;
+  border-radius: var(--lego-r-tile);
   background: var(--lego-tile);
 }
 
@@ -571,7 +599,7 @@
   gap: 4px;
   padding: 8px 4px 6px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--lego-r-popup-tile);
   background: transparent;
   color: #ffffff !important;
   cursor: pointer;
@@ -608,7 +636,7 @@
   background: rgb(255 255 255 / 0.12);
 
   .preview {
-    border-radius: 9px;
+    border-radius: var(--lego-r-popup-tile);
     box-shadow: 0 0 0 2px var(--lego-accent);
   }
 }
@@ -643,7 +671,7 @@
   left: 50%;
   top: 50%;
   translate: -50% -50%;
-  border-radius: 7px;
+  border-radius: var(--lego-r-tile);
   overflow: hidden;
   background: var(--lego-tile);
 }
@@ -668,7 +696,7 @@
   display: grid;
   place-items: center;
   padding: 0 4px;
-  color: rgb(255 255 255 / 0.7);
+  color: var(--lego-plate-quiet);
   font-size: 10px;
   text-align: center;
   pointer-events: none;
@@ -677,7 +705,7 @@
 /* A kit being carried: its parts on a plate of their own. */
 .ghostBlock {
   position: absolute;
-  border-radius: 10px;
+  border-radius: var(--lego-r-plate);
   background: var(--lego-plate);
   outline: 6px solid var(--lego-plate);
 
@@ -713,7 +741,7 @@
     display: grid;
     place-items: center;
     border: 0;
-    border-radius: 6px;
+    border-radius: max(0px, calc(var(--lego-r-tile) - 4px));
     font-size: 11px;
     font-weight: 600;
     box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15);
@@ -768,7 +796,7 @@
     height: 100%;
     padding: 0 3px;
     border: 1px solid #d6d3cc;
-    border-radius: 6px;
+    border-radius: var(--lego-r-inner);
     background: #ffffff;
     font:
       600 clamp(7px, 14cqi, 12px) ui-monospace,
@@ -787,7 +815,7 @@
   min-height: 0;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--lego-r-inner);
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.3);
   cursor: pointer;
 
@@ -925,7 +953,7 @@
   display: grid;
   grid-template-rows: 24px minmax(0, 1fr);
   overflow: hidden;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--lego-r-plate) var(--lego-r-plate) 0 0;
   /* Opaque: the white card behind would show through even a slightly clear sheet. */
   background: rgb(20 21 25);
   color: #ffffff;
@@ -940,7 +968,6 @@
     right: calc(50% - 80px);
     left: calc(50% - 80px);
     grid-template-rows: minmax(0, 1fr);
-    border-radius: 14px 14px 0 0;
 
     .trayContent {
       display: none;
@@ -1079,7 +1106,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1.5px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--lego-r-plate);
   touch-action: pan-y;
   transition:
     background 120ms,
@@ -1189,7 +1216,7 @@
   position: relative;
   min-height: 0;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--lego-r-plate);
   touch-action: none;
 
   /*
@@ -1197,7 +1224,7 @@
    * cells. A swatch's panel open on it stands out as on the board.
    */
   .panel:not([data-owned]) {
-    border-radius: 12px;
+    border-radius: var(--lego-r-plate);
     outline: none;
     box-shadow: none;
     background-image: none;
@@ -1210,12 +1237,7 @@
       top: calc(var(--stud-y) - 2px);
       width: var(--studs-width);
       height: var(--studs-height);
-      background-image: radial-gradient(
-        circle,
-        rgb(255 255 255 / 0.22) 0 9px,
-        rgb(255 255 255 / 0.07) 10px,
-        transparent 11px
-      );
+      background-image: radial-gradient(circle, var(--lego-stud) 0 9px, var(--lego-stud-rim) 10px, transparent 11px);
       background-size: 48px 48px;
       pointer-events: none;
     }
@@ -1237,12 +1259,10 @@
 @keyframes kit-flash {
   0%,
   40% {
-    border-radius: 10px;
     box-shadow: 0 0 0 3px var(--lego-accent);
   }
 
   100% {
-    border-radius: 10px;
     box-shadow: 0 0 0 3px transparent;
   }
 }
@@ -1259,7 +1279,7 @@
   width: 110px;
   padding: 1px 4px;
   border: 1px solid var(--lego-accent);
-  border-radius: 4px;
+  border-radius: var(--lego-r-inner);
   background: rgb(255 255 255 / 0.1);
   color: #ffffff;
   font-size: 11px;
@@ -1287,7 +1307,7 @@
 .selection {
   position: absolute;
   z-index: 2;
-  border-radius: 10px;
+  border-radius: var(--lego-r-plate);
   pointer-events: none;
 }
 
@@ -1296,8 +1316,10 @@
   background: rgb(61 126 255 / 0.12);
 }
 
+/* Around the selected tiles, 4 px out (BoardView's selectionPadding): their corner and that distance. */
 .selection {
   border: 2px dashed var(--lego-accent);
+  border-radius: calc(var(--lego-r-tile) + 4px);
 }
 
 /* How to start editing, at the bottom of the board until something is first selected. */
@@ -1323,7 +1345,7 @@
   display: flex;
   gap: 2px;
   padding: 4px;
-  border-radius: 14px;
+  border-radius: var(--lego-r-plate);
   background: rgb(36 38 44);
   box-shadow: var(--lego-shadow);
   pointer-events: auto;
@@ -1337,7 +1359,7 @@
     min-height: 44px;
     padding: 0 12px;
     border: 0;
-    border-radius: 10px;
+    border-radius: var(--lego-r-bar-button);
     background: none;
     color: #ffffff;
     font: inherit;
@@ -1387,7 +1409,7 @@
   position: relative;
   width: 44px;
   height: 44px;
-  border-radius: 7px;
+  border-radius: var(--lego-r-tile);
   overflow: hidden;
   background: var(--lego-tile);
   color: var(--lego-ink);
@@ -1489,7 +1511,7 @@
   position: absolute;
   max-width: 340px;
   padding: 10px 12px 12px;
-  border-radius: 12px;
+  border-radius: var(--lego-r-plate);
   background: rgb(36 38 44);
   color: #ffffff;
   box-shadow: var(--lego-shadow);
@@ -1512,17 +1534,17 @@
   min-height: 64px;
   padding: 16px;
   place-items: center;
-  border-radius: 8px;
+  border-radius: calc(var(--lego-r-plate) * 0.6);
   background: #443a35;
   color: #fff1df;
   font-size: 12px;
 }
 
+/* A kit's plate in miniature: a plate's corner scaled as its parts are (KitPreview sets the scale). */
 .kitPlate {
   position: relative;
-  border-radius: 8px;
+  border-radius: calc(var(--lego-r-plate) * var(--kit-scale, 0.6));
   background: var(--lego-plate);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
 }
 
 .kitScaled {
@@ -1605,7 +1627,7 @@
     min-width: 0;
     margin: 0 4px;
     border: 1px solid var(--lego-quiet);
-    border-radius: 4px;
+    border-radius: var(--lego-r-inner);
     background: var(--lego-tile);
     color: var(--lego-ink);
     font: inherit;
@@ -1617,7 +1639,7 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border-radius: 7px;
+  border-radius: var(--lego-r-tile);
   background: var(--lego-plate);
 }
 
@@ -1628,8 +1650,8 @@
   left: calc(50% - 12px);
   width: 24px;
   height: 4px;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.7) 1px, transparent 1.5px) 0 0 / 6px 4px;
-  opacity: 0.3;
+  background: radial-gradient(circle, var(--lego-plate-ink) 1px, transparent 1.5px) 0 0 / 6px 4px;
+  opacity: 0.2;
 }
 
 .panel[data-floating] {
@@ -1665,11 +1687,11 @@
 .part:has(.valueState[data-inactive]),
 .studioTile:has(.valueState[data-inactive]) {
   background: transparent;
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
+  box-shadow: inset 0 0 0 1px var(--lego-plate-line);
 }
 
 .valueState[data-inactive] {
-  color: rgb(255 255 255 / 0.5);
+  color: color-mix(in srgb, var(--lego-plate-ink) 50%, transparent);
 
   .slider,
   .knob,
@@ -1704,11 +1726,11 @@
   position: relative;
   min-width: 30px;
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--lego-r-inner);
   background: #ffffff;
   box-shadow:
-    0 0 0 1px rgb(0 0 0 / 0.14),
-    0 1px 2px rgb(0 0 0 / 0.2);
+    0 1px 2px rgb(0 0 0 / 0.24),
+    0 0 1px rgb(0 0 0 / 0.2);
   font-variant-numeric: tabular-nums;
   text-align: center;
   pointer-events: auto;
@@ -1777,7 +1799,7 @@
   padding: 10px;
   overflow: visible;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--lego-r-plate);
   background: rgb(36 38 44);
   box-shadow: var(--lego-shadow);
   color: #ffffff;
@@ -1798,7 +1820,7 @@
     margin: 0;
     padding: 0;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--lego-r-card-key);
     background: var(--lego-tile);
     text-align: center;
     color: var(--lego-ink);
@@ -1852,7 +1874,7 @@
   gap: 2px;
   height: 48px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--lego-r-card-key);
   background: rgb(255 255 255 / 0.08);
   font-size: 28px;
   font-weight: 600;
@@ -1865,7 +1887,7 @@
   }
 
   &[data-fresh] span {
-    border-radius: 4px;
+    border-radius: max(0px, calc(var(--lego-r-card-key) - 3px));
     background: color-mix(in srgb, var(--lego-accent) 45%, transparent);
     padding: 0 3px;
   }
@@ -1964,7 +1986,7 @@
   --studio-column: var(--lego-plate);
   --studio-column-ink: #ffffff;
   --studio-column-quiet: rgb(255 255 255 / 0.62);
-  --studio-column-radius: 12px;
+  --studio-column-radius: var(--lego-r-plate);
   --studio-divider: var(--lego-divider);
   --studio-icon: var(--lego-tile);
   --studio-icon-ink: var(--lego-ink);
@@ -1975,7 +1997,9 @@
   --studio-plate: var(--lego-plate);
   --studio-tile: var(--lego-tile);
   --studio-tile-ink: var(--lego-ink);
-  --studio-tile-radius: 7px;
+  --studio-tile-radius: var(--lego-r-tile);
+  --studio-menu-radius: var(--lego-r-plate);
+  --studio-menu-item-radius: var(--lego-r-bar-button);
   --studio-tile-shadow: none;
   --studio-chosen: var(--lego-preset-active);
   --studio-chosen-ink: var(--lego-ink);
@@ -2019,7 +2043,7 @@
   display: grid;
   min-width: 0;
   overflow: hidden;
-  border-radius: 7px;
+  border-radius: var(--lego-r-tile);
   background: var(--lego-tile);
   color: var(--lego-ink);
 
@@ -2035,8 +2059,8 @@
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 7px;
-  background: rgb(255 255 255 / 0.1);
+  border-radius: var(--lego-r-tile);
+  background: var(--lego-plate-raise);
   cursor: grab;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
@@ -2049,7 +2073,12 @@
 .studioGripDots {
   width: 12px;
   height: 20px;
-  background: radial-gradient(circle, rgb(255 255 255 / 0.8) 1.6px, transparent 2.2px) 0 0 / 6px 6.67px;
+  background: radial-gradient(
+      circle,
+      color-mix(in srgb, var(--lego-plate-ink) 80%, transparent) 1.6px,
+      transparent 2.2px
+    )
+    0 0 / 6px 6.67px;
 }
 
 .studioSetting[data-on-board] .studioGripDots {
@@ -2092,7 +2121,7 @@
   height: 36px;
   padding: 0;
   border: 0;
-  border-radius: 7px;
+  border-radius: max(0px, calc(var(--lego-r-tile) - 4px));
   background: rgb(0 0 0 / 0.06);
   color: var(--lego-ink);
   touch-action: manipulation;
@@ -2152,4 +2181,230 @@
     stroke-linejoin: round;
     vector-effect: non-scaling-stroke;
   }
+}
+
+/*
+ * TEMPORARY: the tile look trial (see `tileLook.ts`). LegoStudio puts these classes on the editor, so the board, the
+ * workbench, kits, popups and the brush studio all follow.
+ */
+
+/*
+ * Looks B and C: parts fuse with their group's neighbours (`data-joins`, see `fusion.ts`). Across a fused side the
+ * fill reaches over the 4 px gap to a 1 px seam: 2 px from the part before the seam, 1 px from the part after it, so
+ * the seam lies on whole pixels. Padding grows the tile without moving its cells, and the corners at the seam are
+ * square; the outer corners of the block keep the tile radius, and a selection's outline follows this outline.
+ */
+.fusedLook .part[data-joins] {
+  box-sizing: content-box;
+}
+
+.fusedLook .part[data-joins~='top'] {
+  margin-top: -1px;
+  padding-top: 1px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.fusedLook .part[data-joins~='right'] {
+  padding-right: 2px;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .part[data-joins~='bottom'] {
+  padding-bottom: 2px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .part[data-joins~='left'] {
+  margin-left: -1px;
+  padding-left: 1px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* The outline around one selected part takes its square corners on the sides it fuses along. */
+.fusedLook .selection[data-joins~='top'] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='right'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='bottom'] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='left'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/*
+ * Look C: the plate muted towards the tiles' tone, so the gaps and seams between tiles read as soft lines rather than
+ * dark ones; what lies on the plate turns dark. Popups, cards and the box stay dark: they are not plates of tiles.
+ */
+.editor.mutedLook {
+  --lego-plate: #d3cec5;
+  /* Lighter than the plate, so a slider's empty end still reads as part of its tile. */
+  --lego-track: #e6e3dd;
+  --lego-plate-ink: var(--lego-ink);
+  --lego-plate-quiet: rgb(36 38 44 / 0.6);
+  --lego-plate-line: rgb(36 38 44 / 0.22);
+  --lego-plate-raise: rgb(36 38 44 / 0.07);
+  --lego-stud: rgb(36 38 44 / 0.1);
+  --lego-stud-rim: rgb(36 38 44 / 0.04);
+  --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.16), 0 6px 20px rgb(0 0 0 / 0.12);
+}
+
+.mutedLook .brushStudio {
+  --studio-column-ink: var(--lego-ink);
+  --studio-column-quiet: rgb(36 38 44 / 0.6);
+  --studio-divider: rgb(36 38 44 / 0.12);
+  --studio-hover: rgb(36 38 44 / 0.05);
+  --studio-pressed: rgb(36 38 44 / 0.1);
+  --studio-disabled-ink: rgb(36 38 44 / 0.45);
+  --studio-disabled-line: rgb(36 38 44 / 0.2);
+}
+
+/* Squircle corners on plates and large tiles, where the browser draws them (Chrome and Edge 139 and later). */
+@supports (corner-shape: squircle) {
+  .squircleLook {
+    .panel,
+    .ghostBlock,
+    .popup,
+    .entryCard,
+    .selectionBar,
+    .spawnCard,
+    .benchSlot,
+    .part[data-large],
+    .studioSetting[data-tall] .studioTile {
+      corner-shape: squircle;
+    }
+
+    .brushStudio {
+      --studio-corner-shape: squircle;
+    }
+  }
+}
+
+/*
+ * By default surfaces part by their fill, without borders. Asked for more contrast, tiles and plates get an edge,
+ * and a fused seam stays visible.
+ */
+@media (prefers-contrast: more) {
+  .editor {
+    --lego-shadow: 0 0 0 1px #000000, 0 4px 12px rgb(0 0 0 / 0.3);
+  }
+
+  .part,
+  .studioTile,
+  .trayTile,
+  .previewTile {
+    box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.75);
+  }
+
+  .board[data-editing] .part,
+  .benchSlot .part {
+    box-shadow:
+      inset 0 0 0 1px rgb(0 0 0 / 0.75),
+      0 2px 0 rgb(0 0 0 / 0.25);
+  }
+
+  .popup,
+  .entryCard,
+  .selectionBar,
+  .spawnCard,
+  .tray {
+    outline: 1px solid #ffffff;
+  }
+}
+
+/* The trial's switch beside Edit, and its card. */
+.tileLookSwitch {
+  position: relative;
+
+  > button {
+    min-width: 36px;
+    padding-inline: 10px;
+  }
+}
+
+.tileLookCard {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 970;
+  display: grid;
+  gap: 8px;
+  width: 232px;
+  padding: 10px;
+  border-radius: var(--lego-r-plate);
+  background: rgb(36 38 44);
+  box-shadow: var(--lego-shadow);
+  color: #ffffff;
+}
+
+.tileLookHeading {
+  color: rgb(255 255 255 / 0.62);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tileLookChoices {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 4px;
+
+  button {
+    display: grid;
+    place-items: center;
+    min-height: 44px;
+    padding: 2px;
+    border: 0;
+    border-radius: var(--lego-r-card-key);
+    background: rgb(255 255 255 / 0.12);
+    color: #ffffff;
+    cursor: pointer;
+  }
+
+  button[aria-pressed='true'] {
+    background: var(--lego-accent);
+  }
+
+  b {
+    font-size: 15px;
+  }
+
+  small {
+    font-size: 10px;
+  }
+}
+
+.tileLookRadius {
+  display: grid;
+  gap: 2px;
+
+  span {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  input {
+    width: 100%;
+    accent-color: var(--lego-accent);
+  }
+}
+
+.tileLookCheck {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 36px;
 }

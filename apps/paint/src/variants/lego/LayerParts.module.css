@@ -175,7 +175,7 @@
   canvas {
     width: 24px;
     height: 24px;
-    border-radius: 4px;
+    border-radius: var(--lego-r-inner);
     flex-shrink: 0;
   }
 
@@ -209,7 +209,7 @@
   --settings-list-text: 13px;
 
   padding: 8px;
-  border-radius: 14px;
+  border-radius: var(--lego-r-plate);
   font: inherit;
 }
 

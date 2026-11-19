@@ -369,6 +369,7 @@ it('adds a channel using one spec, including fraction edits, number edits and ex
       setFlow(next);
     },
     colored: false,
+    group: 'brush-values',
     track: () => 'linear-gradient(black, white)'
   } satisfies ValueChannel;
   const definition = defineValuePart(channel);
