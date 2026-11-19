@@ -16,6 +16,17 @@
   }
 }
 
+/* A header button with a short label instead of an icon, such as the brush file's import and export. */
+.headerTextButton {
+  composes: headerButton;
+  width: auto;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .columns {
   display: grid;
   grid-template-columns: 150px 1fr;

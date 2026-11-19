@@ -59,7 +59,7 @@ export function BrushLibrary(props: {
               }
             }}
           />
-          <button disabled={props.disabled} onClick={() => picker?.click()}>
+          <button class={styles.headerTextButton} disabled={props.disabled} onClick={() => picker?.click()}>
             Import .paintbrush
           </button>
         </Show>
@@ -71,7 +71,11 @@ export function BrushLibrary(props: {
             )
           }
         >
-          <button disabled={props.disabled} onClick={() => props.onExportFile?.(props.preset)}>
+          <button
+            class={styles.headerTextButton}
+            disabled={props.disabled}
+            onClick={() => props.onExportFile?.(props.preset)}
+          >
             Export .paintbrush
           </button>
         </Show>
