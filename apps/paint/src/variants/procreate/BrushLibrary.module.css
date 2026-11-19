@@ -102,7 +102,8 @@
     --settings-list-icon-size: 26px;
     --settings-list-icon-gap: 10px;
     --settings-list-row-start: 7px;
-    --settings-list-radius: 9px;
+    --settings-list-radius: var(--brush-library-row-radius, 9px);
+    --settings-list-icon-radius: var(--brush-library-icon-radius, 7px);
     --settings-list-hover: rgb(255 255 255 / 0.07);
     --settings-list-pressed: rgb(255 255 255 / 0.14);
     --settings-list-inset: 6px;
@@ -138,7 +139,13 @@
   }
 
   .sidebar & {
-    border-radius: 9px;
+    border-radius: var(--brush-library-row-radius, 9px);
+  }
+
+  /* The stroke sample, its corners nested in the row's where the host gives them. */
+  > :last-child {
+    overflow: hidden;
+    border-radius: var(--brush-library-sample-radius, 0);
   }
 }
 

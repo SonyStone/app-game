@@ -23,7 +23,9 @@ import { PopoverHeader } from './Popover';
  * `--brush-library-chosen` (the brush in use, and the chosen set's pill in Procreate's look), `--brush-library-ink`,
  * `--brush-library-quiet`, `--brush-library-line` (the hairline between the columns), `--brush-library-icon` and
  * `--brush-library-icon-ink` (the sets' icon tiles in the sidebar look), `--brush-library-disabled` (header commands
- * while brushes cannot be chosen) and `--brush-library-height` (the columns' height).
+ * while brushes cannot be chosen), `--brush-library-height` (the columns' height), and in the sidebar look
+ * `--brush-library-row-radius` and `--brush-library-icon-radius` (the corners of a set's or brush's row and of a set's
+ * icon tile); `--brush-library-sample-radius` rounds a brush's stroke sample, square by default.
  */
 export function BrushLibrary(props: {
   title: string;

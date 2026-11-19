@@ -5,7 +5,7 @@ import { SettingsList, type SettingsListItem } from '../../shared/ui/SettingsLis
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
 import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
-import { SettingRow } from './SettingRow';
+import { inlineChoiceLimit, SettingRow } from './SettingRow';
 import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
 /**
@@ -224,8 +224,10 @@ export function CategoryPane(props: {
 }
 
 /**
- * The rows of a category whose settings apply to the brush, in schema order. Rows of a section are framed together under its heading; other rows stand alone. Rows are made once per setting and sections
- * once per heading, so values change in place and no row appears, disappears or moves while one is used.
+ * The rows of a category whose settings apply to the brush, in schema order. Rows of a section stand together under
+ * its heading; other rows stand without one. Within either, rows form groups (`rowGroups`) that the studio draws as one
+ * fused outline each. Rows are made once per setting, sections once per heading and groups once per first row, so
+ * values change in place and no row appears, disappears or moves while one is used.
  */
 function CategoryRows(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
@@ -243,17 +245,13 @@ function CategoryRows(props: {
           <Show
             when={run().title}
             fallback={
-              <For each={run().rows}>
-                {(setting) => (
-                  <Row
-                    hostRow={props.hostRow}
-                    category={props.category}
-                    setting={setting}
-                    brush={props.brush}
-                    onChange={props.onChange}
-                  />
-                )}
-              </For>
+              <RowGroups
+                hostRow={props.hostRow}
+                category={props.category}
+                rows={run().rows}
+                brush={props.brush}
+                onChange={props.onChange}
+              />
             }
           >
             {(title) => (
@@ -292,7 +290,72 @@ function sectionRuns(rows: readonly BrushSetting[]) {
   return runs;
 }
 
-/** A framed group of rows under a short heading, announced as a group named by it. */
+/**
+ * The groups one run of rows (a section's, or rows without one) falls into, the studio drawing each as one fused
+ * outline: consecutive rows of the same family form a group, and a new group begins where the family changes. The
+ * families (`rowFamily`) are sliders; list rows, a switch or a long choice that opens its options, each a full-width
+ * line with its label inside; and a short choice, whose label heads its own options, so it is always a group alone.
+ * A section's heading ends a group too, since the runs are split by section first. Keyed by the first row's ID.
+ */
+export function rowGroups(rows: readonly BrushSetting[]) {
+  const groups: { key: string; family: RowFamily; rows: BrushSetting[] }[] = [];
+  for (const row of rows) {
+    const family = rowFamily(row);
+    const last = groups.at(-1);
+    if (last && last.family === family && family !== 'choice') {
+      last.rows.push(row);
+    } else {
+      groups.push({ key: row.id, family, rows: [row] });
+    }
+  }
+
+  return groups;
+}
+
+/** The family a row belongs to for grouping; see `rowGroups`. */
+export function rowFamily(setting: BrushSetting) {
+  return setting.kind === 'number'
+    ? 'slider'
+    : setting.kind === 'choice' && setting.options.length <= inlineChoiceLimit
+      ? 'choice'
+      : 'list';
+}
+
+/** A family of rows that may fuse into one group. */
+export type RowFamily = ReturnType<typeof rowFamily>;
+
+/** The rows of one run in their groups (`rowGroups`), each group a box of its own, named by its family. */
+function RowGroups(props: {
+  hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
+  category: BrushCategory;
+  rows: readonly BrushSetting[];
+  brush: Brush;
+  onChange: (patch: Partial<Brush>) => void;
+}) {
+  const groups = createMemo(() => rowGroups(props.rows));
+
+  return (
+    <For each={groups()} keyed={(group) => group.key}>
+      {(group) => (
+        <div class={styles.rowGroup} data-family={group().family}>
+          <For each={group().rows}>
+            {(setting) => (
+              <Row
+                hostRow={props.hostRow}
+                category={props.category}
+                setting={setting}
+                brush={props.brush}
+                onChange={props.onChange}
+              />
+            )}
+          </For>
+        </div>
+      )}
+    </For>
+  );
+}
+
+/** A section of rows under a short heading, announced as a group named by it. */
 function Section(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
@@ -308,17 +371,13 @@ function Section(props: {
       <h3 id={titleId} class={styles.sectionTitle}>
         {props.title}
       </h3>
-      <For each={props.rows}>
-        {(setting) => (
-          <Row
-            hostRow={props.hostRow}
-            category={props.category}
-            setting={setting}
-            brush={props.brush}
-            onChange={props.onChange}
-          />
-        )}
-      </For>
+      <RowGroups
+        hostRow={props.hostRow}
+        category={props.category}
+        rows={props.rows}
+        brush={props.brush}
+        onChange={props.onChange}
+      />
     </div>
   );
 }

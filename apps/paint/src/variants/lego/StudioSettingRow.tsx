@@ -3,8 +3,10 @@ import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
 
 /**
- * A setting's row in the brush studio, built from the setting's own part (`kind`) as it lies on the board: a grip and
- * the part across the row, a number's slider one cell high, the pressure curve's graph taller (`tall`). The part is
+ * A setting's row in the brush studio, built from the setting's own part (`kind`) as it lies on the board: one tile,
+ * its grip at the left end and the part across the rest, a number's slider one cell high, the pressure curve's graph
+ * taller (`tall`). In a group of settings the row takes the corners of its place in the group's one outline (see
+ * `BrushStudio`), the grip the left ones and the part the right ones. The part is
  * live, editing through its channels as every copy on the board does, so the row and the board always show the same
  * values; its value chips open number entry, as on the board. A setting that does not apply to the brush now shows
  * the part's inactive state and takes no edits.

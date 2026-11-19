@@ -12,8 +12,8 @@ import { createSignal } from 'solid-js';
  */
 export type TileLook = { radius: number; squircle: boolean };
 
-/** The look a device without a stored choice gets: the corners as before the trial. */
-export const defaultTileLook: TileLook = { radius: 13, squircle: false };
+/** The look a device without a stored choice gets: the user's pick from the trial, 18 px plates with squircle corners. */
+export const defaultTileLook: TileLook = { radius: 18, squircle: true };
 
 /**
  * Plate radii to compare: tiles square, tiles as before (7 px), tiles soft (14 px), and tiles fully rounded with

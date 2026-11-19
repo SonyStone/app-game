@@ -40,11 +40,11 @@ import type { createBoard } from './createBoard';
 import type { createSheet } from './createSheet';
 import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { FloatingGrip } from './FloatingGrip';
+import { joinsAttribute, panelEdges, partEdges, partJoins, sameCells } from './fusion';
 import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { joinsAttribute, partJoins, sameCells } from './fusion';
 import { kindLabel, lookOf, partDefinition, partGroup, partLooks } from './parts';
 import type { Popup } from './parts/definition';
 import { BlockView, PartsTray } from './PartsTray';
@@ -568,6 +568,10 @@ export function BoardView(props: {
       { equals: sameCells }
     );
     const joins = createMemo(() => partJoins(fusing(), partGroup));
+    // The sides the plate lies flush against the view's edge; the workbench lies in the box, never at the screen's.
+    const edges = createMemo(() =>
+      panel().bench ? { top: false, right: false, bottom: false, left: false } : panelEdges(frame().rect, view())
+    );
     return (
       <div
         class={[styles.panel, panel().owner !== undefined && styles.owned]}
@@ -575,6 +579,7 @@ export function BoardView(props: {
         data-floating={panel().floating ? '' : undefined}
         data-empty={panel().parts.length === 0 ? '' : undefined}
         data-owned={panel().owner !== undefined ? '' : undefined}
+        data-edges={joinsAttribute(edges())}
         data-keeps-panel
         style={{
           left: `${frame().rect.left}px`,
@@ -634,6 +639,7 @@ export function BoardView(props: {
                   class={styles.part}
                   data-part={part().id}
                   data-joins={joinsAttribute(joins().get(part().id))}
+                  data-edges={joinsAttribute(partEdges(part(), panel().parts, edges(), panel().floating))}
                   data-lifted={isLifted() ? '' : undefined}
                   data-open={chain().has(part().id) ? '' : undefined}
                   data-selected={props.editing && !isLifted() && selection().has(part().id) ? '' : undefined}

@@ -1,4 +1,4 @@
-import type { Part } from './board';
+import { partsBounds, type Part, type Rect } from './board';
 
 /**
  * Fusing: neighbouring parts of one group (`PartGroup`) on a plate draw as one block, their fill reaching across the
@@ -40,8 +40,7 @@ export function partJoins(parts: readonly Part[], groupOf: (kind: string) => str
     for (const side of sides) {
       const found = across.get(part.id)![side];
       const covered = found.reduce((sum, entry) => sum + entry.overlap, 0) === sideLength(part, side);
-      flags[side] =
-        group !== undefined && covered && found.every((entry) => groups.get(entry.part.id) === group);
+      flags[side] = group !== undefined && covered && found.every((entry) => groups.get(entry.part.id) === group);
     }
 
     joined.set(part.id, flags);
@@ -72,6 +71,38 @@ export function partJoins(parts: readonly Part[], groupOf: (kind: string) => str
 
   return result;
 }
+
+/**
+ * The sides of the view a panel lies flush against, as `panelFrame` pushes a panel that would leave the view. A plate
+ * there is concentric with the screen's edge: the edge runs straight on, so the plate's corners on that side are
+ * square, and so are those of the parts lying along that side of the plate, by the same nesting.
+ */
+export function panelEdges(rect: Rect, view: { width: number; height: number }): Joins {
+  return {
+    top: rect.top <= edgeSlack,
+    right: rect.left + rect.width >= view.width - edgeSlack,
+    bottom: rect.top + rect.height >= view.height - edgeSlack,
+    left: rect.left <= edgeSlack
+  };
+}
+
+/**
+ * The sides of `part` that lie along a side of its panel the panel has flush against the view (`edges`), so that its
+ * corners there are square as the plate's are. A floating panel's grip lies above its parts, so its top parts keep
+ * their top corners.
+ */
+export function partEdges(part: Part, parts: readonly Part[], edges: Joins, floating = false): Joins {
+  const bounds = partsBounds(parts);
+  return {
+    top: edges.top && !floating && part.cell.row === bounds.row,
+    right: edges.right && part.cell.column + part.span.columns === bounds.column + bounds.columns,
+    bottom: edges.bottom && part.cell.row + part.span.rows === bounds.row + bounds.rows,
+    left: edges.left && part.cell.column === bounds.column
+  };
+}
+
+/** How near a view's side, in CSS pixels, a panel counts as flush against it. */
+const edgeSlack = 0.5;
 
 /** `joins` as the space-separated list of fused sides a part's `data-joins` attribute holds; `undefined` for none. */
 export function joinsAttribute(joins: Joins | undefined) {

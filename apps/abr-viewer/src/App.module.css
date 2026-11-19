@@ -107,6 +107,7 @@
       width: 10px;
       height: 10px;
       border-radius: 50%;
+      corner-shape: round;
       background: #c6c6c6;
     }
   }
@@ -171,6 +172,7 @@
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
+  corner-shape: round;
   vertical-align: -2px;
   animation: abr-loading-spin 750ms linear infinite;
 

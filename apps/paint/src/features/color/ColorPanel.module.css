@@ -95,6 +95,7 @@
 .hue {
   height: 26px;
   border-radius: 13px;
+  corner-shape: round;
   background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
   box-shadow: inset 0 0 0 1px #0001;
   cursor: ew-resize;

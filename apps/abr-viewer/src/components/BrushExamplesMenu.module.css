@@ -45,6 +45,7 @@
   padding: 0;
   border: 1px solid #555;
   border-radius: 50%;
+  corner-shape: round;
   background: #111;
   color: #fff;
   transition:
@@ -192,6 +193,7 @@
   border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
+  corner-shape: round;
   vertical-align: -2px;
   animation: abr-loading-spin 750ms linear infinite;
 
