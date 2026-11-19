@@ -228,12 +228,12 @@ function PaintVariants() {
       <For each={paintFolderGroups}>
         {(group) => (
           <section>
-            <h2>{group().title}</h2>
+            <h2>{group.title}</h2>
             <ul>
-              <For each={group().routes}>
+              <For each={group.routes}>
                 {(route) => (
                   <li>
-                    <a href={`/paint${route().path}`}>{route().name}</a>
+                    <a href={`/paint${route.path}`}>{route.name}</a>
                   </li>
                 )}
               </For>
