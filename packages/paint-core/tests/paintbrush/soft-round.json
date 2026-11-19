@@ -1,0 +1,68 @@
+{
+  "id": "builtin:soft-round",
+  "name": "Soft round",
+  "apply": [
+    "/tool",
+    "/tips",
+    "/sequence",
+    "/placement",
+    "/size",
+    "/transfer",
+    "/dynamics",
+    "/stroke",
+    "/mixing"
+  ],
+  "definition": {
+    "tool": "brush",
+    "tips": {
+      "round": {
+        "kind": "round",
+        "hardness": 0.65
+      }
+    },
+    "sequence": {
+      "order": "cycle",
+      "tips": [
+        "round"
+      ]
+    },
+    "placement": {
+      "law": "paint-distance-v1",
+      "spacing": 0.12
+    },
+    "size": 32,
+    "transfer": {
+      "flow": 0.35,
+      "opacity": 1
+    },
+    "dynamics": [
+      {
+        "target": "/size",
+        "input": "pressure",
+        "domain": [
+          0,
+          1
+        ],
+        "curve": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "op": "multiply"
+      }
+    ],
+    "stroke": {
+      "smoothing": "studio",
+      "normal": 1,
+      "smooth": 10,
+      "stabilizer": 6,
+      "catchUp": true
+    },
+    "mixing": "linear"
+  }
+}

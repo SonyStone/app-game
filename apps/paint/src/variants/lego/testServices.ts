@@ -73,6 +73,8 @@ export function createTestServices() {
       measure: vi.fn()
     },
     presets: {
+      importFile: vi.fn(async () => {}),
+      exportFile: vi.fn(async () => {}),
       all: () => [],
       resources: vi.fn(async () => ok([])),
       recent: () => [],

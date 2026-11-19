@@ -121,6 +121,8 @@ export function createCatalogueFixture() {
       measure: () => {}
     },
     presets: {
+      importFile: async () => {},
+      exportFile: async () => {},
       all: () => presets,
       resources: library.resources,
       recent: () => presets.slice(0, 7).map((preset) => preset.id),

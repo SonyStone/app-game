@@ -16,7 +16,8 @@ import type { BrushStorage, StoredPreset } from './createBrushStorage';
  */
 export function createBrushLibrary(options: {
   /** Persists user presets; omitted, presets last until the page closes. */
-  storage?: Pick<BrushStorage, 'readPreset' | 'readPresets' | 'readResources' | 'putPreset' | 'deletePreset'>;
+  storage?: Pick<BrushStorage, 'readPreset' | 'readPresets' | 'readResources' | 'putPreset' | 'deletePreset'> &
+    Partial<Pick<BrushStorage, 'putPresets'>>;
   /** Bytes of stored images kept in memory after use. Default 64 MiB. */
   imageBudget?: number;
 }) {
@@ -64,6 +65,42 @@ export function createBrushLibrary(options: {
         : err(brushError('storage', `The images of “${preset.name}” are missing. Import the brush again.`));
     },
     add,
+    /** Publishes a complete validated batch only after its IndexedDB transaction commits. */
+    async addImported(batch: readonly { preset: BrushPreset; resources: readonly BrushResource[] }[]) {
+      await loadAll();
+      const presets: StoredPreset[] = [];
+      const ids = new Set(latestKnown().keys());
+      const resources = new Map<string, BrushResource>();
+      let created = Math.max(Date.now(), ...[...latestKnown().values()].map((p) => p.created + 1));
+      for (const item of batch) {
+        const input = item.preset;
+        const copy = input.id.startsWith('builtin:') || ids.has(input.id) || Object.hasOwn(Object.prototype, input.id);
+        const preset = {
+          ...input,
+          id: copy ? crypto.randomUUID() : input.id,
+          derivedFrom: copy ? input.id : input.derivedFrom,
+          created: created++
+        };
+        presets.push(preset);
+        ids.add(preset.id);
+        for (const image of item.resources) {
+          resources.set(image.id, image);
+        }
+      }
+      if (options.storage && !(await options.storage.putPresets?.(presets, [...resources.values()]))) {
+        throw new Error('Imported brushes could not be saved');
+      }
+      for (const image of resources.values()) {
+        images.put(image, !!options.storage);
+      }
+      images.trim();
+      const next = new Map(latestKnown());
+      for (const preset of presets) {
+        removed.delete(preset.id);
+        next.set(preset.id, preset);
+      }
+      setKnown(next);
+    },
     /**
      * Adds an imported preset with its images, replacing the earlier import of the same `source` in place, so that
      * importing an edited brush again does not duplicate it. Reads the preset list to find that import.

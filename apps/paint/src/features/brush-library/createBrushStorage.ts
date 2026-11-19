@@ -90,6 +90,17 @@ export function createBrushStorage(options: {
         }
       });
     },
+    /** Commits an imported set and all its native tip images in one transaction. */
+    putPresets(presets: readonly StoredPreset[], resources: readonly BrushResource[]) {
+      return write(['presets', 'resources'], (transaction) => {
+        for (const preset of presets) {
+          transaction.objectStore('presets').add(preset);
+        }
+        for (const resource of resources) {
+          transaction.objectStore('resources').put(resource, resource.id);
+        }
+      });
+    },
     /** Deletes a preset and the images no other preset uses. */
     deletePreset(id: string) {
       void write(['presets', 'resources'], async (transaction) => {

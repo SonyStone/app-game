@@ -1,0 +1,112 @@
+{
+  "id": "45b675e3-35e7-46ef-8102-e12757736477",
+  "name": "Grain nib",
+  "origin": {
+    "format": "photoshop.abr",
+    "presetKey": "example-grain-nib",
+    "importer": "paint-abr/1",
+    "mappings": [
+      {
+        "field": "sizeDynamics.control",
+        "value": 2,
+        "target": "/dynamics/0",
+        "outcome": "exact"
+      },
+      {
+        "field": "textureDepth",
+        "value": 60,
+        "target": "/texture/depth",
+        "outcome": "exact"
+      },
+      {
+        "field": "dualBrush.blendMode",
+        "value": "Mltp",
+        "target": "/dual/blend",
+        "outcome": "exact"
+      }
+    ]
+  },
+  "definition": {
+    "tool": "brush",
+    "size": 24,
+    "tips": {
+      "nib": {
+        "kind": "sampled",
+        "resource": "nib-mask"
+      },
+      "split": {
+        "kind": "sampled",
+        "resource": "split-mask"
+      }
+    },
+    "sequence": {
+      "order": "cycle",
+      "tips": [
+        "nib"
+      ]
+    },
+    "placement": {
+      "law": "photoshop-v1",
+      "spacing": 0.18
+    },
+    "dynamics": [
+      {
+        "target": "/size",
+        "input": "pressure",
+        "domain": [
+          0,
+          1
+        ],
+        "curve": [
+          [
+            0,
+            0
+          ],
+          [
+            1,
+            1
+          ]
+        ],
+        "op": "multiply"
+      }
+    ],
+    "texture": {
+      "resource": "grain",
+      "frame": "document",
+      "scale": 1,
+      "depth": 0.6,
+      "blend": "photoshop-height-v1"
+    },
+    "dual": {
+      "tip": "split",
+      "size": 12,
+      "spacing": 0.25,
+      "blend": "multiply"
+    },
+    "transfer": {
+      "flow": 0.7,
+      "opacity": 1
+    },
+    "mixing": "classic"
+  },
+  "resources": {
+    "nib-mask": {
+      "format": "r8",
+      "width": 2,
+      "height": 2,
+      "sha256": "1d33bd54c65afca5254e009694b2a950ce9b19f495865ae9548e6a5d859a9cbb"
+    },
+    "grain": {
+      "format": "r8",
+      "width": 2,
+      "height": 2,
+      "sha256": "84118da27b72bc44f8490d1a678f28890ab7dfb69c983a8212811f72f543ded9"
+    },
+    "split-mask": {
+      "format": "r8",
+      "width": 2,
+      "height": 2,
+      "sha256": "01f8b7b9f8e0a5c0a5527b0b43a8f7012cf5252f9c52dbfef9cf7b81c216af3a"
+    }
+  }
+}
