@@ -1,6 +1,6 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal, createUniqueId, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryPane, CategorySidebar, createCategoryChoice } from './BrushCategories';
@@ -38,7 +38,7 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  *
  * With `penStatus`, a group headed "Pen" ends the sidebar with one entry, "Pressure", whose page is the host's
  * `penPane`: the pen's pressure curve belongs to the device, not to the brush, so it sits apart from the brush's
- * categories.
+ * categories. With `startOnPen` the studio opens on that page.
  */
 export function BrushStudio(props: {
   brush: Brush;
@@ -59,6 +59,8 @@ export function BrushStudio(props: {
   penStatus?: string;
   /** The pen pressure page, made by the host: its curve and the ways to measure or reset it. */
   penPane?: JSX.Element;
+  /** Whether the studio opens on the pen's page rather than the first category; read once, when mounted. */
+  startOnPen?: boolean;
   /** The stroke preview under the title, made by the caller, which owns the painting it needs. */
   preview?: JSX.Element;
   /** The area to draw on with the edited brush, such as a `DrawingPad`; it fills the pad's part of the studio. */
@@ -67,10 +69,10 @@ export function BrushStudio(props: {
   const changed = createMemo(() => brushSettingsDiffer(props.brush, props.baseline));
   const { categories, chosen, choose } = createCategoryChoice(props);
   /** Whether the pen's page is shown rather than the chosen category's. */
-  const [penShown, setPenShown] = createSignal(false);
+  const [penShown, setPenShown] = createSignal(untrack(() => !!props.startOnPen));
   const penTitleId = createUniqueId();
   /** Below 700 px wide, which part is shown: the category list, the chosen category's rows or the pad. */
-  const [view, setView] = createSignal<'list' | 'detail' | 'pad'>('list');
+  const [view, setView] = createSignal<'list' | 'detail' | 'pad'>(untrack(penShown) ? 'detail' : 'list');
   const [root, setRoot] = createSignal<HTMLElement>();
   createEffect(root, (element) => (element ? watchTapTargets(element) : undefined));
 

@@ -21,7 +21,7 @@ export const penPressureKind = 'value:pen-pressure-curve';
  * on the same free-point graph as the Pen pressure window (`PressureCurveEditor`). Every copy, on the board and in the
  * brush studio's Pen page, edits the one curve, so they always agree; edits apply at once to the next stroke. From
  * {@link pressureCurveMinimum} up it is the graph, from four rows with its name and two buttons above it: Measure
- * (the three calibration steps; in the brush studio they run on its page, elsewhere in the Pen pressure window) and
+ * (the three calibration steps, which run on the brush studio's Pen page, opening the studio there if needed) and
  * Reset (the straight line). Smaller, it is a small picture of the curve that opens the graph in a popup. A tap on a
  * point's value above the graph opens the keypad for it. While a pen presses the studio's pad or the graph, a dot
  * shows its raw pressure on the curve, over a histogram of the pressures drawn on the pad.

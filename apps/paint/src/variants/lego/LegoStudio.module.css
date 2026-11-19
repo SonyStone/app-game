@@ -1830,6 +1830,9 @@
   --studio-text: 13px;
   --studio-small: 11px;
   --studio-name: 18px;
+  /* The calibration steps line up with the curve's tile, past its grip. */
+  --studio-pen-indent: 36px;
+  --studio-pen-width: 560px;
 }
 
 /* A number setting in the studio: its grip, then its value part as a slider, one cell high. */
@@ -1956,6 +1959,7 @@
   --curve-reach: 28px;
   --curve-marker: 8px;
   --curve-marker-fill: #e5484d;
+  --curve-bar: color-mix(in srgb, var(--lego-accent) 24%, var(--lego-tile));
   --curve-text: 13px;
 
   grid-row: -2;

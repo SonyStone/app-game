@@ -118,6 +118,7 @@ export function createCatalogueFixture() {
       measured: () => [],
       save: setPenCurve,
       reset: () => setPenCurve(samplePenCurve),
+      open: () => {},
       measure: () => {}
     },
     presets: {

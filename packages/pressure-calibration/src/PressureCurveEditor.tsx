@@ -33,8 +33,9 @@ import styles from './PressureCalibration.module.css';
  * `--surface` (the graph and the points' fill), `--line` (the border), `--accent` (the pen dot and a focused point),
  * `--curve-point` (a point's radius, 6px), `--curve-point-fill` and `--curve-point-ink` (its fill and ring, the
  * surface and the ink), `--curve-reach` (how far from a point a press takes it, 22px; read at each press),
- * `--curve-marker` and `--curve-marker-fill` (the pen dot's radius, 7px, and color, the accent), `--curve-text` (the readout's size, 12px) and `--curve-readout` (`none`
- * hides the readout, as on a small graph).
+ * `--curve-marker` and `--curve-marker-fill` (the pen dot's radius, 7px, and color, the accent), `--curve-bar` (the
+ * histogram's bars, a faint ink), `--curve-text` (the readout's size, 12px) and `--curve-readout` (`none` hides the
+ * readout, as on a small graph).
  */
 export function PressureCurveEditor(props: {
   curve: PressureCurve;
@@ -46,8 +47,7 @@ export function PressureCurveEditor(props: {
   onChange: (curve: PressureCurve) => void;
   /**
    * Makes the shown point's two values taps that offer number entry, for a host with a keypad: called with the value
-   * and the element showing it, to anchor the entry to. With it, the readout shows values only, without the hint
-   * that tells how points are added or removed.
+   * and the element showing it, to anchor the entry to.
    */
   onEntry?: (entry: PointEntry, anchor: Element) => void;
   /** Added to the graph's own class, for a host's size. */
@@ -100,12 +100,8 @@ export function PressureCurveEditor(props: {
 
     const index = active() ?? -1;
     const point = points()[index];
-    if (!point) {
-      return { kind: 'hint', text: props.onEntry ? '' : 'Drag a point; tap the curve to add one' };
-    }
-
-    if (drag()?.removing) {
-      return { kind: 'hint', text: props.onEntry ? '' : 'Let go to remove the point' };
+    if (!point || drag()?.removing) {
+      return { kind: 'none' };
     }
 
     return { kind: 'point', index, pen: point.x, brush: point.y };
@@ -118,11 +114,7 @@ export function PressureCurveEditor(props: {
   /** The readout as plain text, when it shows no point. */
   const readoutText = () => {
     const shown = readout();
-    return shown.kind === 'hint'
-      ? shown.text
-      : shown.kind === 'pen'
-        ? `Pen ${percent(shown.pen)}% → brush ${percent(shown.brush)}%`
-        : '';
+    return shown.kind === 'pen' ? `Pen ${percent(shown.pen)}% → brush ${percent(shown.brush)}%` : '';
   };
   const change = (next: readonly PressurePoint[]) => props.onChange(normalizePressureCurve({ points: next }));
   /** Moves point `index` to raw `to`, kept between its neighbours and with the output never falling. */
@@ -423,7 +415,7 @@ export type PointEntry = {
 
 /** What the readout above the graph shows. */
 type Readout =
-  | { kind: 'hint'; text: string }
+  | { kind: 'none' }
   | { kind: 'pen'; pen: number; brush: number }
   | { kind: 'point'; index: number; pen: number; brush: number };
 

@@ -9,10 +9,11 @@ import { studioBrushRecipe } from '../engine/studioBrushes';
 import styles from './PressureCalibrationWindow.module.css';
 
 /**
- * Paint's pen pressure calibration (`PressureCalibration`) as a floating window over any variant. It does not block
- * the editor: brush settings, presets and tools stay usable, and its test canvas follows the current brush, drawn by Studio's own recipe. A preset's images are read before the
- * canvas switches to it, so the canvas keeps the previous brush meanwhile; if they cannot be read, it says so and
- * keeps the brush it has. Saving, resetting or cancelling closes it.
+ * Paint's pen pressure calibration (`PressureCalibration`) as a floating window over any variant but LEGO, whose
+ * brush studio has the steps on its Pen page. It does not block the editor: brush settings, presets and tools stay
+ * usable, and its test canvas follows the current brush, drawn by Studio's own recipe. A preset's images are read
+ * before the canvas switches to it, so the canvas keeps the previous brush meanwhile; if they cannot be read, the
+ * error shows under the canvas and it keeps the brush it has. Saving, resetting or cancelling closes it.
  */
 export function PressureCalibrationWindow(props: {
   position: { x: number; y: number };
@@ -74,7 +75,14 @@ export function PressureCalibrationWindow(props: {
       onClose={props.onClose}
       class={styles.window}
     >
-      <Show when={preview()} fallback={<p class={styles.loading}>{failure() ?? 'Reading the brush…'}</p>}>
+      <Show
+        when={preview()}
+        fallback={
+          <p class={styles.loading} aria-busy="true">
+            {failure()}
+          </p>
+        }
+      >
         {(current) => (
           <PressureCalibration
             saved={props.calibration.calibration()?.curve}
@@ -88,11 +96,7 @@ export function PressureCalibrationWindow(props: {
             }}
             onCancel={() => props.onClose()}
             preview={current()}
-            note={
-              failure()
-                ? `The chosen brush could not be read (${failure()}); the canvas keeps the previous one.`
-                : 'The canvas draws with the current brush and follows its settings.'
-            }
+            note={failure()}
           />
         )}
       </Show>
