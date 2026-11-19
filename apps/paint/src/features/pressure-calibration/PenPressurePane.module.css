@@ -1,0 +1,38 @@
+/* The pen's curve page in the brush editor's colors: the graph across the column, two buttons under it. */
+.pane {
+  display: grid;
+  gap: 10px;
+  max-width: 560px;
+  --ink: var(--ink-color);
+  --surface: var(--raised, var(--surface-color));
+  --line: var(--line-color);
+  --accent: var(--accent-color);
+  --curve-point: 8px;
+  --curve-reach: 26px;
+}
+
+.graph {
+  width: 100%;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+
+  button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: var(--target, 40px);
+    padding: 0 14px;
+    border: 1px solid var(--line-color);
+    border-radius: 8px;
+    background: var(--surface-color);
+    color: var(--ink-color);
+  }
+
+  button:disabled {
+    opacity: 0.5;
+  }
+}

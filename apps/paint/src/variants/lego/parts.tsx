@@ -6,12 +6,15 @@ import { colorParts } from './parts/colors';
 import type { PartDefinition } from './parts/definition';
 import { layerParts } from './parts/layers';
 import { presetPart } from './parts/presets';
-import { pressureCurvePart } from './parts/pressureCurve';
+import { penPressureKind, pressureCurvePart } from './parts/pressureCurve';
 import { brushValueParts, valueParts } from './parts/values';
 
-/** The box catalogue. Studio-only schema definitions resolve separately; all bindings remain inert until mounted. */
+/**
+ * The box catalogue. Studio-only schema definitions resolve separately; all bindings remain inert until mounted. The
+ * pen's pressure curve follows Pressure calibration, the action that opens the same curve's window.
+ */
 export const partDefinitions: readonly PartDefinition[] = [
-  ...actionParts,
+  ...actionParts.flatMap((part) => (part.kind === 'action:pressure' ? [part, pressureCurvePart] : [part])),
   ...colorParts,
   ...valueParts,
   ...layerParts,
@@ -32,16 +35,18 @@ export function partDefinition(kind: string): PartDefinition | undefined {
   );
 }
 
-/** Studio-only parts: a part per brush number setting and the pressure curve, which enter the board from the studio. */
-const brushParts: readonly PartDefinition[] = [...brushValueParts, pressureCurvePart];
+/** Studio-only parts: a part per brush number setting, which enter the board from the studio. */
+const brushParts: readonly PartDefinition[] = brushValueParts;
 
 /**
  * Kinds of parts the brush studio once offered, by the kind that replaced them. The stabilizer's level and Leonardo's
- * stabilization became the one Smoothing level; a stored part keeps its kind and shows Smoothing.
+ * stabilization became the one Smoothing level; a stored part keeps its kind and shows Smoothing. The brush's
+ * three-handle pressure curve became the pen's own curve (2026-11-19).
  */
 const replacedKinds: Readonly<Record<string, string>> = {
   'value:brush:stabilizer-level': 'value:brush:smoothing',
-  'value:brush:stabilization': 'value:brush:smoothing'
+  'value:brush:stabilization': 'value:brush:smoothing',
+  'value:brush:pressure-curve': penPressureKind
 };
 
 /** The kind a stored part's `kind` is now: the one that replaced it, or itself. */

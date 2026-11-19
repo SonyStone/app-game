@@ -1504,9 +1504,7 @@
  * quiet, with no track, fill or thumb. Clearly off, without the murk of a faded, greyed control.
  */
 .part:has(.valueState[data-inactive]),
-.studioTile:has(.valueState[data-inactive]),
-.part:has(.curvePart[data-inactive]),
-.studioTile:has(.curvePart[data-inactive]) {
+.studioTile:has(.valueState[data-inactive]) {
   background: transparent;
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.2);
 }
@@ -1837,11 +1835,11 @@
   gap: 4px;
   height: 44px;
 
-  /* The pressure curve: a graph about as tall as it is wide, its grip at the top. */
+  /* The pen's pressure curve, the Pen page's one part: a large graph, its grip at the top. */
   &[data-tall] {
-    grid-template-columns: 32px minmax(0, 420px);
+    grid-template-columns: 32px minmax(0, 560px);
     align-items: start;
-    height: 340px;
+    height: min(440px, 56cqh);
 
     .studioGrip {
       height: 100%;
@@ -1897,9 +1895,8 @@
 }
 
 /*
- * The pressure curve as a part (`parts/pressureCurve`): its name, then the graph in the tile's colors, the handles and
- * their chips in the accent as a slider's fill is; or, small, a picture of the curve. Unlit, as a value is, while the
- * curve does not apply.
+ * The pen's pressure curve as a part (`parts/pressureCurve`): from four rows its name and two square buttons, then
+ * the graph on the tile, its points in the accent and as large as a pen needs; or, small, a picture of the curve.
  */
 .curvePart {
   display: grid;
@@ -1907,38 +1904,68 @@
   min-width: 0;
   min-height: 0;
   height: 100%;
+}
 
-  &[data-inactive] {
-    color: rgb(255 255 255 / 0.5);
-  }
+.curveHead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 0 10px;
 }
 
 .curveCaption {
-  padding: 8px 10px 0;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.curveEditor {
-  --curve-ground: rgb(0 0 0 / 0.04);
-  --curve-line: rgb(0 0 0 / 0.16);
-  --curve-ink: var(--lego-ink);
-  --curve-handle: var(--lego-accent);
-  --curve-handle-ink: #ffffff;
-  --curve-pen: #e5484d;
+.curveButton {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(0 0 0 / 0.06);
+  color: var(--lego-ink);
+  touch-action: manipulation;
+
+  &:disabled {
+    opacity: 0.35;
+  }
+}
+
+.curveEditor.curveEditor {
+  --ink: var(--lego-ink);
+  --muted: var(--lego-quiet);
+  --surface: var(--lego-tile);
+  --accent: var(--lego-accent);
+  --line: transparent;
+  --curve-point: 9px;
+  --curve-point-fill: var(--lego-accent);
+  --curve-point-ink: #ffffff;
+  --curve-reach: 28px;
+  --curve-marker: 8px;
+  --curve-marker-fill: #e5484d;
+  --curve-text: 13px;
 
   grid-row: -2;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 
-  [data-inactive] & {
-    --curve-ground: transparent;
-    --curve-line: rgb(255 255 255 / 0.2);
-    --curve-ink: rgb(255 255 255 / 0.5);
-    --curve-handle: rgb(255 255 255 / 0.3);
-    --curve-handle-ink: rgb(255 255 255 / 0.6);
-
-    opacity: 1;
+  /* Below four rows the graph has no room above it for a point's values. */
+  .curvePart:not(:has(.curveHead)) & {
+    --curve-readout: none;
   }
 }
 

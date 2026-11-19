@@ -1,16 +1,10 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, createUniqueId, For, Show, untrack } from 'solid-js';
-import { SettingsList } from '../../shared/ui/SettingsList';
+import { SettingsList, type SettingsListItem } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
-import {
-  brushCategories,
-  type BrushCategory,
-  type BrushSetting,
-  type CurveSetting,
-  type NumberSetting
-} from './schema';
+import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
 import { SettingRow } from './SettingRow';
 import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
@@ -71,17 +65,26 @@ export function CategoryList(props: {
 /**
  * The categories as a Settings-style sidebar (`SettingsList`), as the brush studio shows them: one line per category
  * with its icon, name and status, under the headings of their groups. `onChoose` receives the pressed category.
+ * `extra` adds items after the categories, under groups of their own, for pages that are not the brush's, such as
+ * the pen's; while one of them is `selected`, no category is marked.
  */
 export function CategorySidebar(props: {
   categories: readonly BrushCategory[];
   chosen: BrushCategory;
   brush: Brush;
   onChoose: (category: BrushCategory) => void;
+  extra?: {
+    items: readonly SettingsListItem[];
+    groups: readonly { id: string; label: string }[];
+    /** The extra item shown now, if any. */
+    selected?: string;
+    onSelect: (id: string) => void;
+  };
   /** Added to the list's own class, for a presentation's layout and colors. */
   class?: string;
 }) {
-  const items = createMemo(() =>
-    groups.flatMap((group) =>
+  const items = createMemo(() => [
+    ...groups.flatMap((group) =>
       props.categories
         .filter((category) => category.group === group.id)
         .map((category) => ({
@@ -91,20 +94,23 @@ export function CategorySidebar(props: {
           trailing: category.status(props.brush),
           group: category.group
         }))
-    )
-  );
+    ),
+    ...(props.extra?.items ?? [])
+  ]);
 
   return (
     <SettingsList
       class={props.class}
       label="Brush setting categories"
       items={items()}
-      groups={groups}
-      selected={props.chosen.id}
+      groups={[...groups, ...(props.extra?.groups ?? [])]}
+      selected={props.extra?.selected ?? props.chosen.id}
       onSelect={(id) => {
         const category = props.categories.find((candidate) => candidate.id === id);
         if (category) {
           props.onChoose(category);
+        } else {
+          props.extra?.onSelect(id);
         }
       }}
     />
@@ -172,7 +178,6 @@ const categoryIcons: Record<string, SketchIconName> = {
   brushPose: 'tilt',
   'stroke-correction': 'lasso',
   smoothing: 'lasso',
-  'pressure-curve': 'pressure',
   bristle: 'bristles',
   erodible: 'pencil'
 };
@@ -185,12 +190,12 @@ const categoryIcons: Record<string, SketchIconName> = {
 export function CategoryPane(props: {
   category: BrushCategory;
   /**
-   * The host's row for a number or curve setting, in place of the editor's own slider or graph, such as a control the
+   * The host's row for a number setting, in place of the editor's own slider, such as a control the
    * host uses elsewhere for the same setting; `undefined` keeps the editor's row. Called once per row as it is made,
    * under the row's owner, with the setting and the category it is shown in. The host's row edits the setting itself:
    * the editor sends no patch for it.
    */
-  hostRow?: (setting: NumberSetting | CurveSetting, category: BrushCategory) => JSX.Element | undefined;
+  hostRow?: (setting: NumberSetting, category: BrushCategory) => JSX.Element | undefined;
   brush: Brush;
   onChange: (patch: Partial<Brush>) => void;
   /** Called by the way back to the category list. */
@@ -318,7 +323,7 @@ function Section(props: {
   );
 }
 
-/** A setting's row: the host's for a number or curve setting when it has one, otherwise the editor's own `SettingRow`. */
+/** A setting's row: the host's for a number setting when it has one, otherwise the editor's own `SettingRow`. */
 function Row(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
@@ -328,9 +333,7 @@ function Row(props: {
 }) {
   // A row is made once per setting, so neither its setting nor the host's row changes under it.
   const setting = untrack(() => props.setting);
-  const hosted = untrack(() =>
-    setting.kind === 'number' || setting.kind === 'curve' ? props.hostRow?.(setting, props.category) : undefined
-  );
+  const hosted = untrack(() => (setting.kind === 'number' ? props.hostRow?.(setting, props.category) : undefined));
 
   return hosted ?? <SettingRow setting={setting} brush={props.brush} onChange={props.onChange} />;
 }

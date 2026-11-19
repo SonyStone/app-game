@@ -1,3 +1,4 @@
+import type { PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { createMemo, createSignal } from 'solid-js';
 import { fourLayers, seededDocument } from '../../component-canvas/seededLayers';
 import { createBrushTools, maxBrushSize } from '../../features/brush';
@@ -12,6 +13,7 @@ import { runPartCommand } from './partCommand';
 
 /** One in-memory catalogue scope, shared by all specimens. Uses real brush tools; never reads or writes user storage. */
 export function createCatalogueFixture() {
+  const [penCurve, setPenCurve] = createSignal<PressureCurve>(samplePenCurve);
   const library = createBrushLibrary({});
   const presets: BrushPreset[] = Array.from({ length: 64 }, (_, index) => ({
     ...builtInPresets[index % builtInPresets.length]!,
@@ -109,6 +111,15 @@ export function createCatalogueFixture() {
     },
     quickShape: { enabled: createMemo(() => true), toggle: () => {} },
     windows: { isOpen: () => false, toggle: () => {} },
+    pen: {
+      curve: penCurve,
+      calibrated: () => true,
+      marker: () => undefined,
+      measured: () => [],
+      save: setPenCurve,
+      reset: () => setPenCurve(samplePenCurve),
+      measure: () => {}
+    },
     presets: {
       all: () => presets,
       resources: library.resources,
@@ -178,3 +189,13 @@ export const attachCataloguePreview: NonNullable<Parameters<typeof PreviewAttach
   pause() {},
   dispose() {}
 });
+
+/** A pen curve of four points, a light hand's: firmer low pressure, a soft top. */
+const samplePenCurve: PressureCurve = {
+  points: [
+    { x: 0.04, y: 0 },
+    { x: 0.3, y: 0.42 },
+    { x: 0.62, y: 0.8 },
+    { x: 0.92, y: 1 }
+  ]
+};

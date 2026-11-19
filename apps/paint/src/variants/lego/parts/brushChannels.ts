@@ -1,7 +1,7 @@
 import { curvePosition, curveValue } from '@app-game/abr-brush/sliderCurves';
 import { abrCategories } from '../../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../../features/brush-editor/brushSettingName';
-import { brushCategories, numberSettings } from '../../../features/brush-editor/schema';
+import { brushCategories, legacyPressureCategory, numberSettings } from '../../../features/brush-editor/schema';
 import type { LegoServices } from '../LegoServices';
 import { unitSuffix } from './ValueEntry';
 import type { ValueChannel } from './values';
@@ -15,10 +15,14 @@ export function brushSettingKind(id: string) {
 }
 
 /**
- * Stable settings generate channels once; availability and bounds resolve against the live brush. A curve's three
- * numbers have a channel each, which its part edits through (see `parts/pressureCurve`).
+ * Stable settings generate channels once; availability and bounds resolve against the live brush. The brush's own
+ * pressure minimum, maximum and firmness (`legacyPressureCategory`) keep their channels for parts stored on boards
+ * before the studio stopped offering them.
  */
-export const brushChannels: readonly ValueChannel[] = [brushCategories, abrCategories].flatMap((categories, schema) =>
+export const brushChannels: readonly ValueChannel[] = [
+  [...brushCategories, legacyPressureCategory],
+  abrCategories
+].flatMap((categories, schema) =>
   categories.flatMap((category) =>
     numberSettings(category.settings).flatMap((setting): ValueChannel[] => {
       if (setting.id === 'size' || setting.id === 'opacity') {

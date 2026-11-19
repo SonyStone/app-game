@@ -1,6 +1,6 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal, For } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryPane, CategorySidebar, createCategoryChoice } from './BrushCategories';
@@ -28,8 +28,13 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
  *
  * Cancel and Done both leave the studio through `onDone`. Cancel first sends `baseline`, discarding every change made
- * since it, as a sheet's Cancel does; the side panel's "Cancel changes" instead only reverts and stays open.
- * Fills its parent, which the caller places over the screen.
+ * since it, as a sheet's Cancel does, and calls `onCancel` for what the host restores itself, such as the pen's curve;
+ * the side panel's "Cancel changes" instead only reverts and stays open. Fills its parent, which the caller places
+ * over the screen.
+ *
+ * With `penStatus`, a group headed "Pen" ends the sidebar with one entry, "Pressure", whose page is the host's
+ * `penPane`: the pen's pressure curve belongs to the device, not to the brush, so it sits apart from the brush's
+ * categories.
  */
 export function BrushStudio(props: {
   brush: Brush;
@@ -40,10 +45,16 @@ export function BrushStudio(props: {
   /** The name of the edited brush, shown as the studio's title; "Brush studio" without it. */
   name?: string;
   onChange: (patch: Partial<Brush>) => void;
-  /** The host's rows for number and curve settings; see `CategoryPane`. */
+  /** The host's rows for number settings; see `CategoryPane`. */
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
-  /** Leaves the studio: called by Done, and by Cancel once it has sent the baseline. */
+  /** Leaves the studio: called by Done, and by Cancel once it has sent the baseline and called `onCancel`. */
   onDone: () => void;
+  /** Called by Cancel before `onDone`, for the host to restore what it changed outside the brush. */
+  onCancel?: () => void;
+  /** The pen pressure entry's status in the sidebar, such as "Off"; the Pen group shows only with it. */
+  penStatus?: string;
+  /** The pen pressure page, made by the host: its curve and the ways to measure or reset it. */
+  penPane?: JSX.Element;
   /** The stroke preview under the title, made by the caller, which owns the painting it needs. */
   preview?: JSX.Element;
   /** The area to draw on with the edited brush, such as a `DrawingPad`; it fills the pad's part of the studio. */
@@ -51,6 +62,9 @@ export function BrushStudio(props: {
 }) {
   const changed = createMemo(() => brushSettingsDiffer(props.brush, props.baseline));
   const { categories, chosen, choose } = createCategoryChoice(props);
+  /** Whether the pen's page is shown rather than the chosen category's. */
+  const [penShown, setPenShown] = createSignal(false);
+  const penTitleId = createUniqueId();
   /** Below 700 px wide, which part is shown: the category list, the chosen category's rows or the pad. */
   const [view, setView] = createSignal<'list' | 'detail' | 'pad'>('list');
   const { sidebar, chooseSidebar } = createSidebarStyle();
@@ -73,17 +87,49 @@ export function BrushStudio(props: {
               brush={props.brush}
               onChoose={(category) => {
                 choose(category);
+                setPenShown(false);
                 setView('detail');
               }}
+              extra={
+                props.penStatus === undefined
+                  ? undefined
+                  : {
+                      items: [
+                        { id: penEntry, label: 'Pressure', icon: 'pressure', trailing: props.penStatus, group: 'pen' }
+                      ],
+                      groups: [{ id: 'pen', label: 'Pen' }],
+                      selected: penShown() ? penEntry : undefined,
+                      onSelect: () => {
+                        setPenShown(true);
+                        setView('detail');
+                      }
+                    }
+              }
             />
           </div>
-          <CategoryPane
-            category={chosen()}
-            hostRow={props.hostRow}
-            brush={props.brush}
-            onChange={props.onChange}
-            onBack={() => setView('list')}
-          />
+          <Show
+            when={penShown() && props.penStatus !== undefined}
+            fallback={
+              <CategoryPane
+                category={chosen()}
+                hostRow={props.hostRow}
+                brush={props.brush}
+                onChange={props.onChange}
+                onBack={() => setView('list')}
+              />
+            }
+          >
+            <section class={[styles.pane, styles.penPane]} aria-labelledby={penTitleId} data-pen-pane>
+              <button type="button" class={styles.back} onClick={() => setView('list')}>
+                <SketchIcon name="left" size={18} />
+                All categories
+              </button>
+              <h2 id={penTitleId} class={styles.title}>
+                Pen pressure
+              </h2>
+              {props.penPane}
+            </section>
+          </Show>
         </div>
         <div class={styles.studioPad} role="region" aria-label="Drawing pad">
           {props.pad}
@@ -120,6 +166,7 @@ export function BrushStudio(props: {
                 props.onChange(structuredClone(props.baseline));
               }
 
+              props.onCancel?.();
               props.onDone();
             }}
           >
@@ -133,6 +180,9 @@ export function BrushStudio(props: {
     </section>
   );
 }
+
+/** The sidebar entry of the pen's page, apart from the brush's categories. */
+const penEntry = 'pen-pressure';
 
 /**
  * TEMPORARY, until the user picks one of the two sidebar styles while trying the studio; then the other style, this

@@ -7,7 +7,7 @@ import { createRoot, flush } from 'solid-js';
 import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../features/brush-editor/brushSettingName';
-import { brushCategories, numberSettings } from '../../features/brush-editor/schema';
+import { brushCategories, legacyPressureCategory, numberSettings } from '../../features/brush-editor/schema';
 import { removePart, type Board } from './board';
 import { createBoard } from './createBoard';
 import { LegoServicesContext } from './LegoServices';
@@ -19,7 +19,7 @@ import { roundedValue } from './parts/values';
 import { createTestServices } from './testServices';
 
 it('generates unique names across both schemas, counting shared IDs once', () => {
-  const categories = [...brushCategories, ...abrCategories];
+  const categories = [...brushCategories, legacyPressureCategory, ...abrCategories];
   {
     const rows = [
       ...new Map(categories.flatMap((c) => numberSettings(c.settings).map((s) => [s.id, { c, s }] as const))).values()

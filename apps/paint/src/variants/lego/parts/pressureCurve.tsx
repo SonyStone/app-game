@@ -1,36 +1,37 @@
-import { createMemo, createSignal, Show } from 'solid-js';
-import {
-  PressureCurveEditor,
-  pressureCurvePath,
-  type CurveHandle
-} from '../../../features/brush-editor/PressureCurveEditor';
+import { pressureMapping, type PressureCurve } from '@app-game/paint-core/pressureCurve';
+import { PressureCurveEditor, type PointEntry } from '@app-game/pressure-calibration';
+import { createSignal, Show } from 'solid-js';
 import { pressHandlers } from '../../../shared/ui/pressHandlers';
+import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import type { Span } from '../board';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import type { LookSpec } from '../looks';
-import { brushChannels, brushSettingKind } from './brushChannels';
 import { definePart, type PartBinding } from './definition';
 import { NumberKeypad, ValueEntryCard } from './ValueEntry';
 
 /** The part's name, on the board and over its graph; declared before the part, which reads it as it is defined. */
-const curveLabel = 'Pressure curve';
+const curveLabel = 'Pen pressure';
+
+/** The kind of the pen pressure curve's part. */
+export const penPressureKind = 'value:pen-pressure-curve';
 
 /**
- * The brush's pressure curve as a part (`PressureCurveEditor` in the board's tiles), entering the board from the brush
- * studio, where its row is this part itself. From {@link pressureCurveMinimum} up it is the graph with its three
- * handles, its name above it from four rows; smaller, it is a small picture of the curve that opens the graph in a
- * popup. Each handle edits its number through that number's own channel (`brush:pressure-minimum` and the others),
- * as the number parts on the board do, so every copy of the curve and of its numbers shows the same values. A tap on a
- * handle's chip opens the keypad for that number. While the curve does not apply to the brush, it shows greyed and
- * takes no edits.
+ * The pen's pressure curve as a part: the device's calibration, which every brush receives pressure through, edited
+ * on the same free-point graph as the Pen pressure window (`PressureCurveEditor`). Every copy, on the board and in the
+ * brush studio's Pen page, edits the one curve, so they always agree; edits apply at once to the next stroke. From
+ * {@link pressureCurveMinimum} up it is the graph, from four rows with its name and two buttons above it: Measure
+ * (the three calibration steps; in the brush studio they run on its page, elsewhere in the Pen pressure window) and
+ * Reset (the straight line). Smaller, it is a small picture of the curve that opens the graph in a popup. A tap on a
+ * point's value above the graph opens the keypad for it. While a pen presses the studio's pad or the graph, a dot
+ * shows its raw pressure on the curve, over a histogram of the pressures drawn on the pad.
  */
 export const pressureCurvePart = definePart({
-  kind: brushSettingKind('pressure-curve'),
+  kind: penPressureKind,
   family: 'value',
-  section: 'Values',
-  studioOnly: true,
+  section: 'Tools',
   label: curveLabel,
+  icon: 'pressure',
   looks: {
     looks: [
       { id: 'icon', label: 'Picture', min: { columns: 1, rows: 1 } },
@@ -51,40 +52,29 @@ export const pressureCurvePart = definePart({
   }
 });
 
-/** The span a curve takes on the board when it is lifted from the studio: room for its handles and chips. */
+/** The span a curve takes on the board when it is lifted from the studio: room for its points and its buttons. */
 export const pressureCurveSpan: Span = { columns: 4, rows: 4 };
 
-/** The smallest span the graph shows at: three cells each way, where the pen can still tell its handles apart. */
+/** The smallest span the graph shows at: three cells each way, where the pen can still tell its points apart. */
 export function pressureCurveMinimum(): Span {
   return { columns: 3, rows: 3 };
 }
 
-/** The graph, or the small picture of the curve that opens it, and the keypad a chip opens. */
+/** The graph, or the small picture of the curve that opens it, and the keypad a point's value opens. */
 function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
-  const [entry, setEntry] = createSignal<{ handle: CurveHandle; anchor: Element }>();
+  const [entry, setEntry] = createSignal<{ entry: PointEntry; anchor: Element }>();
   const open = pressHandlers({
-    start: () => props.active,
     tap: (press) => props.onOpen(press.target)
   });
   /** The keypad's key handler, which it hands over as it is made; see `NumberKeypad`'s `keys`. */
   let keypadKeys: ((event: KeyboardEvent) => boolean) | undefined;
 
   return (
-    <div
-      class={styles.curvePart}
-      data-inactive={props.active ? undefined : ''}
-      aria-disabled={props.active ? undefined : 'true'}
-    >
+    <div class={styles.curvePart} data-calibrated={props.calibrated ? '' : undefined}>
       <Show
         when={props.look === 'curve'}
         fallback={
-          <div
-            class={styles.curvePicture}
-            role="button"
-            tabindex={props.active ? 0 : -1}
-            aria-label={props.label}
-            {...open}
-          >
+          <div class={styles.curvePicture} role="button" tabindex={0} aria-label={props.label} {...open}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               <path d={props.picture} />
             </svg>
@@ -92,40 +82,57 @@ function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
         }
       >
         <Show when={props.span.rows >= 4}>
-          <span class={styles.curveCaption}>{props.label}</span>
+          <div class={styles.curveHead}>
+            <span class={styles.curveCaption}>{props.label}</span>
+            <button
+              type="button"
+              class={styles.curveButton}
+              aria-label="Measure pen pressure"
+              title="Measure"
+              onClick={() => props.onMeasure()}
+            >
+              <SketchIcon name="pressure" size={20} />
+            </button>
+            <button
+              type="button"
+              class={styles.curveButton}
+              aria-label="Reset pen pressure"
+              title="Reset"
+              disabled={!props.calibrated}
+              onClick={() => props.onReset()}
+            >
+              <SketchIcon name="reset" size={20} />
+            </button>
+          </div>
         </Show>
         <PressureCurveEditor
           class={styles.curveEditor}
-          label={props.label}
-          minimum={props.minimum}
-          maximum={props.maximum}
-          firmness={props.firmness}
-          disabled={!props.active}
-          onStart={props.onStart}
-          onInput={props.onInput}
-          onCancel={props.onCancel}
-          onEntry={(handle, anchor) => setEntry({ handle, anchor })}
+          curve={props.curve}
+          measured={props.measured}
+          marker={props.marker}
+          onChange={props.onChange}
+          onEntry={(next, anchor) => setEntry({ entry: next, anchor })}
         />
       </Show>
       <Show when={entry()}>
-        {(open) => (
+        {(shown) => (
           <ValueEntryCard
-            anchor={open().anchor}
-            label={props.number(open().handle).label}
+            anchor={shown().anchor}
+            label={shown().entry.label}
             onCancel={() => setEntry(undefined)}
             onKey={(event) => keypadKeys?.(event) ?? false}
           >
             <NumberKeypad
-              label={props.number(open().handle).label}
-              value={props.number(open().handle).value}
-              min={props.number(open().handle).min}
-              max={props.number(open().handle).max}
-              step={props.number(open().handle).step}
+              label={shown().entry.label}
+              value={shown().entry.value}
+              min={shown().entry.min}
+              max={shown().entry.max}
+              step={1}
               unit="%"
               onCommit={(value) => {
-                const handle = open().handle;
+                const { set } = shown().entry;
                 setEntry(undefined);
-                props.onNumber(handle, value);
+                set(value);
               }}
               onCancel={() => setEntry(undefined)}
               keys={(handler) => (keypadKeys = handler)}
@@ -137,20 +144,9 @@ function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
   );
 }
 
-/**
- * The curve's observations and guarded edits: its three numbers' channels, read and written in percent as the number
- * parts do, the brush's stroke for the curve itself, and the values at a press's start, which a cancelled press
- * restores.
- */
+/** The pen's curve and its commands, guarded by the frame, and the popup the small picture opens. */
 function curveNeeds(services: LegoServices, frame: PartBinding) {
-  const stroke = createMemo(() => services.brushEditor.channelBrush().stroke);
-  const active = createMemo(() => handles.every((handle) => channelOf(handle).active?.(services) ?? true));
-  let start: Record<CurveHandle, number> | undefined;
-  const write = (handle: CurveHandle, percent: number) => {
-    if (active()) {
-      channelOf(handle).write(services, percent, services.color.hsv());
-    }
-  };
+  const { pen } = services;
 
   return {
     label: curveLabel,
@@ -160,59 +156,37 @@ function curveNeeds(services: LegoServices, frame: PartBinding) {
     get look() {
       return frame.look;
     },
-    get active() {
-      return active();
+    get curve() {
+      return pen.curve();
     },
-    get minimum() {
-      return stroke().minimum;
+    get calibrated() {
+      return pen.calibrated();
     },
-    get maximum() {
-      return stroke().maximum;
+    get measured() {
+      return pen.measured();
     },
-    get firmness() {
-      return stroke().firmness;
+    get marker() {
+      return pen.marker();
     },
-    /** The small picture's path, the graph's own curve. */
+    /** The small picture's path. */
     get picture() {
-      return pressureCurvePath(stroke());
+      return curvePicture(pen.curve());
     },
-    /** `handle`'s number as the keypad offers it, in percent within its live bounds. */
-    number: (handle: CurveHandle) => {
-      const channel = channelOf(handle);
-      return {
-        label: channel.label,
-        value: Math.round(channel.read(services) / (channel.step ?? 1)) * (channel.step ?? 1),
-        min: channel.minimum?.(services) ?? channel.min,
-        max: channel.max(services),
-        step: channel.step
-      };
-    },
-    onStart: frame.command(() => {
-      const { minimum, maximum, firmness } = stroke();
-      start = { minimum, maximum, firmness };
-    }),
-    onInput: frame.command((handle: CurveHandle, value: number) => write(handle, value * 100)),
-    onNumber: frame.command((handle: CurveHandle, percent: number) => write(handle, percent)),
-    onCancel: frame.command(() => {
-      if (start) {
-        // The bounds of each end follow the other, so the ends go back in the order that keeps them apart.
-        const order: CurveHandle[] =
-          start.minimum < stroke().minimum ? ['minimum', 'maximum', 'firmness'] : ['maximum', 'minimum', 'firmness'];
-        order.forEach((handle) => write(handle, start![handle] * 100));
-      }
-
-      start = undefined;
-    }),
+    onChange: frame.command((curve: PressureCurve) => pen.save(curve)),
+    onMeasure: frame.command(() => pen.measure()),
+    onReset: frame.command(() => pen.reset()),
     onOpen: (anchor: Element) => frame.onPopup(anchor, { kind: 'part', partKind: frame.kind })
   };
 }
 
-const handles: readonly CurveHandle[] = ['minimum', 'maximum', 'firmness'];
-
-/**
- * The channel of the curve's number `handle`. Looked up when used: the channels and the parts import each other, so
- * the channels are not there yet while this module loads.
- */
-function channelOf(handle: CurveHandle) {
-  return brushChannels.find((channel) => channel.id === `brush:pressure-${handle}`)!;
+/** `curve` as an SVG path in a 100 × 100 box, up being 0, drawn with `preserveAspectRatio="none"` to fill any box. */
+export function curvePicture(curve: PressureCurve) {
+  const map = pressureMapping(curve);
+  return Array.from({ length: pictureSamples + 1 }, (_, step) => {
+    const raw = step / pictureSamples;
+    return `${step ? 'L' : 'M'}${(raw * 100).toFixed(2)} ${(100 - map(raw) * 100).toFixed(2)}`;
+  }).join(' ');
 }
+
+/** Points the small picture is drawn through. */
+const pictureSamples = 48;

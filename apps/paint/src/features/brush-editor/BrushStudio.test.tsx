@@ -108,7 +108,7 @@ it('switches between the categories, a category and the pad in the narrow layout
   expect(frame.getAttribute('data-view')).toBe('list');
 });
 
-it("puts the host's rows in place of number and curve rows, and keeps its own where the host gives none", () => {
+it("puts the host's rows in place of number rows, and keeps its own where the host gives none", () => {
   const asked: string[] = [];
   const studio = mount(
     'studio',
@@ -131,11 +131,51 @@ it("puts the host's rows in place of number and curve rows, and keeps its own wh
     null
   ]);
   expect(rows.lastElementChild!.getAttribute('role')).toBe('radiogroup');
-  studio.click(studio.category('Pressure curve'));
-  expect(asked.at(-1)).toBe('pressure-curve:pressure-curve');
-  expect(studio.root().querySelector('[data-hosted="pressure-curve"]')).not.toBeNull();
+  studio.click(studio.category('Stroke correction'));
+  expect(asked.at(-1)).toBe('stroke-correction:smoothing');
+  expect(studio.root().querySelector('[data-hosted="smoothing"]')).not.toBeNull();
   // The host's rows edit the brush themselves; the studio sends no patch for them.
   expect(studio.changes).toEqual([]);
+});
+
+it("offers the brush no pressure curve of its own, a Paint brush's or an ABR preset's", () => {
+  const source = { id: 'test', name: 'Test', preset: { tip: { kind: 'computed', diameter: 30 } }, resources: [] };
+  const values = brushToFormValues(source as unknown as BrushAsset);
+  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
+  for (const [brush, categories] of [
+    [defaultBrush(), undefined],
+    [abr, abrCategories]
+  ] as const) {
+    const studio = mount('studio', brush, categories);
+    expect(studio.categories().join()).not.toMatch(/pressure curve/i);
+    expect(studio.root().querySelector('[data-pen-pane]')).toBeNull();
+  }
+});
+
+it("ends the sidebar with the pen's page, apart from the brush, and has Cancel restore it before leaving", () => {
+  const steps: string[] = [];
+  const studio = mount('studio', defaultBrush(), undefined, () => steps.push('done'), undefined, undefined, {
+    status: '4 points',
+    onCancel: () => steps.push('cancel')
+  });
+  const headings = [...studio.root().querySelectorAll('nav h3')].map((heading) => heading.textContent);
+  expect(headings.at(-1)).toBe('Pen');
+  expect(studio.categories().at(-1)).toBe('Pressure');
+  expect(studio.category('Pressure').textContent).toContain('4 points');
+
+  studio.click(studio.category('Pressure'));
+  const pane = studio.root().querySelector('[data-pen-pane]')!;
+  expect(pane.querySelector('h2')!.textContent).toBe('Pen pressure');
+  expect(pane.querySelector('[data-pen-host]')).not.toBeNull();
+  expect(studio.category('Pressure').getAttribute('aria-current')).toBe('page');
+  expect(studio.category('Painting').getAttribute('aria-current')).toBeNull();
+
+  studio.click(studio.category('Painting'));
+  expect(studio.root().querySelector('[data-pen-pane]')).toBeNull();
+  studio.click(studio.button('Done'));
+  expect(steps).toEqual(['done']);
+  studio.click(studio.button('Cancel'));
+  expect(steps).toEqual(['done', 'cancel', 'done']);
 });
 
 /**
@@ -148,7 +188,8 @@ function mount(
   categories?: readonly BrushCategory[],
   onDone: () => void = () => {},
   name?: string,
-  hostRow?: Parameters<typeof BrushStudio>[0]['hostRow']
+  hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'],
+  pen?: { status: string; onCancel: () => void }
 ) {
   const [brush, setBrush] = createSignal(initial);
   const baseline = snapshotBrushSettings(initial);
@@ -179,6 +220,9 @@ function mount(
             hostRow={hostRow}
             onChange={onChange}
             onDone={onDone}
+            onCancel={pen?.onCancel}
+            penStatus={pen?.status}
+            penPane={<div data-pen-host />}
             pad={<div data-pad />}
           />
         ),

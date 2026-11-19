@@ -5,7 +5,7 @@ import { featureFields, settingGroups, type SettingField } from '@app-game/abr-b
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { Brush } from '@app-game/paint-core/brush';
 import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { brushCategories, catchUpSetting, smoothingSetting, type BrushCategory, type BrushSetting } from './schema';
+import { catchUpSetting, smoothingSetting, type BrushCategory, type BrushSetting } from './schema';
 
 // The tables below are declared before the categories, which read them while they are built.
 
@@ -234,7 +234,7 @@ const units: Record<string, string> = { '#Prc': '%', '#Ang': '°', '#Pxl': 'px' 
  * The editor's categories for an ABR (Photoshop) brush, generated from the shared descriptor bindings in
  * `settingGroups`. Rows are grouped and labelled by {@link layouts}; a row is greyed while its value has no effect,
  * as the engine reads it (see {@link rules}). Smoothing joins Paint's Smoothing level with the preset's own smoothing,
- * the only two that change an ABR stroke, and Paint's pressure curve follows.
+ * the only two that change an ABR stroke.
  */
 export const abrCategories: readonly BrushCategory[] = [
   category('tool', 'Painting', 'basics'),
@@ -261,8 +261,7 @@ export const abrCategories: readonly BrushCategory[] = [
   category('brushPose', 'Brush pose', 'advanced', 'useBrushPose'),
   smoothingCategory(),
   category('bristle', 'Bristle', 'advanced'),
-  category('erodible', 'Erodible', 'advanced'),
-  brushCategories.find((category) => category.id === 'pressure-curve')!
+  category('erodible', 'Erodible', 'advanced')
 ];
 
 /** Keeps texture availability tied to the source resource, even while the runtime texture is off. */

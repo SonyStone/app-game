@@ -10,12 +10,14 @@ import { runPartCommand } from './partCommand';
  * Creates the LEGO capability facade once under the studio owner. Scalar memos stop unrelated brush changes at
  * this boundary. Bindings select props from this facade; looks and controlled components never receive it.
  * `openBrushStudio` is what the "Brush settings" part runs; `brushSettingsNeeded` tells when the brush settings
- * editor must prepare ABR settings, as while the studio is open or an ABR setting is pinned.
+ * editor must prepare ABR settings, as while the studio is open or an ABR setting is pinned. `measurePen` starts the
+ * pen's calibration steps, by default in the session's Pen pressure window.
  */
 export function createLegoServices(
   session: PaintSession,
   openBrushStudio: () => void = () => {},
-  brushSettingsNeeded: () => boolean = () => false
+  brushSettingsNeeded: () => boolean = () => false,
+  measurePen: () => void = () => session.windows.open('pressure')
 ) {
   const color = createMemo(() => session.brush().color);
   const background = createMemo(() => session.brush().backgroundColor ?? '#ffffff');
@@ -89,6 +91,20 @@ export function createLegoServices(
       redo: session.redo
     },
     windows,
+    /**
+     * The pen's pressure curve, the device's calibration that every brush receives pressure through: the curve
+     * (straight while uncalibrated), the raw pressure of the pen on the brush studio's pad and the pressures drawn
+     * there (`session.penPressure`), and its commands. Saving the straight line uncalibrates the pen.
+     */
+    pen: {
+      curve: session.pressureCalibration.curve,
+      calibrated: () => !!session.pressureCalibration.calibration(),
+      marker: session.penPressure.marker,
+      measured: session.penPressure.measured,
+      save: session.pressureCalibration.save,
+      reset: session.pressureCalibration.reset,
+      measure: measurePen
+    },
     symmetry: {
       mode: symmetryMode,
       /** Document commands are accepted, including completion of startup preparation. */

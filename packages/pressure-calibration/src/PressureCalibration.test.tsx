@@ -2,10 +2,11 @@
 import { defaultBrush } from '@app-game/paint-core/brush';
 import type { PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { render, type JSX } from '@solidjs/web';
-import { createRoot, flush } from 'solid-js';
+import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPressureCalibration } from './createPressureCalibration';
 import { PressureCalibration } from './PressureCalibration';
+import { PressureCurveEditor, type PointEntry } from './PressureCurveEditor';
 
 /** Props of every mounted test canvas; read through them, as their getters follow the curve. */
 const preview = vi.hoisted(() => ({
@@ -264,6 +265,71 @@ describe('PressureCalibration', () => {
     expect(document.querySelector('circle[class*="marker"]')).toBeNull();
   });
 
+  it('hands the fitted curve and its pressures to onMeasured after the last step, without a result', () => {
+    const onMeasured = vi.fn();
+    mount(() => (
+      <PressureCalibration
+        saved={undefined}
+        onSave={() => undefined}
+        onReset={() => undefined}
+        onMeasured={onMeasured}
+      />
+    ));
+    for (const [count, pressure] of [
+      [5, (t: number) => 0.4 + 0.3 * t],
+      [2, (t: number) => 0.75 + 0.1 * t],
+      [2, (t: number) => 0.08 + 0.04 * t]
+    ] as const) {
+      for (let index = 0; index < count; index++) {
+        stroke('pen', pressure);
+      }
+      flush();
+      button(/^(Next|Show the curve)$/).click();
+      flush();
+    }
+    expect(onMeasured).toHaveBeenCalledOnce();
+    const [curve, measured] = onMeasured.mock.calls[0]! as [PressureCurve, number[]];
+    expect(curve.points).toHaveLength(5);
+    expect(measured.length).toBeGreaterThan(1000);
+    expect(document.querySelector('svg[aria-label="Pressure curve"]')).toBeNull();
+  });
+
+  it('shows the pen pressing the graph as a dot, and offers number entry for a point when asked', () => {
+    const changes: PressureCurve[] = [];
+    const entries: PointEntry[] = [];
+    const [curve, setCurve] = createSignal(points([0, 0], [0.5, 0.8], [1, 1]));
+    mount(() => (
+      <PressureCurveEditor
+        curve={curve()}
+        onChange={(next) => {
+          changes.push(next);
+          setCurve(next);
+        }}
+        onEntry={(entry) => entries.push(entry)}
+      />
+    ));
+    // With number entry there is no hint, only values.
+    expect(document.querySelector('text')!.textContent).toBe('');
+    const graph = chart();
+    graph.pointer('pointerdown', 0.5, 0.8, 0, 0.3);
+    const marker = document.querySelector('circle[class*="marker"]')!;
+    expect(Number(marker.getAttribute('cx'))).toBeCloseTo(28 + 0.3 * 424);
+    graph.pointer('pointerup', 0.5, 0.8, 0, 0);
+    expect(document.querySelector('circle[class*="marker"]')).toBeNull();
+
+    const values = [...document.querySelectorAll<SVGElement>('[data-entry]')];
+    expect(values.map((value) => value.getAttribute('aria-label'))).toEqual(['Pen pressure 50%', 'Brush pressure 80%']);
+    values[0]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(entries[0]).toMatchObject({ axis: 'pen', label: 'Pen', value: 50, min: 2, max: 98 });
+    entries[0]!.set(30);
+    flush();
+    expect(curve().points[1]).toEqual({ x: 0.3, y: 0.8 });
+    values[1]!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(entries[1]).toMatchObject({ axis: 'brush', value: 80, min: 0, max: 100 });
+    // A press on a value opens entry and moves nothing.
+    expect(changes).toHaveLength(1);
+  });
+
   it('starts measuring again or resets a saved curve', () => {
     const onReset = vi.fn();
     mount(() => (
@@ -308,7 +374,7 @@ function chart() {
   svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: 480, height: 260 }) as DOMRect;
   svg.setPointerCapture = () => undefined;
   return {
-    pointer(type: string, raw: number, value: number, timeStamp = 0) {
+    pointer(type: string, raw: number, value: number, timeStamp = 0, pressure = 0.5) {
       const event = new MouseEvent(type, {
         clientX: 28 + raw * 424,
         clientY: 232 - value * 204,
@@ -318,7 +384,8 @@ function chart() {
       Object.defineProperties(event, {
         pointerId: { value: 3 },
         pointerType: { value: 'pen' },
-        timeStamp: { value: timeStamp }
+        timeStamp: { value: timeStamp },
+        pressure: { value: pressure }
       });
       svg.dispatchEvent(event);
       flush();

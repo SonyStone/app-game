@@ -15,6 +15,7 @@
     "@app-game/brush-preview": "workspace:*",
     "@app-game/paint-core": "workspace:*",
     "@solid-primitives/event-listener": "catalog:",
+    "@solid-primitives/resize-observer": "catalog:",
     "@solidjs/web": "catalog:",
     "solid-js": "catalog:"
   },

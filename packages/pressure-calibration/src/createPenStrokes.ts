@@ -7,9 +7,10 @@ import { createSignal, type Accessor } from 'solid-js';
  * fitting a pressure curve. Mouse and touch contacts are not collected; `otherPointer` names the type of the latest
  * one, so the caller can say that calibration needs a pen. `counted` is the number of samples `fitPressureCurve`
  * would count, updated when a stroke ends; `pressure` is the raw pressure of the pen touching a canvas now, for a
- * live marker, `undefined` between strokes. Listeners follow `target` and detach with the owner.
+ * live marker, `undefined` between strokes. `onStroke` receives each pen stroke as it ends, for a host that keeps
+ * them itself. Listeners follow `target` and detach with the owner.
  */
-export function createPenStrokes(target: Accessor<Element | undefined>) {
+export function createPenStrokes(target: Accessor<Element | undefined>, onStroke?: (stroke: PressureStroke) => void) {
   let strokes: { time: number; pressure: number }[][] = [];
   let current: { id: number; samples: { time: number; pressure: number }[] } | undefined;
   const [counted, setCounted] = createSignal(0);
@@ -50,8 +51,10 @@ export function createPenStrokes(target: Accessor<Element | undefined>) {
       return;
     }
 
-    strokes.push(current.samples);
+    const finished = current.samples;
+    strokes.push(finished);
     current = undefined;
+    onStroke?.(finished);
     setPressure(undefined);
     setCounted(strokePressures(strokes).length);
   });

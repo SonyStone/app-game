@@ -22,6 +22,7 @@ import { PressureCurveEditor } from './PressureCurveEditor';
  * (`PressureCurveEditor`), and the strokes drawn on the test canvas below are drawn again with each change, while a
  * dot on the curve follows the pen's pressure. Save hands the curve to the host; nothing is stored here.
  * With a `saved` curve it starts at the result. Mouse and touch strokes are not measured; it then asks for a pen.
+ * With `onMeasured` it only measures: the fitted curve goes to the host after the last step.
  */
 export function PressureCalibration(props: {
   /** The device's saved curve, or `undefined` while the pen is not calibrated. Read once, when mounted. */
@@ -39,6 +40,12 @@ export function PressureCalibration(props: {
   preview?: Pick<Parameters<typeof BrushPreview>[0], 'brush' | 'resources' | 'recipe' | 'color' | 'mixing'>;
   /** Shown under the result's test canvas, such as how the host's brushes combine the curve with their own. */
   note?: JSX.Element;
+  /**
+   * Receives the fitted curve and the raw pressures it was fitted to (sorted, for a histogram) at the end of the last
+   * step, in place of the result: a host with its own curve editor, such as a brush studio, measures here and edits
+   * there. Read when the last step ends.
+   */
+  onMeasured?: (curve: PressureCurve, measured: readonly number[]) => void;
 }) {
   const [surface, setSurface] = createSignal<HTMLElement>();
   const pen = createPenStrokes(surface);
@@ -143,8 +150,15 @@ export function PressureCalibration(props: {
     }
 
     const { normal = [], hard = [], light = [] } = collected;
-    setCurve(fitPressureCurve({ normal, hard, light }));
-    setMeasured(strokePressures([...normal, ...hard, ...light]));
+    const fitted = fitPressureCurve({ normal, hard, light });
+    const pressures = strokePressures([...normal, ...hard, ...light]);
+    if (props.onMeasured) {
+      props.onMeasured(fitted, pressures);
+      return;
+    }
+
+    setCurve(fitted);
+    setMeasured(pressures);
     setStep('result');
   }
 

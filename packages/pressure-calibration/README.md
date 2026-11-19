@@ -14,6 +14,7 @@ const calibration = createPressureCalibration(); // localStorage `paint.pressure
 // Feed strokes: attachInput(canvas, { …, mapPressure: calibration.mapPressure })
 ```
 
+`onMeasured` makes the block only measure: the fitted curve goes to a host that edits it with its own `PressureCurveEditor`. The editor draws at its element's size and takes its colors and point sizes from custom properties (see its JSDoc).
 `preview` chooses what the test canvas draws with: Paint passes its current brush, the brush's images and
 `studioBrushRecipe`; without it a plain round brush is used. Paint wraps the block in a floating window beside its side panels (Drawing menu) and also
 serves it on its own at `/pressure.html`. Vite consumers need the Solid 2 and TypeGPU plugins, as for `BrushPreview`.

@@ -1,9 +1,14 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { editable } from '@app-game/paint-core/input';
+import { identityPressureCurve, samePressureCurve } from '@app-game/paint-core/pressureCurve';
+import { PressureCalibration } from '@app-game/pressure-calibration';
+import type { JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
 import { BrushStudio, snapshotBrushSettings } from '../brush-editor';
 import { BrushStrokePreview } from '../brush-editor/BrushStrokePreview';
 import { DrawingPad } from '../brush-editor/DrawingPad';
+import { studioBrushRecipe } from '../engine/studioBrushes';
+import { PenPressurePane, penPressureStatus } from '../pressure-calibration';
 import type { PaintSession } from '../session';
 import styles from './BrushStudioDialog.module.css';
 import type { createBrushSettingsEditor } from './createBrushSettingsEditor';
@@ -18,8 +23,14 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
  * title, the session brush's stroke preview; beside the rows, a `DrawingPad` with the brush a stroke on the drawing
  * gets, its images and the session's pen pressure mapping.
  *
+ * The sidebar's Pen group holds the pen's pressure curve, the session's `pressureCalibration`: edits apply to it at
+ * once, so strokes on the pad and on the drawing follow them. Its page is the host's `penPane`, or `PenPressurePane`;
+ * the pen's raw pressure on the pad shows on the graph and fills its histogram for as long as the dialog is open
+ * (`session.penPressure`). While `measuring`, the page runs the three calibration steps (`PressureCalibration`)
+ * instead, and the fitted curve becomes the pen's.
+ *
  * Cancel returns to the brush as it was when the dialog mounted or, after that, when another preset was chosen, and
- * then calls `onClose`, as Done does. Escape closes it too, keeping the changes, unless a control inside used the key,
+ * the pen's curve to what it was when the dialog mounted, and then calls `onClose`, as Done does, which keeps both. Escape closes it too, keeping the changes, unless a control inside used the key,
  * as a menu or a typed number does. While it is open the page behind it is inert, and no key or pointer event in it
  * reaches the page's listeners on the document or the window, so the drawing's shortcuts and gestures stay idle.
  *
@@ -29,8 +40,17 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
 export function BrushStudioDialog(props: {
   session: PaintSession;
   editor: BrushSettingsEditor;
-  /** The host's rows for number and curve settings; see `BrushStudio`. */
+  /** The host's rows for number settings; see `BrushStudio`. */
   hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'];
+  /** The host's page for the pen's pressure curve, in place of `PenPressurePane`. */
+  penPane?: JSX.Element;
+  /**
+   * Whether the pen's page runs the calibration steps; the dialog keeps this itself without it. A host whose own page
+   * starts measuring passes it with `onMeasuring`.
+   */
+  measuring?: boolean;
+  /** Receives whether to measure: true from the page's Measure, false when the steps end or are cancelled. */
+  onMeasuring?: (measuring: boolean) => void;
   /** Whether the studio is out of the way, showing the page under it; false by default. */
   away?: boolean;
   /** Called by Done, by Cancel once it has restored the baseline, and by Escape; the caller then unmounts the dialog. */
@@ -41,7 +61,14 @@ export function BrushStudioDialog(props: {
   ref?: (element: HTMLDialogElement) => void;
 }) {
   const { session, editor } = props;
-  const { brush, library, tools, pressureCalibration } = session;
+  const { brush, library, tools, pressureCalibration, penPressure } = session;
+  /** The pen's curve when the dialog opened, which Cancel restores. */
+  const penBaseline = untrack(() => pressureCalibration.calibration()?.curve);
+  const [ownMeasuring, setOwnMeasuring] = createSignal(false);
+  const measuring = () => props.measuring ?? ownMeasuring();
+  const setMeasuring = (on: boolean) => (props.onMeasuring ?? setOwnMeasuring)(on);
+  const [padSurface, setPadSurface] = createSignal<HTMLElement>();
+  penPressure.watch(padSurface);
   const preset = createMemo(() => tools.preset());
   // Taken when the dialog opens and again whenever another preset is chosen; edits of the brush keep it.
   const baseline = createMemo(() => {
@@ -102,17 +129,74 @@ export function BrushStudioDialog(props: {
         hostRow={props.hostRow}
         onChange={(patch) => void editor.update(patch)}
         onDone={() => props.onClose()}
-        preview={<SessionStrokePreview session={session} editor={editor} height={96} />}
+        onCancel={restorePen}
+        penStatus={penPressureStatus(pressureCalibration.calibration()?.curve)}
+        penPane={
+          <Show
+            when={measuring()}
+            fallback={
+              props.penPane ?? (
+                <PenPressurePane
+                  curve={pressureCalibration.curve()}
+                  measured={penPressure.measured()}
+                  marker={penPressure.marker()}
+                  calibrated={!!pressureCalibration.calibration()}
+                  onChange={pressureCalibration.save}
+                  onMeasure={() => setMeasuring(true)}
+                  onReset={pressureCalibration.reset}
+                />
+              )
+            }
+          >
+            <div class={styles.measure}>
+              <PressureCalibration
+                saved={undefined}
+                onSave={pressureCalibration.save}
+                onReset={pressureCalibration.reset}
+                onCancel={() => setMeasuring(false)}
+                onMeasured={(curve, measured) => {
+                  pressureCalibration.save(curve);
+                  penPressure.add(measured);
+                  setMeasuring(false);
+                }}
+                preview={{
+                  brush: pressureCalibration.strokeBrush(brush(), true),
+                  resources: padResources(),
+                  recipe: studioBrushRecipe,
+                  mixing: brush().mixing
+                }}
+              />
+            </div>
+          </Show>
+        }
         pad={
-          <DrawingPad
-            brush={pressureCalibration.strokeBrush(brush())}
-            resources={padResources()}
-            mapPressure={pressureCalibration.mapPressure}
-          />
+          <div ref={setPadSurface} class={styles.padSurface}>
+            <DrawingPad
+              brush={pressureCalibration.strokeBrush(brush())}
+              resources={padResources()}
+              mapPressure={pressureCalibration.mapPressure}
+            />
+          </div>
         }
       />
     </dialog>
   );
+
+  /** Puts the pen's curve back as it was when the dialog opened: that curve, or none. */
+  function restorePen() {
+    const current = pressureCalibration.calibration()?.curve;
+    if (!penBaseline) {
+      if (current) {
+        pressureCalibration.reset();
+      }
+
+      return;
+    }
+
+    if (!samePressureCurve(penBaseline, current ?? identityPressureCurve)) {
+      pressureCalibration.save(penBaseline);
+    }
+  }
 }
 
 /**

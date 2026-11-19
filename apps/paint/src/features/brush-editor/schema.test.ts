@@ -8,7 +8,7 @@ import {
   snapshotBrushSettings,
   type NumberSetting
 } from './index';
-import { numberSettings } from './schema';
+import { legacyPressureCategory, numberSettings } from './schema';
 
 const modes: StrokeSettings['mode'][] = ['none', 'studio', 'normal', 'smooth', 'stabilizer'];
 const brushes: [string, Brush][] = [
@@ -21,15 +21,11 @@ describe('brush editor schema', () => {
   it('has unique kebab-case IDs and finds every setting, including hidden ones', () => {
     const settings = brushCategories.flatMap((category) => category.settings);
     expect(new Set(settings.map((setting) => setting.id)).size).toBe(settings.length);
-    expect(new Set(brushCategories.map((category) => category.id)).size).toBe(5);
-    expect(brushCategories.map((category) => category.group)).toEqual([
-      'basics',
-      'basics',
-      'basics',
-      'advanced',
-      'advanced'
-    ]);
-    for (const setting of [...settings, ...numberSettings(settings)]) {
+    expect(new Set(brushCategories.map((category) => category.id)).size).toBe(4);
+    expect(brushCategories.map((category) => category.group)).toEqual(['basics', 'basics', 'basics', 'advanced']);
+    // The brush's own pressure numbers are no category's any more, but old board parts still find them.
+    expect(brushCategories.map((category) => category.id)).not.toContain('pressure-curve');
+    for (const setting of [...settings, ...legacyPressureCategory.settings]) {
       expect(setting.id).toMatch(/^[a-z]+(?:-[a-z]+)*$/);
       expect(getBrushSetting(setting.id)).toBe(setting);
     }
@@ -43,8 +39,8 @@ describe('brush editor schema', () => {
         const brush = { ...original, stroke: { ...original.stroke, mode } };
         expect(brushCategories.filter((category) => category.applies(brush)).map((category) => category.id)).toEqual(
           engine === 'abr'
-            ? ['painting', 'stroke-correction', 'pressure-curve']
-            : ['painting', 'brush-tip', 'dynamics', 'stroke-correction', 'pressure-curve']
+            ? ['painting', 'stroke-correction']
+            : ['painting', 'brush-tip', 'dynamics', 'stroke-correction']
         );
         const rows = brushCategories
           .flatMap((category) => category.settings)
@@ -57,14 +53,13 @@ describe('brush editor schema', () => {
           ...(engine === 'round' ? ['hardness'] : engine === 'textured' ? ['spacing'] : []),
           ...(engine === 'abr' ? [] : ['pressure-size', 'pressure-flow']),
           'smoothing',
-          'catch-up',
-          'pressure-curve'
+          'catch-up'
         ]);
         // An ABR preset smooths by itself in the Leonardo modes and Studio, so only the stabilizer trails and calibrates.
         const trails = engine === 'abr' ? mode === 'stabilizer' : ['normal', 'smooth', 'stabilizer'].includes(mode);
-        for (const row of [...rows, ...numberSettings(rows)]) {
-          const curve = ['pressure-curve', 'pressure-minimum', 'pressure-maximum', 'pressure-firmness'];
-          const enabled = row.id === 'catch-up' || curve.includes(row.id) ? trails : true;
+        for (const row of [...rows, ...legacyPressureCategory.settings]) {
+          const legacy = ['pressure-minimum', 'pressure-maximum', 'pressure-firmness'];
+          const enabled = row.id === 'catch-up' || legacy.includes(row.id) ? trails : true;
           expect(row.enabled(brush), row.id).toBe(enabled);
         }
       });
@@ -147,10 +142,19 @@ describe('brush editor schema', () => {
       ['flow', 1, 100, 1, '%'],
       ['hardness', 0, 100, 1, '%'],
       ['spacing', 1, 1000, 1, '%'],
-      ['smoothing', 0, 22, 1, ''],
-      ['pressure-minimum', 0, 79, 1, '%'],
-      ['pressure-maximum', 6, 100, 1, '%'],
-      ['pressure-firmness', 10, 500, 5, '%']
+      ['smoothing', 0, 22, 1, '']
+    ]);
+    expect(
+      legacyPressureCategory.settings.map((setting) => [
+        setting.id,
+        (setting as NumberSetting).min(brush),
+        (setting as NumberSetting).max(brush),
+        (setting as NumberSetting).step
+      ])
+    ).toEqual([
+      ['pressure-minimum', 0, 79, 1],
+      ['pressure-maximum', 6, 100, 1],
+      ['pressure-firmness', 10, 500, 5]
     ]);
     expect(numeric('size').max(brushes[2]![1])).toBe(5000);
     expect(numeric('size').curve?.(brush)).toBeDefined();
@@ -205,7 +209,7 @@ describe('brush editor schema', () => {
     modes.forEach((mode, index) => {
       const b = { ...brush, stroke: { ...brush.stroke, mode, stabilizer: 18 } };
       expect(status('stroke-correction', b)).toBe(expected[index]);
-      expect(status('pressure-curve', b)).toBe(['none', 'studio'].includes(mode) ? 'Off' : '5–80%');
+      expect(legacyPressureCategory.status(b)).toBe(['none', 'studio'].includes(mode) ? 'Off' : '5–80%');
     });
   });
 
@@ -217,11 +221,7 @@ describe('brush editor schema', () => {
     );
     expect(snapshot.stroke).not.toBe(brush.stroke);
     expect(brushSettingsDiffer(brush, snapshot)).toBe(false);
-    for (const setting of brushCategories.flatMap((category) =>
-      category.settings.flatMap((setting) =>
-        setting.kind === 'curve' ? [setting.minimum, setting.maximum, setting.firmness] : [setting]
-      )
-    )) {
+    for (const setting of [...brushCategories, legacyPressureCategory].flatMap((category) => category.settings)) {
       const patch =
         setting.kind === 'number'
           ? setting.write(brush, setting.read(brush) === setting.max(brush) ? setting.min(brush) : setting.max(brush))

@@ -5,7 +5,7 @@ import { initAbr } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { describe, expect, it } from 'vitest';
 import { abrCategories, abrCategoriesFor, abrValues } from './abrSchema';
-import { brushSettingsDiffer, snapshotBrushSettings } from './schema';
+import { brushSettingsDiffer, legacyPressureCategory, snapshotBrushSettings } from './schema';
 
 const source = {
   id: 'test',
@@ -54,8 +54,7 @@ describe('generated ABR settings', () => {
       'brushPose',
       'smoothing',
       'bristle',
-      'erodible',
-      'pressure-curve'
+      'erodible'
     ]);
     expect(abrCategories.every((c) => c.settings.length > 0)).toBe(true);
     const rows = abrCategories.flatMap((c) => c.settings);
@@ -66,10 +65,6 @@ describe('generated ABR settings', () => {
   it('round trips every generated ABR field through the descriptor conversion', () => {
     for (const category of abrCategories.slice(0, 12)) {
       for (const row of category.settings) {
-        if (row.kind === 'curve') {
-          continue;
-        }
-
         const b = brush();
         const next =
           row.kind === 'number'
@@ -296,8 +291,9 @@ describe('generated ABR settings', () => {
     expect(status('smoothing', stabilized)).toBe('6');
     expect(amount.enabled(stabilized)).toBe(false);
     expect(setting('smoothing', 'catch-up').enabled(stabilized)).toBe(true);
-    expect(setting('pressure-curve', 'pressure-curve').enabled(stabilized)).toBe(true);
-    expect(setting('pressure-curve', 'pressure-curve').enabled(b)).toBe(false);
+    // The brush's own pressure numbers, kept for old boards, apply to an ABR brush only in the stabilizer.
+    expect(legacyPressureCategory.settings[0]!.enabled(stabilized)).toBe(true);
+    expect(legacyPressureCategory.settings[0]!.enabled(b)).toBe(false);
     expect({ ...stabilized, ...level.write(stabilized, 0) }.stroke.mode).toBe('studio');
 
     const smoothed = { ...b, ...amount.write(b, 30) };
