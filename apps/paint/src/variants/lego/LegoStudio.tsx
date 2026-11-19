@@ -49,8 +49,9 @@ import { StudioSettingRow } from './StudioSettingRow';
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
  * setting there is its value part itself, and the Pen page the pen pressure curve's part (`StudioSettingRow`); a
  * row's grip lifts a new part of it onto the board, in edit mode or not; the studio gets out of the way while the part
- * is carried and comes back once it lands. The curve's Measure runs the calibration steps on the studio's Pen page
- * while the studio is open, and in the Pen pressure window otherwise.
+ * is carried and comes back once it lands. Pen pressure lives on the studio's Pen page: the "Pressure calibration"
+ * part opens the studio there, and the curve's Measure, on the board or on that page, runs the calibration steps
+ * there, drawn on the studio's pad.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
@@ -73,6 +74,8 @@ export function LegoStudio(
   });
   /** Whether the brush studio, opened by the "Brush settings" part, covers the screen. */
   const [studioOpen, setStudioOpen] = createSignal(false);
+  /** Whether the studio opens on its Pen page, as the pressure parts open it. */
+  const [studioOnPen, setStudioOnPen] = createSignal(false);
   /** The board's commands, which the studio's rows lift new parts with; set by the board as it is made. */
   const [boardControls, setBoardControls] = createSignal<BoardControls | undefined>(undefined, { ownedWrite: true });
   const reportSavingError = (message: string) =>
@@ -82,11 +85,23 @@ export function LegoStudio(
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const services = createLegoServices(
     session,
-    () => setStudioOpen(true),
+    () => {
+      setStudioOnPen(false);
+      setStudioOpen(true);
+    },
     () =>
       studioOpen() ||
       board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-'))),
-    () => (studioOpen() ? setPenMeasuring(true) : session.windows.open('pressure'))
+    (measure) => {
+      if (measure) {
+        setPenMeasuring(true);
+      }
+
+      if (!studioOpen()) {
+        setStudioOnPen(true);
+        setStudioOpen(true);
+      }
+    }
   );
   const closeStudio = () => {
     setPenMeasuring(false);
@@ -317,6 +332,7 @@ export function LegoStudio(
                   onPlace={() => boardControls()?.place(penPressureKind, pressureCurveSpan)}
                 />
               }
+              startOnPen={studioOnPen()}
               measuring={penMeasuring()}
               onMeasuring={setPenMeasuring}
               onClose={closeStudio}

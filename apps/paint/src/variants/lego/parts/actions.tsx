@@ -91,12 +91,8 @@ export const actionParts = [
     },
     onPress: f.command(s.quickShape.toggle)
   })),
-  action('pressure', 'Pressure calibration', 'pressure', (s, f) => ({
-    get active() {
-      return s.windows.isOpen('pressure');
-    },
-    onPress: f.command(() => s.windows.toggle('pressure'))
-  })),
+  // Opens the brush studio on its Pen page, the one place where pen pressure is measured and edited.
+  action('pressure', 'Pressure calibration', 'pressure', (s, f) => ({ onPress: f.command(s.pen.open) })),
   tool('eraser', 'Eraser', 'erase'),
   tool('lasso', 'Lasso', 'lasso'),
   tool('fill', 'Fill', 'fill'),

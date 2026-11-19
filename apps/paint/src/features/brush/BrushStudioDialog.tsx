@@ -7,7 +7,6 @@ import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js'
 import { BrushStudio, snapshotBrushSettings } from '../brush-editor';
 import { BrushStrokePreview } from '../brush-editor/BrushStrokePreview';
 import { DrawingPad } from '../brush-editor/DrawingPad';
-import { studioBrushRecipe } from '../engine/studioBrushes';
 import { PenPressurePane, penPressureStatus } from '../pressure-calibration';
 import type { PaintSession } from '../session';
 import styles from './BrushStudioDialog.module.css';
@@ -25,9 +24,11 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
  *
  * The sidebar's Pen group holds the pen's pressure curve, the session's `pressureCalibration`: edits apply to it at
  * once, so strokes on the pad and on the drawing follow them. Its page is the host's `penPane`, or `PenPressurePane`;
- * the pen's raw pressure on the pad shows on the graph and fills its histogram for as long as the dialog is open
- * (`session.penPressure`). While `measuring`, the page runs the three calibration steps (`PressureCalibration`)
- * instead, and the fitted curve becomes the pen's.
+ * the pen's raw pressure on the pad shows on the graph and fills its histogram, as the pen draws, for as long as the
+ * dialog is open (`session.penPressure`). With `startOnPen` the dialog opens on that page. While `measuring`, the
+ * three calibration steps (`PressureCalibration`) run under the page's graph and take their strokes from the drawing
+ * pad, which then draws with the pen's raw pressure; the graph's histogram fills with them, and at the end the fitted
+ * curve becomes the pen's, appearing on the graph.
  *
  * Cancel returns to the brush as it was when the dialog mounted or, after that, when another preset was chosen, and
  * the pen's curve to what it was when the dialog mounted, and then calls `onClose`, as Done does, which keeps both. Escape closes it too, keeping the changes, unless a control inside used the key,
@@ -44,6 +45,8 @@ export function BrushStudioDialog(props: {
   hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'];
   /** The host's page for the pen's pressure curve, in place of `PenPressurePane`. */
   penPane?: JSX.Element;
+  /** Whether the dialog opens on the pen's page; read once, when mounted. */
+  startOnPen?: boolean;
   /**
    * Whether the pen's page runs the calibration steps; the dialog keeps this itself without it. A host whose own page
    * starts measuring passes it with `onMeasuring`.
@@ -132,50 +135,45 @@ export function BrushStudioDialog(props: {
         onCancel={restorePen}
         preview={<SessionStrokePreview session={session} editor={editor} height={96} />}
         penStatus={penPressureStatus(pressureCalibration.calibration()?.curve)}
+        startOnPen={props.startOnPen}
         penPane={
-          <Show
-            when={measuring()}
-            fallback={
-              props.penPane ?? (
-                <PenPressurePane
-                  curve={pressureCalibration.curve()}
-                  measured={penPressure.measured()}
-                  marker={penPressure.marker()}
-                  calibrated={!!pressureCalibration.calibration()}
-                  onChange={pressureCalibration.save}
-                  onMeasure={() => setMeasuring(true)}
-                  onReset={pressureCalibration.reset}
-                />
-              )
-            }
-          >
-            <div class={styles.measure}>
-              <PressureCalibration
-                saved={undefined}
-                onSave={pressureCalibration.save}
+          <>
+            {props.penPane ?? (
+              <PenPressurePane
+                curve={pressureCalibration.curve()}
+                measured={penPressure.measured()}
+                marker={penPressure.marker()}
+                calibrated={!!pressureCalibration.calibration()}
+                onChange={pressureCalibration.save}
+                onMeasure={() => setMeasuring(true)}
                 onReset={pressureCalibration.reset}
-                onCancel={() => setMeasuring(false)}
-                onMeasured={(curve, measured) => {
-                  pressureCalibration.save(curve);
-                  penPressure.add(measured);
-                  setMeasuring(false);
-                }}
-                preview={{
-                  brush: brush(),
-                  resources: padResources(),
-                  recipe: studioBrushRecipe,
-                  mixing: brush().mixing
-                }}
               />
-            </div>
-          </Show>
+            )}
+            <Show when={measuring()}>
+              <div class={styles.measure} data-pen-measure>
+                <PressureCalibration
+                  saved={undefined}
+                  surface={padSurface()}
+                  histogram={false}
+                  onSave={pressureCalibration.save}
+                  onReset={pressureCalibration.reset}
+                  onCancel={() => setMeasuring(false)}
+                  onMeasured={(curve) => {
+                    // The pad's strokes are already in the graph's histogram (`penPressure` watches the pad).
+                    pressureCalibration.save(curve);
+                    setMeasuring(false);
+                  }}
+                />
+              </div>
+            </Show>
+          </>
         }
         pad={
           <div ref={setPadSurface} class={styles.padSurface}>
             <DrawingPad
               brush={brush()}
               resources={padResources()}
-              mapPressure={pressureCalibration.mapPressure}
+              mapPressure={measuring() ? undefined : pressureCalibration.mapPressure}
             />
           </div>
         }

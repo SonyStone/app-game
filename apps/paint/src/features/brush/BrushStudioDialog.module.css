@@ -55,10 +55,24 @@
   display: contents;
 }
 
-/* The calibration steps on the pen's page, on a tile of the studio's colors. */
+/*
+ * The calibration steps under the pen's graph, built as the studio's controls: each step, the looping picture and each
+ * button a tile of the studio's (`--studio-tile`), the current step in its chosen colours, on the page's own surface.
+ * `--studio-pen-indent` lines them up with the graph's tile and `--studio-pen-width` caps their width.
+ */
 .measure {
-  max-width: 600px;
-  border-radius: var(--studio-tile-radius, 8px);
-  background: var(--surface, #ffffff);
-  color: var(--ink, #444444);
+  --calibration-pad: 0;
+  --calibration-gap: var(--studio-row-gap, 6px);
+  --calibration-tile: var(--studio-tile, var(--surface, #ffffff));
+  --calibration-tile-ink: var(--studio-tile-ink, var(--ink, #444444));
+  --calibration-chosen: var(--studio-chosen, var(--surface, #ffffff));
+  --calibration-ring: var(--studio-chosen-ring, var(--accent, #237aab));
+  --calibration-paper: var(--studio-tile, var(--surface, #ffffff));
+  --calibration-radius: var(--studio-tile-radius, 8px);
+  --calibration-target: var(--studio-row, 44px);
+  --line: transparent;
+
+  max-width: var(--studio-pen-width, 600px);
+  margin-top: var(--studio-row-gap, 6px);
+  margin-inline-start: var(--studio-pen-indent, 0);
 }

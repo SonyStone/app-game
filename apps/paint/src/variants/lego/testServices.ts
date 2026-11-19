@@ -70,6 +70,7 @@ export function createTestServices() {
       measured: () => [],
       save: vi.fn((curve: PressureCurve) => setPenCurve(isIdentityPressureCurve(curve) ? undefined : curve)),
       reset: vi.fn(() => setPenCurve(undefined)),
+      open: vi.fn(),
       measure: vi.fn()
     },
     presets: {

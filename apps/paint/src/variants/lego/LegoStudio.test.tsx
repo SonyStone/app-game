@@ -730,9 +730,12 @@ it('runs the calibration steps on the Pen page from its Measure button, and offe
   dialog.querySelector<HTMLButtonElement>('[aria-label="Measure pen pressure"]')!.click();
   flush();
   const pane = dialog.querySelector('[data-pen-pane]')!;
-  expect(pane.querySelector('[aria-current="step"]')?.textContent).toContain('As usual');
+  expect(pane.querySelector('[aria-current="step"]')?.getAttribute('aria-label')).toBe('As usual');
+  // The graph stays above the steps, which draw on the pad and have no canvas of their own.
+  expect(pane.querySelector('svg[aria-label="Pressure curve"]')).not.toBeNull();
+  expect(pane.querySelector('[data-pen-measure] canvas')).toBeNull();
   expect(wiring.session!.windows.isOpen('pressure')).toBe(false);
-  [...pane.querySelectorAll('button')].find((element) => element.textContent === 'Cancel')!.click();
+  pane.querySelector<HTMLButtonElement>('[data-pen-measure] button[aria-label="Cancel"]')!.click();
   flush();
   expect(pane.querySelector('[aria-current="step"]')).toBeNull();
   expect(pane.querySelector('svg[aria-label="Pressure curve"]')).not.toBeNull();
@@ -741,6 +744,132 @@ it('runs the calibration steps on the Pen page from its Measure button, and offe
   const tools = boxSections.find((section) => section.id === 'Tools')!.kinds;
   expect(tools.indexOf('value:pen-pressure-curve')).toBe(tools.indexOf('action:pressure') + 1);
   expect(partDefinition('value:brush:pressure-curve')?.kind).toBe('value:pen-pressure-curve');
+});
+
+it('opens the studio on the Pen page from the Pressure calibration part, never the old window', () => {
+  storeParts(['action:pressure']);
+  mount();
+  document.querySelector<HTMLButtonElement>('[data-part-kind="action:pressure"] button')!.click();
+  flush();
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Brush studio"]')!;
+  expect(dialog).not.toBeNull();
+  expect(dialog.querySelector('[data-pen-pane] svg[aria-label="Pressure curve"]')).not.toBeNull();
+  expect(penEntry(dialog).getAttribute('aria-current') ?? penEntry(dialog).getAttribute('aria-selected')).toBeTruthy();
+  expect(dialog.querySelector('[aria-current="step"]')).toBeNull();
+  expect(wiring.session!.windows.isOpen('pressure')).toBe(false);
+  click('Done');
+
+  // The Brush settings part still opens the studio on its first category.
+  storeParts(['action:brush-editor']);
+  dispose?.();
+  mount();
+  expect(openStudio().querySelector('[data-pen-pane]')).toBeNull();
+});
+
+it("measures from the board's curve in the studio, on its pad, and Cancel brings back the curve it opened with", () => {
+  storeParts(['action:brush-editor', 'value:pen-pressure-curve']);
+  const stored = JSON.parse(localStorage.getItem('paint.lego')!);
+  stored.board.panels[0].parts[1].span = { columns: 4, rows: 4 };
+  stored.board.panels[0].parts[1].cell = { column: 0, row: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(stored));
+  mount();
+  const calibration = wiring.session!.pressureCalibration;
+  const opened = {
+    points: [
+      { x: 0.05, y: 0 },
+      { x: 0.5, y: 0.6 },
+      { x: 0.9, y: 1 }
+    ]
+  };
+  calibration.save(opened);
+  flush();
+  document.querySelector<HTMLButtonElement>('[data-panel] [aria-label="Measure pen pressure"]')!.click();
+  flush();
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Brush studio"]')!;
+  const pane = dialog.querySelector('[data-pen-pane]')!;
+  const steps = () =>
+    [...pane.querySelectorAll('ol[aria-label="Steps"] > li')].map((step) => step.getAttribute('aria-current'));
+  const meter = () => Number(pane.querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow'));
+  const bars = () =>
+    [...pane.querySelectorAll('svg[aria-label="Pressure curve"] rect')].filter(
+      (bar) => Number(bar.getAttribute('height')) > 0
+    ).length;
+  expect(steps()).toEqual(['step', null, null]);
+  expect(wiring.session!.windows.isOpen('pressure')).toBe(false);
+  // No sentence tells what to do: the steps' block has no text at all.
+  expect(pane.querySelector('[data-pen-measure]')!.textContent!.trim()).toBe('');
+
+  // jsdom lays nothing out, so the pad draws no canvas of its own: a canvas stands in for its paper.
+  const paper = document.createElement('canvas');
+  dialog.querySelector('[aria-label="Drawing pad"] > div')!.append(paper);
+  const stroke = (pressure: (t: number) => number, pointerType = 'pen') => {
+    const samples = Array.from({ length: 250 }, (_, index) => ({
+      timeStamp: index * 4,
+      pressure: pressure(index / 249),
+      buttons: 1
+    }));
+    const send = (type: string, extra: Record<string, unknown>) => {
+      const event = new MouseEvent(type, { bubbles: true });
+      for (const [key, value] of Object.entries({ pointerId: 9, pointerType, ...extra })) {
+        Object.defineProperty(event, key, { value });
+      }
+
+      paper.dispatchEvent(event);
+      flush();
+    };
+    send('pointerdown', { ...samples[0] });
+    send('pointermove', { ...samples.at(-1), getCoalescedEvents: () => samples.slice(1) });
+    send('pointerup', { timeStamp: 1000, pressure: 0 });
+  };
+  stroke(() => 1, 'touch');
+  expect([meter(), bars()]).toEqual([0, 0]);
+  expect(pane.querySelector('[aria-label="Pen only"]')).not.toBeNull();
+  stroke((t) => 0.4 + 0.3 * t);
+  expect(meter()).toBeGreaterThan(200);
+  expect(bars()).toBeGreaterThan(0);
+  expect(pane.querySelector('[aria-label="Pen only"]')).toBeNull();
+  for (const [count, pressure] of [
+    [4, (t: number) => 0.4 + 0.3 * t],
+    [2, (t: number) => 0.75 + 0.1 * t],
+    [2, (t: number) => 0.08 + 0.04 * t]
+  ] as const) {
+    for (let index = 0; index < count; index++) {
+      stroke(pressure);
+    }
+
+    pane.querySelector<HTMLButtonElement>('button[aria-label="Next"], button[aria-label="Finish"]')!.click();
+    flush();
+  }
+
+  // The fitted curve is the pen's at once, shown on the page's graph and on the board's.
+  expect(pane.querySelector('[data-pen-measure]')).toBeNull();
+  expect(calibration.curve().points).toHaveLength(5);
+  expect(calibration.curve().points[0]!.x).toBeGreaterThan(0.07);
+  expect(pane.querySelectorAll('svg[aria-label="Pressure curve"] [data-point]')).toHaveLength(5);
+  click('Cancel');
+  expect(calibration.curve()).toEqual(opened);
+
+  // Done keeps a measured curve.
+  document.querySelector<HTMLButtonElement>('[data-panel] [aria-label="Measure pen pressure"]')!.click();
+  flush();
+  const again = document.querySelector<HTMLDialogElement>('dialog[aria-label="Brush studio"]')!;
+  again.querySelector('[aria-label="Drawing pad"] > div')!.append(paper);
+  for (const [count, pressure] of [
+    [5, (t: number) => 0.4 + 0.3 * t],
+    [2, (t: number) => 0.75 + 0.1 * t],
+    [2, (t: number) => 0.08 + 0.04 * t]
+  ] as const) {
+    for (let index = 0; index < count; index++) {
+      stroke(pressure);
+    }
+
+    again.querySelector<HTMLButtonElement>('button[aria-label="Next"], button[aria-label="Finish"]')!.click();
+    flush();
+  }
+  const measured = calibration.curve();
+  expect(measured.points).toHaveLength(5);
+  click('Done');
+  expect(calibration.curve()).toEqual(measured);
 });
 
 it("Escape in a studio row's keypad closes the keypad and keeps the studio open", () => {

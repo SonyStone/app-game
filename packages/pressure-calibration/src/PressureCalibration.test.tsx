@@ -84,12 +84,13 @@ describe('PressureCalibration', () => {
     mount(() => (
       <PressureCalibration saved={undefined} onSave={onSave} onReset={() => undefined} onCancel={onCancel} />
     ));
-    const next = () => button(/^(Next|Show the curve)$/);
+    const next = () => button(/^(Next|Finish)$/);
     expect(next().disabled).toBe(true);
 
     stroke('mouse', () => 1);
     flush();
-    expect(document.body.textContent).toContain('mouse strokes are not counted');
+    expect(document.querySelector('[role="status"] [aria-label="Pen only"]')).not.toBeNull();
+    expect(document.querySelector('svg[aria-label="As usual"]')).toBeNull();
     expect(next().disabled).toBe(true);
 
     // As usual: a median of 0.55, as on the user's MovinkPad.
@@ -97,7 +98,7 @@ describe('PressureCalibration', () => {
       stroke('pen', (t) => 0.4 + 0.3 * t);
     }
     flush();
-    expect(document.body.textContent).not.toContain('not counted');
+    expect(document.querySelector('[aria-label="Pen only"]')).toBeNull();
     next().click();
     flush();
     expect(next().disabled).toBe(true);
@@ -188,7 +189,6 @@ describe('PressureCalibration', () => {
     graph.pointer('pointerdown', 0.3, 0.45);
     graph.pointer('pointermove', 0.3, 1.3);
     expect(document.querySelector('[data-removing="true"]')).not.toBeNull();
-    expect(document.body.textContent).toContain('Let go to remove the point');
     graph.pointer('pointerup', 0.3, 1.3);
     expect(count()).toBe(2);
 
@@ -268,7 +268,7 @@ describe('PressureCalibration', () => {
         stroke('pen', pressure);
       }
       flush();
-      button(/^(Next|Show the curve)$/).click();
+      button(/^(Next|Finish)$/).click();
       flush();
     }
     expect(onMeasured).toHaveBeenCalledOnce();
@@ -276,6 +276,129 @@ describe('PressureCalibration', () => {
     expect(curve.points).toHaveLength(5);
     expect(measured.length).toBeGreaterThan(1000);
     expect(document.querySelector('svg[aria-label="Pressure curve"]')).toBeNull();
+  });
+
+  it('shows each step as a pictogram whose line fills with its samples, and goes back to measure a step again', () => {
+    mount(() => <PressureCalibration saved={undefined} onSave={() => undefined} onReset={() => undefined} />);
+    const steps = () => [...document.querySelectorAll('ol[aria-label="Steps"] > li')];
+    const meter = () => document.querySelector('[role="progressbar"][aria-label="Pen samples"]')!;
+    const filled = (index: number) =>
+      Number(steps()[index]!.querySelector('path[pathLength]')!.getAttribute('stroke-dasharray')!.split(' ')[0]);
+    expect(steps().map((step) => step.getAttribute('aria-label'))).toEqual(['As usual', 'Firm', 'Light']);
+    expect(steps().map((step) => step.getAttribute('aria-current'))).toEqual(['step', null, null]);
+    expect(meter().getAttribute('aria-valuemax')).toBe('1000');
+    expect(button('Back').disabled).toBe(true);
+
+    // The line fills while the pen is still down, and the count follows once the stroke ends.
+    stroke('pen', () => 0.5, { lift: false });
+    flush();
+    expect(filled(0)).toBeGreaterThan(0.2);
+    expect(meter().getAttribute('aria-valuenow')).toBe('0');
+    expect(document.querySelectorAll('svg[aria-label="Pressure"] rect').length).toBeGreaterThan(0);
+    pointerUp();
+    flush();
+    expect(Number(meter().getAttribute('aria-valuenow'))).toBeGreaterThan(200);
+    for (let index = 0; index < 4; index++) {
+      stroke('pen', (t) => 0.4 + 0.3 * t);
+    }
+    flush();
+    expect(filled(0)).toBe(1);
+    button('Next').click();
+    flush();
+    expect(steps().map((step) => step.getAttribute('aria-current'))).toEqual([null, 'step', null]);
+    expect(steps()[0]!.hasAttribute('data-done')).toBe(true);
+    expect([filled(0), filled(1)]).toEqual([1, 0]);
+    expect(document.querySelector('svg[role="img"][aria-label="Firm"]')).not.toBeNull();
+
+    // Back measures the first step again, from nothing.
+    stroke('pen', () => 0.8);
+    flush();
+    button('Back').click();
+    flush();
+    expect(steps().map((step) => step.getAttribute('aria-current'))).toEqual(['step', null, null]);
+    expect([filled(0), meter().getAttribute('aria-valuenow')]).toEqual([0, '0']);
+    expect(button('Next').disabled).toBe(true);
+  });
+
+  it("takes its strokes from the host's surface, drawing no test canvas of its own", () => {
+    const onMeasured = vi.fn();
+    const pad = document.createElement('div');
+    const paper = document.createElement('canvas');
+    pad.append(paper);
+    document.body.append(pad);
+    mount(() => (
+      <PressureCalibration
+        saved={undefined}
+        surface={pad}
+        histogram={false}
+        onSave={() => undefined}
+        onReset={() => undefined}
+        onMeasured={onMeasured}
+      />
+    ));
+    expect(preview.props).toHaveLength(0);
+    expect(document.querySelector('svg[aria-label="Pressure"]')).toBeNull();
+    for (const [count, pressure] of [
+      [5, (t: number) => 0.4 + 0.3 * t],
+      [2, (t: number) => 0.75 + 0.1 * t],
+      [2, (t: number) => 0.08 + 0.04 * t]
+    ] as const) {
+      for (let index = 0; index < count; index++) {
+        stroke('pen', pressure, { canvas: paper });
+      }
+      flush();
+      button(/^(Next|Finish)$/).click();
+      flush();
+    }
+    expect(onMeasured).toHaveBeenCalledOnce();
+    expect((onMeasured.mock.calls[0]![0] as PressureCurve).points).toHaveLength(5);
+  });
+
+  it('says nothing in sentences: the steps, the pen-only state and the result show no instructions', () => {
+    const shown: string[] = [];
+    mount(() => (
+      <PressureCalibration saved={undefined} onSave={() => undefined} onReset={() => undefined} onCancel={() => {}} />
+    ));
+    const block = document.body.firstElementChild!;
+    shown.push(block.textContent!);
+    expect(block.textContent!.trim()).toBe('');
+    stroke('touch', () => 1);
+    flush();
+    shown.push(block.textContent!);
+    expect(block.textContent!.trim()).toBe('');
+    for (const [count, pressure] of [
+      [5, (t: number) => 0.4 + 0.3 * t],
+      [2, (t: number) => 0.75 + 0.1 * t],
+      [2, (t: number) => 0.08 + 0.04 * t]
+    ] as const) {
+      for (let index = 0; index < count; index++) {
+        stroke('pen', pressure);
+      }
+      flush();
+      shown.push(block.textContent!);
+      button(/^(Next|Finish)$/).click();
+      flush();
+    }
+    // The result: the graph's own labels and nothing more.
+    chart().pointer('pointerdown', 0.5, 0.2);
+    chart().pointer('pointermove', 0.5, 1.6);
+    shown.push(block.textContent!);
+    for (const sentence of [
+      'Draw as you usually do',
+      'firmest pressure',
+      'lightest strokes',
+      'until the bar fills',
+      'Calibration measures a pen',
+      'not counted',
+      'Drag points freely',
+      'tap the curve to add one',
+      'Let go to remove the point',
+      'Show the curve',
+      'Measure again',
+      'Next'
+    ]) {
+      expect(shown.join(' ')).not.toContain(sentence);
+    }
   });
 
   it('shows the pen pressing the graph as a dot, and offers number entry for a point when asked', () => {
@@ -323,10 +446,21 @@ describe('PressureCalibration', () => {
     expect(onReset).toHaveBeenCalledOnce();
     button('Measure again').click();
     flush();
-    expect(document.querySelector('[aria-current="step"]')?.textContent).toContain('As usual');
+    expect(document.querySelector('[aria-current="step"]')?.getAttribute('aria-label')).toBe('As usual');
     expect(preview.props.at(-1)!.redraw).toBe(false);
   });
 });
+
+/** Lifts the pen left down by `stroke(…, { lift: false })`. */
+function pointerUp() {
+  const event = new MouseEvent('pointerup', { bubbles: true });
+  Object.defineProperties(event, {
+    pointerId: { value: 1 },
+    pointerType: { value: 'pen' },
+    timeStamp: { value: 1000 }
+  });
+  document.querySelector('canvas')!.dispatchEvent(event);
+}
 
 function mount(component: () => JSX.Element) {
   disposals.push(render(component, document.body));
@@ -385,9 +519,10 @@ function calibration() {
 }
 
 function button(name: string | RegExp) {
-  const found = [...document.querySelectorAll('button')].find((each) =>
-    typeof name === 'string' ? each.textContent === name : name.test(each.textContent ?? '')
-  );
+  const found = [...document.querySelectorAll('button')].find((each) => {
+    const shown = each.getAttribute('aria-label') ?? each.textContent ?? '';
+    return typeof name === 'string' ? shown === name : name.test(shown);
+  });
   if (!found) {
     throw new Error(`No button ${name}`);
   }
@@ -395,9 +530,15 @@ function button(name: string | RegExp) {
   return found;
 }
 
-/** One second of contact on the test canvas, sampled every 4 ms, with `pressure` over the stroke's progress. */
-function stroke(pointerType: string, pressure: (progress: number) => number) {
-  const canvas = document.querySelector('canvas')!;
+/**
+ * One second of contact on the test canvas (or `canvas`), sampled every 4 ms, with `pressure` over the stroke's
+ * progress; `lift: false` leaves the pen down after its last move.
+ */
+function stroke(
+  pointerType: string,
+  pressure: (progress: number) => number,
+  { canvas = document.querySelector('canvas')!, lift = true }: { canvas?: Element; lift?: boolean } = {}
+) {
   const samples = Array.from({ length: 250 }, (_, index) => ({
     timeStamp: index * 4,
     pressure: pressure(index / 249),
@@ -413,5 +554,7 @@ function stroke(pointerType: string, pressure: (progress: number) => number) {
   };
   pointer('pointerdown', { ...samples[0], timeStamp: 0 });
   pointer('pointermove', { ...samples.at(-1), getCoalescedEvents: () => samples.slice(1) });
-  pointer('pointerup', { timeStamp: 1000, pressure: 0 });
+  if (lift) {
+    pointer('pointerup', { timeStamp: 1000, pressure: 0 });
+  }
 }

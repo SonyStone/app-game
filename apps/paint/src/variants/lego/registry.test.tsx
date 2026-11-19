@@ -250,7 +250,8 @@ it('binds symmetry modes, QuickShape and pressure through their narrow commands'
   document.querySelector<HTMLButtonElement>('[aria-label="QuickShape"]')!.click();
   expect(services.quickShape.toggle).toHaveBeenCalledOnce();
   document.querySelector<HTMLButtonElement>('[aria-label="Pressure calibration"]')!.click();
-  expect(services.windows.toggle).toHaveBeenCalledWith('pressure');
+  expect(services.pen.open).toHaveBeenCalledOnce();
+  expect(services.windows.toggle).not.toHaveBeenCalled();
 });
 
 it('binds the controlled foreground/background pair to its narrow swap command', () => {

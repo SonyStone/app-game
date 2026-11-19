@@ -14,15 +14,26 @@ import { createSignal, Match, Show, Switch, untrack } from 'solid-js';
 import { createPenStrokes } from './createPenStrokes';
 import styles from './PressureCalibration.module.css';
 import { PressureCurveEditor } from './PressureCurveEditor';
+import { Icon, PenNeeded, PressureStrip, StrokeGlyph, StrokeHint } from './StepPictures';
 
 /**
  * Pen pressure calibration as a block of its own, for a dialog, a panel or a page; it needs no editor. Three steps of
- * strokes on a test canvas, drawn as usual, firmly and lightly, fit one curve for the device (`fitPressureCurve`).
- * The result shows the curve over the measured pressure: its points are added, dragged and removed on the graph
- * (`PressureCurveEditor`), and the strokes drawn on the test canvas below are drawn again with each change, while a
- * dot on the curve follows the pen's pressure. Save hands the curve to the host; nothing is stored here.
- * With a `saved` curve it starts at the result. Mouse and touch strokes are not measured; it then asks for a pen.
- * With `onMeasured` it only measures: the fitted curve goes to the host after the last step.
+ * pen strokes, drawn as usual, firmly and lightly, fit one curve for the device (`fitPressureCurve`). The steps speak
+ * in pictures, without sentences: a row of three stroke pictograms of growing and shrinking weight marks the current
+ * step, and its line fills as pen samples come in; a looping picture shows the stroke wanted, a pen tip leaving a line
+ * as heavy as the pressure asked for; a histogram of the pressures measured so far (`histogram`) fills as the pen
+ * draws. Back, Cancel and Next (Finish on the last step) are icon buttons with accessible names; Next waits until the
+ * step has enough samples. Mouse and touch strokes are not measured: while the latest contact was not a pen, a
+ * pictogram shows that a pen is needed in place of the looping picture.
+ *
+ * The strokes are drawn on a test canvas of the block's own, or on the canvases inside `surface`, such as a larger
+ * drawing pad of the host's. The result shows the curve over the measured pressure: its points are added, dragged and
+ * removed on the graph (`PressureCurveEditor`), and the strokes drawn on the test canvas below are drawn again with
+ * each change, while a dot on the curve follows the pen's pressure. Save hands the curve to the host; nothing is
+ * stored here. With a `saved` curve it starts at the result. With `onMeasured` it only measures: the fitted curve goes
+ * to the host after the last step.
+ *
+ * Colours and sizes come from the host's custom properties; see `PressureCalibration.module.css`.
  */
 export function PressureCalibration(props: {
   /** The device's saved curve, or `undefined` while the pen is not calibrated. Read once, when mounted. */
@@ -38,7 +49,14 @@ export function PressureCalibration(props: {
    * An editor passes its current brush, the brush's images and its own recipe, so the canvas draws as its own does.
    */
   preview?: Pick<Parameters<typeof BrushPreview>[0], 'brush' | 'resources' | 'recipe' | 'color' | 'mixing'>;
-  /** Shown under the result's test canvas, such as how the host's brushes combine the curve with their own. */
+  /**
+   * Where the measuring steps take their strokes from: pen strokes on any canvas inside it count, and the block shows
+   * no test canvas of its own while measuring. Without it, the block's own test canvas.
+   */
+  surface?: Element | undefined;
+  /** Whether the measuring steps show the pressures measured so far; true by default. */
+  histogram?: boolean;
+  /** Shown under the result's test canvas, such as why the canvas keeps an earlier brush. */
   note?: JSX.Element;
   /**
    * Receives the fitted curve and the raw pressures it was fitted to (sorted, for a histogram) at the end of the last
@@ -47,12 +65,14 @@ export function PressureCalibration(props: {
    */
   onMeasured?: (curve: PressureCurve, measured: readonly number[]) => void;
 }) {
-  const [surface, setSurface] = createSignal<HTMLElement>();
-  const pen = createPenStrokes(surface);
+  const [ownSurface, setOwnSurface] = createSignal<HTMLElement>();
   const [step, setStep] = createSignal<Step>(untrack(() => (props.saved ? 'result' : 'normal')));
+  const pen = createPenStrokes(() => (step() !== 'result' && props.surface) || ownSurface());
   const [curve, setCurve] = createSignal<PressureCurve>(untrack(() => props.saved ?? identityPressureCurve));
-  /** Raw pressures counted from every step, sorted, for the histogram. */
+  /** Raw pressures counted from every step, sorted, for the result's histogram. */
   const [measured, setMeasured] = createSignal<readonly number[]>([]);
+  /** The counted raw pressures of each finished step, for the live histogram. */
+  const [finished, setFinished] = createSignal<Partial<Record<MeasuringStep, readonly number[]>>>({});
   /** The measuring step on screen, or `undefined` at the result. */
   const measuring = () => {
     const current = step();
@@ -60,8 +80,18 @@ export function PressureCalibration(props: {
   };
   const collected: Partial<Record<MeasuringStep, PressureStroke[]>> = {};
   const edited = () => !props.saved || !samePressureCurve(props.saved, curve());
+  /** How far step `each` is, from 0 to 1: finished steps are full, the current one counts its samples as drawn. */
+  const progress = (each: MeasuringStep, current: MeasuringStep) => {
+    const order = stepOrder.indexOf(each) - stepOrder.indexOf(current);
+    return order < 0 ? 1 : order > 0 ? 0 : Math.min(1, (pen.counted() + pen.drawing().length) / stepSamples[each]);
+  };
+  const groups = (current: MeasuringStep) =>
+    stepOrder.map((each) => ({
+      weight: each,
+      pressures: each === current ? [...pen.pressures(), ...pen.drawing()] : (finished()[each] ?? [])
+    }));
   const canvas = (redraw: boolean) => (
-    <div ref={setSurface} class={styles.canvas}>
+    <div ref={setOwnSurface} class={styles.canvas}>
       <BrushPreview
         brush={props.preview?.brush ?? testBrush}
         resources={props.preview?.resources}
@@ -71,6 +101,7 @@ export function PressureCalibration(props: {
         width={1024}
         height={512}
         redraw={redraw}
+        controls={redraw}
         mapPressure={redraw ? pressureMapping(curve()) : undefined}
       />
     </div>
@@ -82,58 +113,106 @@ export function PressureCalibration(props: {
         <Match when={measuring()}>
           {(current) => (
             <>
-              <ol class={styles.steps}>
+              <ol class={styles.steps} aria-label="Steps">
                 {stepOrder.map((each) => (
-                  <li aria-current={each === current() ? 'step' : undefined}>{stepText[each].name}</li>
+                  <li
+                    aria-current={each === current() ? 'step' : undefined}
+                    aria-label={stepName[each]}
+                    data-done={stepOrder.indexOf(each) < stepOrder.indexOf(current()) ? '' : undefined}
+                  >
+                    <StrokeGlyph weight={each} progress={progress(each, current())} />
+                    <Show when={each === current()}>
+                      <span
+                        class={styles.meter}
+                        role="progressbar"
+                        aria-label="Pen samples"
+                        aria-valuemin={0}
+                        aria-valuemax={stepSamples[each]}
+                        aria-valuenow={Math.min(stepSamples[each], pen.counted())}
+                      />
+                    </Show>
+                  </li>
                 ))}
               </ol>
-              <p class={styles.instruction}>{stepText[current()].instruction}</p>
-              {canvas(false)}
-              <progress
-                class={styles.progress}
-                aria-label="Pen samples"
-                max={stepSamples[current()]}
-                value={pen.counted()}
-              />
-              <Show when={pen.otherPointer()}>
-                {(type) => (
-                  <p class={styles.warning} role="status">
-                    Calibration measures a pen; {type()} strokes are not counted and change nothing.
-                  </p>
-                )}
+              <div class={styles.stage}>
+                <Show
+                  when={pen.otherPointer()}
+                  fallback={<StrokeHint weight={current()} label={stepName[current()]} />}
+                >
+                  {(type) => <PenNeeded type={type()} />}
+                </Show>
+              </div>
+              <Show when={props.histogram ?? true}>
+                <PressureStrip groups={groups(current())} />
               </Show>
+              <Show when={!props.surface}>{canvas(false)}</Show>
               <div class={styles.actions}>
                 <button
+                  type="button"
+                  aria-label="Back"
+                  title="Back"
+                  disabled={current() === stepOrder[0]}
+                  onClick={() => back(current())}
+                >
+                  <Icon name="back" />
+                </button>
+                <Show when={props.onCancel}>
+                  {(cancel) => (
+                    <button type="button" aria-label="Cancel" title="Cancel" onClick={() => cancel()()}>
+                      <Icon name="cancel" />
+                    </button>
+                  )}
+                </Show>
+                <button
+                  type="button"
                   class={styles.primary}
+                  aria-label={current() === 'light' ? 'Finish' : 'Next'}
+                  title={current() === 'light' ? 'Finish' : 'Next'}
                   disabled={pen.counted() < stepSamples[current()]}
                   onClick={() => next(current())}
                 >
-                  {current() === 'light' ? 'Show the curve' : 'Next'}
+                  <Icon name={current() === 'light' ? 'finish' : 'next'} />
                 </button>
-                <Show when={props.onCancel}>{(cancel) => <button onClick={() => cancel()()}>Cancel</button>}</Show>
               </div>
             </>
           )}
         </Match>
         <Match when={step() === 'result'}>
           <PressureCurveEditor curve={curve()} measured={measured()} marker={pen.pressure()} onChange={setCurve} />
-          <p class={styles.instruction}>
-            Drag points freely, tap the curve to add one, double-tap a point or drag it off the graph to remove it. Draw
-            on the canvas below: its strokes follow every change, and a dot shows your pressure on the curve.
-          </p>
           {canvas(true)}
           <Show when={props.note}>
             <p class={styles.note}>{props.note}</p>
           </Show>
           <div class={styles.actions}>
-            <button class={styles.primary} disabled={!edited()} onClick={() => props.onSave(curve())}>
-              Save
+            <button type="button" aria-label="Measure again" title="Measure again" onClick={again}>
+              <Icon name="again" />
             </button>
-            <button onClick={again}>Measure again</button>
-            <button disabled={!props.saved} onClick={() => props.onReset()}>
-              Reset
+            <button
+              type="button"
+              aria-label="Reset"
+              title="Reset"
+              disabled={!props.saved}
+              onClick={() => props.onReset()}
+            >
+              <Icon name="reset" />
             </button>
-            <Show when={props.onCancel}>{(cancel) => <button onClick={() => cancel()()}>Cancel</button>}</Show>
+            <Show when={props.onCancel}>
+              {(cancel) => (
+                <button type="button" aria-label="Cancel" title="Cancel" onClick={() => cancel()()}>
+                  <Icon name="cancel" />
+                </button>
+              )}
+            </Show>
+            <button
+              type="button"
+              class={styles.primary}
+              aria-label="Save"
+              title="Save"
+              disabled={!edited()}
+              onClick={() => props.onSave(curve())}
+            >
+              <Icon name="finish" />
+            </button>
           </div>
         </Match>
       </Switch>
@@ -142,7 +221,9 @@ export function PressureCalibration(props: {
 
   /** Keeps the strokes of `current` and moves to the next step, or fits the curve after the last one. */
   function next(current: MeasuringStep) {
-    collected[current] = pen.take();
+    const strokes = pen.take();
+    collected[current] = strokes;
+    setFinished((all) => ({ ...all, [current]: strokePressures(strokes) }));
     const following = stepOrder[stepOrder.indexOf(current) + 1];
     if (following) {
       setStep(following);
@@ -162,6 +243,19 @@ export function PressureCalibration(props: {
     setStep('result');
   }
 
+  /** Discards the strokes of `current` and of the step before it, and measures that step again. */
+  function back(current: MeasuringStep) {
+    const previous = stepOrder[stepOrder.indexOf(current) - 1];
+    if (!previous) {
+      return;
+    }
+
+    pen.take();
+    delete collected[previous];
+    setFinished(({ [previous]: _dropped, ...kept }) => kept);
+    setStep(previous);
+  }
+
   /** Discards the measured strokes and starts from the first step. */
   function again() {
     pen.take();
@@ -169,6 +263,7 @@ export function PressureCalibration(props: {
       delete collected[each];
     }
 
+    setFinished({});
     setMeasured([]);
     setStep('normal');
   }
@@ -182,11 +277,8 @@ type MeasuringStep = (typeof stepOrder)[number];
 
 const stepOrder = ['normal', 'hard', 'light'] as const;
 
-const stepText = {
-  normal: { name: 'As usual', instruction: 'Draw as you usually do: a few ordinary strokes, until the bar fills.' },
-  hard: { name: 'Firm', instruction: 'Draw a few strokes with the firmest pressure that is still comfortable.' },
-  light: { name: 'Light', instruction: 'Draw a few of the lightest strokes that still leave a line.' }
-} satisfies Record<MeasuringStep, { name: string; instruction: string }>;
+/** Each step's name, which its pictogram and its looping picture are labelled with. */
+const stepName = { normal: 'As usual', hard: 'Firm', light: 'Light' } satisfies Record<MeasuringStep, string>;
 
 /** Counted pen samples each step needs: a median wants about a thousand, the ends a few strokes. */
 const stepSamples = { normal: 1000, hard: 300, light: 300 } satisfies Record<MeasuringStep, number>;
