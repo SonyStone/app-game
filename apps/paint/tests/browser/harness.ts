@@ -1,3 +1,4 @@
+import { compareSoftRound } from '../gpu/softRoundComparison';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { initAbr } from '@app-game/abr-parser';
@@ -59,6 +60,7 @@ async function verifyAbrMaskBatches(report: Report) {
  * QA page.
  */
 export const verifications = {
+  'soft-round-comparison': compareSoftRound,
   gpu: verifyGpu,
   readback: verifyReadbackQueue,
   'brush-batches': verifyBrushBatches,

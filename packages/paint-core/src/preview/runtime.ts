@@ -1,18 +1,14 @@
+import { studioBrushRecipe } from '../composition/studioBrushRecipe';
 import { generatePreviewTip } from '@app-game/abr-brush/physical-tip';
 import { syntheticPath, type PreviewPoint } from '@app-game/abr-brush/stroke';
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { initAbr } from '@app-game/abr-parser';
 import { TILE_SIZE, type Sample } from '../brush';
-import { abrBrush } from '../composition/abrBrushEngine';
-import { createAbrProcessor } from '../composition/abrStrokeProcessor';
-import type { BrushSession } from '../composition/contracts';
+import type { BrushSession, PaintModules } from '../composition/contracts';
 import { createResourceSession } from '../composition/resourceSession';
-import { roundBrush } from '../composition/roundBrushEngine';
-import { texturedBrush } from '../composition/texturedBrushEngine';
 import type { Layer } from '../document';
 import { createPaintRenderer } from '../gpu/renderer';
 import { polygonSelection } from '../selectionMask';
-import { studioProcessors } from '../strokeProcessors';
 import { retouchFixture } from './fixture';
 import { preparePreview } from './prepare';
 import type { PreviewConfiguration, PreviewJob, PreviewReply } from './protocol';
@@ -106,10 +102,7 @@ export function createPreviewRuntime(rendererFactory = createPaintRenderer) {
           if (!engine) {
             throw new Error(`Preview engine ${brush.engine?.id} is not registered.`);
           }
-          const processor =
-            brush.engine?.id === 'abr' && brush.stroke.mode !== 'none'
-              ? createAbrProcessor(brush, 1)
-              : studioProcessors[brush.stroke.mode](brush, 1);
+          const processor = studioBrushRecipe.processors[studioBrushRecipe.selectProcessor(brush)](brush, 1);
           session = createResourceSession(cache, (resources) =>
             engine({
               brush,
@@ -190,11 +183,7 @@ export function createPreviewRuntime(rendererFactory = createPaintRenderer) {
   };
 }
 
-const engines: Record<string, typeof abrBrush.engine> = {
-  abr: abrBrush.engine,
-  round: roundBrush.engine,
-  textured: texturedBrush.engine
-};
+const engines: PaintModules['engines'] = studioBrushRecipe.engines;
 
 function toSamples(points: readonly PreviewPoint[], configuration: PreviewConfiguration): Sample[] {
   return points.map((point) => ({
