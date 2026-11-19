@@ -27,8 +27,10 @@ export function photoshopCategory(
     status: (view) =>
       feature && !view.values[feature]
         ? 'Off'
-        : id === 'texture' && !gate(view)
-          ? 'No embedded pattern'
+        : !gate(view)
+          ? id === 'texture'
+            ? 'No embedded pattern'
+            : 'No embedded second tip'
           : statuses[id](view.values),
     settings: [
       ...(feature
