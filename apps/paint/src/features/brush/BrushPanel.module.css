@@ -127,6 +127,7 @@
   &::-webkit-slider-runnable-track {
     height: 3px;
     border-radius: 2px;
+    corner-shape: round;
     background: #d4d4d4;
   }
 

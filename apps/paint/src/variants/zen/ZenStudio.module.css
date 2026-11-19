@@ -65,6 +65,7 @@
   place-items: center;
   translate: -50% -50%;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--zen-surface);
   box-shadow:
     0 0 0 0.5px var(--zen-line),
@@ -113,6 +114,7 @@
 .dot {
   display: block;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dot-color);
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.22);
   pointer-events: none;
@@ -147,6 +149,7 @@
 .dab {
   display: block;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dot-color);
   box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.18);
 }
@@ -185,6 +188,7 @@
   border: 0;
   translate: -50% -50%;
   border-radius: 50%;
+  corner-shape: round;
   pointer-events: auto;
   touch-action: none;
   cursor: pointer;
@@ -473,6 +477,7 @@
   width: 216px;
   height: 216px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--zen-surface);
   box-shadow:
     0 0 0 8px var(--zen-surface),
@@ -486,6 +491,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  corner-shape: round;
   background: conic-gradient(#f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
   mask: radial-gradient(circle closest-side, transparent calc(100% - 22px), #000 calc(100% - 21.5px));
   pointer-events: none;
@@ -496,6 +502,7 @@
   inset: 29px;
   overflow: hidden;
   border-radius: 50%;
+  corner-shape: round;
   pointer-events: none;
 
   canvas {
@@ -511,6 +518,7 @@
   height: 18px;
   translate: -50% -50%;
   border-radius: 50%;
+  corner-shape: round;
   box-shadow:
     0 0 0 3px #fff,
     0 1px 6px 3px rgb(0 0 0 / 0.3);

@@ -36,7 +36,7 @@
    * drawn every radius is multiplied by `--lego-corner-scale` (see the squircle look at the end of the file): the
    * radii are worked out as arcs, depth subtracted first, and then scaled. Scaling the whole nest keeps its gaps.
    */
-  --lego-radius: 13px;
+  --lego-radius: 18px;
   --lego-corner-shape: round;
   --lego-corner-scale: 1;
   --lego-r-plate: calc(var(--lego-radius) * var(--lego-corner-scale));
@@ -328,6 +328,7 @@
   left: clamp(3px, calc(var(--fraction) - 3px), calc(100% - 9px));
   width: 6px;
   border-radius: min(3px, var(--lego-r-inner));
+  corner-shape: round;
   background: #ffffff;
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.3);
 }
@@ -1043,6 +1044,7 @@
   height: 4px;
   translate: -50% 0;
   border-radius: 2px;
+  corner-shape: round;
   background: rgb(255 255 255 / 0.4);
 }
 

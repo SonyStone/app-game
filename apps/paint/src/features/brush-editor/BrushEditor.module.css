@@ -327,6 +327,7 @@
   flex: 1;
   height: 4px;
   border-radius: 2px;
+  corner-shape: round;
   background: linear-gradient(to right, var(--accent-color) var(--position), var(--line-color) var(--position));
 }
 

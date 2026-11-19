@@ -85,6 +85,7 @@
   position: relative;
   height: 26px;
   border-radius: 13px;
+  corner-shape: round;
   touch-action: none;
   cursor: ew-resize;
   outline: none;
