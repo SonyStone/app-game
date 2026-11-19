@@ -1,6 +1,7 @@
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { createEffect, createMemo, untrack } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
@@ -15,7 +16,8 @@ import {
   type PresetGroup
 } from '../brush-library';
 import { patchAbrValues } from '../brush-library/abrDocument';
-import { readRoundPreset } from '../brush-library/nativeDocument';
+import { hostExtension, hostSettings, syncAbrPreset } from '../brush-library/abrHost';
+import { nativePresetText, readRoundPreset } from '../brush-library/nativeDocument';
 
 /**
  * Owns the active tool and the brush settings captured by the next stroke. The brush and the eraser each use a preset
@@ -264,7 +266,28 @@ export function createBrushTools(options: {
     const slots = { ...next.slots };
     for (const slot of brushSlots) {
       const entry = slots[slot];
-      if (previous?.slots[slot] === entry || (entry.brush.engine && entry.brush.engine.id !== 'round')) {
+      if (previous?.slots[slot] === entry) {
+        continue;
+      }
+      if (entry.brush.engine?.id === 'abr') {
+        const preset = options.library.find(entry.preset);
+        const base = documentEdit(entry.preset)?.abrDocument ?? entry.sampledDocument ?? preset?.abrDocument;
+        if (base && preset && entry.legacyBrush) {
+          slots[slot] = {
+            ...entry,
+            sampledDocument: syncAbrPreset(
+              {
+                ...preset,
+                abrDocument: base,
+                settings: entry.brush
+              },
+              true
+            ).abrDocument
+          };
+        }
+        continue;
+      }
+      if (entry.brush.engine && entry.brush.engine.id !== 'round') {
         continue;
       }
       const preset = { id: entry.preset, name: slot, settings: entry.brush, resourceIds: [] };
@@ -365,7 +388,7 @@ export function createBrushTools(options: {
   function remember(current: ToolState, slot: BrushSlot, next: Brush): ToolState {
     const id = current.slots[slot].preset;
     const preset = options.library.find(id);
-    const slots = { ...current.slots, [slot]: { preset: id, brush: next } };
+    const slots = { ...current.slots, [slot]: { ...current.slots[slot], preset: id, brush: next } };
     if (!preset) {
       return { ...current, slots };
     }
@@ -408,29 +431,81 @@ export function createBrushTools(options: {
         options.onError?.('Could not restore brush edits: ' + String(error));
       }
     }
-    persisting = true;
     if (currentState() === initial) {
       const restored = restoredState(stored, options.library.find, options.onError);
       if (restored) {
         for (const slot of brushSlots) {
           const entry = restored.slots[slot];
+          await restoreSampledSlot(entry, slot, stored);
           const draft = documentEdit(entry.preset);
           if (draft) {
             entry.brush.engine = draft.engine;
           }
         }
-        setState(restored);
+        persisting = true;
+        if (currentState() === initial) {
+          setState(restored);
+        } else {
+          persist(currentState());
+        }
       }
     } else {
       persist(currentState());
     }
+    persisting = true;
   }
+
+  /** Builds a sampled slot from its own settings and the selected preset's durable coverage. */
+  async function restoreSampledSlot(entry: ToolState['slots'][BrushSlot], slot: BrushSlot, stored: unknown) {
+    const old = isRecord(stored) && isRecord(stored.slots) ? stored.slots[slot] : undefined;
+    if (
+      isRecord(old) &&
+      isRecord(old.brush) &&
+      isRecord(old.brush.engine) &&
+      old.brush.engine.id === 'textured' &&
+      entry.brush.engine?.id === 'abr' &&
+      options.library.assets
+    ) {
+      entry.legacyBrush = old.brush;
+      try {
+        const preset = options.library.find(entry.preset)!;
+        const base = parseDocument(preset.abrDocument!, brushSchema);
+        const legacy = { ...restoredBrush(old.brush), engine: old.brush.engine as Brush['engine'] };
+        const text =
+          typeof old.sampledDocument === 'string'
+            ? old.sampledDocument
+            : nativePresetText({ ...preset, settings: legacy }, base.resources);
+        const doc = parseDocument(text, brushSchema);
+        if (doc.id !== entry.preset || doc.definition.tips[doc.definition.sequence.tips[0]!]!.kind !== 'sampled') {
+          throw new Error('Expected a sampled slot document for ' + entry.preset);
+        }
+        const images = await options.library.assets(preset);
+        if (images.isErr()) {
+          throw new Error(images.error.message);
+        }
+        const { resolveAbrText } = await import('../brush-library/abrPresetDocument');
+        const { engine } = await resolveAbrText(text, images.value);
+        const ext = doc.definition.extensions?.[hostExtension];
+        entry.brush = { ...entry.brush, ...(ext && hostSettings.parse(ext.value)), engine };
+        entry.sampledDocument = text;
+      } catch (cause) {
+        options.onError?.('Could not convert ' + slot + ' slot: ' + String(cause));
+      }
+    }
+  }
+
   /** Draft documents survive reopening the studio. Their GPU masks regenerate from shared assets. */
   function persist(value: ToolState) {
     const documents = Object.fromEntries(
       [...documentEdits].map(([id, { base, abrDocument }]) => [id, { base, abrDocument }])
     );
-    options.storage?.writeState(documentEdits.size ? { ...value, documentEdits: documents } : value);
+    const slots = Object.fromEntries(
+      brushSlots.map((slot) => {
+        const { legacyBrush, ...entry } = value.slots[slot];
+        return [slot, { ...entry, brush: legacyBrush ?? entry.brush }];
+      })
+    );
+    options.storage?.writeState({ ...value, slots, ...(documentEdits.size && { documentEdits: documents }) });
   }
 }
 
@@ -471,7 +546,16 @@ type ToolState = {
   /** The brush tool whose brush the next stroke uses: the active tool, or the last brush tool while lassoing. */
   slot: BrushSlot;
   /** Each brush tool's preset and current brush; the brush's colors are unused, see `colors`. */
-  slots: Record<BrushSlot, { preset: string; brush: Brush; nativeDocument?: string }>;
+  slots: Record<
+    BrushSlot,
+    {
+      preset: string;
+      brush: Brush;
+      nativeDocument?: string;
+      sampledDocument?: string;
+      legacyBrush?: Record<string, unknown>;
+    }
+  >;
   eraserMode: EraserMode;
   /** Settings changed on the fly, by preset id. */
   changes: Record<string, Partial<Brush>>;

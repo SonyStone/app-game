@@ -337,3 +337,43 @@ function abrPreset(): Omit<BrushPreset, 'id'> {
     resourceIds: ['tip']
   };
 }
+
+it('restores the sampled slot document on the second load and retains its legacy brush', async () => {
+  const { webcrypto } = await import('node:crypto');
+  vi.stubGlobal('crypto', webcrypto);
+  try {
+    const name = crypto.randomUUID();
+    const first = await setup(name);
+    const legacy = { ...defaultBrush(), size: 9, engine: { id: 'textured', settings: { tipId: 'mask' } } };
+    await first.storage.putPreset(
+      {
+        id: 'nib',
+        name: 'Nib',
+        created: 1,
+        resourceIds: ['mask'],
+        settings: { ...legacy, size: 17 }
+      },
+      [{ id: 'mask', width: 1, height: 1, format: 'r8unorm', pixels: Uint8Array.of(255) }]
+    );
+    first.storage.writeState({ version: 2, slots: { brush: { preset: 'nib', brush: legacy } }, colors: {} });
+    await first.storage.idle();
+    let document: string | undefined;
+    for (let run = 0; run < 2; run++) {
+      const reader = await setup(name);
+      flush();
+      expect(reader.tools.brush()).toMatchObject({ size: 9, engine: { id: 'abr' } });
+      await reader.storage.idle();
+      const state = (await reader.storage.readState()) as {
+        slots: { brush: { sampledDocument: string; brush: Brush } };
+      };
+      expect(state.slots.brush.brush).toEqual(legacy);
+      expect(JSON.parse(state.slots.brush.sampledDocument).definition.size).toBe(9);
+      if (document) {
+        expect(state.slots.brush.sampledDocument).toBe(document);
+      }
+      document = state.slots.brush.sampledDocument;
+    }
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

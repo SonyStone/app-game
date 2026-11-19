@@ -13,9 +13,11 @@ import { expect, it } from 'vitest';
 import { softRoundCandidate } from '../../../tests/fixtures/softRound';
 import { abrDocument, photoshopExtensions, resolveAbr } from './abrDocument';
 import { convertAbr, coverageMap } from './abrPresetDocument';
+import { builtInPresets } from './brushPresets';
 import { createBrushLibrary } from './createBrushLibrary';
-import { resolveNative } from './nativeDocument';
+import { nativeDocument, resolveNative } from './nativeDocument';
 import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
+import { resolveDocument } from './resolveDocument';
 
 await initAbr();
 
@@ -315,4 +317,43 @@ it.each([
   };
   const { document, assets } = await roundTrip(await abrDocument(source));
   await compare(await resolveAbr(document, assets), baseline);
+});
+
+it('switches a Paint round tip to the ABR sampler for scattering and back when disabled', async () => {
+  const document = nativeDocument(builtInPresets[0]!);
+  const values = { scatteringEnabled: true, 'scatterDynamics.jitter': 150, count: 2 };
+  document.definition.extensions = { 'photoshop.scattering.v1': { impact: 'appearance', value: values } };
+  const resolved = await resolveDocument(document, new Map());
+  expect(resolved).toMatchObject({ path: 'abr', status: 'supported' });
+  expect(resolved.reasons.join(' ')).toContain('photoshop.scattering.v1');
+  const expected = softRoundCandidate();
+  const form = expected.engine.settings.values;
+  form.useScattering = true;
+  form.scattering.scatter = 150;
+  form.scattering.count = 2;
+  expect(dabs(resolved.prepared!)).toEqual(dabs(expected));
+
+  values.scatteringEnabled = false;
+  expect(await resolveDocument(document, new Map())).toMatchObject({ path: 'round', status: 'supported' });
+});
+
+it('returns format compatibility reasons with the renderer decision', async () => {
+  const document = nativeDocument(builtInPresets[0]!);
+  document.origin = {
+    format: 'example',
+    presetKey: 'test',
+    importer: 'test',
+    mappings: [{ field: 'grain', value: 0, target: '/tips', outcome: 'approximate', reason: 'grain omitted' }]
+  };
+  expect(await resolveDocument(document, new Map())).toMatchObject({
+    path: 'abr',
+    status: 'approximate',
+    reasons: expect.arrayContaining(['grain: grain omitted'])
+  });
+  document.definition.tool = 'unknown';
+  expect(await resolveDocument(document, new Map())).toMatchObject({
+    path: 'abr',
+    status: 'unavailable',
+    reasons: ['Unknown marking tool: unknown']
+  });
 });

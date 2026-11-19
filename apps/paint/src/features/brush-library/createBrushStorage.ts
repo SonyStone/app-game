@@ -99,9 +99,11 @@ export function createBrushStorage(options: {
           (!isStoredPreset(old) ||
             old.abrDocument ||
             old.nativeDocument ||
+            old.sampledDocument ||
             !!old.abrSource !== !!legacy.abrSource ||
             old.name !== legacy.name ||
             old.created !== legacy.created ||
+            JSON.stringify(old.resourceIds) !== JSON.stringify(legacy.resourceIds) ||
             JSON.stringify(restorePreset(old).settings) !== JSON.stringify(legacy.settings))
         ) {
           current = false;
@@ -201,7 +203,11 @@ export function createBrushStorage(options: {
 export type BrushStorage = ReturnType<typeof createBrushStorage>;
 
 /** A stored user preset; `created` orders presets and is kept when a preset is replaced. */
-export type StoredPreset = BrushPreset & { created: number };
+export type StoredPreset = BrushPreset & {
+  created: number;
+  /** Migration projection beside the original settings and image ids for older readers. */
+  sampledDocument?: Pick<BrushPreset, 'abrDocument' | 'settings' | 'resourceIds' | 'assetIds'>;
+};
 
 type StoreName = 'presets' | 'resources' | 'state';
 
@@ -286,18 +292,27 @@ async function releaseUnused(transaction: IDBTransaction, deleted: unknown, repl
   if (!isStoredPreset(deleted)) {
     return;
   }
-  const retained = new Set([...(replacement?.resourceIds ?? []), ...(replacement?.assetIds ?? [])]);
-  const discarded = [...deleted.resourceIds, ...(deleted.assetIds ?? [])].filter((id) => !retained.has(id));
+  const retained = new Set(replacement && storedImages(replacement));
+  const discarded = storedImages(deleted).filter((id) => !retained.has(id));
   if (!discarded.length) {
     return;
   }
   const remaining = await request<unknown[]>(transaction.objectStore('presets').getAll());
-  const used = new Set(
-    remaining.filter(isStoredPreset).flatMap((preset) => [...preset.resourceIds, ...(preset.assetIds ?? [])])
-  );
+  const used = new Set(remaining.filter(isStoredPreset).flatMap(storedImages));
   for (const resource of discarded) {
     if (!used.has(resource)) {
       transaction.objectStore('resources').delete(resource);
     }
   }
+}
+
+/** Includes the original image ids used by older readers and the migrated projection's digests. */
+function storedImages(preset: StoredPreset) {
+  const migrated = preset.sampledDocument;
+  return [
+    ...preset.resourceIds,
+    ...(preset.assetIds ?? []),
+    ...(migrated?.assetIds ?? []),
+    ...(migrated?.resourceIds ?? [])
+  ];
 }

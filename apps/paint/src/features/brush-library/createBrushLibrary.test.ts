@@ -16,13 +16,17 @@ afterEach(() => {
 it('stores user presets and loads them lazily, one at a time or as a list, without their images', async () => {
   const name = crypto.randomUUID();
   const first = open(name);
-  const ink = first.library.add(preset('Ink', ['tip']), [image('tip')]);
-  const imported = await first.library.importPreset({ ...preset('Imported'), source: 'abr:1' }, [image('abr')]);
-  const marker = first.library.add(preset('Marker'));
+  const sample = (name: string, resourceIds: string[] = []) => ({
+    ...preset(name, resourceIds),
+    settings: { size: 20 }
+  });
+  const ink = first.library.add(sample('Ink', ['tip']), [image('tip')]);
+  const imported = await first.library.importPreset({ ...sample('Imported'), source: 'abr:1' }, [image('abr')]);
+  const marker = first.library.add(sample('Marker'));
   first.library.update(ink.id, { name: 'Fine ink' });
   first.library.remove(marker.id);
   // Importing the same source again replaces the earlier import in place.
-  const replaced = await first.library.importPreset({ ...preset('Imported again'), source: 'abr:1' }, [image('abr')]);
+  const replaced = await first.library.importPreset({ ...sample('Imported again'), source: 'abr:1' }, [image('abr')]);
   expect(replaced.id).toBe(imported.id);
   flush();
   expect(first.library.presets().map(({ name }) => name)).toEqual([
@@ -169,3 +173,29 @@ function preset(name: string, resourceIds: string[] = []): Omit<BrushPreset, 'id
 function image(id: string): BrushResource {
   return { id, width: 2, height: 2, format: 'r8unorm', pixels: new Uint8Array([1, 2, 3, 4]) };
 }
+
+it('migrates sampled coverage once, preserving the old resource and reporting a missing sample', async () => {
+  const { webcrypto } = await import('node:crypto');
+  vi.stubGlobal('crypto', webcrypto);
+  try {
+    const name = crypto.randomUUID();
+    const onError = vi.fn();
+    const { storage } = open(name);
+    const original = { ...preset('Nib', ['tip']), id: 'nib', created: 1 };
+    await storage.putPreset(original, [image('tip')]);
+    await storage.putPreset({ ...original, id: 'bad', created: 2, resourceIds: [] });
+    for (let run = 0; run < 2; run++) {
+      const reader = open(name, { onError });
+      const write = vi.spyOn(reader.storage, 'putPreset');
+      await Promise.all([reader.library.load('nib'), reader.library.loadAll()]);
+      expect(reader.library.find('nib')?.settings.engine?.id).toBe('abr');
+      expect(reader.library.find('bad')?.settings).toEqual(original.settings);
+      expect(write).toHaveBeenCalledTimes(run ? 0 : 1);
+      expect(onError).toHaveBeenCalledTimes(run + 1);
+    }
+    expect(await storage.readPreset('nib')).toMatchObject(original);
+    expect(await storage.readResources(['tip'])).toHaveLength(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
