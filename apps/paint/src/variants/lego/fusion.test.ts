@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
 import { placePart, type Part } from './board';
-import { joinsAttribute, partJoins } from './fusion';
+import { joinsAttribute, panelEdges, partEdges, partJoins } from './fusion';
 import { partDefinitions, partGroup } from './parts';
-import { brushValueParts } from './parts/values';
 import { penPressureKind } from './parts/pressureCurve';
+import { brushValueParts } from './parts/values';
 
 const part = (id: string, kind: string, column: number, row: number, columns = 1, rows = 1): Part => ({
   id,
@@ -27,7 +27,11 @@ it('fuses neighbours of one group along their shared edge', () => {
 });
 
 it('keeps the gap between neighbours of different groups', () => {
-  const parts = [part('undo', 'action:undo', 0, 0), part('redo', 'action:redo', 1, 0), part('size', 'value:size', 2, 0)];
+  const parts = [
+    part('undo', 'action:undo', 0, 0),
+    part('redo', 'action:redo', 1, 0),
+    part('size', 'value:size', 2, 0)
+  ];
 
   expect(joined(parts)).toEqual({ undo: 'right', redo: 'left' });
 });
@@ -42,7 +46,11 @@ it('fuses only parts on the same plate', () => {
 });
 
 it('does not fuse parts that only touch at a corner or lie a cell apart', () => {
-  const parts = [part('lasso', 'action:lasso', 0, 0), part('fill', 'action:fill', 1, 1), part('transform', 'action:transform', 3, 0)];
+  const parts = [
+    part('lasso', 'action:lasso', 0, 0),
+    part('fill', 'action:fill', 1, 1),
+    part('transform', 'action:transform', 3, 0)
+  ];
 
   expect(joined(parts)).toEqual({});
 });
@@ -82,7 +90,11 @@ it('keeps the gap along a side that lies only partly against its group', () => {
 });
 
 it('fuses again after a move brings a part beside its group, and parts once apart stop fusing', () => {
-  const before = [part('undo', 'action:undo', 0, 0), part('redo', 'action:redo', 2, 0), part('size', 'value:size', 1, 0)];
+  const before = [
+    part('undo', 'action:undo', 0, 0),
+    part('redo', 'action:redo', 2, 0),
+    part('size', 'value:size', 1, 0)
+  ];
   expect(joined(before)).toEqual({});
 
   const moved = placePart(before, { ...before[1]!, cell: { column: 1, row: 0 } });
@@ -110,4 +122,18 @@ it('gives every registered kind a group', () => {
   for (const kind of kinds) {
     expect(partGroup(kind), kind).toEqual(expect.any(String));
   }
+});
+
+it('squares a plate pushed against the screen, and the parts along that side of it, as the edge runs straight on', () => {
+  const view = { width: 1000, height: 800 };
+  expect(joinsAttribute(panelEdges({ left: 900, top: 300, width: 100, height: 200 }, view))).toBe('right');
+  expect(joinsAttribute(panelEdges({ left: 0, top: 0, width: 100, height: 200 }, view))).toBe('top left');
+  expect(joinsAttribute(panelEdges({ left: 20, top: 300, width: 100, height: 200 }, view))).toBeUndefined();
+
+  // Size and Opacity side by side against the right edge: only Opacity lies along it, over both of its corners.
+  const parts = [part('size', 'value:size', 0, 0, 1, 4), part('opacity', 'value:opacity', 1, 0, 1, 4)];
+  const right = panelEdges({ left: 900, top: 0, width: 100, height: 200 }, view);
+  expect(parts.map((each) => joinsAttribute(partEdges(each, parts, right)))).toEqual(['top', 'top right']);
+  // A floating plate's grip lies above its parts, so they keep their top corners.
+  expect(parts.map((each) => joinsAttribute(partEdges(each, parts, right, true)))).toEqual([undefined, 'right']);
 });

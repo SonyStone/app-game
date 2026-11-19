@@ -53,9 +53,13 @@
   /* The mark on a fresh keypad value, 3 px inside its field. */
   --lego-r-card-mark: calc(max(0px, var(--lego-radius) - 13px) * var(--lego-corner-scale));
 
-  /* The Settings-style lists LEGO shows on its plates and popups: rows 8 px in, their icons 6 px into a row. */
+  /*
+   * The Settings-style lists LEGO shows on its plates and popups. A row is concentric with its plate, 8 px in; its
+   * icon tile with the row, 7 px in, but never under 3 px, so that it does not turn square, nor over 5 px, so that on
+   * its 26 px a squircle does not turn it into a blob.
+   */
   --settings-list-radius: var(--lego-r-popup-tile);
-  --settings-list-icon-radius: calc(max(0px, var(--lego-radius) - 14px) * var(--lego-corner-scale));
+  --settings-list-icon-radius: calc(min(5px, max(3px, var(--lego-radius) - 15px)) * var(--lego-corner-scale));
 
   background: #faf8f4;
   color: var(--lego-ink);
@@ -454,6 +458,10 @@
   --brush-library-icon-ink: var(--lego-ink);
   --brush-library-disabled: rgb(255 255 255 / 0.35);
   --brush-library-height: min(440px, calc(70vh - 64px));
+  --brush-library-row-radius: var(--settings-list-radius);
+  --brush-library-icon-radius: var(--settings-list-icon-radius);
+  /* The sample lies about as far inside its row as an icon inside its own. */
+  --brush-library-sample-radius: var(--settings-list-icon-radius);
   --settings-split-back: var(--lego-accent);
 
   container: brush-library / inline-size;
@@ -1873,9 +1881,14 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Inside the key, so that it never crosses a fused neighbour; white on the accent's own keys. */
   button:focus-visible {
     outline: 2px solid var(--lego-accent);
-    outline-offset: 1px;
+    outline-offset: -2px;
+  }
+
+  button:focus-visible:is([data-ok], [aria-selected='true']) {
+    outline-color: #ffffff;
   }
 
   button:active {
@@ -1957,14 +1970,25 @@
   }
 }
 
+/* Cancel and OK: one fused pair, a 1 px seam between them and only the pair's outer corners rounded. */
 .keypadActions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  gap: 1px;
 
   .entryCard & button {
     height: 44px;
     font-weight: 600;
+  }
+
+  .entryCard & button:first-child {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .entryCard & button:last-child {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
   }
 
   .entryCard & button:first-child {
@@ -2298,6 +2322,34 @@
   border-bottom-left-radius: 0;
 }
 
+/*
+ * A plate pushed against the screen's edge is concentric with it (`panelEdges`): the edge runs straight on, so the
+ * plate's corners on that side are square, and so are those of the parts lying along that side, nested in it.
+ */
+.panel[data-edges~='top'],
+.part[data-edges~='top'] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.panel[data-edges~='right'],
+.part[data-edges~='right'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.panel[data-edges~='bottom'],
+.part[data-edges~='bottom'] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.panel[data-edges~='left'],
+.part[data-edges~='left'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 /* The outline around one selected part takes its square corners on the sides it fuses along. */
 .selection[data-joins~='top'] {
   border-top-left-radius: 0;
@@ -2396,11 +2448,22 @@
   font-weight: 600;
 }
 
+/* The shortcuts as one segmented control: fused, a 1 px seam between them, only its outer corners rounded. */
 .tileLookChoices {
   display: grid;
   grid-auto-columns: 1fr;
   grid-auto-flow: column;
-  gap: 4px;
+  gap: 1px;
+
+  button:not(:first-child) {
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
+  button:not(:last-child) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
 
   button {
     display: grid;

@@ -75,7 +75,7 @@ function cornerTokens(radius: number, scale = 1) {
       .replace(/var\((--[\w-]+)\)/g, (_match, inner: string) => `${value(inner)}`)
       .replace(/px/g, '')
       .replace(/calc/g, '')
-      .replace(/max/g, 'Math.max');
+      .replace(/\b(min|max)\(/g, 'Math.$1(');
     return Function(`return ${expression}`)() as number;
   };
 
@@ -93,8 +93,11 @@ it('derives every corner from the plate radius, an inner one being the outer les
     '--lego-r-card-key': 3,
     '--lego-r-card-mark': 0,
     '--settings-list-radius': 5,
-    '--settings-list-icon-radius': 0
+    '--settings-list-icon-radius': 3
   });
+  // A list's icon tile is concentric with its row at the default 18 px, and kept between 3 and 5 px elsewhere.
+  expect(cornerTokens(18)).toMatchObject({ '--settings-list-radius': 10, '--settings-list-icon-radius': 3 });
+  expect(cornerTokens(plateRadii.full)).toMatchObject({ '--settings-list-icon-radius': 5 });
   expect(cornerTokens(plateRadii.soft)).toMatchObject({ '--lego-r-tile': 14, '--lego-r-inner': 11 });
   expect(cornerTokens(plateRadii.sharp)).toMatchObject({
     '--lego-r-plate': 6,
@@ -124,7 +127,10 @@ it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills'
     .map(stylesheet)
     .flatMap((css) => [...css.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]!))
     .filter(
-      (value) => !/var\(--lego-r|var\(--studio-row-|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(value)
+      (value) =>
+        !/var\(--lego-r|var\(--studio-row-|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(
+          value
+        )
     );
 
   expect(fixed).toEqual([]);
