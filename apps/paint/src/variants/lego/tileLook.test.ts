@@ -376,3 +376,12 @@ function stylesheet(name: string) {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const source = path.resolve(here, '../..');
 const repository = path.resolve(here, '../../../../..');
+
+it('keeps a device cell override optional when reading and writing trial choices', () => {
+  localStorage.setItem(tileLookKey, JSON.stringify({ radius: 11, squircle: false }));
+  expect(readTileLook()).toEqual({ radius: 11, squircle: false });
+  const trial = createRoot((dispose) => ({ ...createTileLook(), dispose }));
+  trial.change({ cellSize: 32 });
+  expect(readTileLook()).toEqual({ radius: 11, squircle: false, cellSize: 32 });
+  trial.dispose();
+});

@@ -9,7 +9,8 @@ import { HueTriangle } from '../../features/hue-triangle';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
 import { ColorDisc } from '../zen/ColorDisc';
-import { cellGap, pitch, type Span } from './board';
+import { type Span } from './board';
+import { useGrid } from './grid';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import type { LookSpec } from './looks';
@@ -58,6 +59,7 @@ export const autoWheelLook = () => 'disc';
 
 /** The picker in `look` (see `wheelLooks`), filling a part of `span`. */
 export function WheelPart(props: PickerProps & { look: string; span: Span }) {
+  const { length } = useGrid();
   // Keyed: another look is another picker, with state of its own.
   const look = () => wheelLooks.find((candidate) => candidate.id === props.look) ?? wheelLooks[0]!;
 
@@ -82,6 +84,7 @@ export function WheelPart(props: PickerProps & { look: string; span: Span }) {
  * the user fills with parts like any other.
  */
 export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: Element) => void }) {
+  const grid = useGrid();
   const color = () => props.color;
 
   return (
@@ -92,7 +95,7 @@ export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: 
       aria-label={`Color ${color()}`}
       onClick={(event) => props.onOpen(event.currentTarget)}
     >
-      <Show when={props.span.columns >= 2}>
+      <Show when={grid.length(props.span.columns) >= 92}>
         <span class={styles.name}>{color()}</span>
       </Show>
     </button>
@@ -104,11 +107,12 @@ export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: 
  * side by side when wider, named once four cells wide. Tapping the background color swaps the two.
  */
 export function PairPart(props: { span: Span; colors: { foreground: string; background: string }; swap: () => void }) {
+  const grid = useGrid();
   const background = () => props.colors.background;
-  const named = () => props.span.columns >= 4;
+  const named = () => grid.length(props.span.columns) >= 188;
 
   return (
-    <div class={[styles.pair, props.span.columns >= 2 && styles.pairWide]}>
+    <div class={[styles.pair, grid.length(props.span.columns) >= 92 && styles.pairWide]}>
       <span
         class={styles.pairForeground}
         style={{ background: props.colors.foreground }}
@@ -221,8 +225,12 @@ export function HarmonyPart(props: {
   settings: ReturnType<LegoServices['color']['oklch']['settings']>;
   onSettings: LegoServices['color']['oklch']['update'];
 }) {
+  const grid = useGrid();
   return (
-    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
+    <div
+      class={[wheelStyles.guides, styles.wheelField]}
+      data-captioned={grid.length(props.span.rows) >= 92 ? '' : undefined}
+    >
       <HarmonyField settings={props.settings} onSettings={props.onSettings} />
     </div>
   );
@@ -230,15 +238,16 @@ export function HarmonyPart(props: {
 
 /** The OKLCH disk's gamut mask list, filling the part; its caption shows once the part is two cells tall. */
 export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
+  const grid = useGrid();
   return (
-    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={props.span.rows >= 2 ? '' : undefined}>
+    <div
+      class={[wheelStyles.guides, styles.wheelField]}
+      data-captioned={grid.length(props.span.rows) >= 92 ? '' : undefined}
+    >
       <MaskField settings={props.settings} onSettings={props.onSettings} />
     </div>
   );
 }
-
-/** Pixels a part of `cells` cells covers along one side. */
-const length = (cells: number) => cells * pitch - cellGap;
 
 /**
  * `children` laid out `width` pixels wide and scaled, keeping proportions, to fit `box`; never more than half again

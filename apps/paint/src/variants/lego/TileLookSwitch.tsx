@@ -1,4 +1,5 @@
 import { createSignal, For, Show } from 'solid-js';
+import { referenceCell } from './grid';
 import styles from './LegoStudio.module.css';
 import { plateRadii, radiusRange, type TileLook } from './tileLook';
 
@@ -8,6 +9,7 @@ import { plateRadii, radiusRange, type TileLook } from './tileLook';
  * switch squircle corners. Changes apply at once and are kept on the device. Remove it with the trial.
  */
 export function TileLookSwitch(props: {
+  cellSize: number;
   look: TileLook;
   /** Changes some of the look; the caller keeps it. */
   onChange: (patch: Partial<TileLook>) => void;
@@ -56,6 +58,33 @@ export function TileLookSwitch(props: {
                   }
                 >
                   <small>{entry[0]}</small>
+                </button>
+              )}
+            </For>
+          </div>
+          <label class={styles.tileLookRadius}>
+            <span>
+              Cell size <output>{props.cellSize} px</output>
+            </span>
+            <input
+              type="range"
+              aria-label="Cell size"
+              min={28}
+              max={referenceCell}
+              step={2}
+              value={props.cellSize}
+              onInput={(event) => props.onChange({ cellSize: event.currentTarget.valueAsNumber })}
+            />
+          </label>
+          <div class={styles.tileLookChoices}>
+            <For each={[referenceCell, 40, 36, 32]}>
+              {(size) => (
+                <button
+                  type="button"
+                  aria-pressed={size === props.cellSize ? 'true' : 'false'}
+                  onClick={() => props.onChange({ cellSize: size })}
+                >
+                  {size}
                 </button>
               )}
             </For>

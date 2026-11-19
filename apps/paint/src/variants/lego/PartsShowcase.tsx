@@ -1,7 +1,8 @@
 import { createMemo, createSignal, For } from 'solid-js';
 import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
-import { cellGap, maxSpan, pitch, type Span } from './board';
+import { cellGap, maxSpan, type Span } from './board';
 import { attachCataloguePreview, createCatalogueFixture } from './createCatalogueFixture';
+import { referenceCell, useGrid } from './grid';
 import { LegoServicesContext } from './LegoServices';
 import lego from './LegoStudio.module.css';
 import { lookFits } from './looks';
@@ -12,6 +13,7 @@ import styles from './PartsShowcase.module.css';
 
 /** Registry-driven specimens at representative size steps, or a supported grid size selected in the toolbar. */
 export function PartsShowcase() {
+  const grid = useGrid();
   const fixture = createCatalogueFixture();
   const [columns, setColumns] = createSignal(0);
   const [rows, setRows] = createSignal(0);
@@ -26,7 +28,15 @@ export function PartsShowcase() {
   return (
     <LegoServicesContext value={fixture.services}>
       <PreviewAttachment value={attachCataloguePreview}>
-        <main class={[lego.editor, styles.showcase]} data-parts-showcase="">
+        <main
+          class={[lego.editor, styles.showcase]}
+          style={{
+            '--lego-cell': `${grid.cell()}px`,
+            '--lego-hit-size': `${referenceCell}px`,
+            '--lego-gap': `${cellGap}px`
+          }}
+          data-parts-showcase=""
+        >
           <header>
             <h1>LEGO parts</h1>
             <p>Every registered kind and look, with shared in-memory colors, brushes and layers.</p>
@@ -75,8 +85,8 @@ export function PartsShowcase() {
                         <div
                           class={styles.tile}
                           style={{
-                            width: `${specimen.span.columns * pitch - cellGap}px`,
-                            height: `${specimen.span.rows * pitch - cellGap}px`
+                            width: `${grid.length(specimen.span.columns)}px`,
+                            height: `${grid.length(specimen.span.rows)}px`
                           }}
                         >
                           <PartFrame
@@ -92,13 +102,13 @@ export function PartsShowcase() {
                   </For>
                   <figure data-specimen={`${mode}:missing`}>
                     <figcaption>Missing part</figcaption>
-                    <div class={styles.tile} style={{ width: '92px', height: '92px' }}>
+                    <div class={styles.tile} style={{ width: `${grid.length(2)}px`, height: `${grid.length(2)}px` }}>
                       <PartFrame kind="unavailable:example" span={{ columns: 2, rows: 2 }} mode={mode} immediate />
                     </div>
                   </figure>
                   <figure data-specimen={`${mode}:broken`}>
                     <figcaption>Broken part</figcaption>
-                    <div class={styles.tile} style={{ width: '92px', height: '92px' }}>
+                    <div class={styles.tile} style={{ width: `${grid.length(2)}px`, height: `${grid.length(2)}px` }}>
                       <PartFrame kind="broken:example" span={{ columns: 2, rows: 2 }} mode={mode} immediate>
                         <BrokenSpecimen />
                       </PartFrame>

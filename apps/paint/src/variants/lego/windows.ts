@@ -5,7 +5,6 @@ import {
   ownedFrame,
   ownedPanel,
   panelFrame,
-  pitch,
   type Board,
   type Panel,
   type Point
@@ -20,6 +19,7 @@ import {
  * Floating panels remain visible in every mode.
  */
 export function visiblePanels(
+  pitch: number,
   board: Board,
   open: string | undefined,
   editing: boolean,
@@ -66,17 +66,18 @@ export function visiblePanels(
     const host = board.panels.find((other) => other.parts.some((part) => part.id === panel.owner));
     const anchor = host?.parts.find((part) => part.id === panel.owner);
     const pin = pinned?.get(panel.id);
-    let frame = pin ? frameAt(panel, pin, editing) : panelFrame(panel, view, editing);
+    let frame = pin ? frameAt(pitch, panel, pin, editing) : panelFrame(pitch, panel, view, editing);
     if (!pin && host && anchor && depth < 8) {
       const { origin } = frameOf(host, depth + 1);
       const at = { x: origin.x + anchor.cell.column * pitch, y: origin.y + anchor.cell.row * pitch };
       // Where the user put it from its swatch, kept in view; otherwise beside the swatch where there is room.
       frame = panel.offset
         ? keptInView(
-            frameAt(panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }),
+            frameAt(pitch, panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }),
             view
           )
         : ownedFrame(
+            pitch,
             panel,
             {
               left: at.x,
@@ -126,7 +127,7 @@ function keptInView(frame: ReturnType<typeof panelFrame>, view: { width: number;
 /** Swatch `open` and the swatches whose panels it lies in, innermost first; empty when nothing is open or it is gone. */
 export function openChain(board: Board, open: string | undefined) {
   const chain = new Set<string>();
-  for (let owner = open; owner !== undefined && !chain.has(owner); ) {
+  for (let owner = open; owner !== undefined && !chain.has(owner);) {
     const found = findPart(board, owner);
     if (!found) {
       break;

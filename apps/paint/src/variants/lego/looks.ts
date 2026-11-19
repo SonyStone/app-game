@@ -32,13 +32,13 @@ export function fits(min: Span, span: Span) {
  * chosen at the largest size wins, as Android shows a widget's largest layout its size admits: a look chosen at 2×2
  * also shows at 3×3 until something else is chosen there. Without such a choice the part shows `auto`.
  */
-export function resolveLook(chosen: Part['looks'], span: Span, looks: readonly LookSpec[], auto: string) {
+export function resolveLook(chosen: Part['looks'], span: Span, looks: readonly LookSpec[], auto: string, room = span) {
   let best: { id: string; area: number; columns: number } | undefined;
 
   for (const [key, id] of Object.entries(chosen ?? {})) {
     const at = parseSpanKey(key);
     const look = looks.find((candidate) => candidate.id === id);
-    if (!at || !look || !fits(at, span) || !lookFits(look, span)) {
+    if (!at || !look || !fits(at, span) || !lookFits(look, room)) {
       continue;
     }
 

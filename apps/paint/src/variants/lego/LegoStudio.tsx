@@ -18,8 +18,9 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
-import { closedHeight, createSheet } from './createSheet';
+import { createSheet } from './createSheet';
 import { FileApplicationControls } from './FileMenu';
+import { cellGap, createGrid, GridContext, referenceCell } from './grid';
 import { createKits } from './kits';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
@@ -58,6 +59,8 @@ import { TileLookSwitch } from './TileLookSwitch';
  */
 export function LegoStudio(
   props: PaintVariantProps & {
+    /** Positive grid cell edge in CSS pixels. A stored trial size takes precedence. */
+    cellSize?: number;
     /** Host-owned installation, offline status and build identity in the File menu. */
     applicationControls?: JSX.Element;
   }
@@ -86,6 +89,7 @@ export function LegoStudio(
   const board = createBoard(reportSavingError);
   /** TEMPORARY: the tile look trial's choice, applied to the whole editor; see `tileLook.ts`. */
   const tileLook = createTileLook();
+  const grid = createGrid(() => tileLook.look().cellSize ?? props.cellSize);
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
@@ -131,7 +135,7 @@ export function LegoStudio(
   const card = () => {
     const { width, height } = session.size();
     const middle = sheet.middle();
-    const up = editing() && !sheet.sunk() ? Math.max(closedHeight, sheet.height()) : 0;
+    const up = editing() && !sheet.sunk() ? Math.max(grid.pitch(), sheet.height()) : 0;
     const progress = middle > 0 ? Math.min(up, middle) / middle : 0;
     const smallest = Math.max(0.3, (height - middle - cardMargin * 2) / height);
     const scale = 1 - progress * (1 - smallest);
@@ -196,173 +200,178 @@ export function LegoStudio(
   };
 
   return (
-    <LegoServicesContext value={services}>
-      <PaintEditor
-        session={session}
-        class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLook.look().squircle ? styles.squircleLook : ''}`}
-        style={{
-          '--lego-radius': `${tileLook.look().radius}px`,
-          '--card-scale': `${card().scale}`,
-          '--card-x': `${card().x}px`,
-          '--card-y': `${card().y}px`,
-          // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
-          '--sheet-time': sheet.settling() ? '260ms' : '70ms'
-        }}
-      >
-        <PaintStage session={session} class={styles.workspace}>
-          <StageGuides session={session} />
-          <StageOverlays session={session} />
-        </PaintStage>
-        <div class={styles.ui}>
-          <BoardView
-            board={board}
-            kits={kits}
-            session={session}
-            editing={editing()}
-            openPanel={openPanel()}
-            onOpenPanel={setOpenPanel}
-            sheet={sheet}
-            onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
-            ref={setBoardControls}
-          />
-          <Show when={popup() && popupPlace()}>
-            {(place) => (
-              <div
-                ref={setPopupElement}
-                class={styles.popup}
-                data-keeps-panel
-                style={{
-                  left: `${place().x}px`,
-                  top: `${place().y}px`,
-                  visibility: popupSize.width ? undefined : 'hidden'
-                }}
-              >
-                <Switch>
-                  <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
-                    {(open) => {
-                      const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
-                      return (
-                        <PartFrame kind="Looks">
-                          <Show when={findPart(board.board(), id())?.part}>
-                            {(part) => (
-                              <LookChooser
-                                part={part()}
-                                onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
-                              />
-                            )}
-                          </Show>
+    <GridContext value={grid}>
+      <LegoServicesContext value={services}>
+        <PaintEditor
+          session={session}
+          class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLook.look().squircle ? styles.squircleLook : ''}`}
+          style={{
+            '--lego-cell': `${grid.cell()}px`,
+            '--lego-gap': `${cellGap}px`,
+            '--lego-hit-size': `${referenceCell}px`,
+            '--lego-radius': `${(tileLook.look().radius * grid.cell()) / referenceCell}px`,
+            '--card-scale': `${card().scale}`,
+            '--card-x': `${card().x}px`,
+            '--card-y': `${card().y}px`,
+            // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
+            '--sheet-time': sheet.settling() ? '260ms' : '70ms'
+          }}
+        >
+          <PaintStage session={session} class={styles.workspace}>
+            <StageGuides session={session} />
+            <StageOverlays session={session} />
+          </PaintStage>
+          <div class={styles.ui}>
+            <BoardView
+              board={board}
+              kits={kits}
+              session={session}
+              editing={editing()}
+              openPanel={openPanel()}
+              onOpenPanel={setOpenPanel}
+              sheet={sheet}
+              onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
+              ref={setBoardControls}
+            />
+            <Show when={popup() && popupPlace()}>
+              {(place) => (
+                <div
+                  ref={setPopupElement}
+                  class={styles.popup}
+                  data-keeps-panel
+                  style={{
+                    left: `${place().x}px`,
+                    top: `${place().y}px`,
+                    visibility: popupSize.width ? undefined : 'hidden'
+                  }}
+                >
+                  <Switch>
+                    <Match when={popup()?.popup.kind === 'looks' && popup()!.popup}>
+                      {(open) => {
+                        const id = () => (open() as Extract<Popup, { kind: 'looks' }>).id;
+                        return (
+                          <PartFrame kind="Looks">
+                            <Show when={findPart(board.board(), id())?.part}>
+                              {(part) => (
+                                <LookChooser
+                                  part={part()}
+                                  onLook={(look) => board.set(chooseLook(board.latest(), id(), part().span, look))}
+                                />
+                              )}
+                            </Show>
+                          </PartFrame>
+                        );
+                      }}
+                    </Match>
+                    <Match when={popup()?.popup.kind === 'part' && popup()!.popup}>
+                      {(open) => (
+                        <FileApplicationControls
+                          value={props.applicationControls ? () => props.applicationControls : null}
+                        >
+                          <PartFrame
+                            kind={(open() as Extract<Popup, { kind: 'part' }>).partKind}
+                            popup
+                            onDone={() => setPopup(undefined)}
+                          />
+                        </FileApplicationControls>
+                      )}
+                    </Match>
+                    <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
+                      {(open) => (
+                        <PartFrame kind="Note">
+                          <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>
                         </PartFrame>
-                      );
-                    }}
-                  </Match>
-                  <Match when={popup()?.popup.kind === 'part' && popup()!.popup}>
-                    {(open) => (
-                      <FileApplicationControls
-                        value={props.applicationControls ? () => props.applicationControls : null}
-                      >
-                        <PartFrame
-                          kind={(open() as Extract<Popup, { kind: 'part' }>).partKind}
-                          popup
-                          onDone={() => setPopup(undefined)}
-                        />
-                      </FileApplicationControls>
-                    )}
-                  </Match>
-                  <Match when={popup()?.popup.kind === 'note' && popup()!.popup}>
-                    {(open) => (
-                      <PartFrame kind="Note">
-                        <p class={styles.note}>{(open() as Extract<Popup, { kind: 'note' }>).text}</p>
-                      </PartFrame>
-                    )}
-                  </Match>
-                </Switch>
-              </div>
-            )}
-          </Show>
-          <div class={styles.controls}>
-            <TileLookSwitch look={tileLook.look()} onChange={tileLook.change} />
-            <Show when={props.experimentsHref}>
-              {(href) => (
-                <a class={styles.editButton} href={href()}>
-                  Exit
-                </a>
+                      )}
+                    </Match>
+                  </Switch>
+                </div>
               )}
             </Show>
-            <Show when={session.fullscreen.shown}>
-              {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
-              <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
-                <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+            <div class={styles.controls}>
+              <TileLookSwitch cellSize={grid.cell()} look={tileLook.look()} onChange={tileLook.change} />
+              <Show when={props.experimentsHref}>
+                {(href) => (
+                  <a class={styles.editButton} href={href()}>
+                    Exit
+                  </a>
+                )}
+              </Show>
+              <Show when={session.fullscreen.shown}>
+                {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
+                <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
+                  <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
+                </button>
+              </Show>
+              <button
+                type="button"
+                class={styles.editButton}
+                data-active={editing() ? '' : undefined}
+                onClick={() => {
+                  setPopup(undefined);
+                  setOpenPanel(undefined);
+                  sheet.to('closed');
+                  setEditing(!editing());
+                }}
+              >
+                {editing() ? 'Done' : 'Edit'}
               </button>
+            </div>
+            <Show when={abrViewer() !== undefined}>
+              <AbrViewerDialog
+                open={abrViewer() === 'open'}
+                close={() => setAbrViewer('closed')}
+                mixing={session.brush().mixing}
+                onMixingChange={(mixing) => session.tools.updateBrush({ mixing })}
+                onUseBrush={session.presets.useBrush}
+              />
             </Show>
-            <button
-              type="button"
-              class={styles.editButton}
-              data-active={editing() ? '' : undefined}
-              onClick={() => {
-                setPopup(undefined);
-                setOpenPanel(undefined);
-                sheet.to('closed');
-                setEditing(!editing());
-              }}
-            >
-              {editing() ? 'Done' : 'Edit'}
-            </button>
-          </div>
-          <Show when={abrViewer() !== undefined}>
-            <AbrViewerDialog
-              open={abrViewer() === 'open'}
-              close={() => setAbrViewer('closed')}
-              mixing={session.brush().mixing}
-              onMixingChange={(mixing) => session.tools.updateBrush({ mixing })}
-              onUseBrush={session.presets.useBrush}
-            />
-          </Show>
-          <Show when={studioOpen()}>
-            <BrushStudioDialog
-              class={styles.brushStudio}
-              session={session}
-              editor={services.brushEditor}
-              away={boardControls()?.carrying() ?? false}
-              hostRow={(setting, category) => {
-                const kind = brushSettingKind(setting.id);
-                if (!partDefinition(kind)) {
-                  return undefined;
-                }
+            <Show when={studioOpen()}>
+              <BrushStudioDialog
+                class={styles.brushStudio}
+                session={session}
+                editor={services.brushEditor}
+                away={boardControls()?.carrying() ?? false}
+                hostRow={(setting, category) => {
+                  const kind = brushSettingKind(setting.id);
+                  if (!partDefinition(kind)) {
+                    return undefined;
+                  }
 
-                return (
+                  return (
+                    <StudioSettingRow
+                      kind={kind}
+                      span={studioPartSpan}
+                      look="slider"
+                      label={brushSettingName(category, setting)}
+                      onBoard={onBoard(kind)}
+                      onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
+                      onPlace={() => boardControls()?.place(kind, studioPartSpan)}
+                    />
+                  );
+                }}
+                penPane={
                   <StudioSettingRow
-                    kind={kind}
-                    span={studioPartSpan}
-                    look="slider"
-                    label={brushSettingName(category, setting)}
-                    onBoard={onBoard(kind)}
-                    onLift={(event) => boardControls()?.lift(event, kind, studioPartSpan)}
-                    onPlace={() => boardControls()?.place(kind, studioPartSpan)}
+                    kind={penPressureKind}
+                    span={studioCurveSpan}
+                    look="curve"
+                    tall
+                    label="Pen pressure"
+                    onBoard={onBoard(penPressureKind)}
+                    onLift={(event) => boardControls()?.lift(event, penPressureKind, pressureCurveSpan)}
+                    onPlace={() => boardControls()?.place(penPressureKind, pressureCurveSpan)}
                   />
-                );
-              }}
-              penPane={
-                <StudioSettingRow
-                  kind={penPressureKind}
-                  span={studioCurveSpan}
-                  look="curve"
-                  tall
-                  label="Pen pressure"
-                  onBoard={onBoard(penPressureKind)}
-                  onLift={(event) => boardControls()?.lift(event, penPressureKind, pressureCurveSpan)}
-                  onPlace={() => boardControls()?.place(penPressureKind, pressureCurveSpan)}
-                />
-              }
-              startOnPen={studioOnPen()}
-              measuring={penMeasuring()}
-              onMeasuring={setPenMeasuring}
-              onClose={closeStudio}
-            />
-          </Show>
-          <SessionNotices session={session} />
-        </div>
-      </PaintEditor>
-    </LegoServicesContext>
+                }
+                startOnPen={studioOnPen()}
+                measuring={penMeasuring()}
+                onMeasuring={setPenMeasuring}
+                onClose={closeStudio}
+              />
+            </Show>
+            <SessionNotices session={session} />
+          </div>
+        </PaintEditor>
+      </LegoServicesContext>
+    </GridContext>
   );
 }
 

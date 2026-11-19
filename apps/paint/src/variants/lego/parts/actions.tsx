@@ -3,6 +3,7 @@ import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
+import { referenceCell, useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import { definePart, type PartBinding, type PartGroup } from './definition';
@@ -129,6 +130,7 @@ function ActionPart(props: {
   onPress: (anchor: Element) => void;
   status?: string;
 }) {
+  const grid = useGrid();
   return (
     <button
       type="button"
@@ -144,7 +146,12 @@ function ActionPart(props: {
         name={props.icon}
         size={Math.min(40, 20 + (Math.min(props.span.columns, props.span.rows) - 1) * 10)}
       />
-      <Show when={props.span.columns >= 2}>
+      <Show
+        when={
+          grid.length(props.span.columns) >=
+          (grid.cell() >= referenceCell ? 92 : Math.max(92, 34 + (props.status ?? props.label).length * 6))
+        }
+      >
         <span class={styles.name}>{props.status ?? props.label}</span>
       </Show>
     </button>

@@ -2,6 +2,7 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, For, Show } from 'solid-js';
 import { besideRect, type Point } from './board';
+import { useGrid } from './grid';
 import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
@@ -31,6 +32,7 @@ export function SpawnMenu(props: {
   onLiftKit: (event: PointerEvent, kit: Kit) => void;
   onClose: () => void;
 }) {
+  const grid = useGrid();
   const [root, setRoot] = createSignal<HTMLElement>();
   const [card, setCard] = createSignal<HTMLElement>();
   const cardSize = createElementSize(card);
@@ -89,9 +91,9 @@ export function SpawnMenu(props: {
   const cardPlace = () =>
     besideRect(
       {
-        left: props.at.x - ringRadius - 44,
+        left: props.at.x - ringRadius - grid.cell(),
         top: props.at.y - ringRadius - 16,
-        width: ringRadius * 2 + 88,
+        width: ringRadius * 2 + grid.cell() * 2,
         height: ringRadius * 2 + 32
       },
       { width: cardSize.width ?? 0, height: cardSize.height ?? 0 },

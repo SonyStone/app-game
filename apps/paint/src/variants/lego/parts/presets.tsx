@@ -1,6 +1,6 @@
 import { createSignal, onSettled, Show } from 'solid-js';
 import { PresetStroke } from '../../../features/brush-library/PresetStroke';
-import { cellGap, pitch } from '../board';
+import { useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import { definePart, type PartBinding } from './definition';
@@ -19,10 +19,11 @@ export const presetPart = definePart({
 
 /** Controlled library sample. Its renderer owns only cacheable preview resources and releases them on disposal. */
 function PresetPart(props: ReturnType<typeof presetNeeds>) {
+  const { length } = useGrid();
   let tile!: HTMLButtonElement;
   const [backgrounds, setBackgrounds] = createSignal<{ normal: string; active: string }>();
-  const named = () => props.span.columns >= 2;
-  const large = () => props.span.rows >= 2;
+  const named = () => length(props.span.columns) >= 92;
+  const large = () => length(props.span.rows) >= 60;
   const height = () => length(props.span.rows) - (large() && named() ? 22 : 0);
 
   // The preview engine accepts hex colors only; read the CSS palette once after the tile is connected.
@@ -68,8 +69,6 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
     </button>
   );
 }
-
-const length = (cells: number) => cells * pitch - cellGap;
 
 function presetNeeds(services: LegoServices, frame: PartBinding) {
   const id = () => frame.kind.slice('preset:'.length);

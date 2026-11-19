@@ -1,4 +1,5 @@
 .editor {
+  --lego-pitch: calc(var(--lego-cell) + var(--lego-gap));
   /* The Zen color disc reads these. */
   --zen-surface: #ffffff;
   --zen-line: rgb(0 0 0 / 0.12);
@@ -140,7 +141,7 @@
   cursor: grab;
   background-color: var(--lego-plate);
   background-image: radial-gradient(circle, var(--lego-stud) 0 9px, var(--lego-stud-rim) 10px, transparent 11px);
-  background-size: 48px 48px;
+  background-size: var(--lego-pitch) var(--lego-pitch);
   /* Stud centers on the cells' centers: the cell (0, 0) corner plus half a cell, less half the 48 px tile. */
   background-position: calc(var(--stud-x) - 2px) calc(var(--stud-y) - 2px);
   outline: 1.5px dashed var(--lego-plate-line);
@@ -215,9 +216,9 @@
 .corner {
   position: absolute;
   z-index: 3;
-  width: 44px;
-  height: 44px;
-  margin: -22px 0 0 -22px;
+  width: var(--lego-hit-size);
+  height: var(--lego-hit-size);
+  margin: calc(var(--lego-hit-size) / -2) 0 0 calc(var(--lego-hit-size) / -2);
   cursor: nwse-resize;
   touch-action: none;
   pointer-events: auto;
@@ -305,8 +306,8 @@
   span {
     display: grid;
     place-items: center;
-    width: 32px;
-    height: 32px;
+    width: min(32px, calc(var(--lego-cell) - 4px));
+    height: min(32px, calc(var(--lego-cell) - 4px));
     border-radius: 50%;
     corner-shape: round;
     background: var(--swatch, var(--lego-tile));
@@ -477,7 +478,7 @@
   color: #ffffff;
 
   header {
-    min-height: 48px;
+    min-height: var(--lego-pitch);
     padding: 0 0 0 8px;
   }
 }
@@ -531,8 +532,8 @@
 /* A pressure curve's graph opened from its small picture: as large as the part lifted from the studio. */
 .popupCurve {
   display: grid;
-  width: calc(4 * 48px - 4px);
-  height: calc(4 * 48px - 4px);
+  width: calc(4 * var(--lego-pitch) - var(--lego-gap));
+  height: calc(4 * var(--lego-pitch) - var(--lego-gap));
   border-radius: var(--lego-r-popup-tile);
   overflow: hidden;
   background: var(--lego-tile);
@@ -542,8 +543,8 @@
 .popupSlider {
   position: relative;
   display: grid;
-  width: calc(5 * 48px - 4px);
-  height: 44px;
+  width: calc(5 * var(--lego-pitch) - var(--lego-gap));
+  height: var(--lego-cell);
   border-radius: var(--lego-r-popup-tile);
   overflow: hidden;
 }
@@ -585,7 +586,7 @@
 .iconButton {
   display: grid;
   place-items: center;
-  width: 36px;
+  width: calc(var(--lego-hit-size) - 8px);
   padding: 0;
 }
 
@@ -1054,7 +1055,7 @@
   position: absolute;
   top: 9px;
   left: 50%;
-  width: 36px;
+  width: calc(var(--lego-hit-size) - 8px);
   height: 4px;
   translate: -50% 0;
   border-radius: 2px;
@@ -1127,7 +1128,7 @@
 
     &::after {
       width: 4px;
-      height: 40px;
+      height: calc(var(--lego-hit-size) - 4px);
     }
   }
 
@@ -1135,7 +1136,7 @@
     cursor: row-resize;
 
     &::after {
-      width: 40px;
+      width: calc(var(--lego-hit-size) - 4px);
       height: 4px;
     }
   }
@@ -1293,7 +1294,7 @@
       width: var(--studs-width);
       height: var(--studs-height);
       background-image: radial-gradient(circle, var(--lego-stud) 0 9px, var(--lego-stud-rim) 10px, transparent 11px);
-      background-size: 48px 48px;
+      background-size: var(--lego-pitch) var(--lego-pitch);
       pointer-events: none;
     }
   }
@@ -1412,7 +1413,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    min-height: 44px;
+    min-height: var(--lego-hit-size);
     padding: 0 12px;
     border: 0;
     border-radius: var(--lego-r-bar-button);
@@ -1463,8 +1464,8 @@
 
 .trayTile {
   position: relative;
-  width: 44px;
-  height: 44px;
+  width: var(--lego-cell);
+  height: var(--lego-cell);
   border-radius: var(--lego-r-tile);
   overflow: hidden;
   background: var(--lego-tile);
@@ -1675,12 +1676,12 @@
   min-width: 0;
 
   &[data-modes] {
-    grid-template-rows: minmax(0, 1fr) 36px;
+    grid-template-rows: minmax(0, 1fr) calc(var(--lego-cell) - 8px);
     padding-bottom: 4px;
   }
 
   select {
-    min-height: 36px;
+    min-height: calc(var(--lego-cell) - 8px);
     width: calc(100% - 8px);
     min-width: 0;
     margin: 0 4px;
@@ -1935,14 +1936,14 @@
   align-items: baseline;
   justify-content: flex-end;
   gap: 2px;
-  height: 48px;
+  height: var(--lego-pitch);
   padding: 0 12px;
   border-radius: var(--lego-r-card-key);
   background: rgb(255 255 255 / 0.08);
   font-size: 28px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  line-height: 48px;
+  line-height: var(--lego-pitch);
 
   small {
     color: rgb(255 255 255 / 0.62);
@@ -1959,7 +1960,7 @@
 .keypadKeys {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  grid-auto-rows: 44px;
+  grid-auto-rows: var(--lego-cell);
   gap: 4px;
 
   .entryCard & button {
@@ -1983,7 +1984,7 @@
   gap: 1px;
 
   .entryCard & button {
-    height: 44px;
+    height: var(--lego-cell);
     font-weight: 600;
   }
 
@@ -2020,8 +2021,8 @@
 
 .levelZone {
   display: grid;
-  grid-template-columns: repeat(8, 40px);
-  grid-auto-rows: 40px;
+  grid-template-columns: repeat(8, calc(var(--lego-cell) - 4px));
+  grid-auto-rows: calc(var(--lego-cell) - 4px);
   gap: 4px;
 
   .entryCard & button {
@@ -2086,7 +2087,7 @@
   --studio-slider-seam: 1px;
   --studio-group-gap: 12px;
   --studio-disabled: var(--lego-plate-raise);
-  --studio-row: 44px;
+  --studio-row: var(--lego-cell);
   --studio-text: 13px;
   --studio-small: 11px;
   --studio-name: 18px;
@@ -2109,7 +2110,7 @@
 
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
-  height: 44px;
+  height: var(--lego-cell);
   border-radius: var(--studio-row-top) var(--studio-row-top) var(--studio-row-bottom) var(--studio-row-bottom);
   background: var(--lego-tile);
   color: var(--lego-ink);
@@ -2227,8 +2228,8 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: calc(var(--lego-hit-size) - 8px);
+  height: calc(var(--lego-hit-size) - 8px);
   padding: 0;
   border: 0;
   border-radius: var(--lego-r-card-key);
@@ -2429,7 +2430,7 @@
   position: relative;
 
   > button {
-    min-width: 36px;
+    min-width: calc(var(--lego-hit-size) - 8px);
     padding-inline: 10px;
   }
 }
@@ -2475,7 +2476,7 @@
   button {
     display: grid;
     place-items: center;
-    min-height: 44px;
+    min-height: var(--lego-hit-size);
     padding: 2px;
     border: 0;
     border-radius: var(--lego-r-card-key);
@@ -2512,5 +2513,5 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  min-height: 36px;
+  min-height: calc(var(--lego-hit-size) - 8px);
 }

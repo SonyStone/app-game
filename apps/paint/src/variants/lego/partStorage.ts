@@ -7,14 +7,17 @@ import {
   newId,
   panelFrame,
   partData,
-  pitch,
   placeBlock,
   type Board,
   type Panel,
   type Part
 } from './board';
+import { cellGap, referenceCell } from './grid';
 import { layersKit } from './layersKit';
 import { swatchPanelParts } from './swatchPanelParts';
+
+/** Old records used this pitch when saving pixel positions. */
+const pitch = referenceCell + cellGap;
 
 /** Reads parts independently, retaining malformed records behind safe layout fields. */
 export const storedPart = z.unknown().transform((record): Part => {
@@ -221,7 +224,7 @@ function migrateV4Windows(board: Board, version: number): Board {
     }
 
     const legacy = legacyFrame(panel).rect;
-    const anchor = host && panelFrame(host.panel, view).origin;
+    const anchor = host && panelFrame(pitch, host.panel, view).origin;
     const at =
       owner && !window.placed && host && anchor
         ? {
@@ -243,7 +246,7 @@ function migrateV4Windows(board: Board, version: number): Board {
       }
 
       removed.add(part.id);
-      const { origin } = panelFrame(panel, view);
+      const { origin } = panelFrame(pitch, panel, view);
       added.push({
         id: `${part.id}-window`,
         at: {
@@ -332,7 +335,7 @@ const currentVersion = 5;
 
 /** Version 4 used a 36px handle when converting cell-origin positions into stored top-left positions. */
 function legacyFrame(panel: LegacyPanel) {
-  const frame = frameAt({ ...panel, floating: undefined }, { x: 0, y: 0 });
+  const frame = frameAt(pitch, { ...panel, floating: undefined }, { x: 0, y: 0 });
   return {
     ...frame,
     rect: { ...frame.rect, top: frame.rect.top - (panel.window ? 36 : 0) }

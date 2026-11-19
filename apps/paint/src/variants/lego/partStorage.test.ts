@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
+import { cellGap, referenceCell } from './grid';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { maxSpan, partData, pinPanels, placePart, pruneOwned, putPanel, removePart, type Part } from './board';
 import { createBoard, defaultBoard } from './createBoard';
 import { createKits, unpackKit } from './kits';
+
+const pitch = referenceCell + cellGap;
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -161,7 +164,7 @@ it('retains envelope, board, panel, kit and owned-panel fields through edits', (
   const current = board.latest().panels[0]!;
   const moved = { ...current.parts[0]!, cell: { column: 3, row: 4 } };
   const next = putPanel(board.latest(), { ...current, parts: placePart(current.parts, moved) });
-  board.set(pinPanels(next, new Map([['panel', { x: 50, y: 50 }]]), { width: 100, height: 100 }));
+  board.set(pinPanels(pitch, next, new Map([['panel', { x: 50, y: 50 }]]), { width: 100, height: 100 }));
   kits.rename('saved', 'Renamed');
   expect(JSON.parse(localStorage.getItem('paint.lego')!)).toEqual({
     version: 5,
