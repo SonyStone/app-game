@@ -175,7 +175,7 @@
   canvas {
     width: 24px;
     height: 24px;
-    border-radius: var(--lego-r-inner);
+    border-radius: var(--lego-r-badge);
     flex-shrink: 0;
   }
 

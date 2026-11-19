@@ -99,6 +99,10 @@ it('derives every corner from the plate radius, an inner one being the outer les
   expect(cornerTokens(18)).toMatchObject({ '--settings-list-radius': 10, '--settings-list-icon-radius': 3 });
   expect(cornerTokens(plateRadii.full)).toMatchObject({ '--settings-list-icon-radius': 5 });
   expect(cornerTokens(plateRadii.soft)).toMatchObject({ '--lego-r-tile': 14, '--lego-r-inner': 11 });
+  // A badge nests as an inner corner but stops at 4 px, so on 20 px a squircle keeps its straight sides.
+  expect(cornerTokens(plateRadii.today)).toMatchObject({ '--lego-r-badge': 4 });
+  expect(cornerTokens(18)).toMatchObject({ '--lego-r-inner': 9, '--lego-r-badge': 4 });
+  expect(cornerTokens(plateRadii.sharp)).toMatchObject({ '--lego-r-badge': 0 });
   expect(cornerTokens(plateRadii.sharp)).toMatchObject({
     '--lego-r-plate': 6,
     '--lego-r-tile': 0,

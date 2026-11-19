@@ -48,6 +48,12 @@
   /* A tile in a popup, 8 px in. */
   --lego-r-popup-tile: calc(max(0px, var(--lego-radius) - 8px) * var(--lego-corner-scale));
   --lego-r-inner: calc(max(0px, var(--lego-radius) - 9px) * var(--lego-corner-scale));
+  /*
+   * A badge at that depth, under about 24 px high (a value chip, a slider's name, a colour chip, a layer's thumbnail):
+   * the inner radius, but never more than 4 px of arc, so that a squircle keeps its straight sides on so small a
+   * thing instead of turning it into a blob.
+   */
+  --lego-r-badge: calc(min(4px, max(0px, var(--lego-radius) - 9px)) * var(--lego-corner-scale));
   /* A key on the number entry card, 10 px in; a key 4 px inside a tile, as a kit's colour keys, at the same depth. */
   --lego-r-card-key: calc(max(0px, var(--lego-radius) - 10px) * var(--lego-corner-scale));
   /* The mark on a fresh keypad value, 3 px inside its field. */
@@ -381,7 +387,7 @@
 
   span {
     padding: 1px 5px;
-    border-radius: var(--lego-r-inner);
+    border-radius: var(--lego-r-badge);
     background: rgb(255 255 255 / 0.72);
   }
 }
@@ -860,7 +866,7 @@
   min-height: 0;
   padding: 0;
   border: 0;
-  border-radius: var(--lego-r-inner);
+  border-radius: var(--lego-r-badge);
   box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.3);
   cursor: pointer;
 
@@ -1778,7 +1784,7 @@
   position: relative;
   min-width: 30px;
   padding: 3px 8px;
-  border-radius: var(--lego-r-inner);
+  border-radius: var(--lego-r-badge);
   background: #ffffff;
   box-shadow:
     0 1px 2px rgb(0 0 0 / 0.24),
@@ -2086,7 +2092,8 @@
   --studio-name: 18px;
   /* The calibration steps line up with the curve's tile, whose grip lies inside it. */
   --studio-pen-indent: 0px;
-  --studio-pen-width: 560px;
+  /* The graph's tile, its grip and 560 px of graph, and the steps under it as wide. */
+  --studio-pen-width: 592px;
 }
 
 /*
@@ -2109,7 +2116,7 @@
 
   /* The pen's pressure curve, the Pen page's one part: a large graph, its grip down its left side. */
   &[data-tall] {
-    max-width: calc(32px + 560px);
+    max-width: var(--studio-pen-width);
     height: min(440px, 56cqh);
   }
 

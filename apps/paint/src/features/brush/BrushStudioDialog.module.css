@@ -58,11 +58,15 @@
 /*
  * The calibration steps under the pen's graph, built as the studio's controls: each step, the looping picture and each
  * button a tile of the studio's (`--studio-tile`), the current step in its chosen colours, on the page's own surface.
- * `--studio-pen-indent` lines them up with the graph's tile and `--studio-pen-width` caps their width.
+ * The three steps, and back with cancel, are fused groups as the studio's rows are, a seam of `--studio-seam` between
+ * them; the parts stand `--studio-group-gap` apart. `--studio-pen-indent` lines them up with the graph's tile and
+ * `--studio-pen-width` caps their width.
  */
 .measure {
   --calibration-pad: 0;
-  --calibration-gap: var(--studio-row-gap, 6px);
+  --calibration-gap: var(--studio-group-gap, 12px);
+  --calibration-seam: var(--studio-seam, 1px);
+  --calibration-joined-radius: 0px;
   --calibration-tile: var(--studio-tile, var(--surface, #ffffff));
   --calibration-tile-ink: var(--studio-tile-ink, var(--ink, #444444));
   --calibration-chosen: var(--studio-chosen, var(--surface, #ffffff));
@@ -73,6 +77,6 @@
   --line: transparent;
 
   max-width: var(--studio-pen-width, 600px);
-  margin-top: var(--studio-row-gap, 6px);
+  margin-top: var(--studio-group-gap, 12px);
   margin-inline-start: var(--studio-pen-indent, 0);
 }
