@@ -10,18 +10,22 @@ import { createSignal } from 'solid-js';
  *
  * `radius` is the one number every corner derives from: a plate's corner in CSS pixels; a tile's is it less the
  * plate's padding, and so on inwards (see `LegoStudio.module.css`). `squircle` draws plates and large tiles with
- * `corner-shape: squircle` where the browser has it. The look is kept per device and never in the board.
+ * `corner-shape: squircle` where the browser has it. `dim` makes the tiles themselves less bright: the percentage
+ * of the ink colour mixed into them, 0 leaving them as before. The look is kept per device and never in the board.
  */
-export type TileLook = { look: 'A' | 'B' | 'C'; radius: number; squircle: boolean };
+export type TileLook = { look: 'A' | 'B' | 'C'; radius: number; squircle: boolean; dim: number };
 
 /** The look a device without a stored choice gets: the tiles as before. */
-export const defaultTileLook: TileLook = { look: 'A', radius: 13, squircle: false };
+export const defaultTileLook: TileLook = { look: 'A', radius: 13, squircle: false, dim: 0 };
 
 /** Plate radii to compare: tiles square, tiles as before (7 px), tiles soft (14 px). */
 export const plateRadii = { sharp: 6, today: 13, soft: 20 } as const;
 
 /** The smallest and largest plate radius the switch offers. */
 export const radiusRange = { min: 0, max: 24 } as const;
+
+/** The least and most the switch dims the tiles, in percent of ink mixed into them. */
+export const dimRange = { min: 0, max: 40 } as const;
 
 /** The key the look is kept under in `localStorage`. */
 export const tileLookKey = 'paint.lego.tile-look';
@@ -58,13 +62,17 @@ export function readTileLook(): TileLook {
   }
 }
 
-/** `look` with every field valid: an unknown look becomes A, the radius a whole number within `radiusRange`. */
+/**
+ * `look` with every field valid: an unknown look becomes A, the radius a whole number within `radiusRange`, the
+ * dimming a whole number within `dimRange`.
+ */
 function normalTileLook(look: TileLook): TileLook {
   const radius = Number.isFinite(look.radius) ? Math.round(look.radius) : defaultTileLook.radius;
 
   return {
     look: look.look === 'B' || look.look === 'C' ? look.look : 'A',
     radius: Math.max(radiusRange.min, Math.min(radiusRange.max, radius)),
-    squircle: look.squircle === true
+    squircle: look.squircle === true,
+    dim: Math.max(dimRange.min, Math.min(dimRange.max, Number.isFinite(look.dim) ? Math.round(look.dim) : 0))
   };
 }

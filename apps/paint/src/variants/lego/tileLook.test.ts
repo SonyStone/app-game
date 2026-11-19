@@ -13,13 +13,13 @@ it('keeps the chosen look on the device and reads it back', () => {
   const { look, change, dispose } = createRoot((dispose) => ({ ...createTileLook(), dispose }));
   expect(look()).toEqual(defaultTileLook);
 
-  change({ look: 'C', radius: plateRadii.soft, squircle: true });
+  change({ look: 'C', radius: plateRadii.soft, squircle: true, dim: 12 });
   flush();
-  expect(look()).toEqual({ look: 'C', radius: 20, squircle: true });
+  expect(look()).toEqual({ look: 'C', radius: 20, squircle: true, dim: 12 });
   dispose();
 
-  expect(JSON.parse(localStorage.getItem(tileLookKey)!)).toEqual({ look: 'C', radius: 20, squircle: true });
-  expect(readTileLook()).toEqual({ look: 'C', radius: 20, squircle: true });
+  expect(JSON.parse(localStorage.getItem(tileLookKey)!)).toEqual({ look: 'C', radius: 20, squircle: true, dim: 12 });
+  expect(readTileLook()).toEqual({ look: 'C', radius: 20, squircle: true, dim: 12 });
 });
 
 it('falls back to the default for a missing, corrupt or invalid entry', () => {
@@ -28,8 +28,8 @@ it('falls back to the default for a missing, corrupt or invalid entry', () => {
   localStorage.setItem(tileLookKey, '{not json');
   expect(readTileLook()).toEqual(defaultTileLook);
 
-  localStorage.setItem(tileLookKey, JSON.stringify({ look: 'Z', radius: 400, squircle: 'yes' }));
-  expect(readTileLook()).toEqual({ look: 'A', radius: 24, squircle: false });
+  localStorage.setItem(tileLookKey, JSON.stringify({ look: 'Z', radius: 400, squircle: 'yes', dim: 900 }));
+  expect(readTileLook()).toEqual({ look: 'A', radius: 24, squircle: false, dim: 40 });
 });
 
 it('keeps the look for the page when storage refuses the write', () => {
@@ -95,7 +95,9 @@ it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills'
   const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase'].map(stylesheet);
   const fixed = sheets
     .flatMap((css) => [...css.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]!))
-    .filter((value) => !/var\(--lego-r|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(value));
+    .filter(
+      (value) => !/var\(--lego-r|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(value)
+    );
 
   expect(fixed).toEqual([]);
 });

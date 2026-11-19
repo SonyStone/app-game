@@ -208,6 +208,7 @@ export function LegoStudio(
         class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''} ${tileLookClasses()}`}
         style={{
           '--lego-radius': `${tileLook.look().radius}px`,
+          '--lego-dim': `${tileLook.look().dim}%`,
           '--card-scale': `${card().scale}`,
           '--card-x': `${card().x}px`,
           '--card-y': `${card().y}px`,

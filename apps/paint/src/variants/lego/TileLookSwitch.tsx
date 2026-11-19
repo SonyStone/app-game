@@ -1,10 +1,11 @@
 import { createSignal, For, Show } from 'solid-js';
 import styles from './LegoStudio.module.css';
-import { plateRadii, radiusRange, type TileLook } from './tileLook';
+import { dimRange, plateRadii, radiusRange, type TileLook } from './tileLook';
 
 /**
  * TEMPORARY developer control for the tile look trial (see `tileLook.ts`): a round button beside Edit that opens a
- * small card to switch the whole look (A, B, C), the plate radius every corner derives from, and squircle corners.
+ * small card to switch the whole look (A, B, C), the plate radius every corner derives from, how much the tiles are
+ * dimmed, and squircle corners.
  * Changes apply at once and are kept on the device. Remove it with the trial.
  */
 export function TileLookSwitch(props: {
@@ -70,6 +71,19 @@ export function TileLookSwitch(props: {
               )}
             </For>
           </div>
+          <label class={styles.tileLookRadius}>
+            <span>
+              Tiles dimmer <output>{props.look.dim}%</output>
+            </span>
+            <input
+              type="range"
+              min={dimRange.min}
+              max={dimRange.max}
+              step={2}
+              value={props.look.dim}
+              onInput={(event) => props.onChange({ dim: event.currentTarget.valueAsNumber })}
+            />
+          </label>
           <label class={styles.tileLookCheck}>
             <input
               type="checkbox"

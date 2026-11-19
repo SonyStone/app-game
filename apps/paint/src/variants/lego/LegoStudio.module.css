@@ -3,13 +3,15 @@
   --zen-surface: #ffffff;
   --zen-line: rgb(0 0 0 / 0.12);
   --lego-plate: rgb(36 38 44 / 0.92);
-  --lego-tile: #f4f2ee;
-  --lego-preset-active: #dde7ff;
+  /* The tile look trial dims the tiles by mixing the ink into them; 0% leaves every tile colour as it was. */
+  --lego-dim: 0%;
+  --lego-tile: color-mix(in srgb, #f4f2ee, var(--lego-ink) var(--lego-dim));
+  --lego-preset-active: color-mix(in srgb, #dde7ff, var(--lego-ink) var(--lego-dim));
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
   /* The empty part of a value's slider or knob. */
-  --lego-track: #dad7d0;
+  --lego-track: color-mix(in srgb, #dad7d0, var(--lego-ink) var(--lego-dim));
   /* The hairline between a Settings-style sidebar and its detail on one dark plate. */
   --lego-divider: rgb(255 255 255 / 0.1);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
