@@ -6,9 +6,11 @@ import { render } from '@solidjs/web';
 import { createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { abrCategories } from './abrSchema';
+import { rowGroups } from './BrushCategories';
 import { BrushEditor } from './BrushEditor';
 import { BrushStudio } from './BrushStudio';
 import { snapshotBrushSettings, type BrushCategory } from './schema';
+import { inlineChoiceLimit } from './SettingRow';
 
 let disposers: (() => void)[] = [];
 afterEach(() => {
@@ -45,6 +47,79 @@ it('shows the same categories, sections and rows as the panel for an ABR brush',
 
   // Greyed rows stay greyed, sections keep their headings.
   expect(studio.contents('Transfer')).toContain('h3 Opacity');
+});
+
+it('groups a run of rows by family: sliders, list rows, and each short choice alone', () => {
+  const row = (id: string, kind: 'number' | 'toggle' | 'choice', options = 0) =>
+    ({ id, kind, options: Array.from({ length: options }, (_, at) => ({ value: `${at}`, label: `${at}` })) }) as never;
+  const groups = rowGroups([
+    row('size', 'number'),
+    row('flow', 'number'),
+    row('use', 'toggle'),
+    row('mode', 'choice', inlineChoiceLimit + 1),
+    row('mix', 'choice', 2),
+    row('blend', 'choice', 2),
+    row('angle', 'number')
+  ]);
+
+  expect(groups.map((group) => [group.family, group.rows.map((setting) => setting.id).join(' ')])).toEqual([
+    ['slider', 'size flow'],
+    ['list', 'use mode'],
+    ['choice', 'mix'],
+    ['choice', 'blend'],
+    ['slider', 'angle']
+  ]);
+  expect(groups.map((group) => group.key)).toEqual(['size', 'use', 'mix', 'blend', 'angle']);
+});
+
+it('draws every page as groups of one family each, never across a section heading, for Paint and ABR brushes', () => {
+  const source = { id: 'test', name: 'Test', preset: { tip: { kind: 'computed', diameter: 30 } }, resources: [] };
+  const values = brushToFormValues(source as unknown as BrushAsset);
+  const abr: Brush = {
+    ...defaultBrush(),
+    engine: { id: 'abr', settings: { values: { ...values, useShape: true }, tipId: 'tip' } }
+  };
+
+  for (const studio of [mount('studio', defaultBrush()), mount('studio', abr, abrCategories)]) {
+    for (const name of studio.categories()) {
+      studio.click(studio.category(name));
+      const pane = studio.root().querySelector('section[aria-labelledby]')!;
+      const groups = [...pane.querySelectorAll<HTMLElement>('[data-family]')];
+      const controls = pane.querySelectorAll('[role="slider"], [role="switch"], [role="radiogroup"], [aria-haspopup]');
+      expect(controls.length, name).toBeGreaterThan(0);
+
+      for (const control of controls) {
+        const group = control.closest<HTMLElement>('[data-family]')!;
+        const family = control.matches('[role="slider"]')
+          ? 'slider'
+          : control.matches('[role="radiogroup"]')
+            ? 'choice'
+            : 'list';
+        expect(group.dataset.family, `${name}: ${control.getAttribute('aria-labelledby') ?? ''}`).toBe(family);
+      }
+
+      for (const group of groups) {
+        // A group lies wholly in one section or outside all, and a short choice is a group alone.
+        expect(group.parentElement!.matches('[role="group"], div')).toBe(true);
+        expect(group.querySelectorAll('h3')).toHaveLength(0);
+        if (group.dataset.family === 'choice') {
+          expect(group.children).toHaveLength(1);
+        }
+      }
+    }
+  }
+
+  // The ABR Shape dynamics page splits its Size section where a slider meets the Control list row.
+  const studio = mount('studio', abr, abrCategories);
+  studio.click(studio.category('Shape dynamics'));
+  const size = [...studio.root().querySelectorAll<HTMLElement>('[role="group"]')].find(
+    (section) => section.querySelector('h3')?.textContent === 'Size'
+  )!;
+  expect([...size.querySelectorAll<HTMLElement>('[data-family]')].map((group) => group.dataset.family)).toEqual([
+    'slider',
+    'list',
+    'slider'
+  ]);
 });
 
 it('gives each number row a value pill that types, beside its label, over a slider', () => {
@@ -130,14 +205,14 @@ it("puts the host's rows in place of number rows, and keeps its own where the ho
   );
   studio.click(studio.category('Painting'));
   expect(asked).toEqual(['painting:size', 'painting:opacity', 'painting:flow']);
-  const rows = studio.root().querySelector('section[aria-labelledby] > div')!;
-  expect([...rows.children].map((row) => row.getAttribute('data-hosted') ?? row.getAttribute('data-kind'))).toEqual([
+  const rows = [...studio.root().querySelectorAll('section[aria-labelledby] [data-family] > *')];
+  expect(rows.map((row) => row.getAttribute('data-hosted') ?? row.getAttribute('data-kind'))).toEqual([
     'size',
     'opacity',
     'number',
     null
   ]);
-  expect(rows.lastElementChild!.getAttribute('role')).toBe('radiogroup');
+  expect(rows.at(-1)!.getAttribute('role')).toBe('radiogroup');
   studio.click(studio.category('Stroke correction'));
   expect(asked.at(-1)).toBe('stroke-correction:smoothing');
   expect(studio.root().querySelector('[data-hosted="smoothing"]')).not.toBeNull();

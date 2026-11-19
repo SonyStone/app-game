@@ -5,6 +5,9 @@ import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { render } from '@solidjs/web';
 import 'fake-indexeddb/auto';
 import { ok } from 'neverthrow';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createEffect, flush, untrack } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { hexToWheel } from '../../features/color-wheel';
@@ -487,6 +490,45 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   expect(button('Edit')).toBeDefined();
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
+});
+
+it("puts a studio row's grip inside its row, the setting's sliders fused into one group", () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const dialog = openStudio();
+  const rows = ['Size', 'Opacity', 'Flow'].map(
+    (name) => dialog.querySelector<HTMLElement>(`[aria-label^="Drag ${name} onto the board"]`)!.parentElement!
+  );
+
+  // One element is the row's tile: the grip at its left end, then the part across the rest.
+  for (const [at, row] of rows.entries()) {
+    expect(row.children).toHaveLength(2);
+    expect(row.firstElementChild!.matches('button[aria-label^="Drag "]')).toBe(true);
+    expect(
+      row.lastElementChild!.querySelector(
+        `[data-part-kind="${['value:size', 'value:opacity', 'value:brush:flow'][at]}"]`
+      )
+    ).not.toBeNull();
+    expect(row.parentElement).toBe(rows[0]!.parentElement);
+  }
+
+  expect(rows[0]!.parentElement!.dataset.family).toBe('slider');
+  expect([...rows[0]!.parentElement!.children]).toEqual(rows);
+
+  // The row draws the tile and its corners; the grip takes the left ones and the part the right ones, with no gap.
+  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'LegoStudio.module.css'), 'utf8');
+  const rule = (selector: string) => new RegExp(`^${selector} \\{([\\s\\S]*?)^\\}`, 'm').exec(css)![1]!;
+  expect(rule('\\.studioSetting')).toMatch(/background: var\(--lego-tile\);/);
+  expect(rule('\\.studioSetting')).toMatch(
+    /border-radius: var\(--studio-row-top\) var\(--studio-row-top\) var\(--studio-row-bottom\) var\(--studio-row-bottom\);/
+  );
+  expect(rule('\\.studioSetting')).not.toMatch(/(^|\s)gap:/m);
+  expect(rule('\\.studioGrip')).toMatch(
+    /border-radius: var\(--studio-row-top\) 0 0 var\(--studio-row-bottom\);\s+background: transparent;/
+  );
+  expect(rule('\\.studioTile')).toMatch(
+    /\.studioSetting > & \{\s+border-radius: 0 var\(--studio-row-top\) var\(--studio-row-bottom\) 0;/
+  );
 });
 
 it('the slider of a studio row moves the value but never lifts a part', () => {

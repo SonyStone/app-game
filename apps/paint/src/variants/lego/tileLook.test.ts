@@ -124,7 +124,7 @@ it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills'
     .map(stylesheet)
     .flatMap((css) => [...css.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]!))
     .filter(
-      (value) => !/var\(--lego-r|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(value)
+      (value) => !/var\(--lego-r|var\(--studio-row-|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(value)
     );
 
   expect(fixed).toEqual([]);

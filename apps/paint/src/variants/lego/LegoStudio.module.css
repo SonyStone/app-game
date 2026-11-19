@@ -1725,13 +1725,13 @@
   flex-shrink: 0;
 }
 /*
- * A value that does not apply now: an unlit tile, the plate showing through behind a hairline, its name and dash
- * quiet, with no track, fill or thumb. Clearly off, without the murk of a faded, greyed control.
+ * A value that does not apply now: an unlit tile, a quiet raise of the plate, its name and dash quiet, with no
+ * track, fill or thumb. Clearly off, without the murk of a faded, greyed control; a fill rather than a hairline, so a
+ * fused group keeps one outline and its seams.
  */
 .part:has(.valueState[data-inactive]),
 .studioTile:has(.valueState[data-inactive]) {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--lego-plate-line);
+  background: var(--lego-plate-raise);
 }
 
 .valueState[data-inactive] {
@@ -2051,35 +2051,47 @@
   --studio-chosen-ink: var(--lego-ink);
   --studio-chosen-ring: var(--lego-accent);
   --studio-row-gap: 4px;
+  /* Groups of controls fuse as parts do on a board: a 1 px seam inside a group, a wider gap between groups. */
+  --studio-seam: 1px;
+  --studio-slider-seam: 1px;
+  --studio-group-gap: 12px;
+  --studio-disabled: var(--lego-plate-raise);
   --studio-row: 44px;
   --studio-text: 13px;
   --studio-small: 11px;
   --studio-name: 18px;
-  /* The calibration steps line up with the curve's tile, past its grip. */
-  --studio-pen-indent: 36px;
+  /* The calibration steps line up with the curve's tile, whose grip lies inside it. */
+  --studio-pen-indent: 0px;
   --studio-pen-width: 560px;
 }
 
-/* A number setting in the studio: its grip, then its value part as a slider, one cell high. */
+/*
+ * A number setting in the studio: one tile, its grip at the left end and its value part as a slider across the rest,
+ * one cell high. Its corners are those of its place in a group of settings (`--studio-row-top-radius` and
+ * `--studio-row-bottom-radius`, see `BrushStudio`), the tile radius on all four when it stands alone; the grip takes the
+ * left ones and the part the right ones, so the slider's track starts after the grip and its fill and focus follow the
+ * row's outline.
+ */
 .studioSetting {
+  --studio-row-top: var(--studio-row-top-radius, var(--lego-r-tile));
+  --studio-row-bottom: var(--studio-row-bottom-radius, var(--lego-r-tile));
+
   display: grid;
   grid-template-columns: 32px minmax(0, 1fr);
-  gap: 4px;
   height: 44px;
+  border-radius: var(--studio-row-top) var(--studio-row-top) var(--studio-row-bottom) var(--studio-row-bottom);
+  background: var(--lego-tile);
+  color: var(--lego-ink);
 
-  /* The pen's pressure curve, the Pen page's one part: a large graph, its grip at the top. */
+  /* The pen's pressure curve, the Pen page's one part: a large graph, its grip down its left side. */
   &[data-tall] {
-    grid-template-columns: 32px minmax(0, 560px);
-    align-items: start;
+    max-width: calc(32px + 560px);
     height: min(440px, 56cqh);
+  }
 
-    .studioGrip {
-      height: 100%;
-    }
-
-    .studioTile {
-      height: 100%;
-    }
+  /* A setting that does not apply now: the whole row unlit, as its part (see `.valueState[data-inactive]`). */
+  &:has(.valueState[data-inactive]) {
+    background: var(--lego-plate-raise);
   }
 }
 
@@ -2097,38 +2109,59 @@
     min-width: 0;
     min-height: 0;
   }
+
+  .studioSetting > & {
+    border-radius: 0 var(--studio-row-top) var(--studio-row-bottom) 0;
+  }
+
+  /* Unlit, the row draws the raise once for the grip and the part. */
+  .studioSetting > &:has(.valueState[data-inactive]) {
+    background: transparent;
+  }
 }
 
-/* The grip a part is lifted by: studs on the plate, lit in the accent while the setting has a part on the board. */
+/*
+ * The grip a part is lifted by, the row's left end: studs on the tile, lit in the accent while the setting has a part
+ * on the board.
+ */
 .studioGrip {
   display: grid;
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: var(--lego-r-tile);
-  background: var(--lego-plate-raise);
+  border-radius: var(--studio-row-top) 0 0 var(--studio-row-bottom);
+  background: transparent;
   cursor: grab;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
 
   &:active {
     cursor: grabbing;
+    background: color-mix(in srgb, var(--lego-ink) 8%, transparent);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--lego-accent);
+    outline-offset: -2px;
   }
 }
 
 .studioGripDots {
   width: 12px;
   height: 20px;
-  background: radial-gradient(
-      circle,
-      color-mix(in srgb, var(--lego-plate-ink) 80%, transparent) 1.6px,
-      transparent 2.2px
-    )
-    0 0 / 6px 6.67px;
+  background: radial-gradient(circle, var(--lego-quiet) 1.6px, transparent 2.2px) 0 0 / 6px 6.67px;
 }
 
 .studioSetting[data-on-board] .studioGripDots {
   background-image: radial-gradient(circle, var(--lego-accent) 1.6px, transparent 2.2px);
+}
+
+.studioSetting:has(.valueState[data-inactive]) .studioGripDots {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--lego-plate-ink) 50%, transparent) 1.6px,
+    transparent 2.2px
+  );
 }
 
 /*

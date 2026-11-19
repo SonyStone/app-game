@@ -212,8 +212,8 @@ it('greys an ABR row while its control gives it no effect, ignores presses on it
       ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => `${name} ${label}`)
     ])
   );
-  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map(
-    (control) => document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
+  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map((control) =>
+    document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
   );
   const shown = [...new Set(labels)].map((label) =>
     [...label.childNodes]

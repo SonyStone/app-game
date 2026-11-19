@@ -5,11 +5,11 @@ import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/Setti
 import type { SketchIconName } from '../../shared/ui/SketchIcon';
 import { cellGap, cellSize, partData, partsBounds, pitch, type Part } from './board';
 import { closedHeight, type createSheet } from './createSheet';
+import { joinsAttribute, partJoins } from './fusion';
 import type { createKits, Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { joinsAttribute, partJoins } from './fusion';
 import { boxSections, kindLabel, lookOf, partGroup } from './parts';
 import { opaqueData } from './partStorage';
 

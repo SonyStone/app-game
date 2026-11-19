@@ -424,7 +424,7 @@ it('rejects an unknown channel with no writer instead of silently dropping write
 it('imports a brush file and offers export only for the selected native preset', () => {
   const { services } = owned(createTestServices);
   const native = builtInPresets[0]!;
-  const abr = {...native, id:'abr', settings:{engine:{id:'abr', settings:{}}}};
+  const abr = { ...native, id: 'abr', settings: { engine: { id: 'abr', settings: {} } } };
   const [selected, select] = createSignal(native.id);
   services.tools.preset = selected;
   services.presets.all = () => [native, abr];
@@ -433,13 +433,13 @@ it('imports a brush file and offers export only for the selected native preset',
       <PartFrame kind="action:brushes" popup />
     </LegoServicesContext>
   ));
-  const button = () => [...document.querySelectorAll('button')].find(el => el.textContent === 'Export .paintbrush');
+  const button = () => [...document.querySelectorAll('button')].find((el) => el.textContent === 'Export .paintbrush');
   button()!.click();
   expect(services.presets.exportFile).toHaveBeenCalledWith(native.id);
   const file = new File(['sample'], 'sample.paintbrush');
   const input = document.querySelector<HTMLInputElement>('input[accept=".paintbrush"]')!;
-  Object.defineProperty(input,'files',{value:[file]});
-  input.dispatchEvent(new Event('change',{bubbles:true}));
+  Object.defineProperty(input, 'files', { value: [file] });
+  input.dispatchEvent(new Event('change', { bubbles: true }));
   expect(services.presets.importFile).toHaveBeenCalledWith(file);
   select(abr.id);
   flush();
