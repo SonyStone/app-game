@@ -125,7 +125,7 @@ it('paints a replacement through the stroke decorations, such as symmetry', asyn
   }
 });
 
-it('keeps the seed and context of the stroke, calibrates pressure without smoothing and paints only the latest of queued replacements', async () => {
+it('keeps the seed and context of the stroke, preserves pressure without smoothing and paints only the latest of queued replacements', async () => {
   const contexts: Parameters<BrushEngine>[0][] = [];
   const added: Sample[][] = [];
   const engine: BrushEngine = (context) => {
@@ -158,8 +158,7 @@ it('keeps the seed and context of the stroke, calibrates pressure without smooth
     await vi.advanceTimersByTimeAsync(10);
   }
 
-  // Leonardo smoothing with pressure from 0.2 (none) to 0.6 (full).
-  const brush = { ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'normal' as const, minimum: 0.2, maximum: 0.6 } };
+  const brush = { ...defaultBrush(), stroke: { ...defaultBrush().stroke, mode: 'normal' as const } };
   runtime.send({ type: 'begin', brush, samples: [sample(0, 0)] });
   for (const end of [50, 70, 90]) {
     runtime.send({ type: 'replace-stroke', samples: [sample(0, 0, 0.4), sample(end, 0, 0.6), sample(end, end, 0.2)] });
@@ -176,9 +175,9 @@ it('keeps the seed and context of the stroke, calibrates pressure without smooth
   expect(contexts[1]!.layer).toBe(contexts[0]!.layer);
   expect(contexts[1]!.renderer).toBe(contexts[0]!.renderer);
   expect(added.at(-1)).toEqual([
-    expect.objectContaining({ x: 0, y: 0, pressure: expect.closeTo(0.5) }),
-    expect.objectContaining({ x: 90, y: 0, pressure: 1 }),
-    expect.objectContaining({ x: 90, y: 90, pressure: 0 })
+    expect.objectContaining({ x: 0, y: 0, pressure: 0.4 }),
+    expect.objectContaining({ x: 90, y: 0, pressure: 0.6 }),
+    expect.objectContaining({ x: 90, y: 90, pressure: 0.2 })
   ]);
 });
 

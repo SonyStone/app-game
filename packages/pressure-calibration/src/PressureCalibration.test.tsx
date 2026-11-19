@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { defaultBrush } from '@app-game/paint-core/brush';
 import type { PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { render, type JSX } from '@solidjs/web';
 import { createRoot, createSignal, flush } from 'solid-js';
@@ -60,21 +59,6 @@ describe('createPressureCalibration', () => {
       date: 'd',
       userAgent: 'u'
     });
-  });
-
-  it("widens a brush's default pressure range to the full range only while the pen is calibrated", () => {
-    const settings = calibration();
-    const plain = defaultBrush();
-    const own = { ...plain, stroke: { ...plain.stroke, minimum: 0.1, maximum: 0.7 } };
-    expect(settings.strokeBrush(plain)).toBe(plain);
-
-    settings.save(points([0.05, 0], [0.5, 0.5], [0.75, 1]));
-    expect(settings.strokeBrush(plain).stroke).toEqual({ ...plain.stroke, minimum: 0, maximum: 1 });
-    expect(plain.stroke).toEqual(defaultBrush().stroke);
-    expect(settings.strokeBrush(own)).toBe(own);
-
-    settings.reset();
-    expect(settings.strokeBrush(plain)).toBe(plain);
   });
 
   it('forgets the calibration when saving the identity curve, and ignores unreadable storage', () => {

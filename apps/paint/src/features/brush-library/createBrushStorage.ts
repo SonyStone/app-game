@@ -1,3 +1,4 @@
+import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { onCleanup } from 'solid-js';
 import { brushError, type PaintError } from '../../shared/errors';
@@ -59,14 +60,14 @@ export function createBrushStorage(options: {
     readPreset(id: string): Promise<StoredPreset | undefined> {
       return read('A saved brush could not be read.', undefined, async (database) => {
         const record = await request(database.transaction('presets').objectStore('presets').get(id));
-        return isStoredPreset(record) ? record : undefined;
+        return isStoredPreset(record) ? restorePreset(record) : undefined;
       });
     },
     /** Every stored preset in creation order, without reading any image. */
     readPresets(): Promise<StoredPreset[]> {
       return read('Saved brushes could not be read.', [], async (database) => {
         const records = await request<unknown[]>(database.transaction('presets').objectStore('presets').getAll());
-        return records.filter(isStoredPreset).sort((left, right) => left.created - right.created);
+        return records.filter(isStoredPreset).map(restorePreset).sort((left, right) => left.created - right.created);
       });
     },
     /** The stored images with `ids`, in order; `undefined` when any of them is missing or cannot be read. */
@@ -216,6 +217,15 @@ function completion(transaction: IDBTransaction): Promise<void> {
 }
 
 /** A record written by `putPreset`; other values are skipped. */
+/** Reads only the stroke settings supported by this version of Paint. */
+function restorePreset(preset: StoredPreset): StoredPreset {
+  if (preset.settings.stroke) {
+    preset.settings.stroke = normalizeStrokeSettings(preset.settings.stroke);
+  }
+
+  return preset;
+}
+
 function isStoredPreset(value: unknown): value is StoredPreset {
   if (typeof value !== 'object' || value === null) {
     return false;

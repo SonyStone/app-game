@@ -365,7 +365,12 @@ export function createPaintSession(options: {
       engine.canEdit() && !engine.isDrawing() && !transform.active() && !localUndo.open() && !selection.drawing(),
     moveOut: engine.moveOut
   });
-  const inkTrail = createInkTrail({ canvas, enabled: developer.inkTrail, zoom: () => camera.current().zoom });
+  const inkTrail = createInkTrail({
+    canvas,
+    enabled: developer.inkTrail,
+    mapPressure: pressureCalibration.mapPressure,
+    zoom: () => camera.current().zoom
+  });
   const quickShape = createQuickShape({ send: edit, camera: camera.current });
   const warmup = createGpuWarmup({
     enabled: () => developer.warmGpu() && engine.canEdit(),
@@ -463,7 +468,7 @@ export function createPaintSession(options: {
     windows,
     /**
      * This device's pen pressure curve, remembered in `localStorage`: `canvasInput` maps every pen sample through it
-     * and widens a brush's default pressure range (`strokeBrush`), so it acts on the strokes of every variant.
+     * before every stroke processor.
      */
     pressureCalibration,
     /** The pen's raw pressure on the canvases where the curve is edited, such as the brush studio's drawing pad. */
@@ -507,8 +512,8 @@ export function createPaintSession(options: {
     return {
       camera: camera.current,
       size,
-      brush: () => pressureCalibration.strokeBrush(brush()),
-      eraser: () => pressureCalibration.strokeBrush(tools.eraser()),
+      brush,
+      eraser: tools.eraser,
       ready: () => engine.canEdit() && !selection.isBusy() && !uploads.isBusy(),
       navigate: camera.navigate,
       send(command) {

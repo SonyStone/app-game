@@ -5,13 +5,13 @@ import { createSmoothStroke } from '../tests/smoothStroke';
 import { defaultStrokeSettings, normalizeStrokeSettings } from './strokeSettings';
 
 describe('recovered sample filter', () => {
-  it('seeds all history with the first sample and averages raw pressure before calibration', () => {
-    const filter = createStrokeFilter({ ...defaultStrokeSettings(), mode: 'normal', firmness: 2 });
+  it('seeds all history with the first sample and averages raw pressure', () => {
+    const filter = createStrokeFilter({ ...defaultStrokeSettings(), mode: 'normal' });
     const output = filter.add([point(100, 0.05, 10), point(120, 0.8, 30)]);
-    expect(output[0]).toEqual(point(100, 0, 10));
+    expect(output[0]).toEqual(point(100, 0.05, 10));
     expect(output[1]).toMatchObject({ x: 110, time: 20 });
-    expect(output[1]!.pressure).toBeCloseTo(0.25, 12);
-    expect(filter.finish().at(-1)).toEqual(point(120, 1, 30));
+    expect(output[1]!.pressure).toBeCloseTo(0.425, 12);
+    expect(filter.finish().at(-1)).toEqual(point(120, 0.8, 30));
     expect(filter.finish()).toEqual([]);
     expect(filter.add([point(200)])).toEqual([]);
   });
@@ -32,22 +32,19 @@ describe('recovered sample filter', () => {
   });
 
   it('retains stationary pressure updates and rejects invalid samples without poisoning history', () => {
-    const filter = createStrokeFilter({ ...defaultStrokeSettings(), mode: 'normal', minimum: 0, maximum: 1 });
+    const filter = createStrokeFilter({ ...defaultStrokeSettings(), mode: 'normal' });
     const output = filter.add([point(10, 0), point(NaN, 1), point(10, 1), point(20, Infinity)]);
     expect(output.map((sample) => sample.pressure)).toEqual([0, 0.5]);
     expect(filter.finish().at(-1)!.pressure).toBe(1);
   });
 
-  it('bounds calibration to finite output with a positive range and exponent', () => {
+  it('bounds filter windows and input pressure', () => {
     const settings = normalizeStrokeSettings({
       ...defaultStrokeSettings(),
-      minimum: 1,
-      maximum: 0,
-      firmness: NaN,
       normal: 999,
       smooth: -10
     });
-    expect(settings).toMatchObject({ minimum: 0.99, maximum: 1, firmness: 1, normal: 49, smooth: 0 });
+    expect(settings).toMatchObject({ normal: 49, smooth: 0 });
     const filter = createStrokeFilter(settings);
     const output = filter.add([point(0, -1), point(10, 2)]);
     expect(
@@ -70,7 +67,6 @@ describe('Leonardo mode through the worker stroke factory', () => {
     const split = createSmoothStroke(brush);
     brush.stroke.smooth = 49;
     brush.stroke.normal = 49;
-    brush.stroke.maximum = 0.2;
     expect([...samples.flatMap((sample) => split.add([sample])), ...split.finish()]).toEqual(expected);
     expect(split.finish()).toEqual([]);
     expect(split.add(samples)).toEqual([]);

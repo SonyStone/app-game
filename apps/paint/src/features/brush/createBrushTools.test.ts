@@ -220,6 +220,33 @@ it('restores the stored tool state after a reload, unless the user changed it fi
   expect(early.brush().size).toBe(3);
 });
 
+it('restores brush and eraser slots and saved overrides without their retired pressure fields', async () => {
+  const name = crypto.randomUUID();
+  const first = await setup(name);
+  const expected = { ...defaultBrush().stroke, smooth: 17 };
+  const stroke = { ...expected, minimum: 0.2, maximum: 0.6, firmness: 3 };
+  const brush = { ...defaultBrush(), stroke };
+  first.storage.writeState({
+    version: 2,
+    slots: {
+      brush: { preset: 'builtin:soft-round', brush },
+      eraser: { preset: 'builtin:eraser', brush }
+    },
+    eraserMode: 'preset',
+    changes: { inactive: { stroke, flow: 0.4 } },
+    colors: {}
+  });
+  await first.storage.idle();
+
+  const restored = await setup(name);
+  flush();
+  expect(restored.tools.brush().stroke).toEqual(expected);
+  expect(restored.tools.eraser().stroke).toEqual(expected);
+  expect(restored.tools.changes('inactive')).toEqual({ stroke: expected, flow: 0.4 });
+  await restored.storage.idle();
+  expect(JSON.stringify(await restored.storage.readState())).not.toMatch(/minimum|maximum|firmness/);
+});
+
 async function setup(name?: string, clear?: (brush: Brush) => Brush | undefined) {
   const assembled = createRoot((dispose) => {
     disposers.push(dispose);

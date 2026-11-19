@@ -35,9 +35,6 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
  * or reads awkwardly ("Scattering scatter amount").
  */
 const boardNames: Record<string, string> = {
-  'pressure-minimum': 'Pressure minimum',
-  'pressure-maximum': 'Pressure maximum',
-  'pressure-firmness': 'Pressure firmness',
   'abr-scattering-scatter': 'Scatter',
   'abr-scattering-count': 'Scatter count',
   'abr-scattering-countJitter': 'Scatter count jitter',

@@ -38,8 +38,8 @@ describe('Smoothing level', () => {
     }
   });
 
-  it('writes 0 as Studio and every other level as the stabilizer, keeping the pressure curve and catch-up', () => {
-    const from = stroke({ mode: 'smooth', smooth: 12, catchUp: false, minimum: 0.2, maximum: 0.7, firmness: 2 });
+  it('writes 0 as Studio and every other level as the stabilizer, keeping catch-up', () => {
+    const from = stroke({ mode: 'smooth', smooth: 12, catchUp: false });
     expect(withSmoothing(from, 0)).toEqual({ ...from, mode: 'studio' });
     for (let level = 1; level <= maxSmoothing; level++) {
       expect(withSmoothing(from, level)).toEqual({ ...from, mode: 'stabilizer', stabilizer: level });

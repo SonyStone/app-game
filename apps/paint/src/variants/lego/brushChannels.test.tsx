@@ -7,7 +7,7 @@ import { createRoot, flush } from 'solid-js';
 import { expect, it } from 'vitest';
 import { abrCategories } from '../../features/brush-editor/abrSchema';
 import { brushSettingName } from '../../features/brush-editor/brushSettingName';
-import { brushCategories, legacyPressureCategory, numberSettings } from '../../features/brush-editor/schema';
+import { brushCategories, numberSettings } from '../../features/brush-editor/schema';
 import { removePart, type Board } from './board';
 import { createBoard } from './createBoard';
 import { LegoServicesContext } from './LegoServices';
@@ -19,7 +19,7 @@ import { roundedValue } from './parts/values';
 import { createTestServices } from './testServices';
 
 it('generates unique names across both schemas, counting shared IDs once', () => {
-  const categories = [...brushCategories, legacyPressureCategory, ...abrCategories];
+  const categories = [...brushCategories, ...abrCategories];
   {
     const rows = [
       ...new Map(categories.flatMap((c) => numberSettings(c.settings).map((s) => [s.id, { c, s }] as const))).values()
@@ -27,7 +27,6 @@ it('generates unique names across both schemas, counting shared IDs once', () =>
     const names = rows.map(({ c, s }) => brushSettingName(c, s));
     expect(new Set(names).size).toBe(names.length);
     const named = (id: string) => names[rows.findIndex(({ s }) => s.id === id)];
-    expect(named('pressure-minimum')).toBe('Pressure minimum');
     expect(named('abr-brushPose-tiltX')).toBe('Tilt X');
     expect(named('abr-colorDynamics-fade')).toBe('FG/BG fade length');
     expect(named('abr-shapeDynamics-sizeJitter')).toBe('Size jitter');
@@ -74,8 +73,6 @@ it('uses Paint and ABR range, units, curves and schema writes; unavailable chann
     await abr.write(services, 45, hsv);
     flush();
     expect(abr.read(services)).toBe(45);
-    const disabled = brushChannels.find((s) => s.id === 'brush:pressure-minimum')!;
-    expect(disabled.active!(services)).toBe(false);
   } finally {
     dispose();
   }

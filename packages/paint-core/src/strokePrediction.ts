@@ -22,10 +22,9 @@ export function withPrediction(processor: StrokeProcessor, predicted: () => read
  */
 export function predictedTail(
   latest: Sample | undefined,
-  predicted: readonly Sample[],
-  pressure = latest?.pressure
+  predicted: readonly Sample[]
 ): Sample[] {
-  if (!latest || pressure === undefined) {
+  if (!latest) {
     return [];
   }
 
@@ -37,7 +36,7 @@ export function predictedTail(
         point.time > latest.time &&
         point.time - latest.time <= maxPredictionMs
     )
-    .map((point) => ({ ...latest, x: point.x, y: point.y, time: point.time, pressure }));
+    .map((point) => ({ ...latest, x: point.x, y: point.y, time: point.time }));
 }
 
 /** How far ahead of the latest real sample predicted points are shown, in milliseconds. */

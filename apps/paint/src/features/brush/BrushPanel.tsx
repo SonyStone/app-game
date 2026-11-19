@@ -105,7 +105,7 @@ export function BrushDailyControls(props: BrushControlsProps) {
 }
 
 /**
- * Settings of the brush editor: tip hardness and spacing, pressure, Leonardo pen calibration and color mixing. ABR
+ * Settings of the brush editor: tip hardness and spacing, pressure dynamics and color mixing. ABR
  * presets keep their own tip shape and pressure dynamics, so their hardness and pressure switches are not shown.
  */
 export function BrushAdvancedControls(props: BrushControlsProps) {
@@ -156,7 +156,7 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
           Pressure controls flow
         </label>
       </Show>
-      <Show when={calibratesPressure(props.brush)}>
+      <Show when={isLeonardo(props.brush) || stroke().mode === 'stabilizer'}>
         <p class={styles.panelNote}>
           {stroke().mode === 'stabilizer'
             ? 'As in Paint Tool SAI: levels 0 to 15 average the latest 1 to 16 pen samples, S-1 to S-7 steady the hand more and trail further. Strokes ease in and taper out where the pen lifts.'
@@ -172,38 +172,6 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
             Catch up on pen lift
           </label>
         </Show>
-        <details class={styles.pressureControls}>
-          <summary>Pen pressure</summary>
-          <Range
-            label="Pressure minimum"
-            min={0}
-            max={Math.round(stroke().maximum * 100) - 1}
-            suffix="%"
-            value={stroke().minimum * 100}
-            change={(value) => update({ minimum: value / 100 })}
-          />
-          <Range
-            label="Pressure maximum"
-            min={Math.round(stroke().minimum * 100) + 1}
-            max={100}
-            suffix="%"
-            value={stroke().maximum * 100}
-            change={(value) => update({ maximum: value / 100 })}
-          />
-          <Range
-            label="Pressure firmness"
-            min={10}
-            max={500}
-            step={5}
-            suffix="%"
-            value={stroke().firmness * 100}
-            change={(value) => update({ firmness: value / 100 })}
-          />
-          <p class={styles.panelNote}>
-            Minimum and maximum set the pen's pressure range. Firmness at 100% is linear; higher values need a firmer
-            press.
-          </p>
-        </details>
       </Show>
       <label class={styles.mixing}>
         Color mixing
@@ -239,11 +207,6 @@ function strokeUpdater(props: BrushControlsProps) {
 
 function isLeonardo(brush: Brush) {
   return brush.stroke.mode === 'normal' || brush.stroke.mode === 'smooth';
-}
-
-/** The stroke mode maps pen pressure through the calibration: Leonardo's filter and the stabilizer. */
-function calibratesPressure(brush: Brush) {
-  return isLeonardo(brush) || brush.stroke.mode === 'stabilizer';
 }
 
 /** Stabilizer levels in rows of the level grid, as SAI lists them: 0 to 7, 8 to 15, then S-1 to S-7. */

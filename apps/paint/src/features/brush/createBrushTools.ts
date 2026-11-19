@@ -432,16 +432,22 @@ function restoredState(stored: unknown, find: (id: string) => BrushPreset | unde
       ? (stored.tool as PaintTool)
       : 'brush';
   const slot = brushSlots.includes(stored.slot as BrushSlot) ? (stored.slot as BrushSlot) : 'brush';
-  const changes = isRecord(stored.changes)
-    ? Object.fromEntries(Object.entries(stored.changes).filter(([, value]) => isRecord(value)))
-    : {};
+  const changes: ToolState['changes'] = Object.create(null);
+  for (const [id, patch] of Object.entries(isRecord(stored.changes) ? stored.changes : {})) {
+    if (isRecord(patch)) {
+      changes[id] = isRecord(patch.stroke)
+        ? { ...patch, stroke: normalizeStrokeSettings({ ...fallback.slots.brush.brush.stroke, ...patch.stroke }) }
+        : patch;
+    }
+  }
+
   return {
     version: 2,
     tool,
     slot,
     slots,
     eraserMode: stored.eraserMode === 'preset' ? 'preset' : 'clear',
-    changes: changes as ToolState['changes'],
+    changes,
     colors: {
       color: typeof stored.colors.color === 'string' ? stored.colors.color : fallback.colors.color,
       backgroundColor:

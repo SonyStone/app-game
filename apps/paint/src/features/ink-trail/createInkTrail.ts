@@ -12,6 +12,8 @@ import { createEffect, type Accessor } from 'solid-js';
 export function createInkTrail(options: {
   /** The drawing canvas, which bounds the trail. */
   canvas: Accessor<HTMLCanvasElement | undefined>;
+  /** The device curve used by the canvas for pen samples. */
+  mapPressure: (raw: number) => number;
   enabled: Accessor<boolean>;
   /** Document-to-CSS-pixel scale of the view, which sizes the trail like the brush. */
   zoom: () => number;
@@ -51,7 +53,7 @@ export function createInkTrail(options: {
         return;
       }
 
-      const pressure = event.pointerType === 'pen' && brush.pressureSize ? calibrated(event.pressure, brush) : 1;
+      const pressure = event.pointerType === 'pen' && brush.pressureSize ? options.mapPressure(event.pressure) : 1;
       const diameter = Math.max(1, brush.size * options.zoom() * Math.max(0.04, pressure));
       try {
         presenter.updateInkTrailStartPoint(event, { color: withOpacity(brush.color, brush.opacity), diameter });
@@ -88,16 +90,6 @@ function erases(brush: Brush) {
   const settings = brush.engine?.settings as
     { blendMode?: unknown; values?: { tool?: { type?: unknown } } } | undefined;
   return brush.tool === 'eraser' || settings?.blendMode === 'Cler' || settings?.values?.tool?.type === 'ErTl';
-}
-
-/** Pen pressure through the brush's calibration, as the smoothing modes apply it; raw for the others. */
-function calibrated(raw: number, brush: Brush) {
-  const { mode, minimum, maximum, firmness } = brush.stroke;
-  if (mode !== 'normal' && mode !== 'smooth' && mode !== 'stabilizer') {
-    return raw;
-  }
-
-  return Math.max(0, Math.min(1, (raw - minimum) / (maximum - minimum))) ** firmness;
 }
 
 /** A `#rrggbb` color with `opacity` as its alpha byte; other color forms are returned unchanged. */

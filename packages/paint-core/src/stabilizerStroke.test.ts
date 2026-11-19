@@ -6,7 +6,7 @@ import { defaultStrokeSettings } from './strokeSettings';
 
 const brush = (stabilizer: number) => ({
   ...defaultBrush(),
-  stroke: { ...defaultStrokeSettings(), mode: 'stabilizer' as const, stabilizer, minimum: 0, maximum: 1 }
+  stroke: { ...defaultStrokeSettings(), mode: 'stabilizer' as const, stabilizer }
 });
 const pen = (x: number, y: number, time: number, pressure = 0.5): Sample => ({
   x,

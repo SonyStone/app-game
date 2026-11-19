@@ -5,7 +5,7 @@ import { initAbr } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { describe, expect, it } from 'vitest';
 import { abrCategories, abrCategoriesFor, abrValues } from './abrSchema';
-import { brushSettingsDiffer, legacyPressureCategory, snapshotBrushSettings } from './schema';
+import { brushSettingsDiffer, snapshotBrushSettings } from './schema';
 
 const source = {
   id: 'test',
@@ -281,7 +281,7 @@ describe('generated ABR settings', () => {
       throw new Error('Expected the Smoothing level and an amount');
     }
 
-    // At level 0 the preset smooths as Photoshop does; above it the stabilizer replaces that, and the curve applies.
+    // At level 0 the preset smooths as Photoshop does; above it the stabilizer replaces that.
     const b = brush();
     expect(level.read(b)).toBe(0);
     expect(amount.enabled(b)).toBe(true);
@@ -291,9 +291,6 @@ describe('generated ABR settings', () => {
     expect(status('smoothing', stabilized)).toBe('6');
     expect(amount.enabled(stabilized)).toBe(false);
     expect(setting('smoothing', 'catch-up').enabled(stabilized)).toBe(true);
-    // The brush's own pressure numbers, kept for old boards, apply to an ABR brush only in the stabilizer.
-    expect(legacyPressureCategory.settings[0]!.enabled(stabilized)).toBe(true);
-    expect(legacyPressureCategory.settings[0]!.enabled(b)).toBe(false);
     expect({ ...stabilized, ...level.write(stabilized, 0) }.stroke.mode).toBe('studio');
 
     const smoothed = { ...b, ...amount.write(b, 30) };
