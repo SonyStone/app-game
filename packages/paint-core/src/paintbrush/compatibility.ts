@@ -6,7 +6,7 @@ export type Compatibility = { status: 'supported' | 'approximate' | 'unavailable
 /** Format-level compatibility with version one. A renderer can impose further limits. */
 export function compatibility(doc: BrushDocument, knownExtensions: readonly string[] = []): Compatibility {
   const d = doc.definition;
-  if (d.tool !== 'brush' && d.tool !== 'eraser') {
+  if (!['brush', 'eraser', 'pencil', 'mixer', 'smudge', 'blur', 'sharpen'].includes(d.tool)) {
     return { status: 'unavailable', reasons: ['Unknown marking tool: ' + d.tool] };
   }
   const reasons: string[] = [];
@@ -29,7 +29,7 @@ export function compatibility(doc: BrushDocument, knownExtensions: readonly stri
     }
   }
   for (const [key, tip] of Object.entries(d.tips)) {
-    if (!['round', 'ellipse', 'sampled'].includes(tip.kind)) {
+    if (!['round', 'ellipse', 'sampled', 'bristle', 'naturalMedia'].includes(tip.kind)) {
       reasons.push('Unknown tip ' + key + ': ' + tip.kind);
     }
   }

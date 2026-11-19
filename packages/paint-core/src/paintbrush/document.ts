@@ -72,6 +72,8 @@ const definition = z.looseObject({
   texture: z
     .looseObject({
       resource: name,
+      /** A false switch keeps the saved texture available for later edits. Defaults to true. */
+      enabled: z.boolean().optional(),
       frame: name.optional(),
       scale: z.number().positive().optional(),
       depth: unit.optional(),
@@ -81,6 +83,8 @@ const definition = z.looseObject({
   dual: z
     .looseObject({
       tip: name,
+      /** A false switch retains the entire secondary tip without applying it. Defaults to true. */
+      enabled: z.boolean().optional(),
       size: z.number().positive().optional(),
       spacing: z.number().positive().optional(),
       blend: name.optional()

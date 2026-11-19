@@ -91,6 +91,9 @@ export function resolveNative(doc: BrushDocument) {
   const result = compatibility(doc, [nativeId]);
   const reasons = result.reasons;
   const d = doc.definition;
+  if (result.status !== 'unavailable' && !['brush', 'eraser'].includes(d.tool)) {
+    return { status: 'unavailable' as const, reasons: ['Unsupported native marking tool: ' + d.tool] };
+  }
   const tip = d.tips[d.sequence.tips[0]!]!;
   if (d.size !== undefined && (d.size < 1 || d.size > 512)) {
     reasons.push('Size outside native brush range (1–512 px)');
