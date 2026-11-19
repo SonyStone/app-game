@@ -7,6 +7,7 @@ import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js'
 import { BrushStudio } from '../brush-editor';
 import { BrushStrokePreview } from '../brush-editor/BrushStrokePreview';
 import { DrawingPad } from '../brush-editor/DrawingPad';
+import { newPresetName } from '../brush-library/newPresetName';
 import { PenPressurePane, penPressureStatus } from '../pressure-calibration';
 import type { PaintSession } from '../session';
 import styles from './BrushStudioDialog.module.css';
@@ -29,8 +30,12 @@ type BrushSettingsEditor = ReturnType<typeof createBrushSettingsEditor>;
  * pad, which then draws with the pen's raw pressure; the graph's histogram fills with them, and at the end the fitted
  * curve becomes the pen's, appearing on the graph.
  *
+ * "Save as new" saves the brush as edited as a new brush (`editor.saveAs`), offering the brush's name with the next
+ * free number (`newPresetName`); the studio goes on with the new brush, and the brush it came from goes back to how it
+ * was when Cancel would have returned to it. A failure shows in the error line and changes nothing.
+ *
  * Cancel returns to the brush and its document as they were when the dialog mounted or, after that, when another
- * preset was chosen (`editor.checkpoint`), and
+ * preset was chosen, as by "Save as new" (`editor.checkpoint`), and
  * the pen's curve to what it was when the dialog mounted, and then calls `onClose`, as Done does, which keeps both. Escape closes it too, keeping the changes, unless a control inside used the key,
  * as a menu or a typed number does. While it is open the page behind it is inert, and no key or pointer event in it
  * reaches the page's listeners on the document or the window, so the drawing's shortcuts and gestures stay idle.
@@ -73,6 +78,14 @@ export function BrushStudioDialog(props: {
   const [padSurface, setPadSurface] = createSignal<HTMLElement>();
   penPressure.watch(padSurface);
   const preset = createMemo(() => tools.preset());
+  // The new brush's suggested name must not repeat the name of a user brush not yet listed.
+  void library.loadAll();
+  const newName = createMemo(() =>
+    newPresetName(
+      library.find(preset())?.name ?? 'Brush',
+      library.presets().map(({ name }) => name)
+    )
+  );
   // Taken when the dialog opens and again whenever another preset is chosen; edits of the brush keep it.
   const baseline = createMemo(() => {
     preset();
@@ -136,6 +149,8 @@ export function BrushStudioDialog(props: {
               editor.revert(baseline());
               restorePen();
             }}
+            onSaveAs={(name) => editor.saveAs(name, baseline())}
+            newName={newName()}
             preview={<SessionStrokePreview session={session} editor={editor} height={96} />}
             penStatus={penPressureStatus(pressureCalibration.calibration()?.curve)}
             startOnPen={props.startOnPen}

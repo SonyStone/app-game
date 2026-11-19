@@ -34,6 +34,11 @@ import type { BrushView } from './brushView';
  * `--studio-chosen`, `--studio-chosen-ink` and `--studio-chosen-ring` for the chosen category and option and a switch
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
  *
+ * With `onSaveAs`, "Save as new" heads the group of Cancel and Done (its label hidden where the bar is narrow). It
+ * asks for the new brush's name in place of that group: a text field holding `newName`, selected so typing replaces
+ * it, with Cancel and Save beside it; Enter saves, Escape stops naming and leaves the studio open. Once `onSaveAs`
+ * resolves true the group comes back; false keeps the name for another try.
+ *
  * Cancel and Done both leave the studio through `onDone`. Cancel first calls `onCancel`, for the host to discard every
  * change made since the studio opened, as a sheet's Cancel does, the brush's and what it changed outside it, such as
  * the pen's curve; the side panel's "Cancel changes" instead only reverts and stays open. Fills its parent, which the
@@ -54,6 +59,13 @@ export function BrushStudio(props: {
   onDone: () => void;
   /** Called by Cancel before `onDone`, for the host to restore the brush and what it changed outside it. */
   onCancel?: () => void;
+  /**
+   * Saves the edited brush as a new brush named by the user, the name trimmed and not empty, and resolves whether it
+   * was saved; "Save as new" shows only with it.
+   */
+  onSaveAs?: (name: string) => Promise<boolean>;
+  /** The name the naming field offers, as "Soft round 2" for "Soft round"; read when naming starts. */
+  newName?: string;
   /** The pen pressure entry's status in the sidebar, such as "Off"; the Pen group shows only with it. */
   penStatus?: string;
   /** The pen pressure page, made by the host: its curve and the ways to measure or reset it. */
@@ -74,6 +86,8 @@ export function BrushStudio(props: {
    * narrow, and also the pad below 700 px.
    */
   const [view, setView] = createSignal<'list' | 'detail' | 'pad'>(untrack(penShown) ? 'detail' : 'list');
+  /** Whether the header asks for the new brush's name; see `onSaveAs`. */
+  const [naming, setNaming] = createSignal(false);
   const [root, setRoot] = createSignal<HTMLElement>();
   createEffect(root, (element) => (element ? watchTapTargets(element) : undefined));
 
@@ -146,27 +160,57 @@ export function BrushStudio(props: {
           {props.pad}
         </div>
         <div class={styles.studioActions}>
-          <button
-            type="button"
-            class={styles.studioPadToggle}
-            aria-pressed={view() === 'pad' ? 'true' : 'false'}
-            onClick={() => setView(view() === 'pad' ? 'list' : 'pad')}
+          <Show
+            when={naming() && props.onSaveAs}
+            fallback={
+              <>
+                <button
+                  type="button"
+                  class={styles.studioPadToggle}
+                  aria-pressed={view() === 'pad' ? 'true' : 'false'}
+                  onClick={() => setView(view() === 'pad' ? 'list' : 'pad')}
+                >
+                  <SketchIcon name="pencil" size={18} />
+                  Pad
+                </button>
+                <Show when={props.onSaveAs}>
+                  <button
+                    type="button"
+                    class={styles.saveAs}
+                    aria-label="Save as new brush"
+                    onClick={() => setNaming(true)}
+                  >
+                    <SketchIcon name="copy" size={18} />
+                    <span class={styles.saveAsLabel}>Save as new</span>
+                  </button>
+                </Show>
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onCancel?.();
+                    props.onDone();
+                  }}
+                >
+                  Cancel
+                </button>
+                <button type="button" class={styles.done} onClick={() => props.onDone()}>
+                  Done
+                </button>
+              </>
+            }
           >
-            <SketchIcon name="pencil" size={18} />
-            Pad
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              props.onCancel?.();
-              props.onDone();
-            }}
-          >
-            Cancel
-          </button>
-          <button type="button" class={styles.done} onClick={() => props.onDone()}>
-            Done
-          </button>
+            {(save) => (
+              <NewBrushName
+                name={untrack(() => props.newName) ?? ''}
+                onSave={async (name) => {
+                  if (await save()(name)) {
+                    setNaming(false);
+                  }
+                }}
+                onCancel={() => setNaming(false)}
+              />
+            )}
+          </Show>
         </div>
       </div>
     </section>
@@ -175,3 +219,72 @@ export function BrushStudio(props: {
 
 /** The sidebar entry of the pen's page, apart from the brush's categories. */
 const penEntry = 'pen-pressure';
+
+/**
+ * The new brush's name, asked in place of the header's buttons: a text field starting with `name`, focused with its
+ * text selected, then Cancel and Save as icon buttons. Enter saves and Escape cancels; the studio's dialog keeps an
+ * Escape pressed in a field. Save is off while the name is blank and while `onSave` runs, when the field is read-only.
+ */
+function NewBrushName(props: { name: string; onSave: (name: string) => Promise<void>; onCancel: () => void }) {
+  const [value, setValue] = createSignal(untrack(() => props.name));
+  const [saving, setSaving] = createSignal(false);
+  const [field, setField] = createSignal<HTMLInputElement>();
+  createEffect(field, (element) => {
+    if (element) {
+      element.focus({ preventScroll: true });
+      element.select();
+    }
+  });
+  const blank = () => value().trim() === '';
+
+  return (
+    <div class={styles.naming} role="group" aria-label="New brush">
+      <input
+        ref={setField}
+        class={styles.namingField}
+        type="text"
+        aria-label="New brush name"
+        value={value()}
+        readonly={saving()}
+        maxlength={80}
+        autocomplete="off"
+        spellcheck={false}
+        enterkeyhint="done"
+        onInput={(event) => setValue(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            void save();
+          } else if (event.key === 'Escape') {
+            props.onCancel();
+          }
+        }}
+      />
+      <button type="button" class={styles.namingCancel} aria-label="Cancel new brush" onClick={() => props.onCancel()}>
+        <SketchIcon name="close" size={18} />
+      </button>
+      <button
+        type="button"
+        class={styles.done}
+        aria-label="Save new brush"
+        disabled={blank() || saving()}
+        onClick={() => void save()}
+      >
+        <SketchIcon name="check" size={18} />
+      </button>
+    </div>
+  );
+
+  async function save() {
+    if (blank() || saving()) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await props.onSave(value().trim());
+    } finally {
+      setSaving(false);
+    }
+  }
+}
