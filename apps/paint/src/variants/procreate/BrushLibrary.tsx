@@ -20,7 +20,8 @@ import { PopoverHeader } from './Popover';
  * `--brush-library-sets` (the sets column's ground), `--brush-library-pane` (the brushes' ground),
  * `--brush-library-chosen` (the brush in use, and the chosen set's pill in Procreate's look), `--brush-library-ink`,
  * `--brush-library-quiet`, `--brush-library-line`, `--brush-library-icon` and `--brush-library-icon-ink` (the sets'
- * icon tiles), `--brush-library-mark` (the chosen set's tile), `--brush-library-radius` (the columns' corners) and
+ * icon tiles), `--brush-library-mark` (the chosen set's tile), `--brush-library-disabled` (header commands while
+ * brushes cannot be chosen), `--brush-library-radius` (the columns' corners) and
  * `--brush-library-height` (the columns' height).
  */
 export function BrushLibrary(props: {
