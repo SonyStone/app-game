@@ -1,33 +1,57 @@
-import { brushToFormValues, formValuesToBrush, type BrushFormValues } from '@app-game/abr-brush/form';
+import type { BrushFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import { settingGroups } from '@app-game/abr-brush/settings-fields';
-import { initAbr } from '@app-game/abr-parser';
-import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { initAbr, pixels } from '@app-game/abr-parser';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import { describe, expect, it } from 'vitest';
-import { abrCategories, abrCategoriesFor, abrValues } from './abrSchema';
-import { brushSettingsDiffer, snapshotBrushSettings } from './schema';
+import { convertAbr } from '../brush-library/abrPresetDocument';
+import { brushView, type BrushView } from './brushView';
+import { brushCategories } from './schema';
 
-const source = {
+await initAbr();
+
+const source: BrushAsset = {
   id: 'test',
   name: 'Test',
-  preset: { tip: { kind: 'computed', diameter: 30 } },
-  resources: []
-} as unknown as BrushAsset;
+  preset: { kind: 'brush', sourceId: 'one', tip: { kind: 'computed', diameter: pixels(30) } },
+  resources: [],
+  source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+};
+const imported = await convertAbr(source);
 
-function brush(): Brush {
-  return { ...defaultBrush(), engine: { id: 'abr', settings: { values: brushToFormValues(source), tipId: 'tip' } } };
+/** The imported computed preset's view. */
+function brush(): BrushView {
+  return brushView(imported.preset.abrDocument, { ...defaultBrush(), ...imported.preset.settings });
 }
 
-/** `b` with the fields of `patch` written into its engine values, at their root or in `group`. */
-function edit(b: Brush, group: keyof BrushFormValues | undefined, patch: Record<string, unknown>): Brush {
-  const values = abrValues(b);
+/** `view` reading the fields of `patch` in its form values, at their root or in `group`, as rules and statuses do. */
+function edit(view: BrushView, group: keyof BrushFormValues | undefined, patch: Record<string, unknown>): BrushView {
+  const values = view.values;
   const next = group ? { ...values, [group]: { ...(values[group] as object), ...patch } } : { ...values, ...patch };
-  return { ...b, engine: { ...b.engine!, settings: { ...(b.engine!.settings as object), values: next } } };
+  return { ...view, values: next as BrushFormValues };
 }
 
-/** The setting `id` of the ABR category `category`. */
+/** The view after a row wrote `text`. */
+function after(view: BrushView, text: string) {
+  return brushView(text, view.brush);
+}
+
+/** The categories generated from the Photoshop groups. */
+const generated = [
+  'shapeDynamics',
+  'transfer',
+  'scattering',
+  'texture',
+  'dualBrush',
+  'colorDynamics',
+  'brushPose',
+  'bristle',
+  'erodible'
+];
+
+/** The setting `id` of the category `category`. */
 function setting(category: string, id: string) {
-  const found = abrCategories.find((c) => c.id === category)!.settings.find((r) => r.id === id);
+  const found = brushCategories.find((c) => c.id === category)!.settings.find((r) => r.id === id);
   if (!found) {
     throw new Error(`No setting ${id}`);
   }
@@ -35,35 +59,22 @@ function setting(category: string, id: string) {
   return found;
 }
 
-/** The status of the ABR category `id` for `b`. */
-function status(id: string, b: Brush) {
-  return abrCategories.find((c) => c.id === id)!.status(b);
+/** The status of the category `id` for `view`. */
+function status(id: string, view: BrushView) {
+  return brushCategories.find((c) => c.id === id)!.status(view);
 }
 
 describe('generated ABR settings', () => {
-  it('generates rows for every engine group, in reference order', () => {
-    expect(abrCategories.map((c) => c.id)).toEqual([
-      'tool',
-      'brush-tip',
-      'shapeDynamics',
-      'transfer',
-      'scattering',
-      'texture',
-      'dualBrush',
-      'colorDynamics',
-      'brushPose',
-      'smoothing',
-      'bristle',
-      'erodible'
-    ]);
-    expect(abrCategories.every((c) => c.settings.length > 0)).toBe(true);
-    const rows = abrCategories.flatMap((c) => c.settings);
+  it('generates rows for every engine group, without stored-only fields', () => {
+    expect(generated.every((id) => brushCategories.some((c) => c.id === id))).toBe(true);
+    expect(brushCategories.every((c) => c.settings.length > 0)).toBe(true);
+    const rows = brushCategories.flatMap((c) => c.settings);
     expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
     expect(rows.some((r) => /stored only|Tip Wear|Load solid|Pattern Name|Saved foreground/.test(r.label))).toBe(false);
   });
 
-  it('round trips every generated ABR field through the descriptor conversion', () => {
-    for (const category of abrCategories.slice(0, 12)) {
+  it('round trips every generated field through the document', () => {
+    for (const category of brushCategories.filter((c) => generated.includes(c.id))) {
       for (const row of category.settings) {
         const b = brush();
         const next =
@@ -72,29 +83,26 @@ describe('generated ABR settings', () => {
             : row.kind === 'toggle'
               ? row.write(b, !row.read(b))
               : row.write(b, row.options.at(-1)!.value);
-        const edited = { ...b, ...next };
-        const decoded = brushToFormValues(formValuesToBrush(source, abrValues(edited)));
-        // Form writes preserve sampled hardness, but this fixture has a computed primary and secondary tip.
-        expect(row.read({ ...edited, engine: { ...edited.engine!, settings: { values: decoded } } }), row.id).toEqual(
-          row.read(edited)
-        );
+        const written = after(b, next);
+        // Reading the document anew gives what the edit wrote.
+        expect(row.read(after(written, written.text)), row.id).toEqual(row.read(written));
       }
     }
   });
 
   it('keeps switched-off rows visible and disabled, and enables them with the group', () => {
-    for (const category of abrCategories.filter((c) =>
-      ['shapeDynamics', 'scattering', 'dualBrush', 'colorDynamics', 'transfer', 'brushPose'].includes(c.id)
+    for (const category of brushCategories.filter((c) =>
+      ['shapeDynamics', 'scattering', 'colorDynamics', 'transfer', 'brushPose'].includes(c.id)
     )) {
       const toggle = category.settings[0]!;
       expect(toggle.kind).toBe('toggle');
       if (toggle.kind !== 'toggle') {
         continue;
       }
-      const off = { ...brush(), ...toggle.write(brush(), false) };
+      const off = after(brush(), toggle.write(brush(), false));
       expect(category.status(off)).toBe('Off');
       expect(category.settings.slice(1).every((r) => !r.enabled(off))).toBe(true);
-      const on = { ...off, ...toggle.write(off, true) };
+      const on = after(off, toggle.write(off, true));
       // Rows that depend on another row's value, such as a Fade length on its control, stay greyed until it is set.
       expect(category.settings.slice(1).some((r) => r.enabled(on))).toBe(true);
       expect(
@@ -111,61 +119,51 @@ describe('generated ABR settings', () => {
     }
   });
 
-  it('retains ABR values in the cancel baseline without sharing mutable objects', () => {
-    const b = brush();
-    const baseline = snapshotBrushSettings(b, true);
-    const row = abrCategories.find((c) => c.id === 'scattering')!.settings.find((r) => r.kind === 'number')!;
-    if (row.kind !== 'number') {
-      throw new Error('Expected scatter number');
-    }
-    const changed = { ...b, ...row.write(b, 250) };
-    expect(brushSettingsDiffer(changed, baseline)).toBe(true);
-    expect(brushSettingsDiffer({ ...changed, ...structuredClone(baseline) }, baseline)).toBe(false);
-  });
-
-  it('can re-enable an embedded texture after preparation removed its dormant runtime ID', async () => {
-    await initAbr();
-    const textured = {
-      ...source,
-      preset: { ...source.preset, texture: { identifier: 'grain', name: 'Grain' }, textureEnabled: false },
-      resources: [{ resource: { kind: 'pattern', id: 'grain', name: 'Grain', section: 0, index: 0 }, source: {} }]
-    } as unknown as BrushAsset;
-    const category = abrCategoriesFor(textured).find((c) => c.id === 'texture')!;
-    const b = brush();
+  it('can switch on a texture whose pattern the document has, and greys per-tip rows until they apply', () => {
+    const category = brushCategories.find((c) => c.id === 'texture')!;
+    const b = { ...brush(), images: { pattern: true, dual: false } };
     const toggle = category.settings[0]!;
     expect(toggle.enabled(b)).toBe(true);
     expect(category.settings.slice(1).every((r) => !r.enabled(b))).toBe(true);
-    if (toggle.kind !== 'toggle') {
-      throw new Error('Expected texture switch');
-    }
-    const on = { ...b, ...toggle.write(b, true) };
+    const on = edit(b, undefined, { useTexture: true });
     const perTip = ['depthJitter', 'depthControl', 'minimumDepth', 'depthFade'].map((key) => `abr-texture-${key}`);
     expect(category.settings.filter((r) => !r.enabled(on)).map((r) => r.id)).toEqual(perTip);
     const varied = edit(on, 'texture', { eachTip: true, depthControl: 1 });
     expect(category.settings.every((r) => r.enabled(varied))).toBe(true);
   });
 
-  it('requires a texture resource and only shows physical groups for physical tips', () => {
+  it('requires a texture pattern and a second tip, and only shows physical groups for physical tips', () => {
     const b = brush();
-    const texture = abrCategories.find((c) => c.id === 'texture')!;
-    expect(texture.settings.every((r) => !r.enabled(b))).toBe(true);
-    expect(abrCategories.find((c) => c.id === 'bristle')!.applies(b)).toBe(false);
-    expect(abrCategories.find((c) => c.id === 'erodible')!.applies(b)).toBe(false);
+    for (const id of ['texture', 'dualBrush']) {
+      expect(brushCategories.find((c) => c.id === id)!.settings.every((r) => !r.enabled(b))).toBe(true);
+    }
+    expect(brushCategories.find((c) => c.id === 'bristle')!.applies(b)).toBe(false);
+    expect(brushCategories.find((c) => c.id === 'erodible')!.applies(b)).toBe(false);
   });
 
   it('groups each category under short headings and places every engine field once', () => {
-    const transfer = abrCategories.find((c) => c.id === 'transfer')!.settings.filter((r) => r.applies(brush()));
+    const transfer = brushCategories.find((c) => c.id === 'transfer')!.settings.filter((r) => r.applies(brush()));
     expect(transfer.map((r) => [r.section, r.label])).toEqual([
       [undefined, 'Use transfer'],
       ...['Opacity', 'Flow'].flatMap((section) =>
         ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => [section, label])
       )
     ]);
-    const shape = abrCategories.find((c) => c.id === 'shapeDynamics')!.settings;
+    const shape = brushCategories.find((c) => c.id === 'shapeDynamics')!.settings;
     expect([...new Set(shape.flatMap((r) => r.section ?? []))]).toEqual(['Size', 'Angle', 'Roundness', 'Flip']);
 
     const hidden: Record<string, string[]> = {
-      tool: ['type', 'foreground', 'background', 'pressureSmoothing', 'legacy', 'loadSolidColorOnly'],
+      // The tool's Opacity and Flow are the rows every brush shares.
+      tool: [
+        'type',
+        'foreground',
+        'background',
+        'pressureSmoothing',
+        'legacy',
+        'loadSolidColorOnly',
+        'opacity',
+        'flow'
+      ],
       texture: ['patternId', 'patternName'],
       dualBrush: ['tipId'],
       erodible: ['physics'],
@@ -173,7 +171,7 @@ describe('generated ABR settings', () => {
       smoothing: Object.keys(settingGroups.smoothing)
     };
     for (const [group, fields] of Object.entries(settingGroups)) {
-      const placed = abrCategories
+      const placed = brushCategories
         .flatMap((c) => c.settings)
         .filter((r) => r.id.startsWith(`abr-${group}-`))
         .map((r) => r.id.slice(`abr-${group}-`.length))
@@ -185,7 +183,7 @@ describe('generated ABR settings', () => {
     }
 
     // A section's rows are consecutive, so it shows as one group.
-    for (const category of abrCategories) {
+    for (const category of brushCategories) {
       const runs = category.settings.map((r) => r.section).filter((name, i, all) => name && name !== all[i - 1]);
       expect(runs, category.id).toEqual([...new Set(runs)]);
     }
@@ -193,9 +191,9 @@ describe('generated ABR settings', () => {
 
   it('greys a row whose value has no effect under the current control, as the engine reads it', () => {
     const shape = edit(brush(), undefined, { useShapeDynamics: true, tipKind: 'sampledBrush' });
-    const enabled = (category: string, id: string, b: Brush) => setting(category, id).enabled(b);
+    const enabled = (category: string, id: string, b: BrushView) => setting(category, id).enabled(b);
     const sizeRows = ['sizeFade', 'minimumDiameter', 'tiltScale', 'sizeMinimum'].map((k) => `abr-shapeDynamics-${k}`);
-    const sizeState = (b: Brush) => sizeRows.map((id) => enabled('shapeDynamics', id, b));
+    const sizeState = (b: BrushView) => sizeRows.map((id) => enabled('shapeDynamics', id, b));
     const sizeControl = (control: number, jitter = 0) =>
       edit(shape, 'shapeDynamics', { sizeControl: control, sizeJitter: jitter });
     // Off: fade, tilt scale and both minimums have no effect; a jitter makes the minimum diameter its floor.
@@ -220,7 +218,7 @@ describe('generated ABR settings', () => {
 
     const transfer = edit(brush(), undefined, { useTransfer: true });
     const opacity = (control: number) => edit(transfer, 'transfer', { opacityControl: control });
-    const opacityState = (b: Brush) =>
+    const opacityState = (b: BrushView) =>
       ['Jitter', 'Control', 'Minimum', 'Fade'].map((k) => enabled('transfer', `abr-transfer-opacity${k}`, b));
     expect(opacityState(opacity(0))).toEqual([true, true, false, false]);
     expect(opacityState(opacity(2))).toEqual([true, true, true, false]);
@@ -258,14 +256,14 @@ describe('generated ABR settings', () => {
       'Hue 27% · Sat. 25%'
     );
     expect(status('scattering', edit(brush(), undefined, { useScattering: true }))).toMatch(/^Spread \d+% · ×\d+$/);
-    expect(abrCategories.find((c) => c.id === 'colorDynamics')!.label).toBe('Color dynamics');
+    expect(brushCategories.find((c) => c.id === 'colorDynamics')!.label).toBe('Color dynamics');
   });
 
   it('shows the smoothing that changes an ABR stroke under one name: the Smoothing level, then the preset’s own', () => {
-    expect(abrCategories.filter((c) => /smooth|correction/i.test(`${c.id} ${c.label}`)).map((c) => c.label)).toEqual([
-      'Smoothing'
+    expect(brushCategories.filter((c) => /smooth|correction/i.test(`${c.id} ${c.label}`)).map((c) => c.label)).toEqual([
+      'Stroke correction'
     ]);
-    const category = abrCategories.find((c) => c.id === 'smoothing')!;
+    const category = brushCategories.find((c) => c.id === 'stroke-correction')!;
     expect(category.settings.map((r) => [r.section, r.label])).toEqual([
       [undefined, 'Smoothing'],
       [undefined, 'Catch up on pen lift'],
@@ -275,8 +273,8 @@ describe('generated ABR settings', () => {
       ['Photoshop smoothing', 'Catch up at stroke end'],
       ['Photoshop smoothing', 'Adjust for zoom']
     ]);
-    const level = setting('smoothing', 'smoothing');
-    const amount = setting('smoothing', 'abr-smoothing-amount');
+    const level = setting('stroke-correction', 'smoothing');
+    const amount = setting('stroke-correction', 'abr-smoothing-amount');
     if (level.kind !== 'number' || amount.kind !== 'number') {
       throw new Error('Expected the Smoothing level and an amount');
     }
@@ -285,36 +283,39 @@ describe('generated ABR settings', () => {
     const b = brush();
     expect(level.read(b)).toBe(0);
     expect(amount.enabled(b)).toBe(true);
-    expect(setting('smoothing', 'catch-up').enabled(b)).toBe(false);
-    const stabilized = { ...b, ...level.write(b, 6) };
-    expect(stabilized.stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 6 });
-    expect(status('smoothing', stabilized)).toBe('6');
+    expect(setting('stroke-correction', 'catch-up').enabled(b)).toBe(false);
+    const stabilized = after(b, level.write(b, 6));
+    expect(stabilized.brush.stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 6 });
+    expect(status('stroke-correction', stabilized)).toBe('6');
     expect(amount.enabled(stabilized)).toBe(false);
-    expect(setting('smoothing', 'catch-up').enabled(stabilized)).toBe(true);
-    expect({ ...stabilized, ...level.write(stabilized, 0) }.stroke.mode).toBe('studio');
+    expect(setting('stroke-correction', 'catch-up').enabled(stabilized)).toBe(true);
+    expect(after(stabilized, level.write(stabilized, 0)).brush.stroke.mode).toBe('studio');
 
-    const smoothed = { ...b, ...amount.write(b, 30) };
-    expect(abrValues(smoothed).useSmoothing).toBe(true);
-    expect(abrValues(smoothed).smoothing.amount).toBe(30);
-    expect(status('smoothing', smoothed)).toBe('30%');
-    const off = { ...smoothed, ...amount.write(smoothed, 0) };
-    expect(abrValues(off).useSmoothing).toBe(false);
+    const smoothed = after(b, amount.write(b, 30));
+    expect(smoothed.values.useSmoothing).toBe(true);
+    expect(smoothed.values.smoothing.amount).toBe(30);
+    expect(status('stroke-correction', smoothed)).toBe('30%');
+    const off = after(smoothed, amount.write(smoothed, 0));
+    expect(off.values.useSmoothing).toBe(false);
     expect(amount.read(off)).toBe(0);
-    expect(status('smoothing', off)).toBe('Off');
-    expect(setting('smoothing', 'abr-smoothing-pulledString').enabled(off)).toBe(false);
+    expect(status('stroke-correction', off)).toBe('Off');
+    expect(setting('stroke-correction', 'abr-smoothing-pulledString').enabled(off)).toBe(false);
 
     // Raw input reads as level 0 and no amount; a raised amount lets the preset smooth again.
-    const raw = { ...smoothed, stroke: { ...smoothed.stroke, mode: 'none' as const } };
+    const raw = {
+      ...smoothed,
+      brush: { ...smoothed.brush, stroke: { ...smoothed.brush.stroke, mode: 'none' as const } }
+    };
     expect(level.read(raw)).toBe(0);
     expect(amount.read(raw)).toBe(0);
-    expect(status('smoothing', raw)).toBe('Off');
-    const again = { ...raw, ...amount.write(raw, 40) };
-    expect(again.stroke.mode).toBe('studio');
+    expect(status('stroke-correction', raw)).toBe('Off');
+    const again = after(raw, amount.write(raw, 40));
+    expect(again.brush.stroke.mode).toBe('studio');
     expect(amount.read(again)).toBe(40);
   });
 
   it('carries no explanatory text in any category', () => {
-    for (const category of abrCategories) {
+    for (const category of brushCategories) {
       expect(Object.keys(category), category.id).not.toContain('about');
       expect(Object.keys(category), category.id).not.toContain('note');
       for (const row of category.settings) {

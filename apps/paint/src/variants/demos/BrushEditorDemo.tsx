@@ -4,7 +4,7 @@ import { createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { BrushLibraryPanel } from '../../features/brush';
-import { BrushEditor, snapshotBrushSettings } from '../../features/brush-editor';
+import { BrushEditor } from '../../features/brush-editor';
 import type { BrushLibrary } from '../../features/brush-library';
 import { BrushStudioDialog, SessionStrokePreview } from '../../features/brush/BrushStudioDialog';
 import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
@@ -65,14 +65,14 @@ export function BrushEditorDemo(props: PaintVariantProps) {
   });
   // The preset's id alone: the tool state it is read from changes with every edit, which must keep the baseline.
   const preset = createMemo(() => tools.preset());
+  const editor = createBrushSettingsEditor(session);
+  const { view, editError, update: updateEditor } = editor;
   // What Cancel changes returns to: the brush when the panel opens and whenever another preset is chosen.
   const baseline = createMemo(() => {
     open();
     preset();
-    return snapshotBrushSettings(untrack(brush), true);
+    return untrack(editor.checkpoint);
   });
-  const editor = createBrushSettingsEditor(session);
-  const { edited, categories, editError, update: updateEditor } = editor;
   const [brushesOpen, setBrushesOpen] = createSignal(false);
   const [abrMounted, setAbrMounted] = createSignal(false);
   const [abrOpen, setAbrOpen] = createSignal(false);
@@ -193,15 +193,19 @@ export function BrushEditorDemo(props: PaintVariantProps) {
           </div>
           <Show when={editError()}>{(message) => <p role="alert">{message()}</p>}</Show>
           <div class={styles.editor}>
-            <BrushEditor
-              brush={edited()}
-              categories={brush().engine?.id === 'abr' ? categories() : undefined}
-              baseline={baseline()}
-              name={library.find(preset())?.name}
-              onChange={(patch) => void updateEditor(patch)}
-              onDone={() => setOpen(false)}
-              preview={<SessionStrokePreview session={session} editor={editor} height={84} />}
-            />
+            <Show when={view()}>
+              {(current) => (
+                <BrushEditor
+                  brush={current()}
+                  changed={editor.changedSince(baseline())}
+                  onRevert={() => editor.revert(baseline())}
+                  name={library.find(preset())?.name}
+                  onChange={(text) => void updateEditor(text)}
+                  onDone={() => setOpen(false)}
+                  preview={<SessionStrokePreview session={session} editor={editor} height={84} />}
+                />
+              )}
+            </Show>
           </div>
         </aside>
       </Show>

@@ -19,7 +19,10 @@ export type BrushPreset = {
   source?: string;
   /** Legacy import retained for rollback and editing if conversion fails. */
   abrSource?: BrushAsset;
-  /** Editable document prepared by the ABR renderer, including sampled Paint brushes and dormant Photoshop effects. */
+  /**
+   * The brush's editable document where its settings alone cannot carry it: Photoshop presets, sampled Paint brushes,
+   * and round brushes with Photoshop groups, switched on (drawn by the ABR renderer) or dormant (drawn round).
+   */
   abrDocument?: string;
   /** Saved round-brush document. Settings are its runtime projection and legacy fallback. */
   nativeDocument?: string;

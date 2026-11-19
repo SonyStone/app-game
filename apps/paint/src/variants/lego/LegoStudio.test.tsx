@@ -514,11 +514,13 @@ it("puts a studio row's grip inside its row, the setting's sliders fused into on
         `[data-part-kind="${['value:size', 'value:opacity', 'value:brush:flow'][at]}"]`
       )
     ).not.toBeNull();
-    expect(row.parentElement).toBe(rows[0]!.parentElement);
   }
 
+  // Photoshop's blend mode stands between Size and Opacity, so Size is a group of its own.
   expect(rows[0]!.parentElement!.dataset.family).toBe('slider');
-  expect([...rows[0]!.parentElement!.children]).toEqual(rows);
+  expect([...rows[0]!.parentElement!.children]).toEqual([rows[0]]);
+  expect(rows[1]!.parentElement!.dataset.family).toBe('slider');
+  expect([...rows[1]!.parentElement!.children]).toEqual(rows.slice(1));
 
   // The row draws the tile and its corners; the grip takes the left ones and the part the right ones, with no gap.
   const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'LegoStudio.module.css'), 'utf8');

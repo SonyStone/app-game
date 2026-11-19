@@ -111,9 +111,6 @@ export function LegoStudio(
       setStudioOnPen(false);
       setStudioOpen(true);
     },
-    () =>
-      studioOpen() ||
-      board.board().panels.some((panel) => panel.parts.some((part) => part.kind.startsWith('value:brush:abr-'))),
     (measure) => {
       if (measure) {
         setPenMeasuring(true);

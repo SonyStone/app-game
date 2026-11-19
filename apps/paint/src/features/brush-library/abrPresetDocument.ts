@@ -57,6 +57,22 @@ export async function resolveAbrText(text: string, images: readonly BrushResourc
   return resolved.prepared;
 }
 
+/**
+ * Resolves a stored document edit of any brush: the engine it draws with, absent for Paint's round renderer, and the
+ * images the ABR renderer needs.
+ */
+export async function resolveDraft(text: string, images: readonly BrushResource[]) {
+  const {
+    settings,
+    resources = [],
+    reasons
+  } = await resolveDocument(parseDocument(text, brushSchema), coverageMap(images));
+  if (!settings) {
+    throw new Error(reasons.join(', '));
+  }
+  return { engine: settings.engine, resources };
+}
+
 /** Reads coverage by digest for the ABR document resolver. */
 export function coverageMap(images: readonly BrushResource[]) {
   return new Map(images.map((image) => [image.id, image]));

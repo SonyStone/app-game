@@ -1,13 +1,129 @@
-import { brushFormSchema, brushToFormValues, formValuesToBrush, type BrushFormValues } from '@app-game/abr-brush/form';
-import type { BrushAsset } from '@app-game/abr-brush/library';
-import { brushPreviewResources } from '@app-game/abr-brush/resources';
+import type { BrushFormValues } from '@app-game/abr-brush/form';
 import { featureFields, settingGroups, type SettingField } from '@app-game/abr-brush/settings-fields';
-import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
-import type { Brush } from '@app-game/paint-core/brush';
-import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
-import { catchUpSetting, smoothingSetting, type BrushCategory, type BrushSetting } from './schema';
+import { patchFormValues } from '../brush-library/documentSettings';
+import type { BrushView } from './brushView';
+import type { BrushCategory, BrushSetting } from './schema';
 
-// The tables below are declared before the categories, which read them while they are built.
+/**
+ * The studio's Photoshop groups, generated from the shared descriptor bindings in `settingGroups`: each group's rows,
+ * in the reference editor's order and labelled by {@link layouts}, read the document's Photoshop form values and write
+ * them back through `patchFormValues`. Every brush shows them; on a Paint document they start switched off, and a
+ * group switched on moves the brush to the ABR renderer. A row is greyed while its value has no effect, as the engine
+ * reads it (see {@link rules}).
+ */
+export function photoshopCategory(
+  id: Exclude<Group, 'smoothing' | 'tool'>,
+  label: string,
+  group: BrushCategory['group'],
+  feature?: Feature,
+  gate: (view: BrushView) => boolean = always
+): BrushCategory {
+  return {
+    id,
+    label,
+    group,
+    applies: (view) =>
+      id === 'bristle' ? view.values.tipKind === 'dBrush' : id === 'erodible' ? view.values.tipKind === 'dTips' : true,
+    status: (view) =>
+      feature && !view.values[feature]
+        ? 'Off'
+        : id === 'texture' && !gate(view)
+          ? 'No embedded pattern'
+          : statuses[id](view.values),
+    settings: [
+      ...(feature
+        ? [
+            {
+              ...row(id, feature, featureFields[feature], { label: `Use ${label.toLowerCase()}` }, true),
+              enabled: gate
+            }
+          ]
+        : []),
+      ...photoshopRows(id, undefined, (view) => gate(view) && (!feature || view.values[feature]))
+    ]
+  };
+}
+
+/**
+ * The generated rows of the group `id` in display order, only those whose fields are among `keys` when given; each is
+ * greyed unless `active` and its own rule (see {@link rules}) hold.
+ */
+export function photoshopRows(
+  id: Exclude<Group, 'smoothing'>,
+  keys?: readonly string[],
+  active: (view: BrushView) => boolean = always
+): BrushSetting[] {
+  return layouts[id]
+    .filter((placement) => !keys || keys.includes(placement.key))
+    .map((placement) => {
+      const field = (settingGroups[id] as Record<string, SettingField>)[placement.key]!;
+      const rule = rules[id]?.[placement.key] ?? always;
+      return { ...row(id, placement.key, field, placement), enabled: (view) => active(view) && rule(view.values) };
+    });
+}
+
+/** The fields of the group `id` that {@link photoshopRows} shows, in display order. */
+export function photoshopKeys(id: Exclude<Group, 'smoothing'>) {
+  return layouts[id].map((placement) => placement.key);
+}
+
+/**
+ * The row of the Photoshop smoothing field `key`, labelled `label` under the heading "Photoshop smoothing"; see the
+ * studio's Stroke correction.
+ */
+export function photoshopSmoothingRow(key: keyof BrushFormValues['smoothing'], label: string): BrushSetting {
+  return row('smoothing', key, settingGroups.smoothing[key], { label, section: 'Photoshop smoothing' });
+}
+
+/** The tip's own number field `key` of the form, as a Brush tip row. */
+export function photoshopTipRow(
+  key: 'angle' | 'roundness',
+  label: string,
+  min: number,
+  max: number,
+  unit: string
+): BrushSetting {
+  return {
+    id: `abr-tip-${key}`,
+    label,
+    kind: 'number',
+    unit,
+    min: () => min,
+    max: () => max,
+    step: 1,
+    applies: always,
+    enabled: always,
+    read: (view) => view.values[key],
+    write: (view, value) =>
+      patchFormValues(view.text, {
+        ...view.values,
+        [key]: Math.max(min, Math.min(max, Math.round(Number.isNaN(value) ? view.values[key] : value)))
+      })
+  };
+}
+
+/** The descriptor's tip kinds by their short names, as Brush tip's status says them. */
+export const tipKinds: Record<string, string> = {
+  sampledBrush: 'Sampled',
+  computedBrush: 'Generated',
+  dBrush: 'Bristle',
+  dTips: 'Erodible'
+};
+
+/** Whether the tool's own row `key` applies to the document's tool; see {@link applicable}. */
+export function toolApplies(key: 'opacity' | 'flow', view: BrushView) {
+  return applicable('tool', key, view.values);
+}
+
+/** Photoshop's option names, such as `Pen Pressure`, in the editor's sentence case: `Pen pressure`. */
+export function sentenceCase(label: string) {
+  return label.charAt(0) + label.slice(1).toLowerCase();
+}
+
+type Group = keyof typeof settingGroups;
+type Feature = keyof typeof featureFields;
+
+// The tables below are declared before they are read, while the categories are built.
 
 /** Where a generated row goes: its field, its short label, its section, and a unit the descriptor lacks. */
 type Placement = { key: string; label: string; section?: string; unit?: string };
@@ -29,7 +145,7 @@ function section(section: string, ...rows: [key: string, label: string, unit?: s
  */
 const layouts: Record<Exclude<Group, 'smoothing'>, readonly Placement[]> = {
   tool: [
-    ...loose(['mode', 'Mode'], ['opacity', 'Opacity'], ['flow', 'Flow']),
+    ...loose(['mode', 'Mode']),
     ...section(
       'Pen pressure',
       ['pressureOverridesOpacity', 'Always sets opacity'],
@@ -187,7 +303,7 @@ const layouts: Record<Exclude<Group, 'smoothing'>, readonly Placement[]> = {
  * scale only under Pen Tilt, and per-tip texture depth only with Vary per tip. "Always use pressure" replaces the
  * size control and the whole opacity dynamic.
  */
-const rules: Partial<Record<Exclude<Group, 'smoothing'>, Record<string, (v: BrushFormValues, b: Brush) => boolean>>> = {
+const rules: Partial<Record<Exclude<Group, 'smoothing'>, Record<string, (v: BrushFormValues) => boolean>>> = {
   shapeDynamics: {
     sizeControl: (v) => !v.tool.pressureOverridesSize,
     sizeFade: (v) => sizeControl(v) === 1,
@@ -230,118 +346,6 @@ const rules: Partial<Record<Exclude<Group, 'smoothing'>, Record<string, (v: Brus
 /** Display units of the descriptor's unit IDs. */
 const units: Record<string, string> = { '#Prc': '%', '#Ang': '°', '#Pxl': 'px' };
 
-/**
- * The editor's categories for an ABR (Photoshop) brush, generated from the shared descriptor bindings in
- * `settingGroups`. Rows are grouped and labelled by {@link layouts}; a row is greyed while its value has no effect,
- * as the engine reads it (see {@link rules}). Smoothing joins Paint's Smoothing level with the preset's own smoothing,
- * the only two that change an ABR stroke.
- */
-export const abrCategories: readonly BrushCategory[] = [
-  category('tool', 'Painting', 'basics'),
-  {
-    id: 'brush-tip',
-    label: 'Brush tip',
-    group: 'basics',
-    applies: always,
-    status: (b) => `${tipKinds[values(b).tipKind] ?? 'Tip'} · ${Math.round(b.size)} px`,
-    settings: [
-      rootNumber('diameter', 'Size', 1, 5000, 'px'),
-      rootNumber('spacing', 'Spacing', 1, 1000, '%'),
-      rootNumber('angle', 'Angle', -180, 180, '°'),
-      rootNumber('roundness', 'Roundness', 1, 100, '%'),
-      { ...rootNumber('hardness', 'Hardness', 0, 100, '%'), applies: (b) => values(b).tipKind === 'computedBrush' }
-    ]
-  },
-  category('shapeDynamics', 'Shape dynamics', 'basics', 'useShapeDynamics'),
-  category('transfer', 'Transfer', 'basics', 'useTransfer'),
-  category('scattering', 'Scattering', 'advanced', 'useScattering'),
-  category('texture', 'Texture', 'advanced', 'useTexture', (b) => !!settings(b).patternId),
-  category('dualBrush', 'Dual brush', 'advanced', 'useDualBrush'),
-  category('colorDynamics', 'Color dynamics', 'advanced', 'useColorDynamics'),
-  category('brushPose', 'Brush pose', 'advanced', 'useBrushPose'),
-  smoothingCategory(),
-  category('bristle', 'Bristle', 'advanced'),
-  category('erodible', 'Erodible', 'advanced')
-];
-
-/** Keeps texture availability tied to the source resource, even while the runtime texture is off. */
-export function abrCategoriesFor(source: BrushAsset): readonly BrushCategory[] {
-  const form = brushToFormValues(source);
-  const hasPattern = !!brushPreviewResources(formValuesToBrush(source, { ...form, useTexture: true })).pattern;
-  return abrCategoriesWithPattern(hasPattern);
-}
-
-/** ABR studio rows gated by embedded pattern coverage. */
-export function abrCategoriesWithPattern(hasPattern: boolean): readonly BrushCategory[] {
-  const texture = category('texture', 'Texture', 'advanced', 'useTexture', () => hasPattern);
-  return abrCategories.map((category) =>
-    category.id !== 'texture'
-      ? category
-      : {
-          ...texture,
-          status: (b) => (!values(b).useTexture ? 'Off' : hasPattern ? textureStatus(values(b)) : 'No embedded pattern')
-        }
-  );
-}
-
-/** Reads validated engine form values; only call for ABR brushes. */
-export function abrValues(brush: Brush): BrushFormValues {
-  return brushFormSchema.parse(settings(brush).values);
-}
-
-// Engine settings are validated when imported and every generated write preserves that shape.
-function values(brush: Brush): BrushFormValues {
-  return settings(brush).values;
-}
-
-type Group = keyof typeof settingGroups;
-type Feature = keyof typeof featureFields;
-
-/**
- * A generated category of the descriptor group `id`. With a `feature`, its switch comes first and every other row
- * is greyed while it is off; `gate` greys every row, the switch too, such as texture rows without a pattern.
- */
-function category(
-  id: Exclude<Group, 'smoothing'>,
-  label: string,
-  group: BrushCategory['group'],
-  feature?: Feature,
-  gate: (b: Brush) => boolean = always
-): BrushCategory {
-  return {
-    id,
-    label,
-    group,
-    applies: (b) =>
-      id === 'bristle' ? values(b).tipKind === 'dBrush' : id === 'erodible' ? values(b).tipKind === 'dTips' : true,
-    status: (b) =>
-      feature && !values(b)[feature]
-        ? 'Off'
-        : id === 'texture' && !settings(b).patternId
-          ? 'No embedded pattern'
-          : statuses[id](values(b), b),
-    settings: [
-      ...(feature
-        ? [
-            {
-              ...row(id, feature, featureFields[feature], { label: `Use ${label.toLowerCase()}` }, true),
-              enabled: gate
-            }
-          ]
-        : []),
-      ...layouts[id].map((placement) => {
-        const field = (settingGroups[id] as Record<string, SettingField>)[placement.key]!;
-        const generated = row(id, placement.key, field, placement);
-        const rule = rules[id]?.[placement.key] ?? always;
-        return {
-          ...generated,
-          enabled: (b: Brush) => gate(b) && (!feature || values(b)[feature]) && rule(values(b), b)
-        };
-      })
-    ]
-  };
-}
-
 /** The size control the engine uses: "Always use pressure for size" replaces the preset's with Pen Pressure. */
 function sizeControl(v: BrushFormValues) {
   return v.tool.pressureOverridesSize ? 2 : v.shapeDynamics.sizeControl;
@@ -357,24 +361,30 @@ function sampledPaintbrush(v: BrushFormValues) {
   return v.tool.type === 'PbTl' && v.tipKind === 'sampledBrush';
 }
 
-/** A generated row for `key` of `group`, or of the brush's root when `root`, placed and labelled by `placement`. */
-function row(group: Group, key: string, field: SettingField, placement: Omit<Placement, 'key'>, root = false) {
-  const read = (b: Brush): unknown =>
-    root ? values(b)[key as Feature] : (values(b)[group] as Record<string, unknown>)[key];
-  const write = (b: Brush, value: unknown): Partial<Brush> => {
-    const current = values(b);
+/** A generated row for `key` of `group`, or of the form's root when `root`, placed and labelled by `placement`. */
+function row(
+  group: Group,
+  key: string,
+  field: SettingField,
+  placement: Omit<Placement, 'key'>,
+  root = false
+): BrushSetting {
+  const read = (view: BrushView): unknown =>
+    root ? view.values[key as Feature] : (view.values[group] as Record<string, unknown>)[key];
+  const write = (view: BrushView, value: unknown) => {
+    const current = view.values;
     const next = root ? { ...current, [key]: value } : { ...current, [group]: { ...current[group], [key]: value } };
-    return { engine: { ...b.engine!, settings: { ...settings(b), values: next } } };
+    return patchFormValues(view.text, next);
   };
   const base = {
     id: `abr-${group}-${key}`,
     label: placement.label,
     section: placement.section,
-    applies: (b: Brush) => root || applicable(group, key, b),
+    applies: (view: BrushView) => root || applicable(group, key, view.values),
     enabled: always
   };
   if (field.kind === 'boolean') {
-    return { ...base, kind: 'toggle', read: (b) => Boolean(read(b)), write } satisfies BrushSetting;
+    return { ...base, kind: 'toggle', read: (view) => Boolean(read(view)), write };
   }
 
   if (field.options) {
@@ -382,15 +392,15 @@ function row(group: Group, key: string, field: SettingField, placement: Omit<Pla
       ...base,
       kind: 'choice',
       options: field.options.map((o) => ({ label: sentenceCase(o.label), value: String(o.value) })),
-      read: (b) => String(read(b)),
-      write: (b, value) => {
+      read: (view) => String(read(view)),
+      write: (view, value) => {
         const option = field.options!.find((o) => String(o.value) === value);
         if (!option) {
           throw new RangeError(`Unknown ${key}: ${value}`);
         }
-        return write(b, option.value);
+        return write(view, option.value);
       }
-    } satisfies BrushSetting;
+    };
   }
 
   return {
@@ -400,56 +410,20 @@ function row(group: Group, key: string, field: SettingField, placement: Omit<Pla
     min: () => field.min ?? 0,
     max: () => field.max ?? 100,
     step: 1,
-    read: (b) => Number(read(b)),
-    write: (b, value) =>
+    read: (view) => Number(read(view)),
+    write: (view, value) =>
       write(
-        b,
-        Math.max(field.min ?? 0, Math.min(field.max ?? 100, Math.round(Number.isNaN(value) ? Number(read(b)) : value)))
+        view,
+        Math.max(
+          field.min ?? 0,
+          Math.min(field.max ?? 100, Math.round(Number.isNaN(value) ? Number(read(view)) : value))
+        )
       )
-  } satisfies BrushSetting;
-}
-
-/** Photoshop's option names, such as `Pen Pressure`, in the editor's sentence case: `Pen pressure`. */
-function sentenceCase(label: string) {
-  return label.charAt(0) + label.slice(1).toLowerCase();
-}
-
-function rootNumber(
-  key: 'diameter' | 'spacing' | 'angle' | 'roundness' | 'hardness',
-  label: string,
-  min: number,
-  max: number,
-  unit: string
-): BrushSetting {
-  return {
-    id: `abr-tip-${key}`,
-    label,
-    kind: 'number',
-    unit,
-    min: () => min,
-    max: () => max,
-    step: 1,
-    applies: always,
-    enabled: always,
-    read: (b) => values(b)[key],
-    write: (b, value) => ({
-      engine: {
-        ...b.engine!,
-        settings: {
-          ...settings(b),
-          values: {
-            ...values(b),
-            [key]: Math.max(min, Math.min(max, Math.round(Number.isNaN(value) ? values(b)[key] : value)))
-          }
-        }
-      }
-    })
   };
 }
 
 /** Rows that apply to one tool class or tip variant only; other rows always apply. */
-function applicable(group: Group, key: string, b: Brush) {
-  const v = values(b);
+function applicable(group: Group, key: string, v: BrushFormValues) {
   if (group === 'erodible') {
     return v.tipVariant === 0
       ? ['shape', 'softness', 'length'].includes(key)
@@ -503,7 +477,7 @@ function applicable(group: Group, key: string, b: Brush) {
  * One-line statuses of the generated groups while they are on. Each says what the group does now in at most about
  * 24 characters, so it fits the wide layout's column: the controls in use, or else the values that matter most.
  */
-const statuses: Record<Exclude<Group, 'smoothing'>, (v: BrushFormValues, b: Brush) => string> = {
+export const statuses: Record<Exclude<Group, 'smoothing'>, (v: BrushFormValues) => string> = {
   tool: (v) => {
     const mode = settingGroups.tool.mode.options?.find((o) => o.value === v.tool.mode)?.label ?? 'Normal';
     return v.tool.mode === 'Nrml'
@@ -618,86 +592,6 @@ const controlNames: Record<number, string> = {
   8: 'Dial'
 };
 
-const tipKinds: Record<string, string> = {
-  sampledBrush: 'Sampled',
-  computedBrush: 'Generated',
-  dBrush: 'Bristle',
-  dTips: 'Erodible'
-};
-
-/**
- * Smoothing of an ABR stroke: Paint's Smoothing level and catch-up, as for Paint's brushes, then the preset's own
- * Photoshop smoothing. Paint's stroke processor decides which applies (see `studioBrushRecipe`): above level 0 the
- * stabilizer replaces the preset's smoothing, whose rows are then greyed; at 0 the preset smooths as its Photoshop
- * smoothing says, an Amount of 0 being none. A brush stored with raw input reads as level 0 and Amount 0, and a
- * raised Amount lets the preset smooth again.
- */
-function smoothingCategory(): BrushCategory {
-  const level = smoothingSetting();
-  const presetSmooths = (b: Brush) => level.read(b) === 0 && b.stroke.mode !== 'none';
-  const amount = (b: Brush) => (presetSmooths(b) && values(b).useSmoothing ? values(b).smoothing.amount : 0);
-  const preset = (key: keyof BrushFormValues['smoothing'], label: string, catchUp = false): BrushSetting => ({
-    ...row('smoothing', key, settingGroups.smoothing[key], { label, section: 'Photoshop smoothing' }),
-    enabled: (b) => amount(b) > 0 && !(catchUp && values(b).smoothing.pulledString)
-  });
-
-  return {
-    id: 'smoothing',
-    label: 'Smoothing',
-    group: 'advanced',
-    applies: always,
-    status: (b) => (level.read(b) > 0 ? String(level.read(b)) : amount(b) > 0 ? `${amount(b)}%` : 'Off'),
-    settings: [
-      level,
-      catchUpSetting(),
-      {
-        id: 'abr-smoothing-amount',
-        label: 'Amount',
-        section: 'Photoshop smoothing',
-        kind: 'number',
-        unit: '%',
-        min: () => 0,
-        max: () => 100,
-        step: 1,
-        applies: always,
-        enabled: (b) => level.read(b) === 0,
-        read: amount,
-        // Zero switches the preset's smoothing off and keeps its last amount, as Photoshop's own switch does; a raised
-        // amount also leaves raw input for the preset's smoothing.
-        write: (b, value) => {
-          const next = Math.max(0, Math.min(100, Math.round(Number.isNaN(value) ? amount(b) : value)));
-          const current = values(b);
-          return {
-            ...(next > 0 && b.stroke.mode === 'none'
-              ? { stroke: normalizeStrokeSettings({ ...b.stroke, mode: 'studio' }) }
-              : {}),
-            engine: {
-              ...b.engine!,
-              settings: {
-                ...settings(b),
-                values: {
-                  ...current,
-                  useSmoothing: next > 0,
-                  smoothing: { ...current.smoothing, amount: next > 0 ? next : current.smoothing.amount }
-                }
-              }
-            }
-          };
-        }
-      },
-      preset('pulledString', 'Pulled string'),
-      preset('catchUp', 'Catch up', true),
-      preset('catchUpAtEnd', 'Catch up at stroke end', true),
-      preset('adjustForZoom', 'Adjust for zoom')
-    ]
-  };
-}
-
 function always() {
   return true;
-}
-
-/** ABR settings are validated at the engine boundary; callers restrict this adapter to that engine. */
-function settings(brush: Brush): AbrBrushSettings {
-  return brush.engine!.settings as AbrBrushSettings;
 }

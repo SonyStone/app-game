@@ -1,7 +1,9 @@
-import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import { createSaiFilter, saiCode } from '@app-game/paint-core/stabilizerStroke';
 import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { describe, expect, it } from 'vitest';
+import { roundDocumentText } from '../brush-library/documentSettings';
+import { brushView, type BrushView } from './brushView';
 import { getBrushSetting, type NumberSetting, type ToggleSetting } from './schema';
 import { maxSmoothing, smoothingLevel, smoothingTrail, withSmoothing } from './smoothing';
 
@@ -65,24 +67,31 @@ describe('Smoothing level', () => {
 describe('Smoothing and catch-up rows', () => {
   const smoothing = getBrushSetting('smoothing') as NumberSetting;
   const catchUp = getBrushSetting('catch-up') as ToggleSetting;
-  const brush = (patch: Partial<StrokeSettings>, abr = false): Brush => ({
-    ...defaultBrush(),
-    ...(abr ? { engine: { id: 'abr', settings: {} } } : {}),
-    stroke: stroke(patch)
-  });
+  /** A round brush's view with `patch` in its stroke, drawn by the ABR renderer when `abr`, as with scattering on. */
+  const brush = (patch: Partial<StrokeSettings>, abr = false): BrushView => {
+    const live = { ...defaultBrush(), stroke: stroke(patch) };
+    const view = brushView(roundDocumentText(undefined, live), live);
+    return abr ? { ...view, photoshopPath: true } : view;
+  };
+  /** The stroke a row's write leaves in the document. */
+  const written = (view: BrushView, text: string) => brushView(text, view.brush).brush.stroke;
 
   it('reads a Leonardo brush as its level and converts it only once the slider moves', () => {
     const leonardo = brush({ mode: 'smooth', smooth: 10 });
     expect(smoothing.read(leonardo)).toBe(10);
-    expect(smoothing.write(leonardo, 12).stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 12, smooth: 10 });
-    expect(smoothing.write(leonardo, 0).stroke).toMatchObject({ mode: 'studio' });
+    expect(written(leonardo, smoothing.write(leonardo, 12))).toMatchObject({
+      mode: 'stabilizer',
+      stabilizer: 12,
+      smooth: 10
+    });
+    expect(written(leonardo, smoothing.write(leonardo, 0))).toMatchObject({ mode: 'studio' });
   });
 
   it('reads a raw-input brush as 0 and writes levels from there', () => {
     const raw = brush({ mode: 'none' });
     expect(smoothing.read(raw)).toBe(0);
     expect(catchUp.enabled(raw)).toBe(false);
-    expect(smoothing.write(raw, 3).stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 3 });
+    expect(written(raw, smoothing.write(raw, 3))).toMatchObject({ mode: 'stabilizer', stabilizer: 3 });
   });
 
   it('enables catch-up above 0 only, and switching it turns a Leonardo brush into the stabilizer at its level', () => {
@@ -90,12 +99,16 @@ describe('Smoothing and catch-up rows', () => {
     expect(catchUp.enabled(brush({ mode: 'stabilizer', stabilizer: 1 }))).toBe(true);
     const leonardo = brush({ mode: 'normal', normal: 5, catchUp: true });
     expect(catchUp.enabled(leonardo)).toBe(true);
-    expect(catchUp.write(leonardo, false).stroke).toMatchObject({ mode: 'stabilizer', stabilizer: 5, catchUp: false });
+    expect(written(leonardo, catchUp.write(leonardo, false))).toMatchObject({
+      mode: 'stabilizer',
+      stabilizer: 5,
+      catchUp: false
+    });
     const stabilized = brush({ mode: 'stabilizer', stabilizer: 7, catchUp: false });
-    expect(catchUp.write(stabilized, true).stroke).toEqual({ ...stabilized.stroke, catchUp: true });
+    expect(written(stabilized, catchUp.write(stabilized, true))).toEqual({ ...stabilized.brush.stroke, catchUp: true });
   });
 
-  it('reads an ABR brush as 0 unless it uses the stabilizer, as its preset smooths it otherwise', () => {
+  it('reads a brush the ABR renderer draws as 0 unless it uses the stabilizer, as its preset smooths it otherwise', () => {
     for (const mode of ['none', 'studio', 'normal', 'smooth'] as const) {
       expect(smoothing.read(brush({ mode, normal: 20, smooth: 20 }, true)), mode).toBe(0);
       expect(catchUp.enabled(brush({ mode }, true)), mode).toBe(false);

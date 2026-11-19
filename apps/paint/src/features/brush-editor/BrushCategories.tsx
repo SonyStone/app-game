@@ -1,22 +1,20 @@
-import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, createUniqueId, For, Show, untrack } from 'solid-js';
 import { SettingsList, type SettingsListItem } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushEditor.module.css';
+import type { BrushView } from './brushView';
 import { brushCategories, type BrushCategory, type BrushSetting, type NumberSetting } from './schema';
 import { inlineChoiceLimit, SettingRow } from './SettingRow';
 import { StrokeCorrectionDemo } from './StrokeCorrectionDemo';
 
 /**
- * The categories a brush editor offers for `props.brush` and the one it shows: `props.categories` (Paint's by
- * default) that apply to the brush, and the chosen one, or the first while the brush has no chosen one, as after
- * another brush replaced it. Shared by the side panel (`BrushEditor`) and the full-screen `BrushStudio`.
+ * The categories a brush editor offers for `props.brush` and the one it shows: the registry's categories
+ * (`brushCategories`) that apply to the brush, and the chosen one, or the first while the brush has no chosen one, as
+ * after another brush replaced it. Shared by the side panel (`BrushEditor`) and the full-screen `BrushStudio`.
  */
-export function createCategoryChoice(props: { brush: Brush; categories?: readonly BrushCategory[] | undefined }) {
-  const categories = createMemo(() =>
-    (props.categories ?? brushCategories).filter((category) => category.applies(props.brush))
-  );
+export function createCategoryChoice(props: { brush: BrushView }) {
+  const categories = createMemo(() => brushCategories.filter((category) => category.applies(props.brush)));
   const [chosenId, setChosenId] = createSignal(brushCategories[0]!.id);
   const chosen = createMemo(() => categories().find((category) => category.id === chosenId()) ?? categories()[0]!);
 
@@ -34,7 +32,7 @@ export function createCategoryChoice(props: { brush: Brush; categories?: readonl
 export function CategoryList(props: {
   categories: readonly BrushCategory[];
   chosen: BrushCategory;
-  brush: Brush;
+  brush: BrushView;
   onChoose: (category: BrushCategory) => void;
   /** Added to the column's own class, for a presentation's layout. */
   class?: string;
@@ -71,7 +69,7 @@ export function CategoryList(props: {
 export function CategorySidebar(props: {
   categories: readonly BrushCategory[];
   chosen: BrushCategory;
-  brush: Brush;
+  brush: BrushView;
   onChoose: (category: BrushCategory) => void;
   extra?: {
     items: readonly SettingsListItem[];
@@ -128,7 +126,7 @@ const groups = [
  * as selected; whether the category does anything is told by its status alone. The button is named by the category's
  * name and described by its status, also in the medium layout, where both are hidden and only the icon shows.
  */
-function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: boolean; onChoose: () => void }) {
+function CategoryButton(props: { category: BrushCategory; brush: BrushView; chosen: boolean; onChoose: () => void }) {
   const status = createMemo(() => props.category.status(props.brush));
   const nameId = createUniqueId();
   const statusId = createUniqueId();
@@ -161,14 +159,12 @@ function CategoryButton(props: { category: BrushCategory; brush: Brush; chosen: 
 }
 
 /**
- * Icons of the categories by ID, Paint's and ABR's; others show a brush. Each has a different outline, since the
- * medium layout shows the icons alone.
+ * Icons of the categories by ID; others show a brush. Each has a different outline, since the medium layout shows the
+ * icons alone.
  */
 const categoryIcons: Record<string, SketchIconName> = {
   painting: 'sliders',
-  tool: 'sliders',
   'brush-tip': 'selectEllipse',
-  dynamics: 'proportions',
   shapeDynamics: 'sizes',
   transfer: 'bars',
   scattering: 'scatter',
@@ -177,7 +173,6 @@ const categoryIcons: Record<string, SketchIconName> = {
   colorDynamics: 'hue',
   brushPose: 'tilt',
   'stroke-correction': 'lasso',
-  smoothing: 'lasso',
   bristle: 'bristles',
   erodible: 'pencil'
 };
@@ -196,8 +191,8 @@ export function CategoryPane(props: {
    * the editor sends no patch for it.
    */
   hostRow?: (setting: NumberSetting, category: BrushCategory) => JSX.Element | undefined;
-  brush: Brush;
-  onChange: (patch: Partial<Brush>) => void;
+  brush: BrushView;
+  onChange: (text: string) => void;
   /** Called by the way back to the category list. */
   onBack: () => void;
   /** Added to the pane's own class, for a presentation's layout. */
@@ -216,7 +211,7 @@ export function CategoryPane(props: {
       </h2>
       <p class={styles.paneStatus}>{props.category.status(props.brush)}</p>
       <Show when={props.category.id === 'stroke-correction'}>
-        <StrokeCorrectionDemo brush={props.brush} />
+        <StrokeCorrectionDemo brush={props.brush.brush} />
       </Show>
       <CategoryRows hostRow={props.hostRow} category={props.category} brush={props.brush} onChange={props.onChange} />
     </section>
@@ -232,8 +227,8 @@ export function CategoryPane(props: {
 function CategoryRows(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
-  brush: Brush;
-  onChange: (patch: Partial<Brush>) => void;
+  brush: BrushView;
+  onChange: (text: string) => void;
 }) {
   const rows = createMemo(() => props.category.settings.filter((setting) => setting.applies(props.brush)));
   const runs = createMemo(() => sectionRuns(rows()));
@@ -329,8 +324,8 @@ function RowGroups(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
   rows: readonly BrushSetting[];
-  brush: Brush;
-  onChange: (patch: Partial<Brush>) => void;
+  brush: BrushView;
+  onChange: (text: string) => void;
 }) {
   const groups = createMemo(() => rowGroups(props.rows));
 
@@ -361,8 +356,8 @@ function Section(props: {
   category: BrushCategory;
   title: string;
   rows: readonly BrushSetting[];
-  brush: Brush;
-  onChange: (patch: Partial<Brush>) => void;
+  brush: BrushView;
+  onChange: (text: string) => void;
 }) {
   const titleId = createUniqueId();
 
@@ -387,8 +382,8 @@ function Row(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
   setting: BrushSetting;
-  brush: Brush;
-  onChange: (patch: Partial<Brush>) => void;
+  brush: BrushView;
+  onChange: (text: string) => void;
 }) {
   // A row is made once per setting, so neither its setting nor the host's row changes under it.
   const setting = untrack(() => props.setting);

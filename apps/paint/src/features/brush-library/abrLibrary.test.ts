@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import type { BrushAsset } from '@app-game/abr-brush/library';
+import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { initAbr, pixels } from '@app-game/abr-parser';
+import type { Brush } from '@app-game/paint-core/brush';
 import 'fake-indexeddb/auto';
 import { ok } from 'neverthrow';
 import { Blob } from 'node:buffer';
@@ -9,13 +11,13 @@ import { webcrypto } from 'node:crypto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { clearAbrBrush } from '../abr/clearAbrBrush';
-import { abrValues } from '../brush-editor/abrSchema';
 import { createBrushSettingsEditor } from '../brush/createBrushSettingsEditor';
 import { createBrushTools } from '../brush/createBrushTools';
 import type { PaintSession } from '../session';
 import { convertAbr } from './abrPresetDocument';
 import { createBrushLibrary } from './createBrushLibrary';
 import { createBrushStorage } from './createBrushStorage';
+import { patchFormValues } from './documentSettings';
 import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
 
 const asset: BrushAsset = {
@@ -105,21 +107,14 @@ it('copies, edits, saves, reloads and round-trips a Photoshop document and relea
   flush();
   expect(copy.derivedFrom).toBe(source.id);
   const update = async (enabled: boolean, jitter: number) => {
-    const b = s.tools.brush();
-    const values = abrValues(b);
-    await s.editor.update({
-      engine: {
-        id: 'abr',
-        settings: {
-          ...(b.engine!.settings as object),
-          values: {
-            ...values,
-            useShapeDynamics: enabled,
-            shapeDynamics: { ...values.shapeDynamics, sizeJitter: jitter }
-          }
-        }
-      }
-    });
+    const view = s.editor.view()!;
+    await s.editor.update(
+      patchFormValues(view.text, {
+        ...view.values,
+        useShapeDynamics: enabled,
+        shapeDynamics: { ...view.values.shapeDynamics, sizeJitter: jitter }
+      })
+    );
     flush();
   };
   const originalRead = s.library.assets;
@@ -187,10 +182,8 @@ it('restores an unsaved generated mask, copies it and reopens it under the same 
   expect(source!.id).toBe(replaced!.id);
   first.tools.selectPreset(source!.id, 'brush');
   flush();
-  const b = first.tools.brush();
-  await first.editor.update({
-    engine: { id: 'abr', settings: { ...(b.engine!.settings as object), values: { ...abrValues(b), hardness: 21 } } }
-  });
+  const view = first.editor.view()!;
+  await first.editor.update(patchFormValues(view.text, { ...view.values, hardness: 21 }));
   flush();
   const id = first.tools.editedResources(source!.id)![0]!.id;
   expect(source!.resourceIds).not.toContain(id);
@@ -222,3 +215,8 @@ it('exports a clear-mode eraser copy with editable Clear tool options', async ()
   expect(await importPaintbrush(bytes, other.library)).toEqual([]);
   expect(other.library.find(copy.id)?.settings).toEqual(copy.settings);
 });
+
+/** The Photoshop values of a brush the ABR renderer draws. */
+function abrValues(brush: Brush) {
+  return (brush.engine!.settings as AbrBrushSettings).values;
+}

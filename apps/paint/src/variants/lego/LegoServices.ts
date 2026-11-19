@@ -11,8 +11,7 @@ import { runPartCommand } from './partCommand';
 /**
  * Creates the LEGO capability facade once under the studio owner. Scalar memos stop unrelated brush changes at
  * this boundary. Bindings select props from this facade; looks and controlled components never receive it.
- * `openBrushStudio` is what the "Brush settings" part runs; `brushSettingsNeeded` tells when the brush settings
- * editor must prepare ABR settings, as while the studio is open or an ABR setting is pinned. `openPen` opens the
+ * `openBrushStudio` is what the "Brush settings" part runs. `openPen` opens the
  * brush studio on its Pen page, where the pen's pressure lives, with the calibration steps started when `measure`.
  * `options` are the editor's own options, which the "Options" part opens (see `OptionsSheet`): the grid's cell in
  * use, choosing one, and opening the sheet.
@@ -20,7 +19,6 @@ import { runPartCommand } from './partCommand';
 export function createLegoServices(
   session: PaintSession,
   openBrushStudio: () => void = () => {},
-  brushSettingsNeeded: () => boolean = () => false,
   openPen: (measure: boolean) => void = () => {},
   openAbr?: () => void,
   options: { cell: () => number; setCell: (cell: number) => void; open: () => void } = {
@@ -68,10 +66,10 @@ export function createLegoServices(
 
   const windows: Pick<PaintSession['windows'], 'isOpen' | 'toggle'> = session.windows;
 
-  const settings = createBrushSettingsEditor(session, brushSettingsNeeded);
+  const settings = createBrushSettingsEditor(session);
 
   return {
-    brushEditor: { ...settings, channelBrush: createChannelBrush(settings.edited), open: openBrushStudio },
+    brushEditor: { ...settings, open: openBrushStudio },
     brush: { size, opacity, maxSize, update: session.tools.updateBrush },
     color: {
       value: color,
@@ -201,13 +199,3 @@ export type LegoServices = ReturnType<typeof createLegoServices>;
 
 /** One studio scope. Only PartFrame and definition bindings read this context. */
 export const LegoServicesContext = createContext<LegoServices>();
-
-/** Numeric settings ignore foreground and background color changes at the facade boundary. */
-export function createChannelBrush(brush: PaintSession['brush']) {
-  return createMemo(brush, {
-    equals: (a, b) =>
-      (Object.keys({ ...a, ...b }) as (keyof typeof a)[]).every(
-        (key) => key === 'color' || key === 'backgroundColor' || a[key] === b[key]
-      )
-  });
-}

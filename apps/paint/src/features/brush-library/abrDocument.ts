@@ -1,5 +1,11 @@
 import { isBlockEraser } from '@app-game/abr-brush/blockEraser';
-import { descriptorRgbColor, formValuesToBrush, record, type BrushFormValues } from '@app-game/abr-brush/form';
+import {
+  brushToFormValues,
+  descriptorRgbColor,
+  formValuesToBrush,
+  record,
+  type BrushFormValues
+} from '@app-game/abr-brush/form';
 import type { BrushAsset, BrushTipImage } from '@app-game/abr-brush/library';
 import { brushPreviewResources, decodePreviewResources } from '@app-game/abr-brush/resources';
 import { featureFields, settingGroups } from '@app-game/abr-brush/settings-fields';
@@ -401,6 +407,19 @@ export function patchAbrValues(text: string, values: BrushFormValues) {
     }
     set(['extensions', id, 'value', path], value);
   }
+}
+
+/**
+ * The Photoshop form values of any brush document, Paint's round documents included: what the studio's Photoshop
+ * groups read and {@link patchAbrValues} writes back. A Paint document reads its pressure bindings as Shape dynamics
+ * and Transfer under Pen pressure, as the ABR adapter draws them.
+ */
+export function documentFormValues(document: BrushDocument): BrushFormValues {
+  const d = document.definition;
+  return brushToFormValues({
+    name: document.name,
+    preset: { kind: 'brush', sourceId: document.id, ...descriptorFrom(d, d.tips[d.sequence.tips[0]!]!) }
+  } as Pick<BrushAsset, 'name' | 'preset'>);
 }
 
 /** Reconstructs the editable Photoshop fields. Standard sections take precedence over extension values. */

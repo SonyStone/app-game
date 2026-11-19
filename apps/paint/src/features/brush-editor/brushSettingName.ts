@@ -1,11 +1,10 @@
-import { abrCategories } from './abrSchema';
 import { brushCategories, numberSettings as numbersOf, type BrushCategory, type BrushSetting } from './schema';
 
 /**
- * The name a number setting has as a part alone on the board, unique across Paint's and ABR's settings (a setting both
- * schemas share counts once). A name from {@link boardNames} comes first; otherwise a Paint setting keeps its label, and
- * an ABR setting takes the shortest of its label, its section and label ("Size jitter"), and its category, section
- * and label that no other setting has.
+ * The name a number setting has as a part alone on the board, unique across the registry. A name from
+ * {@link boardNames} comes first; otherwise Paint's own settings keep their labels, and a Photoshop setting takes the
+ * shortest of its label, its section and label ("Size jitter"), and its category, section and label that no other
+ * setting has.
  */
 export function brushSettingName(category: BrushCategory, setting: BrushSetting): string {
   const named = boardNames[setting.id];
@@ -13,9 +12,8 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
     return named;
   }
 
-  const own = numbersOf(brushCategories.flatMap((c) => c.settings)).find((s) => s.id === setting.id);
-  if (own) {
-    return own.label;
+  if (!setting.id.startsWith('abr-')) {
+    return setting.label;
   }
 
   if (numberSettings.filter((s) => s.label === setting.label).length === 1) {
@@ -35,6 +33,7 @@ export function brushSettingName(category: BrushCategory, setting: BrushSetting)
  * or reads awkwardly ("Scattering scatter amount").
  */
 const boardNames: Record<string, string> = {
+  spacing: 'Tip spacing',
   'abr-scattering-scatter': 'Scatter',
   'abr-scattering-count': 'Scatter count',
   'abr-scattering-countJitter': 'Scatter count jitter',
@@ -62,11 +61,13 @@ const boardNames: Record<string, string> = {
   'abr-erodible-softness': 'Tip softness'
 };
 
-/** Every number setting of both schemas, a setting they share once. */
+/**
+ * Every number setting of the registry, with the Photoshop rows it once had beside Paint's (`replacedSettings`), so
+ * that the names of the rows that stayed do not change.
+ */
 const numberSettings = [
-  ...new Map(
-    [...brushCategories, ...abrCategories].flatMap((c) => numbersOf(c.settings).map((s) => [s.id, s] as const))
-  ).values()
+  ...numbersOf(brushCategories.flatMap((c) => c.settings)),
+  ...['Size', 'Hardness', 'Opacity', 'Flow'].map((label) => ({ label, section: undefined }))
 ];
 
 /** A label inside a section as one phrase: "Size" and "Jitter" make "Size jitter". */

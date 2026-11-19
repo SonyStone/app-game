@@ -1,10 +1,12 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
+import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { err, ok, type Result } from 'neverthrow';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { brushError, type PaintError } from '../../shared/errors';
 import { syncAbrPreset } from './abrHost';
 import { builtInPresets, type BrushPreset } from './brushPresets';
 import type { BrushStorage, StoredPreset } from './createBrushStorage';
+import { roundFamily, writeSettings } from './documentSettings';
 import { readRoundPreset } from './nativeDocument';
 
 /**
@@ -229,7 +231,10 @@ export function createBrushLibrary(options: {
 
   function preparePreset<T extends BrushPreset>(preset: T, saveHost = false): T {
     if (!isRound(preset)) {
-      const next = syncAbrPreset(preset, saveHost);
+      // A round brush's document keeps Paint's settings in its own sections, where its round renderer reads them.
+      const round = saveHost && preset.abrDocument && roundFamily(parseDocument(preset.abrDocument, brushSchema));
+      const synced = syncAbrPreset(preset, saveHost && !round);
+      const next = round ? { ...synced, abrDocument: writeSettings(synced.abrDocument!, preset.settings) } : synced;
       if (next.nativeDocument) {
         const copy = { ...next };
         delete copy.nativeDocument;

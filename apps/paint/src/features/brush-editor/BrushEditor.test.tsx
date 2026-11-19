@@ -1,24 +1,35 @@
 // @vitest-environment jsdom
-import { brushToFormValues } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import { brushSizeCurve, curveValue } from '@app-game/abr-brush/sliderCurves';
+import { initAbr, pixels } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { render } from '@solidjs/web';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createSignal, flush } from 'solid-js';
+import { createMemo, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { convertAbr } from '../brush-library/abrPresetDocument';
+import { patchFormValues, roundDocumentText } from '../brush-library/documentSettings';
 import { BrushEditor } from './BrushEditor';
-import { abrCategories, abrValues } from './abrSchema';
-import { snapshotBrushSettings, type BrushCategory, type BrushSettingsSnapshot } from './schema';
+import { brushView, roundBrushView, type BrushView } from './brushView';
 
-/** A computed-tip ABR preset whose engine values the ABR tests edit. */
-const abrSource = {
+await initAbr();
+
+/** A computed-tip Photoshop preset, as imported. */
+const imported = await convertAbr({
   id: 'test',
   name: 'Test',
-  preset: { tip: { kind: 'computed', diameter: 30 } },
-  resources: []
-} as unknown as BrushAsset;
+  preset: { kind: 'brush', sourceId: 'one', tip: { kind: 'computed', diameter: pixels(30) } },
+  resources: [],
+  source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+} satisfies BrushAsset);
+
+/** The imported preset's view, with Transfer on when `transfer`. */
+function photoshop(transfer = false): BrushView {
+  const live = { ...defaultBrush(), ...imported.preset.settings };
+  const view = brushView(imported.preset.abrDocument, live);
+  return transfer ? brushView(patchFormValues(view.text, { ...view.values, useTransfer: true }), live) : view;
+}
 
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -118,7 +129,7 @@ it('keeps every row in place while a slider drags and after a switch or a choice
   expect(rows()).toEqual(painting);
   pointer(slider('Size'), 'pointerup', 290);
 
-  click(category('Dynamics'));
+  click(category('Shape dynamics'));
   const pressure = rows();
   for (const toggle of editor().querySelectorAll<HTMLElement>('[role="switch"]')) {
     click(toggle);
@@ -138,12 +149,7 @@ it('keeps every row in place while a slider drags and after a switch or a choice
 });
 
 it('shows a choice of more than three options as one row that opens them, and closes it on a choice, outside or Escape', () => {
-  const values = brushToFormValues(abrSource);
-  const abr: Brush = {
-    ...defaultBrush(),
-    engine: { id: 'abr', settings: { values: { ...values, useTransfer: true }, tipId: 'tip' } }
-  };
-  const { brush, editor, category, click, menu, pointer } = mount(abr, { categories: abrCategories });
+  const { brush, editor, category, click, menu, pointer } = mount(photoshop(true));
   click(category('Transfer'));
   expect(editor().querySelectorAll('[role="radio"]')).toHaveLength(0);
   const button = menu('Flow Control');
@@ -181,21 +187,18 @@ it('shows a choice of more than three options as one row that opens them, and cl
 });
 
 it('keeps a choice of up to three options as a list in place', () => {
-  const { editor } = mount();
+  const { editor, menu } = mount();
   expect([...editor().querySelectorAll('[role="radio"]')].map((radio) => radio.textContent)).toEqual([
     'Smooth color',
     'Classic'
   ]);
-  expect(editor().querySelector('[aria-haspopup]')).toBeNull();
+  // Painting's only long choice is Photoshop's blend mode.
+  expect(editor().querySelectorAll('[aria-haspopup]')).toHaveLength(1);
+  expect(menu('Mode').textContent).toBe('Normal');
 });
 
 it('greys an ABR row while its control gives it no effect, ignores presses on it, and enables it once chosen', () => {
-  const values = brushToFormValues(abrSource);
-  const abr: Brush = {
-    ...defaultBrush(),
-    engine: { id: 'abr', settings: { values: { ...values, useTransfer: true }, tipId: 'tip' } }
-  };
-  const { brush, editor, category, click, menu, slider, pointer } = mount(abr, { categories: abrCategories });
+  const { brush, view, editor, category, click, menu, slider, pointer } = mount(photoshop(true));
   click(category('Transfer'));
   expect(
     [...editor().querySelectorAll('[role="group"]')].map((group) => [
@@ -212,8 +215,8 @@ it('greys an ABR row while its control gives it no effect, ignores presses on it
       ['Jitter', 'Control', 'Minimum', 'Fade length'].map((label) => `${name} ${label}`)
     ])
   );
-  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map(
-    (control) => document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
+  const labels = [...editor().querySelectorAll('[role="group"] [aria-labelledby]')].map((control) =>
+    document.getElementById(control.getAttribute('aria-labelledby')!.split(' ')[0]!)!
   );
   const shown = [...new Set(labels)].map((label) =>
     [...label.childNodes]
@@ -232,19 +235,17 @@ it('greys an ABR row while its control gives it no effect, ignores presses on it
 
   click(menu('Flow Control'));
   click([...editor().querySelectorAll('[role="option"]')].find((option) => option.textContent === 'Pen pressure')!);
-  expect(abrValues(brush()).transfer.flowControl).toBe(2);
+  expect(view().values.transfer.flowControl).toBe(2);
   expect(minimum.getAttribute('aria-disabled')).toBe('false');
   expect(slider('Flow Fade length').getAttribute('aria-disabled')).toBe('true');
   pointer(minimum, 'pointerdown', 250);
   pointer(minimum, 'pointerup', 250);
-  expect(abrValues(brush()).transfer.flowMinimum).toBe(75);
+  expect(view().values.transfer.flowMinimum).toBe(75);
   expect(category('Transfer').textContent).toContain('Pressure');
 });
 
 it('gives every ABR category its own icon and keeps its name for assistive technology', () => {
-  const values = brushToFormValues(abrSource);
-  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
-  const { editor, categories } = mount(abr, { categories: abrCategories });
+  const { editor, categories } = mount(photoshop());
   const buttons = [...editor().querySelectorAll<HTMLElement>('nav button')];
   expect(categories()).toContain('Color dynamics');
   const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
@@ -257,17 +258,15 @@ it('gives every ABR category its own icon and keeps its name for assistive techn
 it('marks the chosen category as selected and tells whether one is on by its status alone', () => {
   const { editor, category, click } = mount();
   expect(category('Painting').getAttribute('aria-current')).toBe('true');
-  expect(category('Dynamics').getAttribute('aria-current')).toBeNull();
-  expect(category('Dynamics').hasAttribute('aria-checked')).toBe(false);
-  expect(category('Dynamics').textContent).toContain('Pressure → Size');
+  expect(category('Shape dynamics').getAttribute('aria-current')).toBeNull();
+  expect(category('Shape dynamics').hasAttribute('aria-checked')).toBe(false);
+  expect(category('Shape dynamics').textContent).toContain('Pressure');
 
-  click(category('Dynamics'));
-  for (const toggle of editor().querySelectorAll<HTMLElement>('[role="switch"][aria-checked="true"]')) {
-    click(toggle);
-  }
+  click(category('Shape dynamics'));
+  click(editor().querySelector<HTMLElement>('[role="switch"][aria-checked="true"]')!);
 
-  expect(category('Dynamics').textContent).toContain('Off');
-  expect(category('Dynamics').getAttribute('aria-current')).toBe('true');
+  expect(category('Shape dynamics').textContent).toContain('Off');
+  expect(category('Shape dynamics').getAttribute('aria-current')).toBe('true');
   expect(category('Painting').getAttribute('aria-current')).toBeNull();
 });
 
@@ -278,19 +277,29 @@ it('depends on no hover', () => {
   expect(css).not.toContain(':hover');
 });
 
-it('leaves out a category with no rows for the brush, as Brush tip for an ABR preset', () => {
-  const { categories } = mount({ ...defaultBrush(), engine: { id: 'abr', settings: {} } });
-  expect(categories()).toEqual(['Painting', 'Stroke correction']);
+it('leaves out a category with no rows for the brush, as Bristle for a generated tip', () => {
+  for (const view of [roundBrushView(defaultBrush()), photoshop()]) {
+    const { categories } = mount(view);
+    expect(categories()).toEqual([
+      'Painting',
+      'Brush tip',
+      'Shape dynamics',
+      'Transfer',
+      'Scattering',
+      'Texture',
+      'Dual brush',
+      'Color dynamics',
+      'Brush pose',
+      'Stroke correction'
+    ]);
+    dispose?.();
+    document.body.replaceChildren();
+  }
 });
 
 it('shows no explanatory text in a category: only its title, status, headings, labels and values', () => {
-  const values = brushToFormValues(abrSource);
-  const abr: Brush = { ...defaultBrush(), engine: { id: 'abr', settings: { values, tipId: 'tip' } } };
-  for (const [brush, categories] of [
-    [defaultBrush(), undefined],
-    [abr, abrCategories]
-  ] as const) {
-    const { editor, click, categories: names, category } = mount(brush, { categories });
+  for (const view of [roundBrushView(defaultBrush()), photoshop()]) {
+    const { editor, click, categories: names, category } = mount(view);
     for (const name of names()) {
       click(category(name!));
       const pane = editor().querySelector('section[aria-labelledby]')!;
@@ -347,7 +356,7 @@ it('cancels to the given baseline, disabled while nothing differs from it, and r
 });
 
 it('cancels to the baseline the caller gives, not to the brush the editor was mounted with', () => {
-  const given = snapshotBrushSettings({ ...defaultBrush(), size: 80, opacity: 0.5 });
+  const given = roundDocumentText(undefined, { ...defaultBrush(), size: 80, opacity: 0.5 });
   const { brush, click, cancel } = mount(defaultBrush(), { baseline: given });
   expect(cancel().disabled).toBe(false);
   click(cancel());
@@ -357,15 +366,15 @@ it('cancels to the baseline the caller gives, not to the brush the editor was mo
 });
 
 it('disables Cancel changes when another brush and its baseline replace the edited one, until the next edit', () => {
-  const { brush, setBrush, setBaseline, slider, pointer, click, cancel } = mount();
+  const { brush, setText, setBaseline, slider, pointer, click, cancel } = mount();
   pointer(slider('Flow'), 'pointerdown', 290);
   pointer(slider('Flow'), 'pointerup', 290);
   expect(cancel().disabled).toBe(false);
 
   // Another preset is chosen: the caller replaces the brush and takes its baseline.
-  const textured: Brush = { ...defaultBrush(), size: 120, flow: 0.4, engine: { id: 'textured', settings: {} } };
-  setBrush(textured);
-  setBaseline(snapshotBrushSettings(textured));
+  const other = roundDocumentText(undefined, { ...defaultBrush(), size: 120, flow: 0.4 });
+  setText(other);
+  setBaseline(other);
   flush();
   expect(cancel().disabled).toBe(true);
 
@@ -375,7 +384,7 @@ it('disables Cancel changes when another brush and its baseline replace the edit
   click(cancel());
   expect(brush().flow).toBe(0.4);
   expect(brush().size).toBe(120);
-  expect(brush().opacity).toBe(textured.opacity);
+  expect(brush().opacity).toBe(defaultBrush().opacity);
 });
 
 it("shows the brush's name above the preview, and nothing in its place without one", () => {
@@ -401,8 +410,8 @@ it('names each category button by its category and describes it by its status, a
   expect(buttons.map((button) => text(button.getAttribute('aria-describedby')))).toEqual([
     '32 px · 100%',
     'Soft round · 65%',
-    'Pressure → Size',
-    'Off'
+    'Pressure',
+    ...Array.from({ length: 7 }, () => 'Off')
   ]);
   const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
   expect(new Set(icons).size).toBe(icons.length);
@@ -420,29 +429,31 @@ it('shows a tapped category alone and goes back to the list in the narrow layout
 });
 
 /**
- * Renders the editor over a brush kept by a controlled parent, with each slider's rail spanning x 100 to 300. The
- * baseline is the initial brush's settings unless one is given; both can be replaced, as a caller choosing another
- * preset does.
+ * Renders the editor over a brush document kept by a controlled parent, with each slider's rail spanning x 100 to 300.
+ * The baseline is the initial document unless one is given; both can be replaced, as a caller choosing another preset
+ * does. `brush` is the brush the document holds.
  */
 function mount(
-  initial: Brush = defaultBrush(),
+  initial: Brush | BrushView = defaultBrush(),
   options: {
     onDone?: () => void;
-    baseline?: BrushSettingsSnapshot;
+    baseline?: string;
     name?: string;
-    categories?: readonly BrushCategory[];
   } = {}
 ) {
-  const [brush, setBrush] = createSignal(initial);
-  const [baseline, setBaseline] = createSignal(options.baseline ?? snapshotBrushSettings(initial));
+  const start = 'text' in initial ? initial : roundBrushView(initial);
+  const [text, setText] = createSignal(start.text);
+  const [baseline, setBaseline] = createSignal(options.baseline ?? start.text);
+  const view = createMemo(() => brushView(text(), start.brush));
+  const brush = createMemo(() => view().brush);
   dispose = render(
     () => (
       <BrushEditor
-        brush={brush()}
-        baseline={baseline()}
+        brush={view()}
+        changed={text() !== baseline()}
+        onRevert={() => setText(baseline())}
         name={options.name}
-        categories={options.categories}
-        onChange={(patch) => setBrush((current) => ({ ...current, ...patch }))}
+        onChange={setText}
         onDone={options.onDone ?? (() => {})}
         preview={<canvas />}
       />
@@ -500,5 +511,19 @@ function mount(
   const cancel = () =>
     [...editor().querySelectorAll('button')].find((button) => button.textContent === 'Cancel changes')!;
 
-  return { brush, setBrush, setBaseline, editor, slider, categories, category, status, click, pointer, cancel, menu };
+  return {
+    brush,
+    view,
+    setText,
+    setBaseline,
+    editor,
+    slider,
+    categories,
+    category,
+    status,
+    click,
+    pointer,
+    cancel,
+    menu
+  };
 }
