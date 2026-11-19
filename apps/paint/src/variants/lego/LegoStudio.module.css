@@ -8,6 +8,8 @@
   --lego-ink: #24262c;
   --lego-quiet: #7c7f88;
   --lego-accent: #3d7eff;
+  /* The empty part of a value's slider or knob. */
+  --lego-track: #dad7d0;
   /* The hairline between a Settings-style sidebar and its detail on one dark plate. */
   --lego-divider: rgb(255 255 255 / 0.1);
   --lego-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 8px 24px rgb(0 0 0 / 0.16);
@@ -255,7 +257,7 @@
   touch-action: none;
   font-weight: 600;
   font-size: 12px;
-  background: conic-gradient(var(--lego-accent) var(--fraction), #dad7d0 0);
+  background: conic-gradient(var(--lego-accent) var(--fraction), var(--lego-track) 0);
 
   span {
     display: grid;
@@ -273,7 +275,7 @@
   position: relative;
   touch-action: none;
   cursor: pointer;
-  background: #dad7d0;
+  background: var(--lego-track);
 }
 
 .fill {
@@ -1314,8 +1316,10 @@
   background: rgb(61 126 255 / 0.12);
 }
 
+/* Around the selected tiles, 4 px out (BoardView's selectionPadding): their corner and that distance. */
 .selection {
   border: 2px dashed var(--lego-accent);
+  border-radius: calc(var(--lego-r-tile) + 4px);
 }
 
 /* How to start editing, at the bottom of the board until something is first selected. */
@@ -2220,12 +2224,35 @@
   border-bottom-left-radius: 0;
 }
 
+/* The outline around one selected part takes its square corners on the sides it fuses along. */
+.fusedLook .selection[data-joins~='top'] {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='right'] {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='bottom'] {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.fusedLook .selection[data-joins~='left'] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
 /*
  * Look C: the plate muted towards the tiles' tone, so the gaps and seams between tiles read as soft lines rather than
  * dark ones; what lies on the plate turns dark. Popups, cards and the box stay dark: they are not plates of tiles.
  */
 .editor.mutedLook {
-  --lego-plate: #dcd8d0;
+  --lego-plate: #d3cec5;
+  /* Lighter than the plate, so a slider's empty end still reads as part of its tile. */
+  --lego-track: #e6e3dd;
   --lego-plate-ink: var(--lego-ink);
   --lego-plate-quiet: rgb(36 38 44 / 0.6);
   --lego-plate-line: rgb(36 38 44 / 0.22);

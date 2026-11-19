@@ -226,6 +226,14 @@ export function BoardView(props: {
 
     return findPart(shown(), [...ids][0]!);
   };
+  /**
+   * The sides the one selected part fuses along, so the selection's outline takes the part's square corners there;
+   * see `fusion.ts`.
+   */
+  const sizableJoins = () => {
+    const found = sizable();
+    return found && joinsAttribute(partJoins(found.panel.parts, partGroup).get(found.part.id));
+  };
   /** Whether the selection lies on the workbench rather than on the board; a band selects on one of them only. */
   const selectionOnBench = () => {
     const board = props.board.board();
@@ -756,7 +764,7 @@ export function BoardView(props: {
           <Show when={!band() && boardSelectionRect()}>
             {(rect) => (
               <>
-                <div class={styles.selection} style={rectStyle(rect())} />
+                <div class={styles.selection} data-joins={sizableJoins()} style={rectStyle(rect())} />
                 <Show when={!drag()}>
                   <Bar rect={rect()} area={view()} />
                 </Show>
@@ -784,7 +792,7 @@ export function BoardView(props: {
               <Show when={!band() && selectionRect()}>
                 {(rect) => (
                   <>
-                    <div class={styles.selection} style={rectStyle(rect())} />
+                    <div class={styles.selection} data-joins={sizableJoins()} style={rectStyle(rect())} />
                     <Show when={!drag()}>
                       <Bar rect={rect()} area={benchView()} />
                     </Show>
