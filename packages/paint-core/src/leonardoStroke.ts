@@ -2,7 +2,7 @@ import { createStrokeSampler, type Brush, type Dab, type Sample } from './brush'
 import { createCubicStroke } from './cubicStroke';
 import { predictedTail } from './strokePrediction';
 import type { StrokeProcessor } from './strokeProcessors';
-import { calibratePressure, normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
+import { normalizeStrokeSettings, type StrokeSettings } from './strokeSettings';
 
 /** Compatibility round-brush adapter; the sample processor can also feed other brush engines. */
 export function createLeonardoStroke(brush: Brush, zoom = 1) {
@@ -21,12 +21,8 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
   const curve = createCubicStroke(brush.size, zoom);
   let finished = false;
   let latest: Sample | undefined;
-  const settings = normalizeStrokeSettings(brush.stroke);
   const draw = (samples: readonly Sample[]) => curve.add(samples);
-  const calibrated = (raw: number) =>
-    Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness;
   return {
-    calibrate: (pressure) => calibratePressure(settings, pressure),
     /** Every real sample participates, independent of animation-frame or event batching. */
     add(samples: readonly Sample[]): Sample[] {
       if (finished) return [];
@@ -37,12 +33,12 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
     /** Extends the filtered curve to real input only in the disposable display tail. */
     preview(): Sample[] {
       if (finished || !latest) return [];
-      return [...curve.preview(), { ...latest, pressure: calibrated(latest.pressure) }];
+      return [...curve.preview(), latest];
     },
     /** Continues the preview, which ends at the latest real point, with the pen's predicted points. */
     predict(predicted) {
       if (finished || !latest) return [];
-      return predictedTail(latest, predicted, calibrated(latest.pressure));
+      return predictedTail(latest, predicted);
     },
     /** Catches up when enabled, then flushes the curve once without adding an endpoint stamp. */
     finish(): Sample[] {
@@ -53,7 +49,7 @@ export function createLeonardoProcessor(brush: Brush, zoom = 1): StrokeProcessor
   };
 }
 
-/** Equal-weight sample history, seeded with the first input; calibration follows raw-pressure averaging. */
+/** Equal-weight sample history, seeded with the first input. */
 export function createStrokeFilter(input: StrokeSettings) {
   const settings = normalizeStrokeSettings(input);
   const count = (settings.mode === 'smooth' ? settings.smooth : settings.normal) + 1;
@@ -76,15 +72,11 @@ export function createStrokeFilter(input: StrokeSettings) {
       pressure += point.pressure;
       time += point.time - sample.time;
     }
-    const normalized = Math.max(
-      0,
-      Math.min(1, (pressure / count - settings.minimum) / (settings.maximum - settings.minimum))
-    );
     return {
       ...sample,
       x: sample.x + x / count,
       y: sample.y + y / count,
-      pressure: normalized ** settings.firmness,
+      pressure: pressure / count,
       time: sample.time + time / count
     };
   };

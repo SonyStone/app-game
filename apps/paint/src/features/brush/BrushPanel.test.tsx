@@ -41,7 +41,7 @@ it('selects raw input without Leonardo controls and retains stabilization settin
     expect(brush().stroke.smooth).toBe(23);
     expect(host.querySelector<HTMLInputElement>('[aria-label="Stabilization"]')!.value).toBe('23');
 
-    // SAI's stabilizer has its levels, 0 to 15 and S-1 to S-7, and pressure calibration; it always finishes the line.
+    // SAI's stabilizer has its levels, 0 to 15 and S-1 to S-7, with a level selector.
     change('stabilizer');
     expect(brush().stroke.mode).toBe('stabilizer');
     const levels = [...host.querySelectorAll<HTMLButtonElement>('[aria-label="Stabilizer"] button')];
@@ -56,7 +56,7 @@ it('selects raw input without Leonardo controls and retains stabilization settin
     expect(brush().stroke.stabilizer).toBe(18);
     expect(pressed().map((button) => button.textContent)).toEqual(['S-3']);
     expect(host.textContent).not.toContain('Catch up on pen lift');
-    expect(host.querySelector('[aria-label="Pressure firmness"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Pressure firmness"]')).toBeNull();
   } finally {
     dispose();
     host.remove();

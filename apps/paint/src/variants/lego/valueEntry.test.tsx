@@ -217,8 +217,7 @@ it('shows a stored stabilizer level or Leonardo stabilization part as Smoothing'
 });
 
 it('opens no entry on a part that does not apply now, nor while the board is being edited', () => {
-  // At Smoothing 0 the pressure curve does not apply, nor do its numbers.
-  const inactive = mountPart('value:brush:pressure-minimum');
+  const inactive = mountPart('value:brush:abr-tip-angle');
   const chip = inactive.host.querySelector<HTMLElement>('[data-value-chip]')!;
   expect(chip.textContent).toBe('—');
   pointer(chip, 'pointerdown', 0);

@@ -8,7 +8,7 @@ import { layersInRect, layersInView, type DocumentRect } from './layersInView';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { PreviewTile } from './composition/documentEdit';
-import { createReplacementProcessor, type StrokeProcessor } from './strokeProcessors';
+import { createReplacementProcessor } from './strokeProcessors';
 import type { Layer, TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
@@ -95,7 +95,6 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       | {
           engine: BrushEngine;
           context: Omit<Parameters<BrushEngine>[0], 'resources' | 'processor'>;
-          processor: () => StrokeProcessor;
         }
       | undefined;
     /** The current stroke was replaced: its samples are complete, so it has no idle clock. */
@@ -736,7 +735,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       replacing = true;
       try {
         strokeSession = createResourceSession(resources, (resources) =>
-          start.engine({ ...start.context, resources, processor: createReplacementProcessor(start.processor()) })
+          start.engine({ ...start.context, resources, processor: createReplacementProcessor() })
         );
         await addSamples(samples);
       } finally {
@@ -1086,13 +1085,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 lod: renderer.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
                 seed: crypto.getRandomValues(new Uint32Array(1))[0]!,
                 renderer: strokeRenderer
-              },
-              processor: () => withPrediction(processor(brush, zoom), () => prediction)
+              }
             };
             strokeReplaced = false;
             const start = strokeStart;
             strokeSession = createResourceSession(resources, (resources) =>
-              start.engine({ ...start.context, resources, processor: start.processor() })
+              start.engine({
+                ...start.context,
+                resources,
+                processor: withPrediction(processor(brush, zoom), () => prediction)
+              })
             );
             saved = false;
             saveVersion++;

@@ -59,6 +59,7 @@ describe('portable paged drawings', () => {
     const metadata = {
       ...source,
       version: 3,
+      brush: { stroke: { minimum: 0.2, maximum: 0.6, firmness: 3 } },
       layers: source.layers.map((layer) => ({
         ...layer,
         tiles: layer.tiles.map(({ key, pixels }) => ({

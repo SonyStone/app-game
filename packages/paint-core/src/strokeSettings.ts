@@ -12,58 +12,28 @@ export type StrokeSettings = {
   stabilizer: number;
   /** Defaults to true. Smooth and stabilizer modes finish toward the lift point; false leaves their filtered endpoint. */
   catchUp: boolean;
-  /** Raw pressure mapped to zero, in [0, maximum). */
-  minimum: number;
-  /** Raw pressure mapped to one, in (minimum, 1]. */
-  maximum: number;
-  /** Positive exponent: above one requires firmer pressure, below one responds more softly. */
-  firmness: number;
 };
 
-/**
- * Research defaults are ready to try; the existing Studio mode remains selected initially. The pressure range, 5% to
- * 80% with firmness 1, is Leonardo 0.17.70's (`leonardo-analysis/stylus-and-stabilization.md`, `pressure_max` about
- * 0.80), taken with its normal and smooth modes on 2026-09-06 and not fitted to anyone's hand.
- */
+/** Initial smoothing mode and independent filter levels. */
 export function defaultStrokeSettings(): StrokeSettings {
   return {
     mode: 'studio',
     normal: 1,
     smooth: 10,
     stabilizer: 6,
-    catchUp: true,
-    minimum: 0.05,
-    maximum: 0.8,
-    firmness: 1
+    catchUp: true
   };
 }
 
-/** Bounds UI/worker settings and guarantees a usable, increasing pressure range. */
+/** Bounds smoothing settings and drops unrecognized fields from older brushes. */
 export function normalizeStrokeSettings(settings: StrokeSettings): StrokeSettings {
-  const minimum = bounded(settings.minimum, 0, 0.99, 0.05);
   return {
     mode: (['none', 'normal', 'smooth', 'stabilizer'] as const).find((mode) => mode === settings.mode) ?? 'studio',
     normal: Math.round(bounded(settings.normal, 0, 49, 1)),
     smooth: Math.round(bounded(settings.smooth, 0, 49, 10)),
     stabilizer: Math.round(bounded(settings.stabilizer, 0, maxStabilizerLevel, 6)),
-    catchUp: settings.catchUp !== false,
-    minimum,
-    maximum: bounded(settings.maximum, minimum + 0.01, 1, 0.8),
-    firmness: bounded(settings.firmness, 0.1, 5, 1)
+    catchUp: settings.catchUp !== false
   };
-}
-
-/**
- * Raw pen pressure through the stroke's `minimum`, `maximum` and `firmness`, as smoothing processors map it: zero up
- * to `minimum`, one from `maximum`, and between them the linear ramp raised to `firmness`.
- */
-export function calibratePressure(
-  settings: Pick<StrokeSettings, 'minimum' | 'maximum' | 'firmness'>,
-  raw: number
-): number {
-  return (
-    Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness
-  );
 }
 
 function bounded(value: number, min: number, max: number, fallback: number): number {

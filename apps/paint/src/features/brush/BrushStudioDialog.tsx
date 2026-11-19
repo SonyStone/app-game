@@ -161,7 +161,7 @@ export function BrushStudioDialog(props: {
                   setMeasuring(false);
                 }}
                 preview={{
-                  brush: pressureCalibration.strokeBrush(brush(), true),
+                  brush: brush(),
                   resources: padResources(),
                   recipe: studioBrushRecipe,
                   mixing: brush().mixing
@@ -173,7 +173,7 @@ export function BrushStudioDialog(props: {
         pad={
           <div ref={setPadSurface} class={styles.padSurface}>
             <DrawingPad
-              brush={pressureCalibration.strokeBrush(brush())}
+              brush={brush()}
               resources={padResources()}
               mapPressure={pressureCalibration.mapPressure}
             />

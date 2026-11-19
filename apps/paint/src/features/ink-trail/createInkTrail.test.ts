@@ -14,8 +14,9 @@ it('starts the trail from drawn events in the brush color, opacity and size, nev
   vi.stubGlobal('navigator', { ...navigator, ink: { requestPresenter } });
   const canvas = document.createElement('canvas');
   const [enabled, setEnabled] = createSignal(true);
+  let mapPressure = (raw: number) => raw;
   const { trail, dispose } = createRoot((dispose) => ({
-    trail: createInkTrail({ canvas: () => canvas, enabled, zoom: () => 2 }),
+    trail: createInkTrail({ canvas: () => canvas, enabled, mapPressure: (raw) => mapPressure(raw), zoom: () => 2 }),
     dispose
   }));
   flush();
@@ -27,6 +28,10 @@ it('starts the trail from drawn events in the brush color, opacity and size, nev
   const brush = { ...defaultBrush(), color: '#112233', opacity: 0.5, size: 10 };
   trail.drawn(event, brush);
   expect(update).toHaveBeenCalledExactlyOnceWith(event, { color: '#11223380', diameter: 10 });
+
+  mapPressure = (raw) => raw * 0.5;
+  trail.drawn(event, brush);
+  expect(update).toHaveBeenLastCalledWith(event, { color: '#11223380', diameter: 5 });
 
   // A stroke the engine no longer receives hides the trail.
   trail.withheld(event);

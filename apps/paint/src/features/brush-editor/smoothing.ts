@@ -23,7 +23,7 @@ export function smoothingLevel(stroke: StrokeSettings): number {
 
 /**
  * `stroke` smoothing at `level`, rounded and clamped to 0 to {@link maxSmoothing}: Studio at 0, the stabilizer at that
- * level above it. The pressure curve and catch-up are kept, and so are the Leonardo windows, which no level uses.
+ * level above it. Catch-up and the independent Leonardo window sizes are preserved.
  */
 export function withSmoothing(stroke: StrokeSettings, level: number): StrokeSettings {
   const rounded = Math.max(0, Math.min(maxSmoothing, Math.round(Number.isFinite(level) ? level : 0)));

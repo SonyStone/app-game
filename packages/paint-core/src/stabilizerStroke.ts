@@ -15,7 +15,7 @@ import { interpolateTabletAxes } from './tabletAxes';
  * only the pending curve is flushed to the last filtered position, tapering its pressure to zero. `stroke.stabilizer` is the
  * level, 0 to 15 or 16 to 22 for S-1 to S-7; `zoom` is the document-to-screen scale, as SAI corrects packets in screen
  * pixels. While the pen rests, the latest sample keeps being filtered at the pen's rate (`idle`), as tablets keep
- * reporting a pen held still. Pressure is calibrated like Leonardo's filter.
+ * reporting a pen held still.
  */
 export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcessor {
   const settings = normalizeStrokeSettings(brush.stroke);
@@ -23,7 +23,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
   let filter: SaiFilter | undefined;
   /** Pen samples before the filter, newest last: the last three, for the packet correction. */
   const recent: Sample[] = [];
-  /** Filter outputs, newest last, with the calibrated pressure; see `curve`. */
+  /** Filter outputs, newest last, see `curve`. */
   const filtered: Sample[] = [];
   const curve = createCurve();
   let tablet = false;
@@ -32,7 +32,6 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
   let finished = false;
 
   return {
-    calibrate,
     add(samples) {
       if (finished) {
         return [];
@@ -49,7 +48,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
         if (!previous) {
           tablet = current.pointerType === 'pen';
           filter = createSaiFilter(code, current, tablet);
-          result.push(...emit(filter.initial));
+          result.push(...draw(filter.initial));
         } else {
           // A pen resting on the canvas at zero pressure adds nothing, as in SAI.
           if (tablet && current.x === previous.x && current.y === previous.y && current.pressure === 0) {
@@ -58,10 +57,10 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
 
           interval = recentInterval(previous, current, interval);
           for (const inserted of evenOut(recent.at(-2), previous, current, zoom)) {
-            result.push(...emit(filter!.update(inserted)));
+            result.push(...draw(filter!.update(inserted)));
           }
 
-          result.push(...emit(filter!.update(current)));
+          result.push(...draw(filter!.update(current)));
         }
 
         recent.push(current);
@@ -90,7 +89,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
       idleTime += elapsedMs;
       while (idleTime >= interval) {
         idleTime -= interval;
-        result.push(...emit(filter.update({ ...latest, time: latest.time + interval })));
+        result.push(...draw(filter.update({ ...latest, time: latest.time + interval })));
       }
 
       return result;
@@ -117,12 +116,6 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
     }
   };
 
-  /** Passes a filter output on to the curve, with its pressure calibrated. */
-  function emit(output: Sample) {
-    return draw({ ...output, pressure: calibrate(output.pressure) });
-  }
-
-  /** Passes a point of the line, its pressure calibrated, on to the curve. */
   function draw(point: Sample) {
     filtered.push(point);
     if (filtered.length > 3) {
@@ -145,7 +138,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
     for (let step = 1; step <= count; step++) {
       const output = filter!.update({ ...lift, pressure: target });
       const share = 1 - (1 - step / count) ** 2;
-      const pressure = code > 1 ? from + share * (calibrate(target) - from) : calibrate(output.pressure);
+      const pressure = code > 1 ? from + share * (target - from) : output.pressure;
       result.push(...draw({ ...output, pressure }));
     }
 
@@ -179,7 +172,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
     for (let index = 1; index <= count + 1; index++) {
       const share = index / count;
       const point = rotate(b, center, share * sweep);
-      const pressure = from + (calibrate(target) - from) * Math.min(1, share);
+      const pressure = from + (target - from) * Math.min(1, share);
       result.push(...draw({ ...lift, ...point, pressure }));
     }
 
@@ -189,14 +182,7 @@ export function createStabilizerProcessor(brush: Brush, zoom = 1): StrokeProcess
   /** Whether the line has reached the resting pen, so filtering it again would change nothing visible. */
   function reached(latest: Sample) {
     const last = filtered.at(-1);
-    return !!last && distance(last, latest) < 0.01 && Math.abs(last.pressure - calibrate(latest.pressure)) < 1e-4;
-  }
-
-  /** Raw pen pressure through the brush's minimum, maximum and firmness. */
-  function calibrate(raw: number) {
-    return (
-      Math.max(0, Math.min(1, (raw - settings.minimum) / (settings.maximum - settings.minimum))) ** settings.firmness
-    );
+    return !!last && distance(last, latest) < 0.01 && Math.abs(last.pressure - latest.pressure) < 1e-4;
   }
 }
 

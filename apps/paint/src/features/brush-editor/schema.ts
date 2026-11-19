@@ -1,6 +1,6 @@
 import { brushSizeCurve, brushSpacingCurve, type SliderCurve } from '@app-game/abr-brush/sliderCurves';
 import type { Brush } from '@app-game/paint-core/brush';
-import { normalizeStrokeSettings, type StrokeSettings } from '@app-game/paint-core/strokeSettings';
+import type { StrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { maxBrushSize } from '../brush/createBrushTools';
 import { maxSmoothing, smoothingLevel, steadySmoothing, withSmoothing } from './smoothing';
 
@@ -196,52 +196,9 @@ export const brushCategories: readonly BrushCategory[] = [
   }
 ];
 
-/**
- * The brush's own pressure range and firmness (`StrokeSettings.minimum`, `maximum` and `firmness`, Leonardo's power
- * curve), as a category the editors no longer show: the pen's pressure curve, one for every brush, replaced it in the
- * brush studio (2026-11-19). The engine still applies the three in the modes `calibratesPressure` names, and parts
- * stored on a board before keep editing them through these settings. While the pen is calibrated, the defaults
- * (5%, 80%, 100%) reach strokes as a straight 0% to 100% (see `createPressureCalibration`'s `strokeBrush`).
- */
-export const legacyPressureCategory: BrushCategory = {
-  id: 'pressure-curve',
-  label: 'Pressure curve',
-  group: 'advanced',
-  applies: always,
-  status: (b) =>
-    calibratesPressure(b) ? `${Math.round(b.stroke.minimum * 100)}–${Math.round(b.stroke.maximum * 100)}%` : 'Off',
-  settings: [
-    strokePercent(
-      'pressure-minimum',
-      'Minimum',
-      'minimum',
-      () => 0,
-      (b) => Math.round(b.stroke.maximum * 100) - 1
-    ),
-    strokePercent(
-      'pressure-maximum',
-      'Maximum',
-      'maximum',
-      (b) => Math.round(b.stroke.minimum * 100) + 1,
-      () => 100
-    ),
-    strokePercent(
-      'pressure-firmness',
-      'Firmness',
-      'firmness',
-      () => 10,
-      () => 500,
-      5
-    )
-  ]
-};
-
-/**
- * Finds a setting regardless of the current engine or stroke mode, also one of {@link legacyPressureCategory}'s;
- * unknown IDs return undefined.
- */
+/** Finds a setting by its stable ID across brush categories. */
 export function getBrushSetting(id: string): BrushSetting | undefined {
-  return [...brushCategories, legacyPressureCategory]
+  return brushCategories
     .flatMap((category) => category.settings)
     .find((setting) => setting.id === id);
 }
@@ -336,20 +293,6 @@ function supportsPressure(b: Brush) {
   return b.engine?.id !== 'abr';
 }
 
-/**
- * Whether the pen pressure range and firmness apply: in the stabilizer, and in the Leonardo modes except for an ABR
- * brush, whose preset smooths and passes the pen's pressure on unchanged there.
- */
-function calibratesPressure(b: Brush) {
-  const leonardo = b.stroke.mode === 'normal' || b.stroke.mode === 'smooth';
-  return b.stroke.mode === 'stabilizer' || (leonardo && b.engine?.id !== 'abr');
-}
-
-/** Merges `patch` into the brush's stroke settings and normalizes the result, as every stroke write must. */
-function strokePatch(b: Brush, patch: Partial<StrokeSettings>): Partial<Brush> {
-  return { stroke: normalizeStrokeSettings({ ...b.stroke, ...patch }) };
-}
-
 /** NaN inputs retain the current value; availability remains the caller's responsibility. */
 function number(
   config: Omit<NumberSetting, 'kind' | 'step' | 'applies' | 'enabled'> &
@@ -425,28 +368,6 @@ function choice(
       return write(b, value);
     }
   };
-}
-
-/** A percent setting of the pen pressure range, enabled only in the modes that calibrate pressure. */
-function strokePercent(
-  id: string,
-  label: string,
-  field: 'minimum' | 'maximum' | 'firmness',
-  min: NumberSetting['min'],
-  max: NumberSetting['max'],
-  step = 1
-): NumberSetting {
-  return number({
-    id,
-    label,
-    unit: '%',
-    min,
-    max,
-    step,
-    enabled: calibratesPressure,
-    read: (b) => b.stroke[field] * 100,
-    write: (b, value) => strokePatch(b, { [field]: value / 100 })
-  });
 }
 
 const tipLabels: Record<string, string> = { round: 'Soft round', textured: 'Textured tip', abr: 'ABR brush' };

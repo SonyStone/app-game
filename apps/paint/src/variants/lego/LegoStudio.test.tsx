@@ -502,35 +502,13 @@ it('the slider of a studio row moves the value but never lifts a part', () => {
   expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
 });
 
-it("keeps old boards' pressure minimum, maximum and firmness parts working, active only with smoothing", () => {
-  storeParts(['action:brush-editor', 'value:brush:pressure-minimum', 'value:brush:pressure-firmness']);
-  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
-  saved.board.panels[0].parts[1].span = { columns: 4, rows: 1 };
-  localStorage.setItem('paint.lego', JSON.stringify(saved));
+it('shows missing-part placeholders for retired brush pressure settings on saved boards', () => {
+  const kinds = ['minimum', 'maximum', 'firmness'].map((field) => `value:brush:pressure-${field}`);
+  storeParts(kinds);
   mount();
-  const part = () => document.querySelector('[data-part-kind="value:brush:pressure-minimum"]')!;
-  const slider = () => part().querySelector<HTMLElement>('[role="slider"]')!;
-  // At Smoothing 0 strokes do not use the brush's own range: the part loads, unlit, and takes nothing.
-  expect(part().querySelector('[data-inactive]')).not.toBeNull();
-  const before = wiring.session!.brush().stroke;
-  pointer(slider(), 'pointerdown', 0.5, 0);
-  pointer(slider(), 'pointerup', 0.5, 0);
-  expect(wiring.session!.brush().stroke).toEqual(before);
-
-  wiring.session!.tools.updateBrush({ stroke: { ...before, mode: 'stabilizer', stabilizer: 4 } });
-  flush();
-  expect(part().querySelector('[data-inactive]')).toBeNull();
-  pointer(slider(), 'pointerdown', 0.5, 0);
-  pointer(slider(), 'pointerup', 0.5, 0);
-  expect(wiring.session!.brush().stroke.minimum).not.toBe(before.minimum);
-  expect(document.querySelector('[data-part-kind="value:brush:pressure-firmness"] [role="slider"]')).not.toBeNull();
-
-  // The studio no longer offers them, nor a brush pressure curve.
-  const dialog = openStudio();
-  expect([...dialog.querySelectorAll('nav button')].map((element) => element.textContent).join()).not.toMatch(
-    /Pressure curve/
-  );
-  expect(dialog.querySelector('[aria-label^="Drag Pressure minimum"]')).toBeNull();
+  for (const kind of kinds) {
+    expect(document.querySelector(`[aria-label="Missing part: ${kind}"]`)).not.toBeNull();
+  }
 });
 
 it("edits the pen's curve in the studio's Pen page and on the board as one, and Cancel restores it", () => {

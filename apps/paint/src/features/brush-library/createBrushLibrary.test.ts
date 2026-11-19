@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { BrushResource } from '@app-game/abr-paint/resources';
+import { defaultStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import 'fake-indexeddb/auto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -53,6 +54,19 @@ it('stores user presets and loads them lazily, one at a time or as a list, witho
   expect(resources.map(({ id, pixels }) => [id, [...pixels]])).toEqual([['tip', [1, 2, 3, 4]]]);
   expect(readResources).toHaveBeenCalledExactlyOnceWith(['tip']);
   expect(await second.library.load(marker.id)).toBeUndefined();
+});
+
+it('drops retired pressure fields when loading one preset or listing the library', async () => {
+  const { library, storage } = open(crypto.randomUUID());
+  const expected = { ...defaultStrokeSettings(), stabilizer: 14 };
+  const stroke = { ...expected, minimum: 0.2, maximum: 0.6, firmness: 3 };
+  await storage.putPreset({ ...preset('Ink'), id: 'ink', created: 1, settings: { stroke } });
+
+  expect((await storage.readPresets())[0]?.settings.stroke).toEqual(expected);
+  expect((await library.load('ink'))?.settings.stroke).toEqual(expected);
+  const write = vi.spyOn(storage, 'putPreset');
+  library.update('ink', { name: 'New ink' });
+  expect(write.mock.calls[0]?.[0].settings.stroke).toEqual(expected);
 });
 
 it('deletes a shared image with its last preset, and reads evicted images again', async () => {

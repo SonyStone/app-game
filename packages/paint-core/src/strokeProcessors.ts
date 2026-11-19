@@ -17,8 +17,6 @@ export type StrokeProcessor = {
    * running ahead of the drawn line would show a jump.
    */
   predict?(predicted: readonly Sample[]): Sample[];
-  /** How the processor maps raw pen pressure, for samples that bypass its smoothing; unchanged when absent. */
-  calibrate?(pressure: number): number;
 };
 
 /** Creates independent filter/curve state at pen-down. Zoom is document-to-CSS scale. */
@@ -58,22 +56,13 @@ export function createRawProcessor(): StrokeProcessor {
   };
 }
 
-/**
- * Paints given samples as they are, for a stroke replaced as a whole (`replace-stroke`): no smoothing, which would
- * round a shape's corners, and no preview tail or prediction, since the samples are final and the pen no longer draws
- * them, but the pressure calibration of `processor`, the stroke's own processor, so the replaced stroke presses like
- * the one it replaces.
- */
-export function createReplacementProcessor(processor: StrokeProcessor): StrokeProcessor {
+/** Passes final replacement samples directly to the engine without prediction or smoothing. */
+export function createReplacementProcessor(): StrokeProcessor {
   const raw = createRawProcessor();
-  const calibrate = processor.calibrate?.bind(processor);
   return {
     preview: raw.preview,
     finish: raw.finish,
-    add: (samples) => {
-      const kept = raw.add(samples);
-      return calibrate ? kept.map((sample) => ({ ...sample, pressure: calibrate(sample.pressure) })) : kept;
-    }
+    add: raw.add
   };
 }
 

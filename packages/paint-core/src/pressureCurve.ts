@@ -9,9 +9,8 @@
  * Normalized curves ({@link normalizePressureCurve}) have 2 to {@link maxPressurePoints} points, `x` increasing by at
  * least {@link pointGap} and `y` never decreasing.
  *
- * Points rather than an exponent such as a brush's `StrokeSettings.firmness`: a hand that draws in a narrow band, as
- * one MovinkPad recording with a median of 0.58 and a 95th percentile of 0.61, would need an exponent near 7 to put
- * its median at one half. Free points rather than the first curve's three (2026-10-10), whose outputs were fixed at
+ * One MovinkPad recording had a median pressure of 0.58 and a 95th percentile of 0.61. A single power curve would
+ * need an exponent near 7 to put its median at one half. Free points rather than the first curve's three (2026-10-10), whose outputs were fixed at
  * zero, one half and full pressure: with fixed outputs the middle point could only bend the curve, as the user found
  * on the tablet.
  */

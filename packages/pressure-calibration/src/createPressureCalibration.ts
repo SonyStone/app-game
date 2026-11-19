@@ -1,4 +1,3 @@
-import type { Brush } from '@app-game/paint-core/brush';
 import {
   applyPressureCurve,
   identityPressureCurve,
@@ -6,7 +5,6 @@ import {
   normalizePressureCurve,
   type PressureCurve
 } from '@app-game/paint-core/pressureCurve';
-import { defaultStrokeSettings } from '@app-game/paint-core/strokeSettings';
 import { createSignal } from 'solid-js';
 
 /**
@@ -14,7 +12,6 @@ import { createSignal } from 'solid-js';
  * date and the browser's user agent. `mapPressure` is meant for `attachInput`: it maps raw pen pressure through the
  * saved curve before every stroke processor and brush engine, so it acts on every brush alike. Without a calibration
  * pressure is unchanged. Presets and documents never carry the curve: each browser on each device keeps its own.
- * `strokeBrush` keeps a brush's default pressure range from narrowing the calibrated pressure a second time.
  * Storage failures keep the curve for this session.
  */
 export function createPressureCalibration() {
@@ -39,27 +36,6 @@ export function createPressureCalibration() {
     mapPressure(raw: number) {
       const current = saved();
       return current ? applyPressureCurve(current.curve, raw) : raw;
-    },
-    /**
-     * `brush` as its strokes should receive it. While the pen is calibrated, a brush pressure curve left at its
-     * defaults (minimum 5%, maximum 80%, firmness 100%, Leonardo's values, applied by the normal, smooth and
-     * stabilizer modes) becomes linear, 0% to 100%, so only the calibration shapes pressure; a curve the user changed
-     * stays. The brush is returned unchanged otherwise. `calibrated` overrides whether the pen counts as calibrated,
-     * for previewing a curve before it is saved.
-     *
-     * The user's decision (2026-10-10): the defaults would narrow calibrated pressure a second time. Applied as a
-     * stroke is sent, so presets and the brush panel keep their values. Only presets saved with a curve of their own
-     * and changes made on the fly differ from the defaults: the built-in Soft round and Eraser keep them, and ABR
-     * imports carry no stroke settings.
-     */
-    strokeBrush(brush: Brush, calibrated = !!saved()): Brush {
-      const { minimum, maximum, firmness } = defaultStrokeSettings();
-      const stroke = brush.stroke;
-      if (!calibrated || stroke.minimum !== minimum || stroke.maximum !== maximum || stroke.firmness !== firmness) {
-        return brush;
-      }
-
-      return { ...brush, stroke: { ...stroke, minimum: 0, maximum: 1 } };
     },
     /** Saves `curve` for every later stroke; the identity curve removes the calibration, as `reset` does. */
     save(curve: PressureCurve) {

@@ -15,7 +15,8 @@ afterEach(() => {
 it('imports a preset into the library once per viewer brush and chooses it', async () => {
   const choose = vi.fn<(preset: BrushPreset) => Promise<Result<void, PaintError>>>(async () => ok());
   const { presets, library } = setup({ choose });
-  expect(await presets.usePreset(abrPreset(), 'abr:1')).toEqual(ok());
+  const prepared = { ...abrPreset(), stroke: { minimum: 0.2, maximum: 0.6, firmness: 3 } };
+  expect(await presets.usePreset(prepared, 'abr:1')).toEqual(ok());
   const chosen = choose.mock.calls[0]![0];
   expect(chosen).toMatchObject({
     name: 'Ink',
@@ -30,6 +31,7 @@ it('imports a preset into the library once per viewer brush and chooses it', asy
   });
   // Unset preset values are not part of the import, so the brush keeps its own.
   expect(chosen.settings).not.toHaveProperty('opacity');
+  expect(chosen.settings).not.toHaveProperty('stroke');
   expect(chosen.resourceIds).toEqual(['tip', 'pattern']);
   expect((await library.resources(chosen))._unsafeUnwrap().map(({ id }) => id)).toEqual(['tip', 'pattern']);
 

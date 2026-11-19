@@ -6,7 +6,7 @@ import { normalizeStrokeSettings } from './strokeSettings';
 it.each([0.05, 1, 8])('None immediately preserves raw segments and pressure at zoom %s', (zoom) => {
   const brush = defaultBrush();
   brush.size = 2;
-  brush.stroke = normalizeStrokeSettings({ ...brush.stroke, mode: 'none', smooth: 49, minimum: 0.7, firmness: 5 });
+  brush.stroke = normalizeStrokeSettings({ ...brush.stroke, mode: 'none', smooth: 49 });
   expect(brush.stroke.mode).toBe('none');
   const stroke = createSmoothStroke(brush, zoom);
   const reference = createStrokeSampler(brush);

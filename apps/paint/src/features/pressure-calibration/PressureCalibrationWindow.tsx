@@ -10,8 +10,7 @@ import styles from './PressureCalibrationWindow.module.css';
 
 /**
  * Paint's pen pressure calibration (`PressureCalibration`) as a floating window over any variant. It does not block
- * the editor: brush settings, presets and tools stay usable, and its test canvas follows the current brush as
- * calibrated strokes reach it (`strokeBrush`), drawn by Studio's own recipe. A preset's images are read before the
+ * the editor: brush settings, presets and tools stay usable, and its test canvas follows the current brush, drawn by Studio's own recipe. A preset's images are read before the
  * canvas switches to it, so the canvas keeps the previous brush meanwhile; if they cannot be read, it says so and
  * keeps the brush it has. Saving, resetting or cancelling closes it.
  */
@@ -59,7 +58,7 @@ export function PressureCalibrationWindow(props: {
     }
 
     return {
-      brush: props.calibration.strokeBrush(props.brush, true),
+      brush: props.brush,
       resources: loaded.resources,
       recipe: studioBrushRecipe,
       mixing: props.brush.mixing
@@ -92,7 +91,7 @@ export function PressureCalibrationWindow(props: {
             note={
               failure()
                 ? `The chosen brush could not be read (${failure()}); the canvas keeps the previous one.`
-                : 'The canvas draws with the current brush and follows its settings. A brush pen pressure range left at its default 5% to 80% spans 0% to 100% once the pen is calibrated.'
+                : 'The canvas draws with the current brush and follows its settings.'
             }
           />
         )}

@@ -119,17 +119,6 @@
   }
 }
 
-.pressureControls {
-  summary {
-    padding: 12px 0;
-    cursor: pointer;
-  }
-
-  .panelNote {
-    padding: 0;
-  }
-}
-
 .range input {
   appearance: none;
   background: transparent;

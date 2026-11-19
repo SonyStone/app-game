@@ -69,8 +69,7 @@ it('follows the brush, and switches presets only once their images are read', as
     flush();
     expect(block.props).toBeDefined();
   });
-  // Calibrated strokes reach a brush with the default 5%–80% range as 0%–100%.
-  expect(block.props!.preview!.brush).toMatchObject({ size: 32, stroke: { minimum: 0, maximum: 1 } });
+  expect(block.props!.preview!.brush).toMatchObject({ size: 32, stroke: defaultBrush().stroke });
   expect(document.querySelector('[role="dialog"][aria-label="Pen pressure"]')).not.toBeNull();
 
   setBrush({ ...brush(), size: 80 });
