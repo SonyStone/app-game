@@ -1,15 +1,69 @@
 /*
- * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles. See `SettingsList` for the properties a
- * host sets; the fallbacks give a quiet light list.
+ * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles, the selected one joined to the detail
+ * beside the list. See `SettingsList` for the properties a host sets; the fallbacks give a quiet light list joined to
+ * a white detail.
  */
 .list {
+  /* The travel of the joined shape (`createJoinedSelection`), for the marks that cross-fade with it. */
+  --settings-list-travel: 200ms cubic-bezier(0.3, 0, 0, 1);
+
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-inline: var(--settings-list-inset, 8px);
+  padding-inline: var(--settings-list-inset, 8px 0);
   color: var(--settings-list-ink, #24262c);
   font-size: var(--settings-list-text, 13px);
+  /* A scrollbar between the rows and the detail would cut the join, so the list scrolls without one. */
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Rows fade out at an edge the list can scroll past; `createScrollFades` sets how far. */
+  &[data-overflow] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      #000 var(--settings-list-fade-start, 0px),
+      #000 calc(100% - var(--settings-list-fade-end, 0px)),
+      transparent
+    );
+  }
+}
+
+/*
+ * The joined shape behind the rows, drawn and moved by `createJoinedSelection`. It lies in the list's scrolling
+ * content, so it scrolls with its row without help.
+ */
+.join {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: var(--settings-list-join, block);
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  /* Its own layer: a frame of the travel only moves it. */
+  will-change: transform;
+}
+
+.joinFill {
+  fill: var(--settings-list-selected, #ffffff);
+}
+
+/* The focus ring of the selected row follows the joined outline, open where the row runs into the detail. */
+.joinEdge {
+  fill: none;
+  stroke: none;
+  stroke-width: 2px;
+
+  .list:has(.row[aria-current]:focus-visible) & {
+    stroke: var(--settings-list-focus, #3d7eff);
+  }
 }
 
 .group {
@@ -19,7 +73,8 @@
   font-weight: 600;
   letter-spacing: 0.02em;
 
-  &:first-child {
+  /* The joined shape comes first in the list, so the first heading is the second child. */
+  &:nth-child(2) {
     margin-top: 2px;
   }
 }
@@ -29,6 +84,8 @@
  * a host's own rule for the rows, such as `.studio .list button`, still wins.
  */
 .list .row {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
@@ -36,8 +93,8 @@
   width: 100%;
   min-height: var(--settings-list-row, 40px);
   margin: 0;
-  /* The icon's tile sits as far inside the highlight from the side as from the top and bottom, as macOS draws it. */
-  padding: 0 10px 0 7px;
+  /* The icon's tile sits as far inside the row from the side as from the top and bottom, as macOS draws it. */
+  padding: 0 calc(var(--settings-list-join-radius, 12px) + 4px) 0 7px;
   border: 0;
   border-radius: var(--settings-list-radius, 9px);
   background: transparent;
@@ -45,27 +102,58 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
+  /* Scrolled into view with its concave corners and clear of the fade. */
+  scroll-margin-block: calc(var(--settings-list-join-radius, 12px) + var(--settings-list-fade, 24px));
   touch-action: manipulation;
+  transition: transform 160ms var(--settings-list-ease-out, ease-out);
   -webkit-tap-highlight-color: transparent;
 
+  /* The pill of a hovered or pressed row: short of the end edge, so it never meets the joined shape's corners. */
+  &::before {
+    position: absolute;
+    inset: 0 var(--settings-list-pill-end, var(--settings-list-join-radius, 12px)) 0 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: transparent;
+    content: '';
+  }
+
   @media (hover: hover) {
-    &:hover:not([aria-current]) {
+    &:hover:not([aria-current])::before {
       background: var(--settings-list-hover, rgb(0 0 0 / 0.05));
     }
   }
 
+  /* Pressed: at once, before the selection lands, the row sinks a little under a darker pill. */
+  &[data-pressed] {
+    transform: scale(0.97);
+    transition-duration: 60ms;
+
+    &:not([aria-current])::before {
+      background: var(--settings-list-pressed, rgb(0 0 0 / 0.1));
+    }
+  }
+
   &:focus-visible {
-    outline: 2px solid var(--settings-list-focus, var(--settings-list-selected, #3d7eff));
+    outline: 2px solid var(--settings-list-focus, #3d7eff);
     outline-offset: -2px;
   }
 
+  /* The joined shape draws the selected row's ground and its focus ring, unless the host turns the join off. */
   &[aria-current] {
-    background: var(--settings-list-selected, #3d7eff);
-    color: var(--settings-list-selected-ink, #ffffff);
+    color: var(--settings-list-selected-ink, inherit);
+
+    @container not style(--settings-list-join: none) {
+      outline: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 
-/* The icon on a small tile, as iOS draws its icons on colored squares. */
+/* The icon on a small tile, as iOS draws its icons on colored squares; the selected row's tile takes the mark. */
 .icon {
   display: grid;
   place-items: center;
@@ -74,9 +162,21 @@
   border-radius: 7px;
   background: var(--settings-list-icon, rgb(0 0 0 / 0.07));
   color: var(--settings-list-icon-ink, inherit);
+  transition:
+    background-color var(--settings-list-travel),
+    color var(--settings-list-travel);
+
+  [aria-current] > & {
+    background: var(--settings-list-mark, var(--settings-list-icon, rgb(0 0 0 / 0.07)));
+    color: var(--settings-list-mark-ink, var(--settings-list-icon-ink, inherit));
+  }
 
   &:empty {
     background: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 
@@ -109,15 +209,11 @@
   white-space: nowrap;
 
   [aria-current] & {
-    color: var(--settings-list-selected-quiet, color-mix(in srgb, currentColor 82%, transparent));
+    color: var(--settings-list-selected-quiet, var(--settings-list-quiet, #7c7f88));
   }
 }
 
 .chevron {
   display: var(--settings-list-chevron, none);
   color: var(--settings-list-quiet, #7c7f88);
-
-  [aria-current] & {
-    color: inherit;
-  }
 }

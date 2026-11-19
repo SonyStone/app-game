@@ -1,6 +1,6 @@
 import type { Brush } from '@app-game/paint-core/brush';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createMemo, createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, createUniqueId, Show } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { watchTapTargets } from '../../shared/ui/watchTapTargets';
 import { CategoryPane, CategorySidebar, createCategoryChoice } from './BrushCategories';
@@ -12,7 +12,9 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * Brush Studio. In landscape, three columns: the brush's name, a stroke preview and the categories; the chosen
  * category's rows; and a drawing pad (the caller's `pad`) taking the remaining half, with Cancel and Done at its top
  * right. In portrait the pad lies across the top and the two columns share the space under it. Narrower than 700 px,
- * one part shows at a time: the categories, a category's rows, or the pad.
+ * one part shows at a time: the categories, a category's rows, or the pad. The chosen category's settings lie on a
+ * raised surface, and its row in the category list is joined to that surface and travels to the next category chosen
+ * (`SettingsList`); in the narrow layout the rows stay plain, each opening its page.
  *
  * It shows the same categories, rows, statuses and sections as `BrushEditor`, with each number
  * row on two lines: its label and its value in a pill that can be dragged or tapped to type, then a slider across the
@@ -22,7 +24,9 @@ import { brushSettingsDiffer, type BrushCategory, type BrushSettingsSnapshot } f
  * Besides the editor's theme properties (`--surface`, `--ink`, `--muted`, `--line`, `--accent`), the studio reads
  * these from its host, each falling back to the studio's own look: `--studio-ground` behind the columns;
  * `--studio-column` and `--studio-column-ink`, `--studio-column-quiet` for the category and settings columns and the
- * text on them, `--studio-gap` around and between them and `--studio-column-radius`; `--studio-plate` under the
+ * text on them, `--studio-gap` around and between them and `--studio-column-radius`; `--studio-raised` for the
+ * settings' surface and the chosen category joined to it; `--studio-icon`, `--studio-icon-ink`, `--studio-hover` and
+ * `--studio-pressed` for the category rows, and `--studio-mark`, `--studio-mark-ink` for the chosen one's icon tile; `--studio-plate` under the
  * buttons over the pad; `--studio-tile`, `--studio-tile-ink` and `--studio-tile-radius` for its controls;
  * `--studio-chosen`, `--studio-chosen-ink` and `--studio-chosen-ring` for the chosen category and option and a switch
  * that is on; `--studio-row-gap` between rows; and `--studio-text`, `--studio-small` and `--studio-name` for its type.
@@ -67,13 +71,12 @@ export function BrushStudio(props: {
   const penTitleId = createUniqueId();
   /** Below 700 px wide, which part is shown: the category list, the chosen category's rows or the pad. */
   const [view, setView] = createSignal<'list' | 'detail' | 'pad'>('list');
-  const { sidebar, chooseSidebar } = createSidebarStyle();
   const [root, setRoot] = createSignal<HTMLElement>();
   createEffect(root, (element) => (element ? watchTapTargets(element) : undefined));
 
   return (
     <section ref={setRoot} class={styles.studioRoot} aria-label="Brush studio">
-      <div class={[styles.frame, styles.studio]} data-view={view()} data-sidebar={sidebar()}>
+      <div class={[styles.frame, styles.studio]} data-view={view()}>
         <div class={styles.studioSheet}>
           <div class={styles.studioSide}>
             <div class={styles.studioHead}>
@@ -135,21 +138,6 @@ export function BrushStudio(props: {
           {props.pad}
         </div>
         <div class={styles.studioActions}>
-          <div class={styles.sidebarSwitch} role="radiogroup" aria-label="Sidebar style (trial)">
-            <For each={sidebarStyles}>
-              {(option) => (
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={sidebar() === option.id ? 'true' : 'false'}
-                  title={option.title}
-                  onClick={() => chooseSidebar(option.id)}
-                >
-                  {option.label}
-                </button>
-              )}
-            </For>
-          </div>
           <button
             type="button"
             class={styles.studioPadToggle}
@@ -183,45 +171,3 @@ export function BrushStudio(props: {
 
 /** The sidebar entry of the pen's page, apart from the brush's categories. */
 const penEntry = 'pen-pressure';
-
-/**
- * TEMPORARY, until the user picks one of the two sidebar styles while trying the studio; then the other style, this
- * switch and its stored choice go. "sidebar": the categories and the settings lie on one plate, divided by a hairline,
- * and the chosen category is an accent-filled pill, as in iPadOS and macOS Settings. "joined": the settings lie on a
- * lighter raised surface, and the chosen category takes that surface's color and runs into it.
- */
-function createSidebarStyle() {
-  const [sidebar, setSidebar] = createSignal<SidebarStyle>(storedSidebarStyle());
-
-  return {
-    sidebar,
-    chooseSidebar: (style: SidebarStyle) => {
-      setSidebar(style);
-      try {
-        localStorage.setItem(sidebarStyleKey, style);
-      } catch {
-        // Storage may be blocked or full; the choice then lasts while the studio is open.
-      }
-    }
-  };
-}
-
-/** The sidebar styles on trial; see `createSidebarStyle`. */
-const sidebarStyles = [
-  { id: 'sidebar', label: 'Sidebar', title: 'Sidebar style: one plate, chosen category as a pill' },
-  { id: 'joined', label: 'Joined', title: 'Sidebar style: chosen category joins the raised settings' }
-] as const;
-
-type SidebarStyle = (typeof sidebarStyles)[number]['id'];
-
-/** Where the trial's choice is kept, per device. */
-const sidebarStyleKey = 'paint.brushStudio.sidebar';
-
-/** The stored sidebar style, "sidebar" when none is stored or storage cannot be read. */
-function storedSidebarStyle(): SidebarStyle {
-  try {
-    return localStorage.getItem(sidebarStyleKey) === 'joined' ? 'joined' : 'sidebar';
-  } catch {
-    return 'sidebar';
-  }
-}

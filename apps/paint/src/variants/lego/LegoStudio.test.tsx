@@ -775,19 +775,18 @@ it("Enter on a studio row's grip puts the part on the board without dragging", (
   expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
 });
 
-it('switches the trial sidebar style and keeps the choice', () => {
+it('joins the chosen category to its settings, with no sidebar style to choose', () => {
   storeParts(['action:brush-editor']);
+  localStorage.setItem('paint.brushStudio.sidebar', 'sidebar');
   mount();
-  let dialog = openStudio();
-  const frame = () => dialog.querySelector<HTMLElement>('[data-sidebar]')!;
-  expect(frame().dataset.sidebar).toBe('sidebar');
-  [...dialog.querySelectorAll<HTMLElement>('[role="radio"]')].find((radio) => radio.textContent === 'Joined')!.click();
-  flush();
-  expect(frame().dataset.sidebar).toBe('joined');
-  expect(localStorage.getItem('paint.brushStudio.sidebar')).toBe('joined');
-  click('Done');
-  dialog = openStudio();
-  expect(frame().dataset.sidebar).toBe('joined');
+  const dialog = openStudio();
+  expect(dialog.querySelector('[aria-label="Sidebar style (trial)"]')).toBeNull();
+  expect(dialog.querySelector('[data-sidebar]')).toBeNull();
+  category(dialog, 'Brush tip');
+  const chosen = [...dialog.querySelectorAll<HTMLElement>('nav button[aria-current="page"]')];
+  expect(chosen.map((row) => row.dataset.item)).toEqual(['brush-tip']);
+  // The joined shape lies in the list itself, ahead of its rows.
+  expect(dialog.querySelector('nav > svg:first-child [data-join="fill"]')).not.toBeNull();
 });
 
 /** Chooses the category named `name` in the studio's sidebar. */

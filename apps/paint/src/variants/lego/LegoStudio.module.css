@@ -1802,17 +1802,21 @@
   --line: color-mix(in srgb, var(--lego-ink) 14%, transparent);
   --studio-ground: #faf8f5;
   --studio-gap: 8px;
-  --studio-column: var(--lego-plate);
+  /*
+   * The sheet under the categories is the darkest plate and the settings' surface the lightest one that still carries
+   * the parts' light tiles, so the chosen category, in the surface's color, reads as cut out of the sheet.
+   */
+  --studio-column: rgb(24 25 29 / 0.97);
   --studio-column-ink: #ffffff;
   --studio-column-quiet: rgb(255 255 255 / 0.62);
   --studio-column-radius: 12px;
-  --studio-raised: rgb(68 71 80);
-  --studio-divider: rgb(255 255 255 / 0.12);
+  --studio-raised: rgb(74 78 89);
   --studio-icon: var(--lego-tile);
   --studio-icon-ink: var(--lego-ink);
   --studio-hover: rgb(255 255 255 / 0.07);
-  --studio-selected: var(--lego-accent);
-  --studio-selected-ink: #ffffff;
+  --studio-pressed: rgb(255 255 255 / 0.14);
+  --studio-mark: var(--lego-accent);
+  --studio-mark-ink: #ffffff;
   --studio-plate: var(--lego-plate);
   --studio-tile: var(--lego-tile);
   --studio-tile-ink: var(--lego-ink);

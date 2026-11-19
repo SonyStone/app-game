@@ -580,9 +580,9 @@
  * Cancel and Done at its top right, as in Procreate's Brush Studio. In portrait the pad lies across the top and the
  * sheet under it; below 700 px one part shows at a time: the list, a category's settings, or the pad.
  *
- * Two sidebar styles are on trial (`data-sidebar`, see `createSidebarStyle`): "sidebar" divides list and settings by
- * a hairline and fills the chosen row with the accent; "joined" raises the settings on a lighter surface and gives
- * the chosen row that surface, so the row runs into the settings it shows.
+ * The settings lie on a raised surface inset in the sheet, and the chosen category is joined to it: the list draws
+ * the row in the surface's color, running into it with concave corners, and moves that shape to the next category
+ * chosen (`SettingsList`). The row's icon tile takes the accent.
  *
  * A host restyles the studio through the --studio-* properties that BrushStudio's JSDoc lists; each falls back to the
  * look described here.
@@ -658,81 +658,38 @@
   }
 }
 
-/* The categories, in the studio's colors; see `SettingsList` for the properties. */
+/* The categories, in the studio's colors, joined to the settings; see `SettingsList` for the properties. */
 .studioList {
   --settings-list-ink: var(--column-ink);
   --settings-list-quiet: var(--column-quiet);
   --settings-list-icon: var(--studio-icon, var(--pill-color));
   --settings-list-icon-ink: var(--studio-icon-ink, var(--ink-color));
   --settings-list-hover: var(--studio-hover, color-mix(in srgb, var(--column-ink) 8%, transparent));
-  --settings-list-selected: var(--studio-selected, var(--accent-color));
-  --settings-list-selected-ink: var(--studio-selected-ink, var(--surface-color));
+  --settings-list-pressed: var(--studio-pressed, color-mix(in srgb, var(--column-ink) 14%, transparent));
+  --settings-list-selected: var(--raised-color);
+  --settings-list-selected-ink: var(--column-ink);
+  --settings-list-selected-quiet: var(--column-quiet);
+  --settings-list-mark: var(--studio-mark, var(--accent-color));
+  --settings-list-mark-ink: var(--studio-mark-ink, var(--surface-color));
+  --settings-list-focus: var(--accent-color);
+  --settings-list-inset: 8px 0;
   --settings-list-text: var(--studio-text, 15px);
   --settings-list-small: var(--studio-small, 12px);
 
   min-height: 0;
-  padding-block: 2px 16px;
+  /* Room under the last row for its concave corner, then the surface's own rounded corner, as an S. */
+  padding-block: 2px 28px;
   overflow: auto;
   overscroll-behavior: contain;
 }
 
+/* The settings on a raised surface inset in the sheet, against the list's end edge, where the chosen row joins it. */
 .studio .pane {
+  margin: 6px 6px 6px 0;
   padding: 14px 16px 24px;
+  border-radius: calc(var(--studio-column-radius, 10px) - 2px);
+  background: var(--raised-color);
   color: var(--column-ink);
-}
-
-/* Sidebar: one plate, a hairline between list and settings. */
-.studio[data-sidebar='sidebar'] .studioSide {
-  border-right: 1px solid var(--studio-divider, var(--line-color));
-}
-
-/*
- * Joined: the settings on a raised surface inset in the plate, and the chosen row in that surface's color, reaching
- * the surface's edge, with concave corners where it meets it, as a folder's tab joins its folder.
- */
-.studio[data-sidebar='joined'] {
-  .studioList {
-    --settings-list-selected: var(--raised-color);
-    --settings-list-selected-ink: var(--column-ink);
-    --settings-list-selected-quiet: var(--column-quiet);
-    --settings-list-inset: 8px 0;
-
-    button {
-      padding-right: 16px;
-    }
-
-    [aria-current] {
-      position: relative;
-      border-start-end-radius: 0;
-      border-end-end-radius: 0;
-    }
-
-    [aria-current]::before,
-    [aria-current]::after {
-      position: absolute;
-      right: 0;
-      width: 12px;
-      height: 12px;
-      content: '';
-      pointer-events: none;
-    }
-
-    [aria-current]::before {
-      bottom: 100%;
-      background: radial-gradient(circle at 0 0, transparent 11.5px, var(--raised-color) 12px);
-    }
-
-    [aria-current]::after {
-      top: 100%;
-      background: radial-gradient(circle at 0 100%, transparent 11.5px, var(--raised-color) 12px);
-    }
-  }
-
-  .pane {
-    margin: 6px 6px 6px 0;
-    border-radius: calc(var(--studio-column-radius, 10px) - 2px);
-    background: var(--raised-color);
-  }
 }
 
 .studio .back {
@@ -971,32 +928,6 @@
   }
 }
 
-/* TEMPORARY: the trial's switch between the two sidebar styles; see `createSidebarStyle`. */
-.sidebarSwitch {
-  display: flex;
-  align-self: center;
-  margin-right: 4px;
-  padding: 2px;
-  border-radius: calc(var(--tile-radius) + 2px);
-  background: color-mix(in srgb, var(--studio-tile, var(--surface-color)) 22%, transparent);
-
-  .frame & button {
-    min-height: 32px;
-    padding: 0 10px;
-    border-radius: var(--tile-radius);
-    background: transparent;
-    box-shadow: none;
-    color: var(--studio-column-ink, var(--ink-color));
-    font-size: var(--studio-small, 12px);
-  }
-
-  .frame & button[aria-checked='true'] {
-    background: var(--studio-tile, var(--surface-color));
-    color: var(--studio-tile-ink, var(--ink-color));
-    font-weight: 600;
-  }
-}
-
 @container brush-studio (orientation: portrait) and (width >= 700px) {
   .frame.studio {
     grid-template: minmax(0, 44fr) minmax(0, 56fr) / minmax(0, 1fr);
@@ -1032,29 +963,19 @@
     grid-area: 1 / 1;
   }
 
-  /* Each row opens a page of its own here, so it shows a chevron; the chosen one is no longer marked. */
+  /* Each row opens a page of its own here, so it shows a chevron; the chosen one is no longer marked or joined. */
   .studio .studioList {
+    --settings-list-join: none;
     --settings-list-chevron: block;
-    --settings-list-selected: transparent;
-    --settings-list-selected-ink: var(--column-ink);
-    --settings-list-selected-quiet: var(--column-quiet);
+    --settings-list-mark: var(--settings-list-icon);
+    --settings-list-mark-ink: var(--settings-list-icon-ink);
+    --settings-list-pill-end: 0px;
     --settings-list-inset: 8px;
+
+    padding-bottom: 16px;
   }
 
-  .studio[data-sidebar] .studioSide {
-    border-right: 0;
-  }
-
-  .studio[data-sidebar='joined'] .studioList [aria-current] {
-    border-radius: var(--settings-list-radius, 9px);
-
-    &::before,
-    &::after {
-      display: none;
-    }
-  }
-
-  .studio[data-sidebar='joined'] .pane {
+  .studio .pane {
     margin: 0;
   }
 
