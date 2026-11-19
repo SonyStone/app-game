@@ -1097,3 +1097,133 @@ it('starts at 28 px cells, with the plate radius the same share of the cell', ()
   expect(tile.style.width).toBe('60px');
   expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 28) / 44);
 });
+
+it('composes the default board at 28 px with every caption the 44 px board showed, in less room', () => {
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 5, board: boardAt44 }));
+  dispose = render(() => <LegoStudio cellSize={44} />, document.body);
+  flush();
+  const before = boardText();
+  const roomBefore = plateArea();
+  dispose();
+  localStorage.clear();
+  document.body.replaceChildren();
+
+  mount();
+  const after = boardText();
+  for (const [id, text] of before) {
+    expect(after.get(id), id).toContain(text);
+  }
+
+  // At 44 px the names showed; the parts that carry them did not shrink to icons.
+  expect([...before.values()].join(' ')).toContain('Brush settings');
+  expect(plateArea()).toBeLessThan(roomBefore * 0.65);
+});
+
+it('opens a board stored before the 28 px cells as it was stored, with no part missing, broken or overlapping', () => {
+  const stored = JSON.stringify({ version: 5, board: boardAt44 });
+  localStorage.setItem('paint.lego', stored);
+  mount();
+  expect(document.querySelector('[aria-label^="Missing part"], [aria-label^="Broken part"]')).toBeNull();
+  expect(localStorage.getItem('paint.lego')).toBe(stored);
+  for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
+    const rects = [...panel.querySelectorAll<HTMLElement>('[data-part]')].map((part) => {
+      const [left, top, width, height] = ['left', 'top', 'width', 'height'].map((side) =>
+        parseFloat(part.style.getPropertyValue(side))
+      );
+      return { left: left!, top: top!, right: left! + width!, bottom: top! + height! };
+    });
+    for (const [index, a] of rects.entries()) {
+      expect(a.right).toBeLessThanOrEqual(parseFloat(panel.style.width));
+      for (const b of rects.slice(index + 1)) {
+        expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
+      }
+    }
+  }
+
+  // Where the text fits, the captions are back: three cells of 28 px name the eraser and shorten Brush settings.
+  const text = boardText();
+  expect(text.get('eraser')).toBe('Eraser');
+  expect(text.get('brush-editor')).toBe('Settings');
+  expect(text.get('brightness')).toMatch(/^B\d+%$/);
+});
+
+/** Each part's text on the board, by its id. */
+function boardText() {
+  return new Map(
+    [...document.querySelectorAll<HTMLElement>('[data-panel] [data-part]')].map((part) => [
+      part.getAttribute('data-part')!,
+      part.textContent ?? ''
+    ])
+  );
+}
+
+/** The area in square CSS pixels the board's plates take. */
+function plateArea() {
+  return [...document.querySelectorAll<HTMLElement>('[data-panel]')].reduce(
+    (sum, panel) => sum + parseFloat(panel.style.width) * parseFloat(panel.style.height),
+    0
+  );
+}
+
+/** The default board as it was composed for 44 px cells, before 2026-11-19. */
+const boardAt44 = (() => {
+  const part = (id: string, kind: string, column: number, row: number, columns = 1, rows = 1, look?: string) => ({
+    id,
+    kind,
+    cell: { column, row },
+    span: { columns, rows },
+    ...(look ? { looks: { [`${columns}x${rows}`]: look } } : {})
+  });
+  return {
+    panels: [
+      {
+        id: 'tools',
+        at: { x: 0.02, y: 0.12 },
+        parts: [
+          part('soft', 'preset:builtin:soft-round', 0, 0, 3, 2),
+          part('brushes', 'action:brushes', 0, 2, 3),
+          part('eraser', 'action:eraser', 0, 3, 3),
+          part('lasso', 'action:lasso', 0, 4),
+          part('fill', 'action:fill', 1, 4),
+          part('transform', 'action:transform', 2, 4),
+          part('undo', 'action:undo', 0, 5),
+          part('redo', 'action:redo', 1, 5),
+          part('size-knob', 'value:size', 2, 5),
+          part('local-undo', 'action:local-undo', 0, 6, 3),
+          part('brush-editor', 'action:brush-editor', 0, 8, 3),
+          part('file', 'action:file', 0, 7, 3)
+        ]
+      },
+      {
+        id: 'colors',
+        at: { x: 0.3, y: 0.02 },
+        parts: [
+          part('color', 'color:swatch', 0, 0, 2, 2),
+          part('hue', 'value:hue', 2, 0, 5),
+          part('brightness', 'value:brightness', 2, 1, 5)
+        ]
+      },
+      {
+        id: 'stroke',
+        at: { x: 0.95, y: 0.3 },
+        parts: [part('size', 'value:size', 0, 0, 1, 4), part('opacity', 'value:opacity', 1, 0, 1, 4)]
+      },
+      {
+        id: 'layers-panel',
+        at: { x: 0.17, y: 0.5 },
+        floating: true,
+        parts: [
+          part('layers-name', 'layers:name', 0, 0, 5),
+          part('layers-blend', 'layers:blend', 0, 1, 3),
+          part('layers-opacity', 'value:layer-opacity', 3, 1, 2, 1, 'number'),
+          ...['lock', 'clip', 'up', 'down', 'merge-down'].map((kind, column) =>
+            part(`layers-${kind}`, `layer:${kind}`, column, 2)
+          ),
+          part('layers-list', 'layers:list', 0, 3, 5, 5, 'wide'),
+          ...['add', 'duplicate', 'delete'].map((kind, column) => part(`layers-${kind}`, `layer:${kind}`, column, 8)),
+          part('layers-smooth', 'layers:smooth-color', 3, 8, 2)
+        ]
+      }
+    ]
+  };
+})();

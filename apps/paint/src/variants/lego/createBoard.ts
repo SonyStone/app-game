@@ -73,7 +73,7 @@ function swatchPanel(owner: string): Board['panels'][number] {
 /**
  * The board a first visit sees, composed for the default 28 px cell: on the left everything a sketch, a fill and
  * layers take, the brush group on top (the brush, the brush library and Brush settings, undo and redo and the size
- * beside them), the tools under it (the eraser, the lasso, the local undo, the fill and the transform) and the file
+ * beside them), the tools under it (the eraser, the lasso, the local undo, the fill and the transform) beside the file
  * commands; the color across the top (a swatch opening its panel of pickers, hue and brightness) and the size and
  * opacity standing on the right, in a mix of sizes that shows how a part changes as it grows. A part with a name is
  * as long as its name needs; a button without one keeps a single cell.
@@ -92,9 +92,9 @@ export const defaultBoard: Board = {
         { id: 'brush-editor', kind: 'action:brush-editor', cell: { column: 0, row: 3 }, span: { columns: 4, rows: 1 } },
         { id: 'eraser', kind: 'action:eraser', cell: { column: 0, row: 4 }, span: { columns: 3, rows: 1 } },
         { id: 'lasso', kind: 'action:lasso', cell: { column: 3, row: 4 }, span: { columns: 1, rows: 1 } },
-        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 5 }, span: { columns: 3, rows: 1 } },
-        { id: 'fill', kind: 'action:fill', cell: { column: 3, row: 5 }, span: { columns: 1, rows: 1 } },
-        { id: 'file', kind: 'action:file', cell: { column: 0, row: 6 }, span: { columns: 3, rows: 1 } },
+        { id: 'local-undo', kind: 'action:local-undo', cell: { column: 0, row: 5 }, span: { columns: 4, rows: 1 } },
+        { id: 'file', kind: 'action:file', cell: { column: 0, row: 6 }, span: { columns: 2, rows: 1 } },
+        { id: 'fill', kind: 'action:fill', cell: { column: 2, row: 6 }, span: { columns: 1, rows: 1 } },
         { id: 'transform', kind: 'action:transform', cell: { column: 3, row: 6 }, span: { columns: 1, rows: 1 } }
       ]
     },

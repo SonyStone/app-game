@@ -7,8 +7,8 @@ import { useGrid } from './grid';
 import { LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { partDefinition } from './parts';
-import { fits, type TextStyle } from './textFit';
 import type { PartBinding, PartMode, Popup } from './parts/definition';
+import { fits, type TextStyle } from './textFit';
 
 /**
  * Common host for board parts, ghosts, box/kit previews, chooser looks and popups. Owns failure isolation and mode,

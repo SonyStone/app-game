@@ -269,7 +269,8 @@ export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
 function GuideField(props: { span: Span; caption: string; children: JSX.Element }) {
   const grid = useGrid();
   const captioned = () =>
-    grid.length(props.span.rows) - 2 * guideInset >= guideCaptionStyle.size * guideCaptionLine + guideGap + grid.cell() - 8 &&
+    grid.length(props.span.rows) - 2 * guideInset >=
+      guideCaptionStyle.size * guideCaptionLine + guideGap + grid.cell() - 8 &&
     fits(props.caption, guideCaptionStyle, grid.length(props.span.columns) - 2 * guideInset);
 
   return (

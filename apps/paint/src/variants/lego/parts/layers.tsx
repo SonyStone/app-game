@@ -1,5 +1,5 @@
 import { createMemo, merge, onSettled, Show } from 'solid-js';
-import { BlendModePicker, blendModeLabel } from '../../../features/layers/BlendModePicker';
+import { blendModeLabel, BlendModePicker } from '../../../features/layers/BlendModePicker';
 import { layerCommand, LayerList, LayerName, type LayerCommand } from '../../../features/layers/LayerControls';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import styles from '../LayerParts.module.css';

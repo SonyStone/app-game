@@ -782,7 +782,8 @@ export function namedSliderSpan(
   const active = channel.active?.(services) ?? true;
   const ends = [channel.minimum?.(services) ?? channel.min, channel.max(services)];
   const { chip } = valueTexts(channel, active ? [channel.read(services), ...ends] : undefined);
-  const length = 2 * labelPadding + captionInset + labelGap + chipLength(chip) + textWidth(channel.label, sliderCaptionStyle) + 1;
+  const length =
+    2 * labelPadding + captionInset + labelGap + chipLength(chip) + textWidth(channel.label, sliderCaptionStyle) + 1;
   return { columns: minimumSpan({ width: length, height: 0 }).columns, rows: 1 };
 }
 
