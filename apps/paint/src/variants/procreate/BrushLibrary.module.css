@@ -64,7 +64,7 @@
   --settings-list-quiet: var(--brush-library-quiet, var(--pc-secondary));
   --settings-list-join: none;
   --settings-list-selected-pill: var(--brush-library-chosen, var(--pc-blue));
-  --settings-list-selected-ink: #ffffff;
+  --settings-list-selected-ink: var(--brush-library-ink, var(--pc-label));
   --settings-list-selected-quiet: rgb(255 255 255 / 0.8);
   --settings-list-icon-size: 0px;
   --settings-list-icon-gap: 0px;
@@ -130,7 +130,6 @@
 
   &[aria-selected='true'] {
     background: var(--brush-library-chosen, var(--pc-blue));
-    color: #ffffff;
   }
 
   &:disabled {
