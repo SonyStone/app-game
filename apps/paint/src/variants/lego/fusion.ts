@@ -47,7 +47,7 @@ export function partJoins(parts: readonly Part[], groupOf: (kind: string) => str
   }
 
   // A side stays fused only while every neighbour across it fuses back; dropping one side can drop others.
-  for (let changed = true; changed;) {
+  for (let changed = true; changed; ) {
     changed = false;
 
     for (const part of parts) {
