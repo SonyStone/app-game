@@ -150,7 +150,7 @@ it.each([undefined, true] as const)(
         kind: `preset:${preset.id}`,
         span: { columns: 2, rows: 2 }
       }))
-    ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 5, row: Math.floor(index / 12) * 5 } }));
+    ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 7, row: Math.floor(index / 12) * 7 } }));
     board.set({ panels: [{ id: 'catalogue', at: { x: 0, y: 0 }, floating, parts }] });
     const [editing, setEditing] = createSignal(false);
     disposers.push(

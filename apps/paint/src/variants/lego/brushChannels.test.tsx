@@ -127,8 +127,8 @@ it('keeps unavailable parts named and inert, and revives them when the brush sup
   const unmount = render(
     () => (
       <LegoServicesContext value={services}>
-        <PartFrame kind="value:brush:hardness" span={{ columns: 4, rows: 1 }} />
-        <PartFrame kind="value:brush:abr-tip-angle" span={{ columns: 4, rows: 1 }} />
+        <PartFrame kind="value:brush:hardness" span={{ columns: 6, rows: 1 }} />
+        <PartFrame kind="value:brush:abr-tip-angle" span={{ columns: 6, rows: 1 }} />
       </LegoServicesContext>
     ),
     host

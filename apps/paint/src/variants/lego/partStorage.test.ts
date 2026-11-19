@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { cellGap, referenceCell } from './grid';
+import { layersKit } from './layersKit';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { maxSpan, partData, pinPanels, placePart, pruneOwned, putPanel, removePart, type Part } from './board';
@@ -384,7 +385,9 @@ it.each([undefined, 1, 2])('expands an old inline Layers look in place on boards
   expect(board.latest().panels).toHaveLength(1);
   expect(panel.floating).toBeUndefined();
   expect(panel.parts.find((part) => part.kind === 'layers:name')?.cell).toEqual({ column: 2, row: 3 });
-  expect(panel.parts.find((part) => part.kind === 'layers:list')?.span).toEqual({ columns: 5, rows: 5 });
+  expect(panel.parts.find((part) => part.kind === 'layers:list')?.span).toEqual(
+    layersKit.parts.find((part) => part.kind === 'layers:list')!.span
+  );
   expect(panel.parts.some((part) => part.kind === 'action:layers')).toBe(false);
   expect(panel.parts.find((part) => part.id === neighbor.id)?.cell).not.toEqual(neighbor.cell);
   expect(

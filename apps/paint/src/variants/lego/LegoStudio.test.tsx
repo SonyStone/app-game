@@ -341,7 +341,8 @@ it('session color commands keep picker and mixing-palette policies distinct', ()
 it('disables symmetry until the restored document accepts commands, including after a renderer failure', async () => {
   storeParts(['action:symmetry', 'action:symmetry']);
   const saved = JSON.parse(localStorage.getItem('paint.lego')!);
-  saved.board.panels[0].parts[1].span = { columns: 2, rows: 2 };
+  // Three cells wide and two high: room for the list of modes under the toggle at the default cell.
+  saved.board.panels[0].parts[1].span = { columns: 3, rows: 2 };
   localStorage.setItem('paint.lego', JSON.stringify(saved));
   mount();
   const session = wiring.session!;
@@ -438,7 +439,8 @@ it("shows the brush's stroke preview above the studio's categories", () => {
 it('a studio row and the board part of one setting are the same control and show one value', () => {
   storeParts(['action:brush-editor', 'value:brush:flow']);
   const saved = JSON.parse(localStorage.getItem('paint.lego')!);
-  saved.board.panels[0].parts[1].span = { columns: 4, rows: 1 };
+  // As long as the studio's row, so both show the name beside the value.
+  saved.board.panels[0].parts[1].span = { columns: 6, rows: 1 };
   localStorage.setItem('paint.lego', JSON.stringify(saved));
   mount();
   const dialog = openStudio();
@@ -485,8 +487,10 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   expect(dialog.hasAttribute('data-away')).toBe(false);
   const landed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]')!;
   expect(landed).not.toBeNull();
-  expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
-  expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('44px');
+  // Just long enough for its name beside its value chip, one cell high: five cells for "Flow" and "100%".
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
+  expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('28px');
+  expect(landed.querySelector('[role="slider"]')!.textContent).toMatch(/^Flow\d+%$/);
   expect(button('Edit')).toBeDefined();
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
@@ -575,7 +579,7 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
                 id: 'curve',
                 kind: 'value:brush:pressure-curve',
                 cell: { column: 0, row: 1 },
-                span: { columns: 4, rows: 4 }
+                span: { columns: 6, rows: 6 }
               }
             ]
           }
@@ -713,7 +717,7 @@ it("shows the pen's raw pressure on the pad as a dot on every copy of the curve,
                 id: 'curve',
                 kind: 'value:pen-pressure-curve',
                 cell: { column: 0, row: 1 },
-                span: { columns: 4, rows: 4 }
+                span: { columns: 6, rows: 6 }
               }
             ]
           }
@@ -811,7 +815,7 @@ it('opens the studio on the Pen page from the Pressure calibration part, never t
 it("measures from the board's curve in the studio, on its pad, and Cancel brings back the curve it opened with", () => {
   storeParts(['action:brush-editor', 'value:pen-pressure-curve']);
   const stored = JSON.parse(localStorage.getItem('paint.lego')!);
-  stored.board.panels[0].parts[1].span = { columns: 4, rows: 4 };
+  stored.board.panels[0].parts[1].span = { columns: 6, rows: 6 };
   stored.board.panels[0].parts[1].cell = { column: 0, row: 1 };
   localStorage.setItem('paint.lego', JSON.stringify(stored));
   mount();
@@ -940,7 +944,7 @@ it("Enter on a studio row's grip puts the part on the board without dragging", (
   flush();
   const placed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]');
   expect(placed).not.toBeNull();
-  expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('188px');
+  expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
   expect(placed!.closest('[data-panel]')!.getAttribute('data-panel')).not.toBe('test-panel');
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
@@ -1059,19 +1063,37 @@ function openBox() {
 
 it('relays a host cell change to mounted parts, captions and corners while keeping the stored board', () => {
   storeParts(['action:brush-editor']);
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!);
+  saved.board.panels[0].parts[0].span = { columns: 3, rows: 1 };
+  localStorage.setItem('paint.lego', JSON.stringify(saved));
   const [cell, setCell] = createSignal(44);
   dispose = render(() => <LegoStudio cellSize={cell()} />, document.body);
   flush();
   const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
   const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
   const board = localStorage.getItem('paint.lego');
-  expect(tile.style.width).toBe('92px');
-  expect(tile.textContent).toContain('Brush settings');
+  expect(tile.style.width).toBe('140px');
+  expect(tile.textContent).toBe('Brush settings');
+  // Narrower, the name gives way to the short one where only that fits, then to the icon alone.
   setCell(32);
   flush();
   expect(document.querySelector('[data-part="test-0"]')).toBe(tile);
+  expect(tile.style.width).toBe('104px');
+  expect(tile.textContent).toBe('Settings');
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 32) / 44);
+  setCell(20);
+  flush();
   expect(tile.style.width).toBe('68px');
-  expect(tile.textContent).not.toContain('Brush settings');
-  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo(18 * 32 / 44);
+  expect(tile.textContent).toBe('');
   expect(localStorage.getItem('paint.lego')).toBe(board);
+});
+
+it('starts at 28 px cells, with the plate radius the same share of the cell', () => {
+  storeParts(['action:undo']);
+  mount();
+  const tile = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
+  const editor = tile.closest<HTMLElement>('[style*="--lego-cell"]')!;
+  expect(editor.style.getPropertyValue('--lego-cell')).toBe('28px');
+  expect(tile.style.width).toBe('60px');
+  expect(parseFloat(editor.style.getPropertyValue('--lego-radius'))).toBeCloseTo((18 * 28) / 44);
 });

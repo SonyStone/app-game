@@ -177,7 +177,8 @@ const part = (id: string, kind: string, column: number, row: number, columns: nu
 /**
  * The ready kits, each one of the library's color panels taken apart: Procreate's Colors (the pair, the Classic
  * square and sliders, history and palette), the OKLCH wheel (disk, lightness, harmony, gamut mask), the Desktop
- * color panel (pair and hex, the triangle, H/S/V numbers, history), and the panel a new swatch opens.
+ * color panel (pair and hex, the triangle, H/S/V numbers, history), and the panel a new swatch opens. They are
+ * composed for the default 28 px cell, each named part as long as its name needs.
  */
 const readyKits: Kit[] = [
   layersKit,
@@ -186,15 +187,15 @@ const readyKits: Kit[] = [
     id: 'ready:procreate-colors',
     name: 'Procreate Colors',
     parts: [
-      part('pair', 'color:pair', 0, 0, 2, 1),
-      part('hex', 'color:hex', 2, 0, 3, 1),
-      part('square', 'color:wheel', 0, 1, 5, 4, 'square'),
-      part('hue', 'value:hue', 0, 5, 5, 1),
-      part('saturation', 'value:saturation', 0, 6, 5, 1),
-      part('brightness', 'value:brightness', 0, 7, 5, 1),
-      part('history', 'color:history', 0, 8, 5, 1),
-      part('palette', 'color:palette', 0, 9, 5, 2),
-      part('mixing', 'action:mixing', 0, 11, 5, 1)
+      part('pair', 'color:pair', 0, 0, 3, 1),
+      part('hex', 'color:hex', 3, 0, 3, 1),
+      part('square', 'color:wheel', 0, 1, 6, 5, 'square'),
+      part('hue', 'value:hue', 0, 6, 6, 1),
+      part('saturation', 'value:saturation', 0, 7, 6, 1),
+      part('brightness', 'value:brightness', 0, 8, 6, 1),
+      part('history', 'color:history', 0, 9, 6, 2),
+      part('palette', 'color:palette', 0, 11, 6, 3),
+      part('mixing', 'action:mixing', 0, 14, 6, 1)
     ],
     owned: []
   },
@@ -202,10 +203,10 @@ const readyKits: Kit[] = [
     id: 'ready:oklch-wheel',
     name: 'OKLCH wheel',
     parts: [
-      part('disk', 'color:wheel', 0, 0, 5, 5, 'wheel'),
-      part('lightness', 'value:lightness', 0, 5, 5, 1),
-      part('harmony', 'color:harmony', 0, 6, 5, 1),
-      part('mask', 'color:mask', 0, 7, 5, 1)
+      part('disk', 'color:wheel', 0, 0, 6, 6, 'wheel'),
+      part('lightness', 'value:lightness', 0, 6, 6, 1),
+      part('harmony', 'color:harmony', 0, 7, 6, 1),
+      part('mask', 'color:mask', 0, 8, 6, 1)
     ],
     owned: []
   },
@@ -213,13 +214,13 @@ const readyKits: Kit[] = [
     id: 'ready:desktop-color',
     name: 'Desktop color',
     parts: [
-      part('pair', 'color:pair', 0, 0, 4, 1),
-      part('hex', 'color:hex', 4, 0, 2, 1),
-      part('triangle', 'color:wheel', 0, 1, 6, 6, 'triangle'),
-      part('hue', 'value:hue', 0, 7, 2, 1, 'number'),
-      part('saturation', 'value:saturation', 2, 7, 2, 1, 'number'),
-      part('brightness', 'value:brightness', 4, 7, 2, 1, 'number'),
-      part('history', 'color:history', 0, 8, 6, 1)
+      part('pair', 'color:pair', 0, 0, 5, 1),
+      part('hex', 'color:hex', 5, 0, 4, 1),
+      part('triangle', 'color:wheel', 0, 1, 9, 7, 'triangle'),
+      part('hue', 'value:hue', 0, 8, 3, 1, 'number'),
+      part('saturation', 'value:saturation', 3, 8, 3, 1, 'number'),
+      part('brightness', 'value:brightness', 6, 8, 3, 1, 'number'),
+      part('history', 'color:history', 0, 9, 9, 1)
     ],
     owned: []
   }

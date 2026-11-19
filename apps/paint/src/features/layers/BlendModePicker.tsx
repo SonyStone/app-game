@@ -151,6 +151,11 @@ function Preview(props: { mode: BlendMode; linear: boolean }) {
 }
 
 /** Modes in menu order, with a short label for the button, a one-line summary and a tooltip sentence. */
+/** The name the picker's button shows for `mode`. */
+export function blendModeLabel(mode: BlendMode) {
+  return (modes.find((candidate) => candidate.id === mode) ?? modes[0]!).label;
+}
+
 const modes = [
   {
     id: 'normal',

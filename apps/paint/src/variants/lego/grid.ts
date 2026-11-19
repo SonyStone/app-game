@@ -1,30 +1,35 @@
 import { createContext, useContext } from 'solid-js';
 import type { Span } from './board';
 
-/** Reference cell for the default layout, trial radii and historical board migrations. */
+/** The cell edge in CSS pixels a device starts with: the size the user chose with a pen on the tablet (2026-11-19). */
+export const defaultCell = 28;
+/**
+ * The cell the first layouts were made at. Plate radii keep their share of it at every size (18 px at 44), boards
+ * stored before cells were counted keep their positions in its pitch, and a press area stays this large.
+ */
 export const referenceCell = 44;
 /** Fixed space between adjacent cells. */
 export const cellGap = 4;
 /** Plate inset around the outermost cells. */
 export const panelPadding = 6;
 
+/** A part's size in CSS pixels, by which its looks and captions are decided. */
+export type Room = { width: number; height: number };
+
 /** Pixel geometry for one editor. Each read follows the host's current cell size. */
 export function createGrid(requestedCell: () => number | undefined) {
   const cell = () => {
     const size = requestedCell();
-    return size !== undefined && Number.isFinite(size) && size > 0 ? size : referenceCell;
+    return size !== undefined && Number.isFinite(size) && size > 0 ? size : defaultCell;
   };
   const pitch = () => cell() + cellGap;
   const length = (cells: number) => cells * pitch() - cellGap;
-  /** Size class for look selection. One-cell controls also fit the smallest trial size. */
-  const room = (span: Span): Span => {
-    const tracks = (cells: number) => Math.max(1, Math.floor((cells * pitch()) / (referenceCell + cellGap)));
-    return { columns: tracks(span.columns), rows: tracks(span.rows) };
-  };
-  /** Smallest current span that can show a look designed for `min` reference tracks. */
-  const minimumSpan = (min: Span): Span => {
-    const cells = (tracks: number) => (tracks <= 1 ? 1 : Math.ceil((tracks * (referenceCell + cellGap)) / pitch()));
-    return { columns: cells(min.columns), rows: cells(min.rows) };
+  /** The pixels a part of `span` has, which its looks are decided by. */
+  const room = (span: Span): Room => ({ width: length(span.columns), height: length(span.rows) });
+  /** The smallest span with at least `min` pixels each way, and at least one cell. */
+  const minimumSpan = (min: Room): Span => {
+    const cells = (pixels: number) => Math.max(1, Math.ceil((pixels + cellGap) / pitch()));
+    return { columns: cells(min.width), rows: cells(min.height) };
   };
   return { cell, pitch, length, room, minimumSpan };
 }

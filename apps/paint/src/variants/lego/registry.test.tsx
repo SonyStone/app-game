@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest
 import { builtInPresets } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { createSheet } from './createSheet';
+import { createGrid } from './grid';
 import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';
 import { LookChooser } from './LookChooser';
@@ -70,7 +71,7 @@ it.each(['live', 'edit', 'preview'] satisfies PartMode[])(
             <PartFrame
               kind={definition.family === 'preset' ? `preset:${builtInPresets[0]!.id}` : definition.kind}
               look={look?.id}
-              span={look?.min ?? { columns: 2, rows: 2 }}
+              span={look ? createGrid(() => undefined).minimumSpan(look.min) : { columns: 2, rows: 2 }}
               mode={mode}
             />
           </LegoServicesContext>
@@ -230,7 +231,7 @@ it('binds symmetry modes, QuickShape and pressure through their narrow commands'
   services.symmetry.setMode = vi.fn(setMode);
   mount(() => (
     <LegoServicesContext value={services}>
-      <PartFrame kind="action:symmetry" span={{ columns: 2, rows: 2 }} />
+      <PartFrame kind="action:symmetry" span={{ columns: 3, rows: 2 }} />
       <PartFrame kind="action:quickshape" />
       <PartFrame kind="action:pressure" />
     </LegoServicesContext>
@@ -375,6 +376,7 @@ it('adds a channel using one spec, including fraction edits, number edits and ex
   const definition = defineValuePart(channel);
   const frame: PartBinding = {
     width: 140,
+    height: 44,
     open: false,
     kind: 'value:flow',
     span: { columns: 3, rows: 1 },

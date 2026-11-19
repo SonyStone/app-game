@@ -253,12 +253,12 @@ it('renders and runs a healthy action after dropping malformed optional looks', 
   expect(document.querySelector('[aria-label^="Missing part:"]')).toBeNull();
 });
 
-it('shows readable broken-part text from two cells wide', () => {
+it('shows readable broken-part text where its three lines fit', () => {
   const Broken = () => {
     throw new Error('broken');
   };
   renderOwned(() => (
-    <PartFrame kind="test" span={{ columns: 2, rows: 1 }}>
+    <PartFrame kind="test" span={{ columns: 3, rows: 2 }}>
       <Broken />
     </PartFrame>
   ));

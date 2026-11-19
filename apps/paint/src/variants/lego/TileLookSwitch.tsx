@@ -1,12 +1,12 @@
 import { createSignal, For, Show } from 'solid-js';
-import { referenceCell } from './grid';
+import { defaultCell, referenceCell } from './grid';
 import styles from './LegoStudio.module.css';
 import { plateRadii, radiusRange, type TileLook } from './tileLook';
 
 /**
  * TEMPORARY developer control for the tile look trial (see `tileLook.ts`): a round button beside Edit, showing the
- * plate radius, that opens a small card to set that radius, directly or by its sharp, today and soft shortcuts, and to
- * switch squircle corners. Changes apply at once and are kept on the device. Remove it with the trial.
+ * plate radius, that opens a small card to set that radius, directly or by its sharp, today and soft shortcuts, the
+ * cell size, directly or by its shortcuts around the 28 px default, and to switch squircle corners. Changes apply at once and are kept on the device. Remove it with the trial.
  */
 export function TileLookSwitch(props: {
   cellSize: number;
@@ -69,7 +69,7 @@ export function TileLookSwitch(props: {
             <input
               type="range"
               aria-label="Cell size"
-              min={28}
+              min={defaultCell}
               max={referenceCell}
               step={2}
               value={props.cellSize}
@@ -77,7 +77,7 @@ export function TileLookSwitch(props: {
             />
           </label>
           <div class={styles.tileLookChoices}>
-            <For each={[referenceCell, 40, 36, 32]}>
+            <For each={cellShortcuts}>
               {(size) => (
                 <button
                   type="button"
@@ -102,3 +102,6 @@ export function TileLookSwitch(props: {
     </div>
   );
 }
+
+/** The cell sizes the switch offers at a tap: the default, the two the user found good for a pen, and the first one. */
+const cellShortcuts = [defaultCell, 32, 36, referenceCell];

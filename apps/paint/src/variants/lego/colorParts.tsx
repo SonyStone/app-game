@@ -13,7 +13,8 @@ import { type Span } from './board';
 import { useGrid } from './grid';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
-import type { LookSpec } from './looks';
+import { anyRoom, type LookSpec } from './looks';
+import { fits, legoMonoFamily, type TextStyle } from './textFit';
 
 /** Controlled color editing callbacks: input is live, commit records only a settled color. */
 export type ColorInputProps = {
@@ -37,15 +38,15 @@ export type PickerProps = ColorInputProps & {
 
 /**
  * The picker's looks: Zen's disc, the saturation and brightness square and the OKLCH disk at any size, the hue
- * triangle and Coolorus once there is room for their controls. The OKLCH disk's lightness, harmony and gamut mask
- * are parts of their own (`value:lightness`, `color:harmony`, `color:mask`).
+ * triangle and Coolorus once there is room for their controls, 140 and 188 CSS pixels square. The OKLCH disk's
+ * lightness, harmony and gamut mask are parts of their own (`value:lightness`, `color:harmony`, `color:mask`).
  */
 export const wheelLooks: readonly WheelLook[] = [
-  { id: 'disc', label: 'Disc', min: { columns: 1, rows: 1 }, width: 232, Picker: Disc },
-  { id: 'square', label: 'Square', min: { columns: 1, rows: 1 }, Picker: Square },
-  { id: 'triangle', label: 'Triangle', min: { columns: 3, rows: 3 }, width: 236, Picker: Triangle },
-  { id: 'wheel', label: 'OKLCH disk', min: { columns: 1, rows: 1 }, width: 248, Picker: OklchDisk },
-  { id: 'coolorus', label: 'Coolorus', min: { columns: 4, rows: 4 }, width: 240, Picker: Coolorus }
+  { id: 'disc', label: 'Disc', min: anyRoom, width: 232, Picker: Disc },
+  { id: 'square', label: 'Square', min: anyRoom, Picker: Square },
+  { id: 'triangle', label: 'Triangle', min: { width: 140, height: 140 }, width: 236, Picker: Triangle },
+  { id: 'wheel', label: 'OKLCH disk', min: anyRoom, width: 248, Picker: OklchDisk },
+  { id: 'coolorus', label: 'Coolorus', min: { width: 188, height: 188 }, width: 240, Picker: Coolorus }
 ];
 
 /**
@@ -80,7 +81,7 @@ export function WheelPart(props: PickerProps & { look: string; span: Span }) {
 }
 
 /**
- * The brush color as a swatch, with its hex once two cells wide. A tap opens the swatch's own panel (`onOpen`), which
+ * The brush color as a swatch, with its hex where the hex fits. A tap opens the swatch's own panel (`onOpen`), which
  * the user fills with parts like any other.
  */
 export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: Element) => void }) {
@@ -95,24 +96,33 @@ export function SwatchPart(props: { span: Span; color: string; onOpen: (anchor: 
       aria-label={`Color ${color()}`}
       onClick={(event) => props.onOpen(event.currentTarget)}
     >
-      <Show when={grid.length(props.span.columns) >= 92}>
+      <Show when={fits(color(), hexStyle, grid.length(props.span.columns) - 2 * swatchInset)}>
         <span class={styles.name}>{color()}</span>
       </Show>
     </button>
   );
 }
 
+/** How `.color` sets the swatch's hex, `swatchInset` from its sides. */
+const hexStyle: TextStyle = { size: 13, weight: 600, family: legoMonoFamily };
+const swatchInset = 8;
+
 /**
- * The foreground color before the background one, as Photoshop and Procreate show them: overlapping at one cell,
- * side by side when wider, named once four cells wide. Tapping the background color swaps the two.
+ * The foreground color before the background one, as Photoshop and Procreate show them: overlapping in a square
+ * part, side by side once `pairSideBySide` pixels wide, each named where both names fit their halves. Tapping the
+ * background color swaps the two.
  */
 export function PairPart(props: { span: Span; colors: { foreground: string; background: string }; swap: () => void }) {
   const grid = useGrid();
   const background = () => props.colors.background;
-  const named = () => grid.length(props.span.columns) >= 188;
+  const width = () => grid.length(props.span.columns);
+  const named = () =>
+    width() >= pairSideBySide &&
+    fits('Foreground', pairNameStyle, width() / 2 - pairHalfInset) &&
+    fits('Background', pairNameStyle, width() / 2 - pairHalfInset);
 
   return (
-    <div class={[styles.pair, grid.length(props.span.columns) >= 92 && styles.pairWide]}>
+    <div class={[styles.pair, width() >= pairSideBySide && styles.pairWide]}>
       <span
         class={styles.pairForeground}
         style={{ background: props.colors.foreground }}
@@ -138,6 +148,12 @@ export function PairPart(props: { span: Span; colors: { foreground: string; back
     </div>
   );
 }
+
+/** The width from which the pair stands side by side: two cells at every cell size the trial offers. */
+const pairSideBySide = 56;
+/** How `.pair` sets a name, and the pixels a half loses to its insets and a little air around its name. */
+const pairNameStyle: TextStyle = { size: 11, weight: 600 };
+const pairHalfInset = 6 + 4;
 
 /** The brush color as `#rrggbb` to read or type; Enter or leaving the field applies it, a wrong entry is undone. */
 export function HexPart(props: ColorInputProps) {
@@ -166,15 +182,18 @@ export function HexPart(props: ColorInputProps) {
 }
 
 /**
- * The recently used colors, newest first, as round chips filling the part two to a cell each way, the places no color
- * has taken yet outlined; a tap paints in one.
+ * The recently used colors, newest first, as round chips filling the part as many as fit at about `chipPitch` pixels
+ * each way, the places no color has taken yet outlined; a tap paints in one.
  */
 export function HistoryPart(props: ColorInputProps & { span: Span; colors: readonly string[] }) {
-  const count = () => props.span.columns * props.span.rows * 4;
+  const grid = useGrid();
+  const across = () => chipsAlong(grid.length(props.span.columns));
+  const down = () => chipsAlong(grid.length(props.span.rows));
+  const count = () => across() * down();
   const colors = () => props.colors.slice(0, count());
 
   return (
-    <Chips span={props.span} label="Color history" round>
+    <Chips columns={across()} rows={down()} label="Color history" round>
       <For each={colors()}>
         {(color) => (
           <Chip
@@ -195,14 +214,16 @@ export function HistoryPart(props: ColorInputProps & { span: Span; colors: reado
 }
 
 /**
- * Procreate's default palette, two chips to a cell across, as many as fit at two rows to a cell; when they run out
- * first, the rows grow to fill the part.
+ * Procreate's default palette, as many chips as fit at about `chipPitch` pixels each way; when they run out first,
+ * the rows grow to fill the part.
  */
 export function PalettePart(props: ColorInputProps & { span: Span }) {
-  const colors = () => defaultPalette.slice(0, props.span.columns * props.span.rows * 4);
+  const grid = useGrid();
+  const across = () => chipsAlong(grid.length(props.span.columns));
+  const colors = () => defaultPalette.slice(0, across() * chipsAlong(grid.length(props.span.rows)));
 
   return (
-    <Chips span={props.span} label="Palette" rows={Math.ceil(colors().length / (props.span.columns * 2))}>
+    <Chips columns={across()} rows={Math.ceil(colors().length / across())} label="Palette">
       <For each={colors()}>
         {(color) => (
           <Chip
@@ -219,35 +240,50 @@ export function PalettePart(props: ColorInputProps & { span: Span }) {
   );
 }
 
-/** The OKLCH disk's harmony list, filling the part; its caption shows once the part is two cells tall. */
+/** The OKLCH disk's harmony list, filling the part; its caption shows where it fits above the list. */
 export function HarmonyPart(props: {
   span: Span;
   settings: ReturnType<LegoServices['color']['oklch']['settings']>;
   onSettings: LegoServices['color']['oklch']['update'];
 }) {
-  const grid = useGrid();
   return (
-    <div
-      class={[wheelStyles.guides, styles.wheelField]}
-      data-captioned={grid.length(props.span.rows) >= 92 ? '' : undefined}
-    >
+    <GuideField span={props.span} caption="Harmony">
       <HarmonyField settings={props.settings} onSettings={props.onSettings} />
+    </GuideField>
+  );
+}
+
+/** The OKLCH disk's gamut mask list, filling the part; its caption shows where it fits above the list. */
+export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
+  return (
+    <GuideField span={props.span} caption="Gamut mask">
+      <MaskField settings={props.settings} onSettings={props.onSettings} />
+    </GuideField>
+  );
+}
+
+/**
+ * A guide's list as a part (see `.wheelField`): a list one cell less its insets high, under its `caption` where the
+ * part has the height for a line of it and the width for its text.
+ */
+function GuideField(props: { span: Span; caption: string; children: JSX.Element }) {
+  const grid = useGrid();
+  const captioned = () =>
+    grid.length(props.span.rows) - 2 * guideInset >= guideCaptionStyle.size * guideCaptionLine + guideGap + grid.cell() - 8 &&
+    fits(props.caption, guideCaptionStyle, grid.length(props.span.columns) - 2 * guideInset);
+
+  return (
+    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={captioned() ? '' : undefined}>
+      {props.children}
     </div>
   );
 }
 
-/** The OKLCH disk's gamut mask list, filling the part; its caption shows once the part is two cells tall. */
-export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
-  const grid = useGrid();
-  return (
-    <div
-      class={[wheelStyles.guides, styles.wheelField]}
-      data-captioned={grid.length(props.span.rows) >= 92 ? '' : undefined}
-    >
-      <MaskField settings={props.settings} onSettings={props.onSettings} />
-    </div>
-  );
-}
+/** How `.wheelField` sets a guide's caption over its list. */
+const guideCaptionStyle: TextStyle = { size: 11 };
+const guideCaptionLine = 1.3;
+const guideGap = 4;
+const guideInset = 4;
 
 /**
  * `children` laid out `width` pixels wide and scaled, keeping proportions, to fit `box`; never more than half again
@@ -365,16 +401,27 @@ function Coolorus(props: PickerProps) {
   );
 }
 
-/** Chips two to a cell each way, or in `rows` rows, filling the part. */
-function Chips(props: { span: Span; label: string; round?: boolean; rows?: number; children: JSX.Element }) {
+/**
+ * How many color chips lie along `length` CSS pixels of a part: one per `chipPitch` past the chips' 3 px inset, at
+ * least one. Two to a cell at the reference cell size, and never so many that a chip turns too small for a pen.
+ */
+export function chipsAlong(length: number) {
+  return Math.max(1, Math.floor((length - 3) / chipPitch));
+}
+
+/** The least distance in CSS pixels from one color chip to the next. */
+const chipPitch = 20;
+
+/** Chips in `columns` and `rows`, filling the part. */
+function Chips(props: { columns: number; rows: number; label: string; round?: boolean; children: JSX.Element }) {
   return (
     <div
       class={[styles.chips, props.round && styles.round]}
       role="group"
       aria-label={props.label}
       style={{
-        'grid-template-columns': `repeat(${props.span.columns * 2}, minmax(0, 1fr))`,
-        'grid-template-rows': `repeat(${props.rows ?? props.span.rows * 2}, minmax(0, 1fr))`
+        'grid-template-columns': `repeat(${props.columns}, minmax(0, 1fr))`,
+        'grid-template-rows': `repeat(${props.rows}, minmax(0, 1fr))`
       }}
     >
       {props.children}
