@@ -2,43 +2,37 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createSignal, createUniqueId, For, Show } from 'solid-js';
-import { createJoinedSelection } from './createJoinedSelection';
 import styles from './SettingsList.module.css';
 import { SketchIcon, type SketchIconName } from './SketchIcon';
 
 /**
  * The sidebar of a list–detail panel, as the Settings apps of iPadOS, macOS, Windows and GNOME draw theirs: one
  * compact line per item (`SettingsRow`) with its icon on a small tile, its name and a quiet trailing status that
- * truncates first, under the headings of their groups. The selected item is joined to the detail beside the list: a
- * shape in the detail's color covers its row out to the list's end edge and curves into the detail above and below
- * it, and it travels to the next item chosen (`createJoinedSelection`); the selected item's icon tile takes the mark
- * color. A press selects an item through `onSelect`; the caller owns the selection and shows the item's detail, which
- * it places against the list's end edge. Knows nothing about what the items are. A list or menu without a detail
- * lays the same rows out in `SettingsRows`.
+ * truncates first, under the headings of their groups. The selected item lies on a rounded pill in the accent, its
+ * label and trailing text in white, and the pill slides to the next item chosen in 200 ms on
+ * `cubic-bezier(0.3, 0, 0, 1)` (at once with reduced motion or on the first placement). A press selects an item
+ * through `onSelect`; the caller owns the selection and shows the item's detail beside the list, usually in a
+ * `SettingsSplit`, which also turns list and detail into two screens where the panel is narrow. Knows nothing about
+ * what the items are. A list or menu without a detail lays the same rows out in `SettingsRows`.
  *
  * Each item is a button named by its label and described by its trailing text, and the selected one is marked as the
  * current page. A row shows it is pressed as soon as a pointer goes down on it. The arrow keys, Home and End move the
  * focus between the rows; Enter or Space selects the focused one. Items keep the order given; a group's heading shows
  * before the first item of the group, so the items of a group should be consecutive. Items without a group come first,
  * without a heading. When the list scrolls, rows fade out at a scrolled edge, more so the further the list can scroll
- * that way, and the selected row is scrolled fully into view.
+ * that way, and the selected row is scrolled into view.
  *
  * The host styles it through custom properties, each with a fallback: `--settings-list-ink` and
  * `--settings-list-quiet` for the text; `--settings-list-icon` and `--settings-list-icon-ink` for the icon tiles,
  * `--settings-list-icon-size` (26 px; 0 drops the tiles) and `--settings-list-icon-gap` (10 px after them);
- * `--settings-list-selected` (the joined shape: the detail's color), `--settings-list-selected-ink` and
- * `--settings-list-selected-quiet` (its trailing text) for the selected row, and `--settings-list-selected-pill` for
- * its pill where nothing is joined (`SettingsRows`, or a list with the join off); `--settings-list-mark` and
- * `--settings-list-mark-ink` for its icon tile;
- * `--settings-list-join` (`block`, or `none` for plain rows that do not join anything) and
- * `--settings-list-join-radius` (the concave corners, 12 px); `--settings-list-hover`, `--settings-list-pressed` and
- * `--settings-list-focus`; `--settings-list-pill-end` (how far a hovered or pressed row's pill stops short of the end
- * edge, the join radius by default); `--settings-list-row` (row height, 40 px), `--settings-list-radius` (the rows'
- * corners), `--settings-list-row-start` (the row's start padding, 7 px), `--settings-list-inset` (the rows' distance
- * from the list's sides, as `padding-inline`; the end side must be 0 for the join), `--settings-list-fade` (the fade
- * at a scrolled edge, 24 px), `--settings-list-text`, `--settings-list-small` and `--settings-list-weight` (the
- * label's, 500) for the type, and `--settings-list-chevron` (`none` by default, `block` to show a chevron at each
- * row's end, as a phone's list does when each item opens a page of its own).
+ * `--settings-list-selected` (the selected row's pill, an accent blue), `--settings-list-selected-ink` (its label,
+ * white) and `--settings-list-selected-quiet` (its trailing text); `--settings-list-hover`, `--settings-list-pressed`
+ * and `--settings-list-focus`; `--settings-list-row` (row height, 40 px), `--settings-list-radius` (the rows' and the
+ * pill's corners), `--settings-list-row-start` (the row's start padding, 7 px), `--settings-list-inset` (the rows'
+ * distance from the list's sides, as `padding-inline`, 8 px), `--settings-list-fade` (the fade at a scrolled edge,
+ * 24 px), `--settings-list-text`, `--settings-list-small` and `--settings-list-weight` (the label's, 500) for the
+ * type, and `--settings-list-chevron` (`none` by default, `block` to show a chevron at each row's end, as a phone's
+ * list does when each item opens a page of its own; a narrow `SettingsSplit` sets it).
  */
 export function SettingsList(props: {
   items: readonly SettingsListItem[];
@@ -54,16 +48,18 @@ export function SettingsList(props: {
   class?: string;
 }) {
   const [list, setList] = createSignal<HTMLElement>();
-  const [layer, setLayer] = createSignal<SVGSVGElement>();
-  createJoinedSelection({ list, layer, selected: () => props.selected, layout: () => props.items });
+  const [pill, setPill] = createSignal<HTMLElement>();
+  createSelectionPill(
+    list,
+    pill,
+    () => props.selected,
+    () => props.items
+  );
   createScrollFades(list, () => props.items);
 
   return (
     <nav ref={setList} class={[styles.list, props.class]} aria-label={props.label} onKeyDown={moveFocus}>
-      <svg ref={setLayer} class={styles.join} aria-hidden="true">
-        <path class={styles.joinFill} data-join="fill" />
-        <path class={styles.joinEdge} data-join="edge" />
-      </svg>
+      <span ref={setPill} class={styles.pill} aria-hidden="true" />
       {/* Keyed by id: items are rebuilt as their statuses change, and their rows stay. */}
       <For each={props.items} keyed={(item) => item.id}>
         {(item, index) => (
@@ -141,8 +137,8 @@ function moveFocus(event: KeyboardEvent) {
  * and custom properties they take.
  *
  * `selected` marks the chosen row: as the current page by default, as the selected option with `role="option"`; a
- * `menuitem` has no selection. In a `SettingsList` the joined shape draws the chosen row's ground; in `SettingsRows`
- * a pill in `--settings-list-selected-pill` does. Either way its tile takes the mark color.
+ * `menuitem` has no selection. Its ground is a pill in `--settings-list-selected`: in a `SettingsList` the list's one
+ * pill, which slides between rows; in `SettingsRows` the row's own. Its icon tile keeps its colors on it.
  */
 export function SettingsRow(props: {
   /** Matched against the selection; also the row's `data-item`, by which lists find their rows. */
@@ -212,9 +208,9 @@ export function SettingsRow(props: {
 }
 
 /**
- * A plain column of `SettingsRow`s that joins nothing, for a menu or a list without a detail beside it: the rows,
- * type, radii and states of a `SettingsList`, the chosen row on a pill (`--settings-list-selected-pill`) instead of
- * the joined shape, and the same arrow, Home and End keys and edge fades. Takes the same custom properties.
+ * A plain column of `SettingsRow`s for a menu or a list without a detail beside it: the rows, type, radii and states
+ * of a `SettingsList`, the chosen row on the same accent pill, which does not slide here, and the same arrow, Home and
+ * End keys and edge fades. Takes the same custom properties.
  */
 export function SettingsRows(props: {
   /** The column's accessible name. */
@@ -241,6 +237,111 @@ export function SettingsRows(props: {
       {props.children}
     </div>
   );
+}
+
+/**
+ * A panel's list beside its detail on one plate, the list's end edge a hairline (`--settings-split-line`), as a
+ * Settings window lays out its sidebar and page; `list` is the list's side and `children` the detail, each one
+ * element. The list's side is `--settings-split-list` wide (`minmax(160px, 34%)` by default).
+ *
+ * Where a host finds the panel too narrow for both, it sets `--settings-split: narrow` on this element, from a
+ * container query on its own width, and list and detail become two screens, as on a phone: `view` names the one shown;
+ * the list's rows show chevrons and no selected pill, and `SettingsBack` controls inside appear. The caller sets `view`
+ * to `detail` when an item is chosen and back to `list` from `SettingsBack`; where list and detail fit, both show and
+ * `view` changes nothing.
+ */
+export function SettingsSplit(props: {
+  /** The screen shown while narrow. */
+  view: 'list' | 'detail';
+  list: JSX.Element;
+  children: JSX.Element;
+  /** Added to the split's own class, for a host's size, plate and colors. */
+  class?: string;
+}) {
+  return (
+    <div class={[styles.split, props.class]} data-view={props.view}>
+      {props.list}
+      {props.children}
+    </div>
+  );
+}
+
+/**
+ * The bar at the top of a `SettingsSplit`'s detail that leads back to the list, shown only while the split is narrow:
+ * a chevron with the list's name, then the detail's title, as a phone's navigation bar. Its color is
+ * `--settings-split-back` (the accent by default).
+ */
+export function SettingsBack(props: {
+  /** The list's name, such as "Families". */
+  label: string;
+  /** The detail's title, such as the chosen family's name. */
+  title: string;
+  onBack: () => void;
+}) {
+  return (
+    <div class={styles.backBar}>
+      <button type="button" class={styles.back} onClick={() => props.onBack()}>
+        <SketchIcon name="left" size={18} />
+        {props.label}
+      </button>
+      <h3 class={styles.backTitle}>{props.title}</h3>
+    </div>
+  );
+}
+
+/**
+ * Lays the pill in `pill` under the row of `list` whose `data-item` is `selected`, sized as the row. When the
+ * selection changes it slides there by the pill's CSS transition and the row is scrolled into view; on the first
+ * placement, and when the list is laid out anew, it moves at once. The pill hides while no row is selected or laid
+ * out. `pill` lies in `list`'s scrolling content, which is its rows' offset parent, so it scrolls with them.
+ */
+function createSelectionPill(
+  list: () => HTMLElement | undefined,
+  pill: () => HTMLElement | undefined,
+  selected: () => string | undefined,
+  layout: () => unknown
+) {
+  let shown: string | undefined;
+  const place = (glide: boolean) => {
+    const element = pill();
+    const id = selected();
+    const rows = list()?.querySelectorAll<HTMLElement>('[data-item]') ?? [];
+    const row = id === undefined ? undefined : [...rows].find((candidate) => candidate.dataset.item === id);
+    if (!element || !row || row.offsetHeight === 0) {
+      element?.style.setProperty('visibility', 'hidden');
+      shown = undefined;
+      return;
+    }
+
+    const moved = shown !== undefined && shown !== id;
+    if (!glide || !moved) {
+      element.style.transition = 'none';
+    }
+
+    element.style.removeProperty('visibility');
+    element.style.transform = `translate(${row.offsetLeft}px, ${row.offsetTop}px)`;
+    element.style.width = `${row.offsetWidth}px`;
+    element.style.height = `${row.offsetHeight}px`;
+    if (element.style.transition) {
+      // Laid out where it is now before the transition comes back, so the next move glides from here.
+      void element.offsetWidth;
+      element.style.removeProperty('transition');
+    }
+
+    if (glide && moved) {
+      row.scrollIntoView?.({ block: 'nearest' });
+    }
+
+    shown = id;
+  };
+
+  createEffect(
+    () => [selected(), layout(), list(), pill()],
+    () => place(true)
+  );
+  if (typeof ResizeObserver !== 'undefined') {
+    createResizeObserver(list, () => place(false));
+  }
 }
 
 /**

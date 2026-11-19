@@ -191,8 +191,8 @@
 }
 
 /*
- * The modes' list on a popup's plate, as LEGO's other lists: white rows, the current mode on a quiet pill. Two
- * classes' weight, over the panel's own card.
+ * The modes' list on a popup's plate, as LEGO's other lists: white rows, the current mode on an accent pill as the
+ * brush studio's chosen category. Two classes' weight, over the panel's own card.
  */
 [popover].blendList {
   --layers-surface: rgb(36 38 44);
@@ -200,9 +200,10 @@
   --layers-muted: rgb(255 255 255 / 0.62);
   --layers-accent: var(--lego-accent);
   --layers-line: transparent;
-  --layers-menu-selected: rgb(255 255 255 / 0.12);
+  --layers-menu-selected: var(--lego-accent);
   --layers-menu-shadow: var(--lego-shadow);
   --settings-list-selected-ink: #ffffff;
+  --settings-list-selected-quiet: rgb(255 255 255 / 0.8);
   --settings-list-hover: rgb(255 255 255 / 0.07);
   --settings-list-pressed: rgb(255 255 255 / 0.14);
   --settings-list-text: 13px;

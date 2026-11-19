@@ -242,9 +242,9 @@
 .blendList {
   --settings-list-ink: var(--layers-ink, var(--ink, #444));
   --settings-list-quiet: var(--layers-muted, var(--muted));
-  --settings-list-selected-pill: var(--layers-menu-selected, #e3eef5);
+  --settings-list-selected: var(--layers-menu-selected, #e3eef5);
   --settings-list-selected-ink: var(--layers-accent, var(--accent));
-  --settings-list-mark: var(--layers-accent, var(--accent));
+  --settings-list-selected-quiet: var(--layers-muted, var(--muted));
   --settings-list-focus: var(--layers-accent, var(--accent));
   --settings-list-inset: 0;
   --settings-list-text: 12px;

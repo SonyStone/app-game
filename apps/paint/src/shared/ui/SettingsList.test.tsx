@@ -4,7 +4,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSignal, flush, For } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { SettingsList, SettingsRow, SettingsRows, type SettingsListItem } from './SettingsList';
+import {
+  SettingsBack,
+  SettingsList,
+  SettingsRow,
+  SettingsRows,
+  SettingsSplit,
+  type SettingsListItem
+} from './SettingsList';
 
 let dispose: (() => void) | undefined;
 const restores: (() => void)[] = [];
@@ -46,7 +53,7 @@ it('heads each group once where it starts, marks the selected item and selects t
   const nav = host.querySelector('nav[aria-label="Categories"]')!;
   const outline = () =>
     [...nav.children]
-      .filter((element) => element.tagName !== 'svg')
+      .filter((element) => element.getAttribute('aria-hidden') !== 'true')
       .map((element) =>
         element.tagName === 'H3'
           ? `# ${element.textContent}`
@@ -85,57 +92,85 @@ it("insets each row's icon from the row's side as far as from its top, against a
   const tile = Number(/\.icon \{[^}]*?width: var\(--settings-list-icon-size, (\d+)px\)/.exec(css)![1]);
   const inset = Number(/\n\s*padding: 0 .+ 0 var\(--settings-list-row-start, (\d+)px\);/.exec(row)![1]);
   expect(inset).toBe((40 - tile) / 2);
-  // The joined shape draws the selected row's ground: the row itself changes only its text color, and the pill
-  // behind it, which a joined list leaves clear.
+  // The list's pill draws the selected row's ground: the row itself changes only its text color.
   const selected = /&\[data-selected\] \{([^&}]*)/.exec(row)?.[1];
   expect(selected).toContain('color');
   expect(selected).not.toMatch(/padding|margin|grid|background/);
-  expect(
-    /&\[data-selected\] \{[^}]*&::before \{\s*background: var\(--settings-list-selected-pill, transparent\);/.test(row)
-  ).toBe(true);
 });
 
-it('moves the joined shape to the chosen row, at once with reduced motion', () => {
+it('lays the accent pill under the selected row and slides it to the next one chosen, scrolling it into view', () => {
   stubLayout();
-  stubMotion(true);
+  const scrolled: string[] = [];
+  // jsdom has no scrolling: the rows record what asks to be brought into view.
+  Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+    configurable: true,
+    value(this: HTMLElement) {
+      scrolled.push(this.dataset.item ?? '');
+    }
+  });
+  restores.push(() => Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView'));
   const { nav, select } = mountList('painting');
-  const layer = nav.querySelector('svg')!;
-  expect(layer.getAttribute('data-row')).toBe('painting');
+  const pill = nav.firstElementChild as HTMLElement;
+  expect(pill.getAttribute('aria-hidden')).toBe('true');
   // "Painting" is the second row, after a group heading; "Stroke correction" the fourth, after another.
-  expect(layer.style.transform).toBe('translate(0px, 62px)');
+  expect([pill.style.transform, pill.style.width, pill.style.height]).toEqual([
+    'translate(8px, 62px)',
+    '292px',
+    '40px'
+  ]);
+  expect(pill.style.visibility).toBe('');
+  // Placed at once the first time: the transition is back for the next move.
+  expect(pill.style.transition).toBe('');
+  expect(scrolled).toEqual([]);
 
   select('stroke');
-  expect(layer.getAttribute('data-row')).toBe('stroke');
-  expect(layer.style.transform).toBe('translate(0px, 166px)');
-  expect(layer.querySelector('[data-join="fill"]')!.getAttribute('d')).toMatch(/^M300 -12 A12 12/);
+  expect(pill.style.transform).toBe('translate(8px, 166px)');
+  expect(pill.style.transition).toBe('');
+  expect(scrolled).toEqual(['stroke']);
 });
 
-it('travels to the chosen row over 200 ms with motion, and joins a first row at the top without a corner', () => {
+it('hides the pill while no row is selected', () => {
   stubLayout();
-  stubMotion(false);
-  const frames = stubFrames();
-  const { nav, select } = mountList('general');
-  const layer = nav.querySelector('svg')!;
-  // "General" is the first row, at the content's very top: no room for its upper concave corner.
-  expect(layer.style.transform).toBe('translate(0px, 0px)');
-  expect(layer.querySelector('[data-join="edge"]')!.getAttribute('d')).toMatch(/^M300 0 A0 0/);
+  const [selected, setSelected] = createSignal<string | undefined>(undefined);
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => (
+      <SettingsList
+        label="Categories"
+        items={[{ id: 'general', label: 'General' }]}
+        selected={selected()}
+        onSelect={setSelected}
+      />
+    ),
+    host
+  );
+  flush();
+  const pill = host.querySelector('nav')!.firstElementChild as HTMLElement;
+  expect(pill.style.visibility).toBe('hidden');
+  setSelected('general');
+  flush();
+  expect(pill.style.visibility).toBe('');
+  expect(pill.style.transform).toBe('translate(8px, 0px)');
+});
 
-  select('stroke');
-  expect(layer.getAttribute('data-row')).toBe('stroke');
-  frames.run(0);
-  expect(layer.style.transform).toBe('translate(0px, 0px)');
-  frames.run(50);
-  const halfway = Number(/, ([\d.]+)px/.exec(layer.style.transform)![1]);
-  expect(halfway).toBeGreaterThan(166 * 0.4);
-  expect(halfway).toBeLessThan(166 * 0.7);
-  frames.run(200);
-  expect(layer.style.transform).toBe('translate(0px, 166px)');
-  expect(frames.pending()).toBe(0);
+it("slides the pill on the 200 ms timing, at once with reduced motion, and fills a plain list's selected row", () => {
+  // jsdom applies no stylesheet, so it is read as text.
+  const css = readFileSync(join(__dirname, 'SettingsList.module.css'), 'utf8');
+  expect(css).toContain('--settings-list-travel: 200ms cubic-bezier(0.3, 0, 0, 1);');
+  const pill = /\n\.pill \{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+  expect(pill).toContain('background: var(--settings-list-selected, #3d7eff);');
+  expect(pill).toContain('transform var(--settings-list-travel)');
+  expect(pill).toMatch(/prefers-reduced-motion: reduce\) \{\s*transition: none;/);
+  expect(css).toMatch(
+    /\.plain \.row\[data-selected\]::before \{\s*background: var\(--settings-list-selected, #3d7eff\);/
+  );
+  // The selected row's text is white on the pill by default.
+  expect(css).toContain('color: var(--settings-list-selected-ink, #ffffff);');
 });
 
 it('shows a press at once, before the selection lands', () => {
   stubLayout();
-  stubMotion(true);
   const { nav, selected } = mountList('painting');
   const tip = rowNamed(nav, 'Brush tip');
   tip.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, isPrimary: true, pointerType: 'pen' }));
@@ -152,7 +187,6 @@ it('shows a press at once, before the selection lands', () => {
 
 it('moves the focus with the arrow keys, Home and End; the focused row selects as a button', () => {
   stubLayout();
-  stubMotion(true);
   const { nav, selected } = mountList('painting');
   const rows = [...nav.querySelectorAll<HTMLButtonElement>('button')];
   const key = (name: string) =>
@@ -247,6 +281,76 @@ it('lays the same row out in a plain list: options marked selected, menu items w
   expect(run).toHaveBeenCalledOnce();
 });
 
+it('puts a list beside its detail, and names which of the two shows where they are two screens', () => {
+  const [view, setView] = createSignal<'list' | 'detail'>('list');
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => (
+      <SettingsSplit
+        view={view()}
+        list={
+          <SettingsList
+            label="Families"
+            items={[{ id: 'color', label: 'Color' }]}
+            selected="color"
+            onSelect={() => setView('detail')}
+          />
+        }
+      >
+        <section aria-label="Color">
+          <SettingsBack label="Families" title="Color" onBack={() => setView('list')} />
+        </section>
+      </SettingsSplit>
+    ),
+    host
+  );
+  flush();
+  const split = host.firstElementChild as HTMLElement;
+  expect([...split.children].map((child) => child.tagName)).toEqual(['NAV', 'SECTION']);
+  expect(split.dataset.view).toBe('list');
+
+  split.querySelector<HTMLButtonElement>('[data-item="color"]')!.click();
+  flush();
+  expect(split.dataset.view).toBe('detail');
+  const back = split.querySelector('section button')!;
+  expect([back.textContent, back.nextElementSibling!.textContent]).toEqual(['Families', 'Color']);
+  (back as HTMLButtonElement).click();
+  flush();
+  expect(split.dataset.view).toBe('list');
+});
+
+it("turns a split into two screens by the host's container query on its own width", () => {
+  // jsdom applies no stylesheet or container query, so the rules are read as text; the browser check measures them.
+  const css = readFileSync(join(__dirname, 'SettingsList.module.css'), 'utf8');
+  const narrow = /@container style\(--settings-split: narrow\) \{([\s\S]*)\n\}/.exec(css)?.[1] ?? '';
+  expect(narrow).toMatch(
+    /\.split\[data-view='list'\] > :nth-child\(2\),\s*\.split\[data-view='detail'\] > :first-child \{\s*display: none;/
+  );
+  expect(narrow).toMatch(/\.split \.list \{\s*--settings-list-chevron: block;/);
+  expect(narrow).toMatch(/\.split \.pill \{\s*display: none;/);
+  expect(narrow).toMatch(/\.split \.backBar \{\s*display: grid;/);
+  // Outside the query the back bar is hidden and both sides show.
+  expect(css).toMatch(/\n\.backBar \{\s*display: none;/);
+
+  // Each host sets the switch from the width of its own box, not the window's.
+  const lego = readFileSync(join(__dirname, '../../variants/lego/LegoStudio.module.css'), 'utf8');
+  expect(lego).toMatch(/container: box-shelves \/ inline-size;/);
+  expect(lego).toMatch(/@container box-shelves \(width < 380px\) \{\s*\.trayBody \{\s*--settings-split: narrow;/);
+  expect(lego).toMatch(/container: brush-library \/ inline-size;/);
+  expect(lego).toMatch(
+    /@container brush-library \(width < 400px\) \{\s*\.brushesCard > \* \{\s*--settings-split: narrow;/
+  );
+  const studio = readFileSync(join(__dirname, '../../features/brush-editor/BrushEditor.module.css'), 'utf8');
+  expect(studio).toMatch(/@container brush-studio \(width < 520px\) \{\s*\.studioSheet \{\s*--settings-split: narrow;/);
+  expect(studio).toMatch(
+    /@container brush-studio \(orientation: landscape\) and \(700px <= width < 1000px\) \{\s*\.studioSheet \{\s*--settings-split: narrow;/
+  );
+  for (const sheet of [css, lego, studio]) {
+    expect(sheet).not.toMatch(/@media[^{]*width/);
+  }
+});
+
 /** Renders four rows, the second and third under "Basics" and the fourth under "Advanced", with `selected` chosen. */
 function mountList(initial: string) {
   const [selected, setSelected] = createSignal(initial);
@@ -330,38 +434,4 @@ function stubLayout() {
   define('offsetLeft', (element) => box(element).left);
   define('offsetWidth', (element) => box(element).width);
   define('scrollHeight', () => 400);
-}
-
-/** Answers `prefers-reduced-motion` with `reduced`. */
-function stubMotion(reduced: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) =>
-    Object.assign(new EventTarget(), {
-      matches: reduced,
-      media: query,
-      onchange: null,
-      addListener() {},
-      removeListener() {}
-    })
-  );
-}
-
-/** Animation frames run by hand, at times relative to when they were stubbed. */
-function stubFrames() {
-  let queue: FrameRequestCallback[] = [];
-  let now = 1000;
-  vi.spyOn(performance, 'now').mockImplementation(() => now);
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => queue.push(callback));
-  vi.stubGlobal('cancelAnimationFrame', () => {
-    queue = [];
-  });
-
-  return {
-    run: (time: number) => {
-      now = 1000 + time;
-      const due = queue;
-      queue = [];
-      due.forEach((callback) => callback(now));
-    },
-    pending: () => queue.length
-  };
 }

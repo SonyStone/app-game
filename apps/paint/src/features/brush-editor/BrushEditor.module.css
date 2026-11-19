@@ -580,9 +580,9 @@
  * Cancel and Done at its top right, as in Procreate's Brush Studio. In portrait the pad lies across the top and the
  * sheet under it; below 700 px one part shows at a time: the list, a category's settings, or the pad.
  *
- * The settings lie on a raised surface inset in the sheet, and the chosen category is joined to it: the list draws
- * the row in the surface's color, running into it with concave corners, and moves that shape to the next category
- * chosen (`SettingsList`). The row's icon tile takes the accent.
+ * The sheet is a `SettingsSplit`: one plate, a hairline between the categories and the settings, the chosen category
+ * on an accent pill that slides to the next one chosen (`SettingsList`). Where the sheet is too narrow for both, the
+ * categories and a category's settings become two screens with a way back, as a phone's Settings.
  *
  * A host restyles the studio through the --studio-* properties that BrushStudio's JSDoc lists; each falls back to the
  * look described here.
@@ -601,7 +601,6 @@
   --tile-radius: var(--studio-tile-radius, 8px);
   --tile-shadow: var(--studio-tile-shadow, 0 1px 4px rgb(0 0 0 / 12%));
   --sheet-color: var(--studio-column, var(--side-color));
-  --raised-color: var(--studio-raised, var(--surface-color));
 
   grid-template: minmax(0, 1fr) / minmax(0, 1fr) minmax(0, 1fr);
   grid-template-areas: 'sheet pad';
@@ -611,11 +610,12 @@
   font-size: var(--studio-text, 15px);
 }
 
-/* The one plate under the categories and the settings. */
+/* The one plate under the categories and the settings (`SettingsSplit`). */
 .studioSheet {
-  display: grid;
+  --settings-split-list: minmax(200px, 36%);
+  --settings-split-line: var(--studio-divider, var(--line-color));
+
   grid-area: sheet;
-  grid-template: minmax(0, 1fr) / minmax(200px, 36fr) minmax(0, 64fr);
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -658,7 +658,7 @@
   }
 }
 
-/* The categories, in the studio's colors, joined to the settings; see `SettingsList` for the properties. */
+/* The categories, in the studio's colors; see `SettingsList` for the properties. */
 .studioList {
   --settings-list-ink: var(--column-ink);
   --settings-list-quiet: var(--column-quiet);
@@ -666,34 +666,34 @@
   --settings-list-icon-ink: var(--studio-icon-ink, var(--ink-color));
   --settings-list-hover: var(--studio-hover, color-mix(in srgb, var(--column-ink) 8%, transparent));
   --settings-list-pressed: var(--studio-pressed, color-mix(in srgb, var(--column-ink) 14%, transparent));
-  --settings-list-selected: var(--raised-color);
-  --settings-list-selected-ink: var(--column-ink);
-  --settings-list-selected-quiet: var(--column-quiet);
-  --settings-list-mark: var(--studio-mark, var(--accent-color));
-  --settings-list-mark-ink: var(--studio-mark-ink, var(--surface-color));
+  --settings-list-selected: var(--studio-selected, var(--accent-color));
+  --settings-list-selected-ink: var(--studio-selected-ink, #ffffff);
+  --settings-list-selected-quiet: var(--studio-selected-quiet, rgb(255 255 255 / 0.8));
   --settings-list-focus: var(--accent-color);
-  --settings-list-inset: 8px 0;
+  --settings-list-inset: 8px;
   --settings-list-text: var(--studio-text, 15px);
   --settings-list-small: var(--studio-small, 12px);
 
   min-height: 0;
-  /* Room under the last row for its concave corner, then the surface's own rounded corner, as an S. */
-  padding-block: 2px 28px;
+  padding-block: 2px 16px;
   overflow: auto;
   overscroll-behavior: contain;
 }
 
-/* The settings on a raised surface inset in the sheet, against the list's end edge, where the chosen row joins it. */
 .studio .pane {
-  margin: 6px 6px 6px 0;
   padding: 14px 16px 24px;
-  border-radius: calc(var(--studio-column-radius, 10px) - 2px);
-  background: var(--raised-color);
   color: var(--column-ink);
 }
 
 .studio .back {
   color: var(--column-ink);
+}
+
+/* The way back to the categories, where they and the settings are two screens. */
+@container style(--settings-split: narrow) {
+  .studio .back {
+    display: flex;
+  }
 }
 
 .studio .title {
@@ -928,6 +928,22 @@
   }
 }
 
+/*
+ * The sheet is too narrow for the categories beside the settings, about 500 px, and they become two screens: beside
+ * the pad in a landscape studio under 1000 px, or on their own in one under 520 px.
+ */
+@container brush-studio (orientation: landscape) and (700px <= width < 1000px) {
+  .studioSheet {
+    --settings-split: narrow;
+  }
+}
+
+@container brush-studio (width < 520px) {
+  .studioSheet {
+    --settings-split: narrow;
+  }
+}
+
 @container brush-studio (orientation: portrait) and (width >= 700px) {
   .frame.studio {
     grid-template: minmax(0, 44fr) minmax(0, 56fr) / minmax(0, 1fr);
@@ -954,31 +970,6 @@
     grid-area: main;
   }
 
-  .studioSheet {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .studioSide,
-  .studio .pane {
-    grid-area: 1 / 1;
-  }
-
-  /* Each row opens a page of its own here, so it shows a chevron; the chosen one is no longer marked or joined. */
-  .studio .studioList {
-    --settings-list-join: none;
-    --settings-list-chevron: block;
-    --settings-list-mark: var(--settings-list-icon);
-    --settings-list-mark-ink: var(--settings-list-icon-ink);
-    --settings-list-pill-end: 0px;
-    --settings-list-inset: 8px;
-
-    padding-bottom: 16px;
-  }
-
-  .studio .pane {
-    margin: 0;
-  }
-
   .studioActions {
     grid-area: actions;
     justify-self: stretch;
@@ -993,12 +984,6 @@
     margin-right: auto;
   }
 
-  .studio .back {
-    display: flex;
-  }
-
-  .studio[data-view='list'] .pane,
-  .studio[data-view='detail'] .studioSide,
   .studio[data-view='pad'] .studioSheet {
     display: none;
   }

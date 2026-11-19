@@ -4,7 +4,7 @@ import type { Result } from 'neverthrow';
 import { createSignal, For, Show } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
-import { SettingsList } from '../../shared/ui/SettingsList';
+import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import styles from './BrushLibrary.module.css';
 import { brushSets, setOf, type BrushSet } from './brushSets';
@@ -12,17 +12,18 @@ import { PopoverHeader } from './Popover';
 
 /**
  * Procreate's Brush Library: brush sets in a column on the left (a `SettingsList`), the chosen set's brushes on the
- * right as their names over sample strokes, the brush in use in blue. Choosing a brush applies it and keeps the
+ * right as their names over sample strokes, the brush in use in blue, the two on one plate (`SettingsSplit`). Where a
+ * host's container query makes the split narrow, the sets and a set's brushes are two screens, a tap on a set opening
+ * its brushes under a way back. Choosing a brush applies it and keeps the
  * library open, as in Procreate; choosing a set only browses. The library opens on the set of the brush in use. `+`
  * imports ABR brushes.
  *
  * Drawn in the Procreate variant's colors (its `--pc-*` properties) by default. A host restyles it through
  * `--brush-library-sets` (the sets column's ground), `--brush-library-pane` (the brushes' ground),
  * `--brush-library-chosen` (the brush in use, and the chosen set's pill in Procreate's look), `--brush-library-ink`,
- * `--brush-library-quiet`, `--brush-library-line`, `--brush-library-icon` and `--brush-library-icon-ink` (the sets'
- * icon tiles), `--brush-library-mark` (the chosen set's tile), `--brush-library-disabled` (header commands while
- * brushes cannot be chosen), `--brush-library-radius` (the columns' corners) and
- * `--brush-library-height` (the columns' height).
+ * `--brush-library-quiet`, `--brush-library-line` (the hairline between the columns), `--brush-library-icon` and
+ * `--brush-library-icon-ink` (the sets' icon tiles in the sidebar look), `--brush-library-disabled` (header commands
+ * while brushes cannot be chosen) and `--brush-library-height` (the columns' height).
  */
 export function BrushLibrary(props: {
   title: string;
@@ -45,8 +46,8 @@ export function BrushLibrary(props: {
   /** Rows under the columns, such as Mixer Brush commands. */
   footer?: JSX.Element;
   /**
-   * Draws the sets as the Settings-style sidebar of LEGO's panels, each on its icon tile, the chosen one joined to
-   * the brushes beside it, instead of Procreate's blue pill.
+   * Draws the sets as the Settings-style sidebar of LEGO's panels, each on its icon tile with its name and count, the
+   * chosen one on an accent pill, instead of Procreate's plain names.
    */
   sidebar?: boolean;
 }) {
@@ -54,6 +55,8 @@ export function BrushLibrary(props: {
   const sets = () => brushSets(props.presets, props.recent);
   const [chosen, setChosen] = createSignal(() => setOf(sets(), props.preset));
   const shown = () => sets().find((set) => set.id === chosen()) ?? sets()[0];
+  /** The screen shown where the sets and the brushes are two screens. */
+  const [view, setView] = createSignal<'list' | 'detail'>('list');
 
   return (
     <>
@@ -111,50 +114,61 @@ export function BrushLibrary(props: {
         </Show>
       </PopoverHeader>
       {props.children}
-      <div class={styles.columns} data-sidebar={props.sidebar ? '' : undefined}>
-        <SettingsList
-          class={styles.sets}
-          label="Brush sets"
-          items={sets().map((set) => ({
-            id: set.id,
-            label: set.name,
-            icon: setIcons[set.id],
-            trailing: String(set.presets.length)
-          }))}
-          selected={chosen()}
-          onSelect={(id) => setChosen(id as BrushSet['id'])}
-        />
-        <div class={styles.brushes} role="listbox" aria-label={`${shown()?.name ?? ''} brushes`}>
-          <For each={shown()?.presets ?? []} keyed={(preset) => preset.id}>
-            {(preset) => (
-              <button
-                class={styles.brush}
-                role="option"
-                aria-selected={preset().id === props.preset ? 'true' : 'false'}
-                disabled={props.disabled}
-                onClick={() => props.onChoose(preset().id)}
-              >
-                <span class={styles.brushName}>{preset().name}</span>
-                <StrokePreview
-                  settings={preset().settings}
-                  resources={
-                    props.resources
-                      ? async () => {
-                          const result = await props.resources!(preset());
-                          if (result.isErr()) {
-                            throw result.error;
+      <SettingsSplit
+        class={props.sidebar ? `${styles.columns} ${styles.sidebar}` : styles.columns}
+        view={view()}
+        list={
+          <SettingsList
+            class={styles.sets}
+            label="Brush sets"
+            items={sets().map((set) => ({
+              id: set.id,
+              label: set.name,
+              icon: setIcons[set.id],
+              trailing: String(set.presets.length)
+            }))}
+            selected={chosen()}
+            onSelect={(id) => {
+              setChosen(id as BrushSet['id']);
+              setView('detail');
+            }}
+          />
+        }
+      >
+        <div class={styles.brushPane}>
+          <SettingsBack label="Sets" title={shown()?.name ?? ''} onBack={() => setView('list')} />
+          <div class={styles.brushes} role="listbox" aria-label={`${shown()?.name ?? ''} brushes`}>
+            <For each={shown()?.presets ?? []} keyed={(preset) => preset.id}>
+              {(preset) => (
+                <button
+                  class={styles.brush}
+                  role="option"
+                  aria-selected={preset().id === props.preset ? 'true' : 'false'}
+                  disabled={props.disabled}
+                  onClick={() => props.onChoose(preset().id)}
+                >
+                  <span class={styles.brushName}>{preset().name}</span>
+                  <StrokePreview
+                    settings={preset().settings}
+                    resources={
+                      props.resources
+                        ? async () => {
+                            const result = await props.resources!(preset());
+                            if (result.isErr()) {
+                              throw result.error;
+                            }
+                            return result.value;
                           }
-                          return result.value;
-                        }
-                      : undefined
-                  }
-                  height={30}
-                />
-              </button>
-            )}
-          </For>
+                        : undefined
+                    }
+                    height={30}
+                  />
+                </button>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
+      </SettingsSplit>
       {props.footer}
     </>
   );

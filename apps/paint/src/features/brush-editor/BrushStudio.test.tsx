@@ -96,16 +96,23 @@ it('names the edited brush as its title and shows the pad it is given', () => {
 it('switches between the categories, a category and the pad in the narrow layout', () => {
   const studio = mount('studio', defaultBrush());
   const frame = studio.root().firstElementChild!;
+  // The sheet is a split of the categories and the settings, which shows one of them where it is narrow.
+  const sheet = frame.firstElementChild!;
+  expect(sheet.firstElementChild!.querySelector('nav[aria-label="Brush setting categories"]')).not.toBeNull();
   expect(frame.getAttribute('data-view')).toBe('list');
+  expect(sheet.getAttribute('data-view')).toBe('list');
   studio.click(studio.category('Dynamics'));
   expect(frame.getAttribute('data-view')).toBe('detail');
+  expect(sheet.getAttribute('data-view')).toBe('detail');
   studio.click(studio.button('Pad'));
   expect(frame.getAttribute('data-view')).toBe('pad');
   studio.click(studio.button('Pad'));
   expect(frame.getAttribute('data-view')).toBe('list');
+  expect(sheet.getAttribute('data-view')).toBe('list');
   studio.click(studio.category('Dynamics'));
   studio.click(studio.button('All categories'));
   expect(frame.getAttribute('data-view')).toBe('list');
+  expect(sheet.getAttribute('data-view')).toBe('list');
 });
 
 it("puts the host's rows in place of number rows, and keeps its own where the host gives none", () => {

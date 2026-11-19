@@ -904,9 +904,9 @@ it("Enter on a studio row's grip puts the part on the board without dragging", (
   expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
 });
 
-it('joins the chosen category to its settings, with no sidebar style to choose', () => {
+it("marks the chosen category on the sidebar's sliding pill, with no sidebar style to choose", () => {
   storeParts(['action:brush-editor']);
-  localStorage.setItem('paint.brushStudio.sidebar', 'sidebar');
+  localStorage.setItem('paint.brushStudio.sidebar', 'joined');
   mount();
   const dialog = openStudio();
   expect(dialog.querySelector('[aria-label="Sidebar style (trial)"]')).toBeNull();
@@ -914,8 +914,9 @@ it('joins the chosen category to its settings, with no sidebar style to choose',
   category(dialog, 'Brush tip');
   const chosen = [...dialog.querySelectorAll<HTMLElement>('nav button[aria-current="page"]')];
   expect(chosen.map((row) => row.dataset.item)).toEqual(['brush-tip']);
-  // The joined shape lies in the list itself, ahead of its rows.
-  expect(dialog.querySelector('nav > svg:first-child [data-join="fill"]')).not.toBeNull();
+  // The pill lies in the list itself, ahead of its rows; no joined shape is drawn.
+  expect(dialog.querySelector('nav > span[aria-hidden="true"]:first-child')).not.toBeNull();
+  expect(dialog.querySelector('[data-join]')).toBeNull();
 });
 
 /** Chooses the category named `name` in the studio's sidebar. */

@@ -1,10 +1,10 @@
 /*
- * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles, the selected one joined to the detail
- * beside the list, or on a pill in a plain list (`.plain`, `SettingsRows`). See `SettingsList` for the properties a
- * host sets; the fallbacks give a quiet light list joined to a white detail.
+ * A Settings-style sidebar: plain one-line rows, not buttons drawn as tiles, the selected one on an accent pill that
+ * slides between rows, or on its own pill in a plain list (`.plain`, `SettingsRows`). See `SettingsList` for the
+ * properties a host sets; the fallbacks give a quiet light list with a blue selection.
  */
 .list {
-  /* The travel of the joined shape (`createJoinedSelection`), for the marks that cross-fade with it. */
+  /* The pill's slide to the next row chosen, and the marks that cross-fade with it. */
   --settings-list-travel: 200ms cubic-bezier(0.3, 0, 0, 1);
 
   position: relative;
@@ -12,10 +12,10 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-inline: var(--settings-list-inset, 8px 0);
+  padding-inline: var(--settings-list-inset, 8px);
   color: var(--settings-list-ink, #24262c);
   font-size: var(--settings-list-text, 13px);
-  /* A scrollbar between the rows and the detail would cut the join, so the list scrolls without one. */
+  /* The edge fades show that the list scrolls, so it scrolls without a bar beside the rows. */
   scrollbar-width: none;
 
   &::-webkit-scrollbar {
@@ -35,34 +35,23 @@
 }
 
 /*
- * The joined shape behind the rows, drawn and moved by `createJoinedSelection`. It lies in the list's scrolling
- * content, so it scrolls with its row without help.
+ * The selected row's pill, placed and sized by `createSelectionPill` as the row; it slides to the next row chosen. It
+ * lies in the list's scrolling content, so it scrolls with its row.
  */
-.join {
+.pill {
   position: absolute;
   top: 0;
   left: 0;
-  display: var(--settings-list-join, block);
-  width: 1px;
-  height: 1px;
-  overflow: visible;
+  border-radius: var(--settings-list-radius, 9px);
+  background: var(--settings-list-selected, #3d7eff);
   pointer-events: none;
-  /* Its own layer: a frame of the travel only moves it. */
-  will-change: transform;
-}
+  transition:
+    transform var(--settings-list-travel),
+    width var(--settings-list-travel),
+    height var(--settings-list-travel);
 
-.joinFill {
-  fill: var(--settings-list-selected, #ffffff);
-}
-
-/* The focus ring of the selected row follows the joined outline, open where the row runs into the detail. */
-.joinEdge {
-  fill: none;
-  stroke: none;
-  stroke-width: 2px;
-
-  .list:has(.row[data-selected]:focus-visible) & {
-    stroke: var(--settings-list-focus, #3d7eff);
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 
@@ -73,7 +62,7 @@
   font-weight: 600;
   letter-spacing: 0.02em;
 
-  /* The joined shape comes first in the list, so the first heading is the second child. */
+  /* The pill comes first in the list, so the first heading is the second child. */
   &:nth-child(2) {
     margin-top: 2px;
   }
@@ -93,7 +82,7 @@
   min-height: var(--settings-list-row, 40px);
   margin: 0;
   /* The icon's tile sits as far inside the row from the side as from the top and bottom, as macOS draws it. */
-  padding: 0 calc(var(--settings-list-join-radius, 12px) + 4px) 0 var(--settings-list-row-start, 7px);
+  padding: 0 10px 0 var(--settings-list-row-start, 7px);
   border: 0;
   border-radius: var(--settings-list-radius, 9px);
   background: transparent;
@@ -101,16 +90,18 @@
   font: inherit;
   text-align: left;
   cursor: pointer;
-  /* Scrolled into view with its concave corners and clear of the fade. */
-  scroll-margin-block: calc(var(--settings-list-join-radius, 12px) + var(--settings-list-fade, 24px));
+  /* Scrolled into view clear of the fade. */
+  scroll-margin-block: var(--settings-list-fade, 24px);
   touch-action: manipulation;
-  transition: transform 160ms var(--settings-list-ease-out, ease-out);
+  transition:
+    transform 160ms var(--settings-list-ease-out, ease-out),
+    color var(--settings-list-travel);
   -webkit-tap-highlight-color: transparent;
 
-  /* The pill of a hovered or pressed row: short of the end edge, so it never meets the joined shape's corners. */
+  /* The pill of a hovered or pressed row, and of the selected row in a plain list. */
   &::before {
     position: absolute;
-    inset: 0 var(--settings-list-pill-end, var(--settings-list-join-radius, 12px)) 0 0;
+    inset: 0;
     z-index: -1;
     border-radius: inherit;
     background: transparent;
@@ -138,22 +129,20 @@
     outline-offset: -2px;
   }
 
+  /* On the selected row's pill, a focus ring in the pill's own color would not show. */
+  &[data-selected]:focus-visible {
+    outline-color: var(--settings-list-selected-ink, #ffffff);
+    outline-offset: -4px;
+  }
+
   &:disabled {
     cursor: default;
     opacity: 0.45;
   }
 
-  /* The joined shape draws the selected row's ground and its focus ring, unless the host turns the join off. */
+  /* The list's pill draws the selected row's ground; the row takes the pill's ink. */
   &[data-selected] {
-    color: var(--settings-list-selected-ink, inherit);
-
-    &::before {
-      background: var(--settings-list-selected-pill, transparent);
-    }
-
-    @container not style(--settings-list-join: none) {
-      outline: none;
-    }
+    color: var(--settings-list-selected-ink, #ffffff);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -161,29 +150,12 @@
   }
 }
 
-/*
- * A plain list joins nothing: its selected row lies on a pill as wide as the row, and the end padding needs no room
- * for concave corners. Two classes, as the row's own rule.
- */
-.plain .row {
-  padding-right: 10px;
-
-  &::before {
-    inset: 0;
-  }
-
-  &[data-selected] {
-    &::before {
-      background: var(--settings-list-selected-pill, rgb(0 0 0 / 0.08));
-    }
-  }
-
-  &[data-selected]:focus-visible {
-    outline: 2px solid var(--settings-list-focus, #3d7eff);
-  }
+/* A plain list has no sliding pill: its selected row lies on its own. Two classes, as the row's own rule. */
+.plain .row[data-selected]::before {
+  background: var(--settings-list-selected, #3d7eff);
 }
 
-/* The icon on a small tile, as iOS draws its icons on colored squares; the selected row's tile takes the mark. */
+/* The icon on a small tile, as iOS draws its icons on colored squares; it keeps its colors on the selected pill. */
 .icon {
   display: grid;
   place-items: center;
@@ -194,20 +166,12 @@
   border-radius: 7px;
   background: var(--settings-list-icon, rgb(0 0 0 / 0.07));
   color: var(--settings-list-icon-ink, inherit);
-  transition:
-    background-color var(--settings-list-travel),
-    color var(--settings-list-travel);
-
-  [data-selected] > & {
-    background: var(--settings-list-mark, var(--settings-list-icon, rgb(0 0 0 / 0.07)));
-    color: var(--settings-list-mark-ink, var(--settings-list-icon-ink, inherit));
-  }
 
   &:empty {
     background: none;
   }
 
-  /* A picture fills its tile; when its row is chosen, the mark rings it instead of filling it. */
+  /* A picture fills its tile; when its row is chosen, a ring in the pill's ink sets it off the pill. */
   &[data-picture] {
     overflow: visible;
 
@@ -220,12 +184,8 @@
 
     [data-selected] > & {
       background: none;
-      box-shadow: 0 0 0 2px var(--settings-list-mark, currentColor);
+      box-shadow: 0 0 0 2px var(--settings-list-selected-ink, #ffffff);
     }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    transition: none;
   }
 }
 
@@ -256,9 +216,14 @@
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color var(--settings-list-travel);
 
   [data-selected] & {
-    color: var(--settings-list-selected-quiet, var(--settings-list-quiet, #7c7f88));
+    color: var(--settings-list-selected-quiet, rgb(255 255 255 / 0.8));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
   }
 }
 
@@ -266,4 +231,95 @@
   display: var(--settings-list-chevron, none);
   margin-left: 10px;
   color: var(--settings-list-quiet, #7c7f88);
+}
+
+/*
+ * A list and its detail on one plate (`SettingsSplit`): the list's side, then the detail, a hairline between them.
+ * Both sides keep their own scrolling; the host sizes the split.
+ */
+.split {
+  display: grid;
+  grid-template-columns: var(--settings-split-list, minmax(160px, 34%)) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+
+  > :first-child {
+    border-inline-end: 1px solid var(--settings-split-line, rgb(0 0 0 / 0.1));
+  }
+}
+
+/* The way back to the list, shown only while the split is narrow. */
+.backBar {
+  display: none;
+  grid-template-columns: auto minmax(0, 1fr);
+  justify-self: stretch;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+}
+
+.back {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 40px;
+  margin: 0 0 0 -6px;
+  padding: 0 8px 0 0;
+  border: 0;
+  background: none;
+  color: var(--settings-split-back, #3d7eff);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.backTitle {
+  margin: 0;
+  overflow: hidden;
+  font-size: inherit;
+  font-weight: 700;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * Narrow, by the host's container query (`--settings-split: narrow` on the split): list and detail are two screens in
+ * one cell, the one `data-view` names shown. The list's rows each open their page, so they show chevrons and no
+ * selection, as a phone's list; the detail shows its way back.
+ */
+@container style(--settings-split: narrow) {
+  .split > :is(:first-child, :nth-child(2)) {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    border-inline-end: 0;
+  }
+
+  .split[data-view='list'] > :nth-child(2),
+  .split[data-view='detail'] > :first-child {
+    display: none;
+  }
+
+  .split .list {
+    --settings-list-chevron: block;
+  }
+
+  .split .pill {
+    display: none;
+  }
+
+  .split .list .row[data-selected] {
+    color: inherit;
+
+    .trailing {
+      color: var(--settings-list-quiet, #7c7f88);
+    }
+  }
+
+  .split .backBar {
+    display: grid;
+  }
 }
