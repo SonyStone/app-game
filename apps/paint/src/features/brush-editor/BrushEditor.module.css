@@ -985,8 +985,9 @@
 }
 
 /*
- * Cancel and Done over the pad, on a plate of the host's where it gives one: one fused pair, a seam of `--studio-seam`
- * between them and only the pair's outer corners rounded, as a group of rows is.
+ * Save as new, Cancel and Done over the pad, on a plate of the host's where it gives one: one fused group, a seam of
+ * `--studio-seam` between them and only the group's outer corners rounded, as a group of rows is. While naming a new
+ * brush, its name field, Cancel and Save take the group's place, fused the same way.
  */
 .studioActions {
   z-index: 2;
@@ -1020,6 +1021,57 @@
 .frame .studioActions .studioPadToggle + button {
   border-start-end-radius: 0;
   border-end-end-radius: 0;
+}
+
+.frame .studioActions .saveAs + button,
+.frame .studioActions .namingCancel {
+  border-radius: 0;
+}
+
+.frame .studioActions .saveAs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.naming {
+  display: flex;
+  flex: 1;
+  gap: var(--studio-seam, 1px);
+  min-width: 0;
+}
+
+.frame .naming button {
+  display: grid;
+  place-items: center;
+  width: var(--target);
+  padding: 0;
+}
+
+.frame .naming .done:disabled {
+  opacity: 0.45;
+}
+
+.namingField {
+  flex: 1;
+  width: 240px;
+  min-width: 0;
+  min-height: var(--target);
+  padding: 0 12px;
+  border: 0;
+  border-start-start-radius: var(--tile-radius);
+  border-end-start-radius: var(--tile-radius);
+  background: var(--studio-tile, var(--surface-color));
+  box-shadow: var(--tile-shadow);
+  color: var(--studio-tile-ink, inherit);
+  font: inherit;
+  font-size: var(--studio-text, 16px);
+  outline: none;
+
+  &:focus-visible,
+  &:focus {
+    box-shadow: inset 0 0 0 2px var(--accent-color);
+  }
 }
 
 .frame .studioActions .done {
@@ -1092,6 +1144,11 @@
   .frame .studioActions .studioPadToggle {
     display: flex;
     margin-right: auto;
+  }
+
+  /* Save as new keeps its icon only; its accessible name stays. */
+  .saveAsLabel {
+    display: none;
   }
 
   .studio[data-view='pad'] .studioSheet {

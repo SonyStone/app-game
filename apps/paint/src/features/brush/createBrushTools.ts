@@ -3,8 +3,10 @@ import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { normalizeStrokeSettings } from '@app-game/paint-core/strokeSettings';
+import type { Result } from 'neverthrow';
 import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
+import type { PaintError } from '../../shared/errors';
 import {
   applyPreset,
   defaultPresetGroups,
@@ -34,7 +36,8 @@ import { nativePresetText, readRoundPreset } from '../brush-library/nativeDocume
  * change; changes made before the restore win over it. Must be created within a Solid owner.
  */
 export function createBrushTools(options: {
-  library: Pick<BrushLibrary, 'find' | 'load' | 'add' | 'update' | 'remove'> & Partial<Pick<BrushLibrary, 'assets'>>;
+  library: Pick<BrushLibrary, 'find' | 'load' | 'add' | 'addStored' | 'update' | 'remove'> &
+    Partial<Pick<BrushLibrary, 'assets'>>;
   onError?: (message: string) => void;
   storage?: Pick<BrushStorage, 'readState' | 'writeState'>;
   /**
@@ -191,46 +194,34 @@ export function createBrushTools(options: {
     /**
      * Saves the active tool's brush as a new preset carrying `groups` (the `tip` group always) and selects it for that
      * tool; an eraser erasing with the brush is saved as an erasing preset and switches to its `preset` mode. The new
-     * preset references the current preset's images. Returns the new preset.
+     * preset references the current preset's images. Returns the new preset. The library writes it in the background.
      */
     savePresetAs(name: string, groups: readonly PresetGroup[] = defaultPresetGroups): BrushPreset {
+      const copy = copyOfActive(name, groups);
+      return selectCopy(copy, options.library.add(copy.preset, copy.resources));
+    },
+    /**
+     * Saves the active tool's brush as a new preset as `savePresetAs` does, but selects it only once storage has
+     * written it (`BrushLibrary.addStored`): a refused write leaves the library and the tools as they were and fails
+     * with the library's `storage` error. The source preset keeps its changes and document edit; see `restoreChanges`.
+     */
+    async savePresetAsStored(
+      name: string,
+      groups: readonly PresetGroup[] = defaultPresetGroups
+    ): Promise<Result<BrushPreset, PaintError>> {
+      const copy = copyOfActive(name, groups);
+      const added = await options.library.addStored(copy.preset, copy.resources);
+      return added.map((preset) => selectCopy(copy, preset));
+    },
+    /** The settings of `id` changed on the fly as remembered, apart from its document edit; see `restoreChanges`. */
+    rememberedChanges: (id: string): Partial<Brush> | undefined => currentState().changes[id],
+    /**
+     * Puts back the remembered changes of `id`, as `rememberedChanges` gave them, or none: choosing the preset again
+     * applies them. For a preset no tool uses, as the source of a copy just saved; a tool using it keeps its brush.
+     */
+    restoreChanges(id: string, changes: Partial<Brush> | undefined) {
       const current = currentState();
-      const saved = currentBrush();
-      const source = options.library.find(current.slots[presetSlot(current)].preset);
-      const edit = source && documentEdit(source.id);
-      const settings = presetSettings(saved, groups);
-      // A round brush's document edit carries its Photoshop groups, switched on or dormant, into the copy.
-      let document = edit?.abrDocument ?? (saved.engine?.id === 'abr' ? source?.abrDocument : undefined);
-      // Clear-mode erasing overrides the runtime blend without changing the source preset.
-      // A standalone copy needs the same mode in its editable Photoshop tool options.
-      if (document && settings.engine?.id === 'abr') {
-        const abr = settings.engine.settings as AbrBrushSettings;
-        if (abr.blendMode === 'Cler' && abr.values.tool.type !== 'ErTl' && abr.values.tool.mode !== 'Cler') {
-          const values = { ...abr.values, tool: { ...abr.values.tool, mode: 'Cler' } };
-          document = patchAbrValues(document, values);
-          settings.engine = { ...settings.engine, settings: { ...abr, values } };
-        }
-      }
-      const added = options.library.add(
-        {
-          name,
-          settings,
-          derivedFrom: source?.id,
-          paintbrush: source?.paintbrush,
-          ...(document && { abrDocument: document, assetIds: source?.assetIds, abrArchive: source?.abrArchive }),
-          resourceIds: edit?.resources.map((r) => r.id) ?? source?.resourceIds ?? []
-        },
-        edit?.resources
-      );
-      setState({
-        ...current,
-        eraserMode: current.slot === 'eraser' ? 'preset' : current.eraserMode,
-        slots: {
-          ...current.slots,
-          [current.slot]: { preset: added.id, brush: { ...saved, engine: added.settings.engine } }
-        }
-      });
-      return added;
+      setState({ ...current, changes: changes ? { ...current.changes, [id]: changes } : without(current.changes, id) });
     },
     /** Deletes a user preset and its changes; tools using it stop using it, see `abandonPreset`. */
     deletePreset(id: string) {
@@ -271,6 +262,54 @@ export function createBrushTools(options: {
       setState(snapshot as ToolState);
     }
   };
+
+  /**
+   * The new preset `savePresetAs` saves for the active tool, its new images, and the slot and brush it is selected
+   * for; see `selectCopy`.
+   */
+  function copyOfActive(name: string, groups: readonly PresetGroup[]) {
+    const current = currentState();
+    const saved = currentBrush();
+    const source = options.library.find(current.slots[presetSlot(current)].preset);
+    const edit = source && documentEdit(source.id);
+    const settings = presetSettings(saved, groups);
+    // A round brush's document edit carries its Photoshop groups, switched on or dormant, into the copy.
+    let document = edit?.abrDocument ?? (saved.engine?.id === 'abr' ? source?.abrDocument : undefined);
+    // Clear-mode erasing overrides the runtime blend without changing the source preset.
+    // A standalone copy needs the same mode in its editable Photoshop tool options.
+    if (document && settings.engine?.id === 'abr') {
+      const abr = settings.engine.settings as AbrBrushSettings;
+      if (abr.blendMode === 'Cler' && abr.values.tool.type !== 'ErTl' && abr.values.tool.mode !== 'Cler') {
+        const values = { ...abr.values, tool: { ...abr.values.tool, mode: 'Cler' } };
+        document = patchAbrValues(document, values);
+        settings.engine = { ...settings.engine, settings: { ...abr, values } };
+      }
+    }
+
+    const preset: Omit<BrushPreset, 'id' | 'builtIn'> = {
+      name,
+      settings,
+      derivedFrom: source?.id,
+      paintbrush: source?.paintbrush,
+      ...(document && { abrDocument: document, assetIds: source?.assetIds, abrArchive: source?.abrArchive }),
+      resourceIds: edit?.resources.map((r) => r.id) ?? source?.resourceIds ?? []
+    };
+    return { preset, resources: edit?.resources, slot: current.slot, brush: saved };
+  }
+
+  /** Makes the slot `copy` was saved from use `added`, the preset saved from it, with the brush it was saved with. */
+  function selectCopy(copy: ReturnType<typeof copyOfActive>, added: BrushPreset) {
+    const current = currentState();
+    setState({
+      ...current,
+      eraserMode: copy.slot === 'eraser' ? 'preset' : current.eraserMode,
+      slots: {
+        ...current.slots,
+        [copy.slot]: { preset: added.id, brush: { ...copy.brush, engine: added.settings.engine } }
+      }
+    });
+    return added;
+  }
 
   function setState(next: ToolState) {
     publish(documentSlots(next, currentState()));

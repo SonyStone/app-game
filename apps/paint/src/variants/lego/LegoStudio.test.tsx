@@ -4,12 +4,13 @@ import { createDocument } from '@app-game/paint-core/document';
 import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { render } from '@solidjs/web';
 import 'fake-indexeddb/auto';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEffect, createSignal, flush, untrack } from 'solid-js';
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
+import { getBrushSetting } from '../../features/brush-editor/schema';
 import { hexToWheel } from '../../features/color-wheel';
 import type { EngineHandlers } from '../../features/engine/openPaintTransport';
 import type { PaintSession } from '../../features/session';
@@ -699,6 +700,102 @@ it("keeps the pen's curve on Done, and Cancel returns to the curve the studio op
   expect(calibration.curve().points[1]!.y).toBe(0.7);
 });
 
+it('saves the edited brush as a new one from the studio header, goes on with it, and Cancel returns to it as saved', async () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const { tools, library } = wiring.session!;
+  await tools.loaded;
+  tools.selectPreset('builtin:soft-round', 'brush');
+  // Changed on the board before the studio opened; the studio then makes the brush 48 px.
+  tools.updateBrush({ size: 40 });
+  flush();
+  const before = tools.rememberedChanges('builtin:soft-round');
+  const dialog = openStudio();
+  const title = () => dialog.querySelector('h1')!.textContent;
+  await studioSize(48);
+  expect(title()).toBe('Soft round');
+
+  // Naming asks in place, offering the next free name, selected so typing replaces it; Escape ends only the naming.
+  saveAsNew(dialog);
+  let field = nameField(dialog)!;
+  expect(field.value).toMatch(/^Soft round \d+$/);
+  expect(library.presets().map(({ name }) => name)).not.toContain(field.value);
+  expect(document.activeElement).toBe(field);
+  expect([field.selectionStart, field.selectionEnd]).toEqual([0, field.value.length]);
+  expect(button('Cancel')).toBeUndefined();
+  const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+  field.dispatchEvent(escape);
+  flush();
+  // Kept from the dialog, whose Escape would close the studio.
+  expect(escape.defaultPrevented).toBe(true);
+  expect(nameField(dialog)).toBeNull();
+  expect(dialog.isConnected).toBe(true);
+  expect(title()).toBe('Soft round');
+
+  saveAsNew(dialog);
+  field = nameField(dialog)!;
+  field.value = 'Scattered round';
+  field.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  flush();
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await vi.waitFor(() => {
+    flush();
+    expect(title()).toBe('Scattered round');
+  });
+  expect(nameField(dialog)).toBeNull();
+  const copy = library.find(tools.preset())!;
+  expect(copy).toMatchObject({ name: 'Scattered round', derivedFrom: 'builtin:soft-round' });
+  expect(tools.brush().size).toBe(48);
+  expect(tools.rememberedChanges('builtin:soft-round')).toEqual(before);
+
+  // Cancel returns to the new brush as it was saved, not to the original.
+  await studioSize(60);
+  click('Cancel');
+  expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBeNull();
+  expect(tools.preset()).toBe(copy.id);
+  expect(tools.brush().size).toBe(48);
+
+  // Done keeps later edits as ever.
+  openStudio();
+  await studioSize(70);
+  click('Done');
+  expect(tools.preset()).toBe(copy.id);
+  expect(tools.brush().size).toBe(70);
+});
+
+it('keeps the original brush and the naming when the new brush cannot be saved, and tells why', async () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  const { tools, library } = wiring.session!;
+  await tools.loaded;
+  tools.selectPreset('builtin:soft-round', 'brush');
+  flush();
+  const opened = tools.brush().size;
+  const dialog = openStudio();
+  await studioSize(48);
+  const count = library.presets().length;
+  const refused = 'Brush changes could not be saved on this device.';
+  vi.spyOn(library, 'addStored').mockResolvedValue(err({ kind: 'brush', code: 'storage', message: refused }));
+
+  saveAsNew(dialog);
+  const offered = nameField(dialog)!.value;
+  nameField(dialog)!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await vi.waitFor(() => {
+    flush();
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(refused);
+  });
+  expect(nameField(dialog)?.value).toBe(offered);
+  expect(dialog.querySelector('h1')!.textContent).toBe('Soft round');
+  expect(tools.preset()).toBe('builtin:soft-round');
+  expect(library.presets()).toHaveLength(count);
+
+  // Cancel still returns to the brush as the studio opened it.
+  dialog.querySelector<HTMLButtonElement>('[aria-label="Cancel new brush"]')!.click();
+  flush();
+  click('Cancel');
+  expect(tools.brush().size).toBe(opened);
+});
+
 it("shows the pen's raw pressure on the pad as a dot on every copy of the curve, and its strokes as a histogram", () => {
   localStorage.setItem(
     'paint.lego',
@@ -1158,6 +1255,24 @@ function category(dialog: HTMLElement, name: string) {
     .find((element) => element.textContent?.includes(name))!
     .click();
   flush();
+}
+
+/** Makes the brush `size` px through the open studio's document, as its Size row does, and waits for the edit. */
+async function studioSize(size: number) {
+  const editor = wiring.services!.brushEditor;
+  expect(await editor.update(getBrushSetting('size')!.write(editor.view()!, size as never))).toBe(true);
+  flush();
+}
+
+/** Presses the studio header's "Save as new". */
+function saveAsNew(dialog: HTMLElement) {
+  dialog.querySelector<HTMLButtonElement>('[aria-label="Save as new brush"]')!.click();
+  flush();
+}
+
+/** The field naming a new brush in the studio's header, while it asks. */
+function nameField(dialog: HTMLElement) {
+  return dialog.querySelector<HTMLInputElement>('input[aria-label="New brush name"]');
 }
 
 /** The sidebar entry of the pen's page in the studio's "Pen" group. */

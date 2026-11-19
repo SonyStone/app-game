@@ -18,6 +18,7 @@ import type { PaintSession } from '../session';
  * settings changed outside the studio, as on the board, are written into it as they change (see `syncHost`).
  *
  * `checkpoint` takes what Cancel returns to and `revert` returns to it: the document edit and the brush as they were.
+ * `saveAs` saves the edited brush as a new preset and leaves the preset it came from as it was at a checkpoint.
  */
 export function createBrushSettingsEditor(session: PaintSession) {
   const { tools, brush, library, engine } = session;
@@ -52,6 +53,8 @@ export function createBrushSettingsEditor(session: PaintSession) {
   // The images of the latest edit, which the preset's saved images lack.
   const [edited, setEdited] = createSignal<{ preset: string; resources: readonly BrushResource[] }>();
   let revision = 0;
+  /** The latest edit's resolution, which `saveAs` waits for. */
+  let resolving = Promise.resolve(true);
   onCleanup(() => {
     revision++;
   });
@@ -60,7 +63,11 @@ export function createBrushSettingsEditor(session: PaintSession) {
     /** The current brush's document as the studio reads it; `undefined` for a brush that has none to edit. */
     view,
     editError,
-    update,
+    /** Edits the current brush's document to `next`; resolves false when the edit failed. */
+    update(next: string) {
+      resolving = update(next);
+      return resolving;
+    },
     /** The images the latest edit of the chosen preset made, which its saved images lack; reactive. */
     resources: () => {
       const edits = edited();
@@ -69,7 +76,13 @@ export function createBrushSettingsEditor(session: PaintSession) {
     /** What Cancel returns to, now: the chosen preset, its document edit, its document and its brush settings. */
     checkpoint(): Checkpoint {
       const id = preset();
-      return { preset: id, edit: tools.documentEdit(id), text: text(), brush: editableSettings(brush()) };
+      return {
+        preset: id,
+        edit: tools.documentEdit(id),
+        changes: tools.rememberedChanges(id),
+        text: text(),
+        brush: editableSettings(brush())
+      };
     },
     /** Whether the brush or its document differs from `checkpoint`. */
     changedSince(checkpoint: Checkpoint) {
@@ -89,14 +102,47 @@ export function createBrushSettingsEditor(session: PaintSession) {
 
       tools.restoreDocumentEdit(checkpoint.preset, checkpoint.edit);
       tools.updateBrush(structuredClone(checkpoint.brush));
-    }
+    },
+    saveAs
   };
 
   /**
-   * Echoes `next` at once and publishes it once resolved and its new images are resident for the next stroke. A
-   * document Paint's round renderer draws publishes at once, as it needs neither images nor the ABR adapter.
+   * Saves the brush as edited, once the edit still resolving has been published, as a new preset named `name`
+   * (`savePresetAsStored`), which its tool then uses. The preset it came from, `checkpoint`'s, gets back the document
+   * edit and the changes it had at `checkpoint`, so the edits saved into the copy do not stay on it. Resolves whether
+   * the copy was saved: a failed edit, another preset chosen meanwhile, or a refused write saves nothing, changes
+   * nothing, and shows why in `editError`.
    */
-  async function update(next: string) {
+  async function saveAs(name: string, checkpoint: Checkpoint) {
+    let waited: Promise<boolean>;
+    let edited: boolean;
+    do {
+      waited = resolving;
+      edited = await waited;
+    } while (waited !== resolving);
+
+    const source = preset();
+    if (!edited || source !== checkpoint.preset) {
+      return false;
+    }
+
+    const saved = await tools.savePresetAsStored(name);
+    if (saved.isErr()) {
+      setEditError(saved.error.message);
+      return false;
+    }
+
+    tools.restoreDocumentEdit(source, checkpoint.edit);
+    tools.restoreChanges(source, checkpoint.changes);
+    return true;
+  }
+
+  /**
+   * Echoes `next` at once and publishes it once resolved and its new images are resident for the next stroke. A
+   * document Paint's round renderer draws publishes at once, as it needs neither images nor the ABR adapter. Resolves
+   * false when the edit failed, true otherwise, a later edit or another preset having overtaken it included.
+   */
+  async function update(next: string): Promise<boolean> {
     const id = preset();
     const chosen = library.find(id);
     const host = untrack(brush);
@@ -109,7 +155,7 @@ export function createBrushSettingsEditor(session: PaintSession) {
       const round = chooseRenderPath(document);
       if (round.path === 'round') {
         publish(next, round.settings, []);
-        return;
+        return true;
       }
 
       const images = chosen?.assetIds?.length ? await library.assets(chosen) : undefined;
@@ -124,7 +170,7 @@ export function createBrushSettingsEditor(session: PaintSession) {
         reasons
       } = await resolveDocument(document, coverageMap(coverage), host);
       if (!current()) {
-        return;
+        return true;
       }
 
       if (!resolved) {
@@ -134,7 +180,7 @@ export function createBrushSettingsEditor(session: PaintSession) {
       if (resources.length) {
         const uploaded = await engine.putResources(resources);
         if (!current()) {
-          return;
+          return true;
         }
 
         if (uploaded.isErr()) {
@@ -143,11 +189,15 @@ export function createBrushSettingsEditor(session: PaintSession) {
       }
 
       publish(next, resolved, resources);
+      return true;
     } catch (error) {
-      if (current()) {
-        setPending(undefined);
-        setEditError(error instanceof Error ? error.message : String(error));
+      if (!current()) {
+        return true;
       }
+
+      setPending(undefined);
+      setEditError(error instanceof Error ? error.message : String(error));
+      return false;
     }
 
     /** Publishes the resolved document: its edit, its images, and the brush settings it holds. */
@@ -176,6 +226,7 @@ export function createBrushSettingsEditor(session: PaintSession) {
 type Checkpoint = {
   preset: string;
   edit: ReturnType<PaintSession['tools']['documentEdit']>;
+  changes: ReturnType<PaintSession['tools']['rememberedChanges']>;
   text: string | undefined;
   brush: ReturnType<typeof editableSettings>;
 };

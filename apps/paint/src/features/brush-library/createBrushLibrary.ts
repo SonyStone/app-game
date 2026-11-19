@@ -68,6 +68,27 @@ export function createBrushLibrary(options: {
     /** All coverage referenced by the editable document, including disabled sampler roles. */
     assets: (preset: BrushPreset) => resources(preset, preset.assetIds ?? []),
     add,
+    /**
+     * Adds a user preset as `add` does, but publishes it only once storage has written it with its images, so a refused
+     * write leaves the library as it was. Fails with a `storage` error then; storage reports the cause itself.
+     */
+    async addStored(
+      preset: Omit<BrushPreset, 'id' | 'builtIn'>,
+      resources: readonly BrushResource[] = []
+    ): Promise<Result<BrushPreset, PaintError>> {
+      const added = newPreset(preset);
+      if (options.storage && !(await options.storage.putPreset(added, resources))) {
+        return err(brushError('storage', `“${preset.name}” could not be saved on this device.`));
+      }
+
+      for (const image of resources) {
+        images.put(image, !!options.storage);
+      }
+
+      images.trim();
+      remember(added);
+      return ok(withoutCreated(added));
+    },
     /** Publishes a complete validated batch only after its IndexedDB transaction commits. */
     async addImported(batch: readonly { preset: BrushPreset; resources: readonly BrushResource[] }[]) {
       await loadAll();
@@ -207,14 +228,16 @@ export function createBrushLibrary(options: {
    * of other presets are referenced by id only.
    */
   function add(preset: Omit<BrushPreset, 'id' | 'builtIn'>, resources: readonly BrushResource[] = []): BrushPreset {
-    const latest = Math.max(0, ...[...latestKnown().values()].map(({ created }) => created));
-    // Strictly increasing, so presets created within one millisecond keep their order.
-    const added = preparePreset(
-      { ...preset, id: crypto.randomUUID(), created: Math.max(Date.now(), latest + 1) },
-      true
-    );
+    const added = newPreset(preset);
     store(added, resources);
     return withoutCreated(added);
+  }
+
+  /** `preset` prepared for storage with a new id, created after every preset known so far. */
+  function newPreset(preset: Omit<BrushPreset, 'id' | 'builtIn'>): StoredPreset {
+    const latest = Math.max(0, ...[...latestKnown().values()].map(({ created }) => created));
+    // Strictly increasing, so presets created within one millisecond keep their order.
+    return preparePreset({ ...preset, id: crypto.randomUUID(), created: Math.max(Date.now(), latest + 1) }, true);
   }
 
   /** Reads every stored preset, without images, once; later calls share the first read. */

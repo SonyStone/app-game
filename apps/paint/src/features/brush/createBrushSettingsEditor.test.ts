@@ -4,11 +4,12 @@ import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import { initAbr, pixels } from '@app-game/abr-parser';
 import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import 'fake-indexeddb/auto';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { Blob } from 'node:buffer';
 import { webcrypto } from 'node:crypto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { engineError } from '../../shared/errors';
 import type { LegoServices } from '../../variants/lego/LegoServices';
 import { brushChannels } from '../../variants/lego/parts/brushChannels';
 import { getBrushSetting } from '../brush-editor/schema';
@@ -55,7 +56,7 @@ function open(name: string) {
       brushEditor: editor,
       brush: { size: () => tools.brush().size, opacity: () => tools.brush().opacity, update: tools.updateBrush }
     } as unknown as LegoServices;
-    return { storage, library, tools, editor, services, onError };
+    return { storage, library, tools, editor, services, onError, engine };
   });
 }
 
@@ -243,4 +244,103 @@ it('saves a round brush with scattering dormant as one that draws round and keep
   expect(row(reopened, 'abr-scattering-scatter')).toBe(150);
   await studio(reopened, 'abr-scattering-useScattering', true);
   expect(reopened.tools.brush().engine?.id).toBe('abr');
+});
+
+it('saves the edited brush as a new brush, goes on with it, and leaves the one it came from as it was', async () => {
+  const db = crypto.randomUUID();
+  const s = open(db);
+  await s.tools.loaded;
+  s.tools.selectPreset('builtin:soft-round', 'brush');
+  // Changed on the board before the studio opened: the original keeps this change, and only this one.
+  s.tools.updateBrush({ size: 40 });
+  flush();
+  const before = s.tools.rememberedChanges('builtin:soft-round');
+  expect(before).toMatchObject({ size: 40 });
+  const checkpoint = s.editor.checkpoint();
+  await studio(s, 'abr-scattering-useScattering', true);
+  await studio(s, 'abr-scattering-scatter', 150);
+  await studio(s, 'size', 48);
+
+  expect(await s.editor.saveAs('Soft round 2', checkpoint)).toBe(true);
+  flush();
+  const copy = s.library.find(s.tools.preset())!;
+  expect(copy.id).not.toBe('builtin:soft-round');
+  expect(copy).toMatchObject({ name: 'Soft round 2', derivedFrom: 'builtin:soft-round' });
+  expect(copy.settings.engine?.id).toBe('abr');
+  expect(
+    parseDocument(copy.abrDocument!, brushSchema).definition.extensions?.['photoshop.scattering.v1']?.value
+  ).toMatchObject({ scatteringEnabled: true, 'scatterDynamics.jitter': 150 });
+  // The studio goes on with the copy as saved.
+  expect(row(s, 'abr-scattering-useScattering')).toBe(true);
+  expect(row(s, 'size')).toBe(48);
+  expect(s.editor.changedSince(s.editor.checkpoint())).toBe(false);
+  expect(s.editor.editError()).toBe('');
+
+  // The original has neither the studio's document edit nor its changes, only what it had before.
+  expect(s.tools.documentEdit('builtin:soft-round')).toBeUndefined();
+  expect(s.tools.rememberedChanges('builtin:soft-round')).toEqual(before);
+  s.tools.selectPreset('builtin:soft-round', 'brush');
+  flush();
+  expect(s.tools.brush().engine).toBeUndefined();
+  expect(row(s, 'abr-scattering-useScattering')).toBe(false);
+  expect(row(s, 'size')).toBe(40);
+
+  // Both survive a reload as they were left.
+  s.tools.selectPreset(copy.id, 'brush');
+  flush();
+  await s.storage.idle();
+  const reopened = open(db);
+  await reopened.tools.loaded;
+  flush();
+  expect(reopened.tools.preset()).toBe(copy.id);
+  expect(reopened.tools.brush().engine?.id).toBe('abr');
+  expect(row(reopened, 'abr-scattering-scatter')).toBe(150);
+  expect(reopened.tools.documentEdit('builtin:soft-round')).toBeUndefined();
+  reopened.tools.selectPreset('builtin:soft-round', 'brush');
+  flush();
+  expect(reopened.tools.brush().engine).toBeUndefined();
+  expect(row(reopened, 'size')).toBe(40);
+});
+
+it('saves nothing and changes nothing when storage refuses the new brush', async () => {
+  const s = open(crypto.randomUUID());
+  await s.tools.loaded;
+  s.tools.selectPreset('builtin:soft-round', 'brush');
+  flush();
+  const checkpoint = s.editor.checkpoint();
+  await studio(s, 'abr-scattering-useScattering', true);
+  const edit = s.tools.documentEdit('builtin:soft-round');
+  const count = s.library.presets().length;
+  vi.spyOn(s.storage, 'putPreset').mockResolvedValue(false);
+
+  expect(await s.editor.saveAs('Soft round 2', checkpoint)).toBe(false);
+  flush();
+  expect(s.editor.editError()).toBe('“Soft round 2” could not be saved on this device.');
+  expect(s.tools.preset()).toBe('builtin:soft-round');
+  expect(s.library.presets()).toHaveLength(count);
+  expect(s.tools.documentEdit('builtin:soft-round')).toBe(edit);
+  expect(row(s, 'abr-scattering-useScattering')).toBe(true);
+  // Cancel still returns to the brush the studio opened with.
+  s.editor.revert(checkpoint);
+  flush();
+  expect(s.tools.brush().engine).toBeUndefined();
+});
+
+it('waits for the edit still resolving, and saves nothing when its images could not be uploaded', async () => {
+  const s = open(crypto.randomUUID());
+  await s.tools.loaded;
+  s.tools.selectPreset('builtin:soft-round', 'brush');
+  flush();
+  const checkpoint = s.editor.checkpoint();
+  const count = s.library.presets().length;
+  s.engine.putResources.mockResolvedValueOnce(err(engineError('failed', 'The GPU refused the masks')) as never);
+  const view = s.editor.view()!;
+  const pending = s.editor.update(getBrushSetting('abr-scattering-useScattering')!.write(view, true as never));
+
+  expect(await s.editor.saveAs('Soft round 2', checkpoint)).toBe(false);
+  expect(await pending).toBe(false);
+  flush();
+  expect(s.editor.editError()).toBe('The GPU refused the masks');
+  expect(s.tools.preset()).toBe('builtin:soft-round');
+  expect(s.library.presets()).toHaveLength(count);
 });
