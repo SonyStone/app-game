@@ -1,8 +1,8 @@
 {
   "note": "Synced copy of photoshop-formats; edit it there and run `pnpm sync:formats` (scripts/sync-formats.mjs).",
   "repository": "photoshop-formats",
-  "commit": "623610d9073fb55f1e08c4b0eefd4b719fcc8d0a",
-  "tree": "5dbf2db358b4072cd6cc40ce44634cd1a9f79f31",
+  "commit": "59c55dc0fbb8b97febfe184fdfdfcd83dcb79ce9",
+  "tree": "aed60402c83834bd43b49df2172973899ea519db",
   "files": {
     "README.md": "1b050299f25b54caac5dcea3dea006587a467c4cc88f41e8026b89c6da1ce2f1",
     "package.json": "6dbf54ffc9d386fef15dcd87070193a3b7cc188d8642995d339d1c6782b75e00",
@@ -52,7 +52,7 @@
     "src/sliderCurves.test.ts": "4f05762dd4669d27b0aea5d1083580b9a4903e6313b69420d072a7b280b800a9",
     "src/sliderCurves.ts": "cf75740805e594eeef2caf5aad9a4331825a0a1c76b99dbabab5b86f217d30d2",
     "src/smoothing.test.ts": "5a53bb2ebc856a23892cd49657421a7361118ee1cfcf1c89fcda88f6499e47c1",
-    "src/stroke.ts": "e523058a95e6a68c895285e20f84987c0aaee88ae29796039b427f02589c335e",
+    "src/stroke.ts": "5911736d509b64af9b2d7e78321164378c9c68cab65629186d3b0c0fa6124fc6",
     "src/tabletInput.ts": "78ad49e7b4d3e49b0f2eb241868df5399bde40dccdacdae96d6baaad4b75ebc8",
     "src/textureDynamics.ts": "11da9ded684f8181a574a4fe9260ba2772e7daaa034f450ba74e868780165530",
     "src/tipMath.ts": "f4bb09f04ff7b063eec6590930f313c2a5a204f9ca6e245d8dc155038f439a7b",

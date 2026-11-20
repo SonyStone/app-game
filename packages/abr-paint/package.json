@@ -11,6 +11,7 @@
     "./engine": "./src/engine.ts",
     "./preset": "./src/preset.ts",
     "./adaptiveQuality": "./src/adaptiveQuality.ts",
+    "./gpu/paintRound": "./src/gpu/paintRound.ts",
     "./gpu/stampBounds": "./src/gpu/stampBounds.ts",
     "./gpu/commandSlots": "./src/gpu/commandSlots.ts",
     "./gpu/commandBatch": "./src/gpu/commandBatch.ts",

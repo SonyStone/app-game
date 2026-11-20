@@ -89,6 +89,43 @@ it('reuses the Block Eraser tip resource across strokes', () => {
   }
 });
 
+it('resolves the footprint before generating real or preview dabs', async () => {
+  const host = createHost();
+  const { settings, renderer } = host.context;
+  settings.coverage = 'paint-round-v1';
+  settings.placement = 'paint-distance-v1';
+  try {
+    const footprint = () => host.begin.mock.calls.at(-1)![3].coverage;
+    createAbrStroke(host.context).cancel();
+    expect(footprint()).toBe('photoshop-v1');
+
+    renderer.supportsPaintRound = true;
+    const stroke = createAbrStroke(host.context);
+    expect(footprint()).toBe('paint-round-v1');
+    await stroke.add([{ x: 0, y: 0, time: 0, pressure: 1 }]);
+    expect(host.dabs[0]).toEqual({ x: 0, y: 0, radius: 8, flow: 1 });
+    stroke.cancel();
+
+    settings.values.angle = 45;
+    createAbrStroke(host.context).cancel();
+    expect(footprint()).toBe('paint-round-v1');
+    settings.values.roundness = 80;
+    createAbrStroke(host.context).cancel();
+    expect(footprint()).toBe('photoshop-v1');
+    settings.values.roundness = 100;
+
+    for (const flag of ['useTexture', 'useScattering', 'useDualBrush', 'useColorDynamics',
+      'useWetEdges', 'useBuildUp'] as const) {
+      settings.values[flag] = true;
+      createAbrStroke(host.context).cancel();
+      expect(footprint(), flag).toBe('photoshop-v1');
+      settings.values[flag] = false;
+    }
+  } finally {
+    host.release();
+  }
+});
+
 /** A tiny host without Paint, DOM, workers, or a GPU. Documents/history are deliberately opaque strings. */
 function createHost(toolOptions?: { kind: string } & Record<string, unknown>, pixel = new Uint8Array(4)) {
   const preset = prepareAbrBrush({

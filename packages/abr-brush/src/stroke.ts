@@ -155,6 +155,8 @@ export function createAbrStrokeSampler(
      * nominal spacing up to a quarter diameter and compensates flow including first contact.
      */
     placement?: 'photoshop-v1' | 'paint-distance-v1';
+    /** Resolved footprint. For eligible round brushes, emit nominal radii before tip raster enlargement. */
+    coverage?: 'photoshop-v1' | 'paint-round-v1';
     seed?: number;
     /** Retains source geometry for consumers using Photoshop row rasterization. Defaults to false. */
     sampledTipGeometry?: boolean;
@@ -404,6 +406,16 @@ export function createAbrStrokeSampler(
     }
   };
   function stamp(p: PreviewPoint, direction: number, timed = false) {
+    if (paint && input.coverage === 'paint-round-v1') {
+      const pressureSize = (v.useShapeDynamics || v.tool.pressureOverridesSize) && shape.sizeControl === 2;
+      const scale = pressureSize ? Math.max(shape.minimumDiameter / 100, p.pressure) : 1;
+      const radius = Math.max(0.25, size * 0.5 * scale);
+      const flow = paint.ratio > 1 ? 1 - (1 - input.flow) ** paint.ratio : input.flow;
+      // Keep PreviewStroke's instance stride. The round pipeline binds color and opacity once per stroke.
+      data.push(p.x, p.y, radius, radius, 1, 0, 1, 1, flow, 1, 0, 0, 0, 0, 0, 1);
+      return paint.step(p.pressure);
+    }
+
     const firstStamp = data.length;
     const tablet = prepareTabletInput(browserTabletInput(p), v.useBrushPose ? v.brushPose : undefined);
     const { pressure, rotation, tiltX: tx, tiltY: ty } = tablet;

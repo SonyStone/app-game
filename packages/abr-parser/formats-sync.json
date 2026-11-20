@@ -1,7 +1,7 @@
 {
   "note": "Synced copy of photoshop-formats; edit it there and run `pnpm sync:formats` (scripts/sync-formats.mjs).",
   "repository": "photoshop-formats",
-  "commit": "623610d9073fb55f1e08c4b0eefd4b719fcc8d0a",
+  "commit": "59c55dc0fbb8b97febfe184fdfdfcd83dcb79ce9",
   "tree": "2618fab2b38856a9ec6f351157c9f5ee6fb272ca",
   "files": {
     ".gitignore": "048b9565522d3557323d23854967d34094b85bca3bd89236097ec0c58c2a2a40",

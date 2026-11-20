@@ -12,6 +12,7 @@ import {
   type PreviewStroke
 } from '@app-game/abr-brush/stroke';
 import { z } from 'zod/v3';
+import type { AbrRasterSettings } from './gpu/abrStamps';
 import type { Dab, Sample } from './input';
 import type { AbrBrushInput, AbrStrokeContext, AbrStrokeSession } from './contracts';
 import { adaptiveBrushQuality } from './adaptiveQuality';
@@ -52,7 +53,10 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     brush.size,
     settings.values.tipKind === 'sampledBrush' ? tip : undefined
   );
+  const coverage = renderer.supportsPaintRound ? resolveAbrCoverage(settings, restoreHistory) : 'photoshop-v1';
   const input = {
+    coverage,
+    placement: settings.placement,
     seed: settings.seed ?? seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
     values: settings.values,
     color: brush.color,
@@ -64,7 +68,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     sampledTipGeometry: true,
     minimumSpacing: quality?.minimumSpacing,
     tipSpacing: quality?.tipSpacing
-  };
+  } satisfies Parameters<typeof createAbrStrokeSampler>[0];
   const sampler = createAbrStrokeSampler(input, tip);
   let pencilContact = settings.values.tool.type === 'PcTl' && settings.values.tool.autoErase;
   const dualInput = dualPreviewInput({ ...input, width: 1, height: 1, dpr: 1, background: '#ffffff' });
@@ -77,15 +81,15 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
   const sample = (samples: readonly Sample[], preview = false) => {
     const points = samples.map(tabletPoint);
     const mode = preview ? 'preview' : 'add';
-    return [...(secondary ? dabs(secondary[mode](points), true) : []), ...dabs(sampler[mode](points), false)];
+    return [...(secondary ? dabs(secondary[mode](points), true) : []), ...dabs(sampler[mode](points), false, coverage)];
   };
-  renderer.begin(layer, brush, undefined, {
+  const rasterSettings: AbrRasterSettings<Layer> = {
     values: settings.values,
     tip,
     pattern,
     dual,
     size: brush.size,
-    compositeOpacity: strokeCompositeOpacity(input),
+    compositeOpacity: coverage === 'paint-round-v1' ? brush.opacity : strokeCompositeOpacity(input),
     tipLodBias: quality?.lod,
     mixing: brush.mixing,
     blendMode: settings.blendMode,
@@ -123,7 +127,12 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
             layers: settings.values.tool.smudgeAllLayers ? (layers ?? [layer]) : [layer]
           }
         : undefined
-  });
+  };
+  if (settings.coverage !== undefined) {
+    rasterSettings.coverage = coverage;
+  }
+  renderer.begin(layer, brush, undefined, rasterSettings);
+
   const buildUp = settings.values.useBuildUp && supportsAirbrush(settings.values.tool);
   const pulled =
     brush.stroke.mode !== 'none' &&
@@ -213,6 +222,10 @@ export function runAbrBrushCommand<Layer, Change, Brush extends AbrBrushInput>({
 /** Cloneable preset configuration. Decode before beginning GPU stroke state. */
 export const abrBrushSettings = z
   .object({
+    /** Defaults to Photoshop spacing. Paint distance integrates intervals in pressure-scaled diameters. */
+    placement: z.enum(['photoshop-v1', 'paint-distance-v1']).optional(),
+    /** Defaults to Photoshop coverage. Analytic round requires Paint distance and a compatible host and preset. */
+    coverage: z.enum(['photoshop-v1', 'paint-round-v1']).optional(),
     tipId: z.string().min(1).max(512),
     patternId: z.string().min(1).max(512).optional(),
     dualId: z.string().min(1).max(512).optional(),
@@ -229,6 +242,37 @@ export const abrBrushSettings = z
 
 /** Validated settings transported between editor UI and the drawing runtime. */
 export type AbrBrushSettings = z.infer<typeof abrBrushSettings>;
+
+/**
+ * Resolves the entire stroke before sampling. Unsupported presets keep Photoshop's footprint
+ * for both real and predicted stamps. Circular tips are invariant under rotation and reflection.
+ */
+export function resolveAbrCoverage(settings: AbrBrushSettings, restoreHistory = false) {
+  if (settings.coverage !== 'paint-round-v1' || settings.placement !== 'paint-distance-v1') {
+    return 'photoshop-v1';
+  }
+
+  const v = settings.values;
+  const eraser = v.tool.type === 'ErTl' && v.tool.eraserMode === 1 && !v.tool.eraseToHistory;
+  if ((v.tool.type !== 'PbTl' && !eraser) || restoreHistory ||
+      settings.blendMode !== (eraser ? 'Cler' : 'Nrml') || v.tool.mode !== 'Nrml') {
+    return 'photoshop-v1';
+  }
+
+  if (v.tipKind !== 'computedBrush' || v.roundness !== 100 || v.useDualBrush || settings.dualId ||
+      v.useTexture || v.useScattering || v.useBuildUp || v.useWetEdges || v.useNoise ||
+      v.useColorDynamics || v.useBrushPose || v.useTransfer || v.tool.pressureOverridesOpacity) {
+    return 'photoshop-v1';
+  }
+
+  const shape = v.shapeDynamics;
+  if (v.useShapeDynamics && (shape.roundnessJitter || shape.roundnessControl || shape.brushProjection ||
+      shape.sizeJitter || shape.sizeMinimum || ![0, 2].includes(shape.sizeControl))) {
+    return 'photoshop-v1';
+  }
+
+  return 'paint-round-v1';
+}
 
 /** Shared 1×1 Block Eraser coverage. One identity per session lets GPU caches reuse its texture. */
 const blockEraserResource: BrushResource = (() => {
@@ -265,9 +309,19 @@ function computedDualResource(tip: ReturnType<typeof computedSecondaryTip>): Bru
 function tabletPoint(sample: Sample): PreviewPoint {
   return { ...sample, tiltX: sample.tiltX ?? 0, tiltY: sample.tiltY ?? 0, rotation: sample.rotation ?? 0 };
 }
-function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
+function dabs(stroke: PreviewStroke, secondary: boolean, coverage?: AbrBrushSettings['coverage']): Dab[] {
   return Array.from({ length: stroke.count }, (_, i) => {
-    const data = stroke.data.subarray(i * 16, i * 16 + 16);
+    const offset = i * 16;
+    if (coverage === 'paint-round-v1') {
+      return {
+        x: stroke.data[offset]!,
+        y: stroke.data[offset + 1]!,
+        radius: stroke.data[offset + 2]!,
+        flow: stroke.data[offset + 8]!
+      };
+    }
+
+    const data = stroke.data.subarray(offset, offset + 16);
     const sampledTip = stroke.sampledTips?.[i];
     return {
       x: data[0]!,

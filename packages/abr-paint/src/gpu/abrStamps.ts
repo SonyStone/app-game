@@ -45,6 +45,8 @@ export { abrStampLayout } from './abrShaders';
 
 /** Immutable preset resources pinned by the brush session. */
 export type AbrRasterSettings<Layer = unknown> = {
+  /** Effective footprint. paint-round-v1 uses analytic round instances and r16float transmittance. */
+  coverage?: 'photoshop-v1' | 'paint-round-v1';
   /** Selected immutable document state; restoration interpolates premultiplied pixels by accumulated coverage. */
   historySource?: Layer;
   values: BrushFormValues;
