@@ -87,6 +87,18 @@ export function createStrokeState(
         throw new Error('Finish the current stroke before beginning another.');
       }
 
+      // The ABR engine supplies nominal round instances for this footprint. Use the shared
+      // transmittance scratch, including its eviction snapshots and disposable tail copies.
+      if (abr?.coverage === 'paint-round-v1') {
+        brush = {
+          ...brush,
+          hardness: abr.values.hardness / 100,
+          opacity: abr.compositeOpacity ?? 1,
+          tool: abr.values.tool.type === 'ErTl' ? 'eraser' : 'brush'
+        };
+        abr = undefined;
+      }
+
       data.abr = abr ? raster.prepareAbr({ ...abr, alphaLock: layer.alphaLock }) : undefined;
       data.smudge = !!abr?.smudge;
       data.mixer = !!abr?.mixer;

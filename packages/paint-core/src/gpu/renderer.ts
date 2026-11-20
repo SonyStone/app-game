@@ -444,6 +444,7 @@ async function assemblePaintRenderer(
       return [...keys];
     },
     /** The shared ABR renderer contract passes its raster settings in the fourth argument. */
+    supportsPaintRound: true,
     begin(layer: Layer, brush: Brush, _reserved?: undefined, abr?: AbrRasterSettings<Layer>) {
       strokes.begin(layer, brush, abr);
     },

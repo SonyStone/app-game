@@ -12,6 +12,8 @@ import { unpackTile } from '@app-game/paint-core/tilePixels';
 import { softRoundCandidate } from '../fixtures/softRound';
 import baseline from '../fixtures/softRoundCoverage.json';
 
+type Variant = 'native' | 'ABR' | 'paint-round' | 'matched processor';
+
 type Row = {
   label: string;
   size: number;
@@ -46,12 +48,29 @@ export async function compareSoftRound(report: (message: string) => void) {
           loaded.add(resource.id);
         }
       }
-      for (const abr of [false, true]) {
-        await compareCell(row, abr, preset, renderer, canvas, cache, async (label, bytes, count) => {
+      const native = new Map<string, { bytes: Uint8Array; empty: string }>();
+      const variants: Variant[] = ['native', 'ABR', 'paint-round'];
+      if (row.mode === 'studio') {
+        variants.push('matched processor');
+      }
+
+      for (const variant of variants) {
+        const abr = variant !== 'native';
+        await compareCell(row, variant, preset, renderer, canvas, cache, async (label, bytes, count) => {
           captured.add(label);
           const metrics = await captureCell(label, bytes, row, abr, count, report);
           // Compare raw byte hashes, independent of the PNG encoder. Collect all changed cells in one run.
           const expected = (baseline as Record<string, string>)[label];
+          const phase = label.endsWith(' displayed') ? 'displayed' : 'finished';
+          if (variant === 'native') {
+            native.set(phase, { bytes, empty: metrics.split(' ')[2]! });
+          } else if (variant !== 'ABR' && !(variant === 'paint-round' && row.mode === 'studio')) {
+            const reference = native.get(phase)!;
+            const worst = bytes.reduce((max, v, i) => Math.max(max, Math.abs(v - reference.bytes[i]!)), 0);
+            if (worst > 1 || metrics.split(' ')[2] !== reference.empty) {
+              errors.push(label + ' differs from native, worst ' + worst);
+            }
+          }
           if (expected !== metrics) {
             errors.push(label + ': expected ' + expected + ', got ' + metrics);
           }
@@ -74,16 +93,21 @@ export async function compareSoftRound(report: (message: string) => void) {
 
 async function compareCell(
   row: Row,
-  abr: boolean,
+  variant: Variant,
   preset: ReturnType<typeof softRoundCandidate>,
   renderer: Awaited<ReturnType<typeof createPaintRenderer>>,
   canvas: OffscreenCanvas,
   cache: ReturnType<typeof createBrushResources>,
   captureBytes: (label: string, bytes: Uint8Array<ArrayBuffer>, count: number) => Promise<void>
 ) {
-  const brush: Brush = { ...preset.brush, engine: abr ? preset.engine : undefined, opacity: row.opacity ?? 1 };
+  const abr = variant !== 'native';
+  const analytic = variant === 'paint-round' || variant === 'matched processor';
+  const engine: typeof preset.engine = analytic
+    ? { ...preset.engine, settings: { ...preset.engine.settings, placement: 'paint-distance-v1', coverage: 'paint-round-v1' } }
+    : preset.engine;
+  const brush: Brush = { ...preset.brush, engine: abr ? engine : undefined, opacity: row.opacity ?? 1 };
   brush.stroke = { ...brush.stroke, mode: row.mode ?? 'studio' };
-  const label = row.size + 'px ' + row.label + (abr ? ' ABR' : ' native');
+  const label = row.size + 'px ' + row.label + ' ' + variant;
   let count = 0;
   const capture = (phase: string, bytes: Uint8Array<ArrayBuffer>) => captureBytes(label + phase, bytes, count);
   let reference: Uint8Array | undefined;
@@ -110,8 +134,9 @@ async function compareCell(
     for (let pass = 0; pass < (row.passes ?? 1); pass++) {
       const last = row.points.at(-1)!;
       const predicted = [{ ...last, x: last.x + 8, time: last.time + 8 }];
+      const processorBrush = variant === 'matched processor' ? { ...brush, engine: undefined } : brush;
       const processor = row.mode
-        ? withPrediction(studioBrushRecipe.processors[studioBrushRecipe.selectProcessor(brush)](brush, 1), () =>
+        ? withPrediction(studioBrushRecipe.processors[studioBrushRecipe.selectProcessor(processorBrush)](brush, 1), () =>
             row.prediction ? predicted : []
           )
         : createStudioProcessor(brush);
@@ -126,6 +151,12 @@ async function compareCell(
           processor,
           renderer: {
             ...renderer,
+            begin(layer, activeBrush, tip, settings) {
+              if (analytic && settings?.coverage !== 'paint-round-v1') {
+                throw new Error(label + ' did not select analytic coverage');
+              }
+              renderer.begin(layer, activeBrush, tip, settings);
+            },
             async paint(dabs) {
               const stamps = row.centres && dabs.length ? attributionDabs(row, brush, dabs[0]!) : dabs;
               count += stamps.length;

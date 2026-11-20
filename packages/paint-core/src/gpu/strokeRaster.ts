@@ -1,3 +1,4 @@
+import { createPaintRoundPipelines } from '@app-game/abr-paint/gpu/paintRound';
 import { createAbrStamps, type AbrRasterSettings } from '@app-game/abr-paint/gpu/abrStamps';
 import { expandToRasterGrid } from '@app-game/abr-paint/gpu/brushBatchSize';
 import { createCanvasPickup, type PickupRegion } from '@app-game/abr-paint/gpu/canvasPickup';
@@ -27,7 +28,6 @@ import {
   tileBytes,
   tileCoordinates,
   tileId,
-  transmittanceBlend,
   type PaintTile,
   type StrokeScratch
 } from './tileTextures';
@@ -64,19 +64,7 @@ export function createStrokeRaster(
 ) {
   const { stroke, residency, displayCache, targets, paintBounds, allowsTile } = deps;
   const device = root.device;
-  const pipelines = {
-    stamp: root.createRenderPipeline({
-      attribs: { stamp: shader.stampLayout.attrib },
-      vertex: shader.stampVertex,
-      fragment: shader.stampFragment,
-      targets: { format: 'r16float', blend: transmittanceBlend }
-    }),
-    stroke: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.strokeFragment,
-      targets: { format: 'rgba8unorm' }
-    })
-  };
+  const pipelines = createPaintRoundPipelines(root);
   const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
   // writeBuffer copies at call time, so one staging array serves every round-brush stamp upload.
