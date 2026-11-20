@@ -431,6 +431,7 @@ it('imports a brush file and offers export only for the selected native preset',
   const [selected, select] = createSignal(native.id);
   services.tools.preset = selected;
   services.presets.all = () => [native, abr];
+  services.presets.listed = services.presets.all;
   mount(() => (
     <LegoServicesContext value={services}>
       <PartFrame kind="action:brushes" popup />

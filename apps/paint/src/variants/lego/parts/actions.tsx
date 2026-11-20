@@ -40,7 +40,15 @@ export const actionParts = [
   action('brushes', 'brush', 'Brushes', 'brush', () => ({}), {
     needs: (s, f) => ({
       get presets() {
-        return s.presets.all();
+        return s.presets.listed();
+      },
+      own: {
+        get deleting() {
+          return s.presets.own.deleting();
+        },
+        rename: f.command(s.presets.own.rename),
+        remove: f.command(s.presets.own.remove),
+        undo: f.command(s.presets.own.undo)
       },
       get recent() {
         return s.presets.recent();

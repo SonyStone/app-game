@@ -1,7 +1,7 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { JSX } from '@solidjs/web';
 import type { Result } from 'neverthrow';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show, untrack } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
@@ -26,6 +26,13 @@ import { PopoverHeader } from './Popover';
  * while brushes cannot be chosen), `--brush-library-height` (the columns' height), and in the sidebar look
  * `--brush-library-row-radius` and `--brush-library-icon-radius` (the corners of a set's or brush's row and of a set's
  * icon tile); `--brush-library-sample-radius` rounds a brush's stroke sample, square by default.
+ *
+ * With `own`, the brush in use, when it is one of the user's own (not built-in), shows Rename and Delete on its row,
+ * beside its sample, drawn on `--brush-library-icon` tiles in `--brush-library-icon-ink`. Rename turns the name into a
+ * text field with the name selected, Cancel and Confirm beside it: Enter confirms, Escape ends the renaming only, a
+ * blank name cannot be confirmed. Delete takes the brush away at once, the brush in use moving to the next one listed
+ * (or the one before), and its row becomes a strip that offers Undo until the deletion is final, a bar running out
+ * the time left. Without `own` no brush offers either, as in Procreate's look.
  */
 export function BrushLibrary(props: {
   title: string;
@@ -52,11 +59,37 @@ export function BrushLibrary(props: {
    * chosen one on an accent pill, instead of Procreate's plain names.
    */
   sidebar?: boolean;
+  /** Renaming and deleting the user's own brushes; omitted, brushes can only be chosen. See `createOwnBrushes`. */
+  own?: {
+    /** Brushes being deleted, by id, with the time (`Date.now()`) their deletion becomes final. */
+    deleting: ReadonlyMap<string, number>;
+    /** Renames brush `id`; `name` is not blank. */
+    rename: (id: string, name: string) => void;
+    /** Deletes brush `id` undoably; `next` is the brush to use instead when `id` is in use. */
+    remove: (id: string, next?: string) => void;
+    undo: (id: string) => void;
+  };
 }) {
   let picker: HTMLInputElement | undefined;
   const sets = () => brushSets(props.presets, props.recent);
   const [chosen, setChosen] = createSignal(() => setOf(sets(), props.preset));
-  const shown = () => sets().find((set) => set.id === chosen()) ?? sets()[0];
+  /** The chosen set, or once it is gone, as after deleting its last brush, the set of the brush in use. */
+  const shown = () =>
+    sets().find((set) => set.id === chosen()) ?? sets().find((set) => set.id === setOf(sets(), props.preset));
+  /** The brush whose name is being edited; choosing another brush ends the renaming. */
+  const [renaming, setRenaming] = createSignal<string | undefined>(() => {
+    void props.preset;
+    return undefined;
+  });
+  const deleting = (id: string) => props.own?.deleting.get(id);
+  /**
+   * The brush to use instead of `id` once it is deleted: the next one in the shown set that stays, else the one before.
+   */
+  const successor = (id: string) => {
+    const staying = (shown()?.presets ?? []).filter((preset) => preset.id === id || deleting(preset.id) === undefined);
+    const index = staying.findIndex((preset) => preset.id === id);
+    return (staying[index + 1] ?? staying[index - 1])?.id;
+  };
   /** The screen shown where the sets and the brushes are two screens. */
   const [view, setView] = createSignal<'list' | 'detail'>('list');
 
@@ -127,9 +160,9 @@ export function BrushLibrary(props: {
               id: set.id,
               label: set.name,
               icon: setIcons[set.id],
-              trailing: String(set.presets.length)
+              trailing: String(set.presets.filter((preset) => deleting(preset.id) === undefined).length)
             }))}
-            selected={chosen()}
+            selected={shown()?.id}
             onSelect={(id) => {
               setChosen(id as BrushSet['id']);
               setView('detail');
@@ -141,15 +174,8 @@ export function BrushLibrary(props: {
           <SettingsBack label="Sets" title={shown()?.name ?? ''} onBack={() => setView('list')} />
           <div class={styles.brushes} role="listbox" aria-label={`${shown()?.name ?? ''} brushes`}>
             <For each={shown()?.presets ?? []} keyed={(preset) => preset.id}>
-              {(preset) => (
-                <button
-                  class={styles.brush}
-                  role="option"
-                  aria-selected={preset().id === props.preset ? 'true' : 'false'}
-                  disabled={props.disabled}
-                  onClick={() => props.onChoose(preset().id)}
-                >
-                  <span class={styles.brushName}>{preset().name}</span>
+              {(preset) => {
+                const sample = () => (
                   <StrokePreview
                     settings={preset().settings}
                     resources={
@@ -165,14 +191,157 @@ export function BrushLibrary(props: {
                     }
                     height={30}
                   />
-                </button>
-              )}
+                );
+                const selected = () => preset().id === props.preset;
+                const editable = () => !!props.own && !preset().builtIn && selected();
+
+                return (
+                  <Show
+                    when={deleting(preset().id) === undefined}
+                    fallback={
+                      <DeletedBrush
+                        name={preset().name}
+                        expires={deleting(preset().id)!}
+                        onUndo={() => props.own?.undo(preset().id)}
+                      />
+                    }
+                  >
+                    <div class={styles.row} data-actions={editable() && renaming() !== preset().id ? '' : undefined}>
+                      <Show
+                        when={editable() && renaming() === preset().id}
+                        fallback={
+                          <button
+                            class={styles.brush}
+                            role="option"
+                            aria-selected={selected() ? 'true' : 'false'}
+                            disabled={props.disabled}
+                            onClick={() => props.onChoose(preset().id)}
+                          >
+                            <span class={styles.brushName}>{preset().name}</span>
+                            {sample()}
+                          </button>
+                        }
+                      >
+                        <div class={styles.brush} role="option" aria-selected="true" aria-label={preset().name}>
+                          <BrushName
+                            name={preset().name}
+                            onConfirm={(name) => {
+                              setRenaming(undefined);
+                              props.own?.rename(preset().id, name);
+                            }}
+                            onCancel={() => setRenaming(undefined)}
+                          />
+                          {sample()}
+                        </div>
+                      </Show>
+                      <Show when={editable() && renaming() !== preset().id}>
+                        <div class={styles.rowActions} role="group" aria-label={`${preset().name} actions`}>
+                          <button
+                            type="button"
+                            aria-label="Rename brush"
+                            title="Rename"
+                            disabled={props.disabled}
+                            onClick={() => setRenaming(preset().id)}
+                          >
+                            <SketchIcon name="pencil" size={18} />
+                          </button>
+                          <button
+                            type="button"
+                            aria-label="Delete brush"
+                            title="Delete"
+                            disabled={props.disabled}
+                            onClick={() => props.own?.remove(preset().id, successor(preset().id))}
+                          >
+                            <SketchIcon name="trash" size={18} />
+                          </button>
+                        </div>
+                      </Show>
+                    </div>
+                  </Show>
+                );
+              }}
             </For>
           </div>
         </div>
       </SettingsSplit>
       {props.footer}
     </>
+  );
+}
+
+/**
+ * A brush's name being edited in place: a text field starting with `name`, focused with its text selected, then
+ * Cancel and Confirm as fused icon tiles. Enter confirms and Escape cancels, the key going no further, so the popup
+ * holding the library stays open. Confirm is off while the name is blank.
+ */
+function BrushName(props: { name: string; onConfirm: (name: string) => void; onCancel: () => void }) {
+  const [value, setValue] = createSignal(untrack(() => props.name));
+  const [field, setField] = createSignal<HTMLInputElement>();
+  createEffect(field, (element) => {
+    if (element) {
+      element.focus({ preventScroll: true });
+      element.select();
+    }
+  });
+  const blank = () => value().trim() === '';
+  const confirm = () => {
+    if (!blank()) {
+      props.onConfirm(value().trim());
+    }
+  };
+
+  return (
+    <div class={styles.naming} role="group" aria-label="Rename brush">
+      <input
+        ref={setField}
+        class={styles.namingField}
+        type="text"
+        aria-label="Brush name"
+        value={value()}
+        maxlength={80}
+        autocomplete="off"
+        spellcheck={false}
+        enterkeyhint="done"
+        onInput={(event) => setValue(event.currentTarget.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            confirm();
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onCancel();
+          }
+        }}
+      />
+      <button type="button" aria-label="Cancel renaming" onClick={() => props.onCancel()}>
+        <SketchIcon name="close" size={18} />
+      </button>
+      <button type="button" class={styles.confirm} aria-label="Confirm name" disabled={blank()} onClick={confirm}>
+        <SketchIcon name="check" size={18} />
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The row of a brush being deleted: its name struck through and, where its sample was, a bar running out the time
+ * until `expires` (`Date.now()` time) beside Undo.
+ */
+function DeletedBrush(props: { name: string; expires: number; onUndo: () => void }) {
+  const left = untrack(() => Math.max(0, props.expires - Date.now()));
+
+  return (
+    <div class={styles.deleted} role="group" aria-label={`${props.name} deleted`}>
+      <span class={styles.brushName}>{props.name}</span>
+      <div class={styles.deletedLine}>
+        <span class={styles.countdown} style={{ 'animation-duration': `${left}ms` }} />
+        <button type="button" class={styles.undo} aria-label="Undo delete" onClick={() => props.onUndo()}>
+          <SketchIcon name="undo" size={16} />
+          Undo
+        </button>
+      </div>
+    </div>
   );
 }
 

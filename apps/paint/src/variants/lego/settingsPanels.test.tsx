@@ -159,6 +159,7 @@ it('shows the brush sets as a sidebar in LEGO and as pills in Procreate, the cho
   const [brush, other] = builtInPresets;
   services.tools.preset = createSignal(other!.id)[0];
   services.presets.all = () => [brush!, other!];
+  services.presets.listed = services.presets.all;
   services.presets.recent = () => [brush!.id];
   mount(() => (
     <LegoServicesContext value={services}>
