@@ -6,8 +6,7 @@ import type { BrushPreset } from './brushPresets';
 
 /**
  * A brush preset's sample stroke: an S-curve across the whole width, stamped dab by dab with the preset's spacing,
- * flow and opacity. Round brushes use their hardness and taper with pressure; presets with tip images (ABR and
- * textured brushes) stamp their primary tip, read through `resources` when the sample first scrolls into view. Sizes
+ * flow and opacity. Round brushes use their hardness and taper with pressure; presets with ABR tip images stamp their primary tip, read through `resources` when the sample first scrolls into view. Sizes
  * map to the strip's height geometrically, keeping the presets' relative sizes. Sizes itself to its box's CSS width
  * and `height`.
  */

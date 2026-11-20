@@ -824,7 +824,7 @@ export function createPaintSession(options: {
   }
 
   /**
-   * The tool paints color, so Alt/Option-click picks a color: the fill, and round and textured presets and ABR Brush
+   * The tool paints color, so Alt/Option-click picks a color: the fill, and round presets and ABR Brush
    * or Pencil presets. ABR erasers keep Alt for erasing to history, and the Mixer Brush for loading paint.
    */
   function paintsColor() {

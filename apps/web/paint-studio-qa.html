@@ -35,7 +35,7 @@
     <button id="smudge-responsiveness">Measure Smudge responsiveness</button>
     <button id="abr-mixing">Check ABR color mixing</button>
     <button id="abr-brush">Check ABR presets</button>
-    <button id="textured-brush">Check textured brushes</button>
+    <button id="sampled-brush">Check sampled brushes</button>
     <button id="canvas-targets">Check canvas targets</button>
     <button id="execution-modes">Check execution modes</button>
     <button id="worker">Run worker checks</button>
@@ -51,7 +51,7 @@
       import {initAbr} from '@app-game/abr-parser';
       import {loadBrushLibrary} from '@app-game/abr-brush/library';
       import { selectBrushFile } from '../abr-viewer/src/lib/select-brush-file';
-      import { verifyTexturedBrush } from '../paint/tests/gpu/texturedBrushVerification';
+      import { verifySampledBrush } from '../paint/tests/gpu/sampledBrushVerification';
       import { verifySelection } from '../paint/tests/gpu/selectionVerification';
       import { verifyPressureSpacing } from '../paint/tests/gpu/pressureVerification';
       import { verifyStrokeFiltering } from '../paint/tests/gpu/strokeFilteringVerification';
@@ -72,10 +72,10 @@
       import { measurePainting, measureDensePainting, measureNavigation } from '../paint/tests/gpu/performance';
       const button = document.querySelector('#run'),
         output = document.querySelector('#output');
-      document.querySelector('#textured-brush').onclick = async () => {
-        output.textContent = 'Checking textured brushes…\n';
+      document.querySelector('#sampled-brush').onclick = async () => {
+        output.textContent = 'Checking sampled brushes…\n';
         try {
-          await verifyTexturedBrush(
+          await verifySampledBrush(
             (message) => (output.textContent += message + '\n'),
             async () => {
               const response = await selectBrushFile('spatter_brushes.abr');

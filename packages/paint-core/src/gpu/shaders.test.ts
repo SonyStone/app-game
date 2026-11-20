@@ -3,14 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { selectionEdge, shapeVertex, tileFragment, tileVertex } from './selectionOverlay';
 import * as shaders from './shaders';
 import { clipFragment } from './strokeClip';
-import { texturedStampFragment } from './texturedStamps';
 import { fallbackFragment } from './viewFallback';
 import { fragment, vertex } from './virtualTexture';
 
 describe('GPU shader compilation', () => {
-  it('resolves textured coverage with mip-filtered sampling', () => {
-    expect(tgpu.resolve([texturedStampFragment])).toContain('textureSample');
-  });
   it('resolves the selection mask and animated edge shaders', () => {
     for (const shader of [tileVertex, tileFragment, shapeVertex, selectionEdge])
       expect(tgpu.resolve([shader])).toMatch(/@(vertex|fragment)/);

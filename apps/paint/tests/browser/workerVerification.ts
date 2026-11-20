@@ -1,7 +1,8 @@
+import { equalDocuments } from './equalDocuments';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { verifyBrushResourceTransport } from './resourceVerification';
-import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
+import { sampledFixture } from '../gpu/sampledFixture';
 import Worker from '../../src/features/engine/paint.worker?worker';
 import { readPaintFile } from '@app-game/paint-core/paintFile';
 import type { PaintCommand, PaintEvent } from '@app-game/paint-core/protocol';
@@ -47,26 +48,21 @@ export async function verifyWorker(report: (message: string) => void) {
   };
   try {
     await init();
-    const uploaded = wait((e) => e.type === 'brush-resources' && e.requestId === 'textured-tip');
+    const sampled = await sampledFixture();
+    const uploaded = wait((e) => e.type === 'brush-resources' && e.requestId === 'sampled-tip');
     send({
       type: 'brush-resources',
-      requestId: 'textured-tip',
+      requestId: 'sampled-tip',
       action: 'put',
-      resource: {
-        id: 'qa-textured-tip',
-        width: 2,
-        height: 2,
-        format: 'r8unorm',
-        pixels: new Uint8Array([255, 255, 255, 255])
-      }
+      resource: sampled.resource
     });
     const upload = await uploaded;
-    if (upload.type !== 'brush-resources' || !upload.result.ok) throw new Error('Textured tip upload failed.');
+    if (upload.type !== 'brush-resources' || !upload.result.ok) throw new Error('Sampled tip upload failed.');
     const committed = wait((e) => e.type === 'state' && e.document.canUndo);
     const drawing = wait((e) => e.type === 'state' && !e.saved);
     send({
       type: 'begin',
-      brush: { ...defaultBrush(), engine: texturedBrush.select({ tipId: 'qa-textured-tip', spacing: 0.04 }) },
+      brush: sampled.brush,
       samples: [{ x: -30, y: 0, pressure: 1, time: 0 }]
     });
     send({ type: 'samples', samples: [{ x: 30, y: 0, pressure: 0.5, time: 20 }] });
@@ -77,15 +73,15 @@ export async function verifyWorker(report: (message: string) => void) {
     const original = await download();
     const decoded = await readPaintFile(original);
     assert(decoded.layers[0]!.tiles.size > 0, 'Worker did not commit stroke pixels');
-    report('PASS: production worker commits textured batched pressure input and exports a valid .paint document');
+    report('PASS: production worker commits sampled batched pressure input and exports a valid .paint document');
     const undone = wait((e) => e.type === 'state' && e.document.tileCount === 0);
     send({ type: 'undo' });
     await undone;
     const redone = wait((e) => e.type === 'state' && e.document.tileCount > 0);
     send({ type: 'redo' });
     await redone;
-    assert(await equalFiles(await download(), original), 'Worker undo/redo changed serialized pixels');
-    report('PASS: worker undo/redo restores an identical exported file');
+    assert(await equalDocuments(await download(), original), 'Worker undo/redo changed exported pixels');
+    report('PASS: worker undo/redo restores every exported tile');
     const points = [
       { x: -100, y: -100 },
       { x: 100, y: -100 },
@@ -176,7 +172,7 @@ export async function verifyWorker(report: (message: string) => void) {
     const restored = wait((e) => e.type === 'restored');
     send({ type: 'import', file: original });
     await restored;
-    assert(await equalFiles(await download(), original), 'Imported document changed its pixels or camera');
+    assert(await equalDocuments(await download(), original), 'Imported document changed its pixels or camera');
     const pngResult = wait((e) => e.type === 'download');
     send({ type: 'png' });
     const png = await pngResult;
@@ -279,26 +275,4 @@ async function equalFiles(a: Blob, b: Blob) {
   const left = new Uint8Array(await a.arrayBuffer());
   const right = new Uint8Array(await b.arrayBuffer());
   return left.length === right.length && left.every((byte, index) => byte === right[index]);
-}
-
-/** Tile insertion order can change after a move; compare metadata and decoded pixels by key. */
-async function equalDocuments(a: Blob, b: Blob) {
-  const left = await readPaintFile(a),
-    right = await readPaintFile(b);
-  if (
-    left.activeId !== right.activeId ||
-    JSON.stringify(left.camera) !== JSON.stringify(right.camera) ||
-    left.layers.length !== right.layers.length
-  )
-    return false;
-  return left.layers.every(({ tiles, ...info }, index) => {
-    const { tiles: other, ...otherInfo } = right.layers[index]!;
-    if (JSON.stringify(info) !== JSON.stringify(otherInfo) || tiles.size !== other.size) return false;
-    return [...tiles].every(([key, data]) => {
-      const match = other.get(key);
-      if (!match) return false;
-      const pixels = unpackTile(match);
-      return unpackTile(data).every((value, at) => value === pixels[at]);
-    });
-  });
 }

@@ -1,9 +1,10 @@
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { expect, it } from 'vitest';
+import { sampledPreset } from '../../../tests/sampledPreset';
 import { applyPreset, presetChanges, presetSettings, type BrushPreset } from './brushPresets';
 
 it('saves the chosen groups and always the tip', () => {
-  const brush = { ...defaultBrush(), size: 80, color: '#ff0000', engine: { id: 'textured', settings: { tipId: 't' } } };
+  const brush = { ...defaultBrush(), size: 80, color: '#ff0000', engine: sampledPreset().engine };
   expect(presetSettings(brush, ['size'])).toEqual({
     engine: brush.engine,
     tool: 'brush',

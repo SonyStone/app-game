@@ -85,6 +85,11 @@ export async function convertSampled(preset: BrushPreset, images: readonly Brush
   if (!image) {
     throw new Error('Missing native tip: ' + tipId);
   }
+  return prepareSampledPreset(preset, image);
+}
+
+/** Creates a single sampled-tip document from Paint host settings and decoded coverage. */
+export async function prepareSampledPreset(preset: BrushPreset, image: BrushResource) {
   const sha256 = await assetId(image);
   const text = nativePresetText(preset, { tip: { format: 'r8', width: image.width, height: image.height, sha256 } });
   const item = await prepareDocument(text, new Map([[sha256, image]]));

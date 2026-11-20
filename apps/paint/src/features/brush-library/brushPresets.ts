@@ -13,6 +13,8 @@ export type BrushPreset = {
   name: string;
   /** Values of the included groups. `tip` is always included; a missing `engine` selects the round brush. */
   settings: Partial<Brush>;
+  /** Reason a retained legacy preset cannot be selected. */
+  unavailable?: string;
   /** Ids of the tip, texture and dual-brush images that the engine settings refer to; uploaded before use. */
   resourceIds: readonly string[];
   /** Identifies an imported original, such as an ABR brush; importing the same original again replaces the preset. */

@@ -89,7 +89,7 @@ A custom engine implements `BrushEngine` from `contracts.ts` (`packages/paint-co
 
 To catch up with a stationary pen, a processor may implement `idle(elapsedMs)`, returning processed points. The engine passes them to the renderer without reprocessing and returns `true` from its own `idle` to show the result and keep the clock running, or `false` to stop it until the next input. The runtime calls this optional method in the shared queue, with at most one pending operation. Finish, cancel, device loss, and disposal stop the clock. The None processor does not provide idle and keeps raw input. The Airbrush engine may still use its own clock to accumulate paint, independently of path smoothing.
 
-For a decoded ABR tip there is `texturedBrush`, which rasterizes coverage into Studio tiles. **Brush settings → ABR brushes…** opens the shared ABR viewer for importing and selecting a preset; it becomes a preset of the brush library, and the full preset is passed to the `abrBrush` engine, including supported dynamics and Tool Options. Currently `PaintRenderer` describes Studio's existing raster backend; there is no contract for arbitrary vector documents here.
+Sampled tips resolve to `abrBrush`, which rasterizes coverage into Studio tiles. **Brush settings → ABR brushes…** opens the shared ABR viewer for importing and selecting a preset; it becomes a preset of the brush library, and the full preset is passed to the `abrBrush` engine, including supported dynamics and Tool Options. Currently `PaintRenderer` describes Studio's existing raster backend; there is no contract for arbitrary vector documents here.
 
 ## Replacing a stroke
 
@@ -143,7 +143,7 @@ An explicit `brush.engine.id` takes precedence over `selectEngine`. Without `bru
 
 The built-in `roundBrush.select({ hardness, spacing })` sets optional overrides of the current round-brush settings. Omitted or `undefined` values keep the values from `Brush`. A preset explicitly overrides these fields; a UI editing such a preset must update its `engine.settings`.
 
-Settings must be transferable via `structuredClone`. ABR-tip and dual-tip pixels are loaded with a separate command; `begin` receives their IDs. Decoded tips are rasterized via `texturedBrush`; in the app, `src/features/abr/createAbrPresets.ts` imports a preset chosen in the ABR viewer into the brush library, and `src/features/brush-library/createPresetUploads.ts` uploads its resources.
+Settings must be transferable via `structuredClone`. ABR-tip and dual-tip pixels are loaded with a separate command; `begin` receives their IDs. Decoded tips are rasterized via `abrBrush`; in the app, `src/features/abr/createAbrPresets.ts` imports a preset chosen in the ABR viewer into the brush library, and `src/features/brush-library/createPresetUploads.ts` uploads its resources.
 
 ## Brush resources
 
@@ -180,37 +180,7 @@ The LRU evicts only unused entries. A duplicate ID is rejected: a new texture ve
 
 The runtime releases resource pins after `finish`, `cancel`, a factory/input/finish error, and device loss. A cancel failure keeps both errors in an `AggregateError`. Runtime shutdown cancels the active stroke and releases the cache. Document import and renderer recovery keep the resources of the selected brushes. Switching main/worker creates a different runtime. `createPaintEngine` (`src/features/engine/createPaintEngine.ts`) waits for the selected preset to be re-uploaded through its `prepare` hook (`createAbrPresets.restore()`) before enabling input.
 
-This is a cache of decoded CPU pixels. A separate GPU cache in `gpu/texturedStamps.ts` (`packages/paint-core/src/gpu/texturedStamps.ts`) serves `texturedBrush` rasterization. Brush resources are not written to `.paint` or the document's IndexedDB; the saved drawing already contains raster tiles. The UI keeps the source pixels of the applied preset until page reload and re-uploads them when the runtime changes. There is no persistent library storage yet.
-
-## Textured BrushEngine
-
-`texturedBrush` is registered in Studio's production recipe and is available to other JSX compositions:
-
-```tsx
-<BrushEngines engines={{ round: roundBrush.engine, textured: texturedBrush.engine }} selectEngine={() => 'round'}>
-  {/* BrushResources and PaintRuntime */}
-</BrushEngines>
-```
-
-After the resource loads successfully, select it for a stroke:
-
-```ts
-const brush = {
-  ...defaultBrush(),
-  size: 128,
-  engine: texturedBrush.select({ tipId: 'tip:my-brush:v1', angle: Math.PI / 4, spacing: 0.08 })
-};
-runtime.send({ type: 'begin', brush, samples: [{ x: 0, y: 0, pressure: 0.5, time: performance.now() }] });
-// Then regular samples and end. tool: 'eraser' uses the same tip for erasing.
-```
-
-`size` sets the length of the longer side; proportions come from the texture. `angle` is a clockwise rotation in radians, 0 by default; `spacing` optionally overrides the Brush setting. Tip coverage replaces `hardness`. Input smoothing, pressure, flow, opacity, and color blending remain shared with Studio. Dabs use the circumscribed circle for tile lookup, so rotated rectangular corners are not clipped.
-
-The read-only entry point `@app-game/abr-parser/reader` of the shared ABR-viewer parser returns a `brushTip` with `width`, `height`, `data`. For the load command, pass `pixels: brushTip.data`, `format: 'r8unorm'`, and your own versioned ID. `data` is already normalized to 8-bit coverage, even if the source ABR `depth` is 16. Studio does not import ABR-viewer application code: the QA test host passes the shared parser's result through this same contract.
-
-The GPU cache is created on the first textured stroke. The texture, mip levels, and bind group are reused across strokes and canvases of one renderer. The limit is 64 MiB including mip levels and 256 entries; eviction happens between strokes. Resource identity, not the string ID, determines reloading: a new resource after deleting the old ID will not receive a stale GPU texture. The GPU cache does not pin CPU buffers. Renderer loss releases GPU copies; the next stroke uploads them from the surviving CPU cache.
-
-Current support covers grayscale tips, constant rotation, proportions, and basic stroke settings. Scattering, angle/roundness dynamics, dual brush, patterns, wet edges, and full Photoshop reproduction are not yet wired up. In Studio's regular UI the round brush is selected by default. After import you can pick a tip with a thumbnail, change size, flow, opacity, and spacing, or return to Soft round.
+Sampled-tip documents use the ABR renderer. Paint stores their grayscale coverage in the brush library and uploads it before selecting the brush.
 
 ## ABR import in Studio
 
@@ -248,7 +218,7 @@ Unit tests referenced below by bare file name are in `apps/paint/src/composition
 - `PaintApplication.test.tsx`: engine/processor selection at the stroke boundary, signals for replacing and removing targets, unknown ID.
 - `packages/abr-paint/src/resources.test.ts`: budget, LRU, and atomicity of cache errors; `brushResources.test.ts`: resource release on engine failure.
 - `memoryStorage.test.ts`: isolation, immutable snapshots, restore, atomic failure, undo preservation during collect.
-- QA **Check textured brushes**: a real ABR tip, transparency, proportions, rotation, preview/commit, tile corners, cancel, undo/redo, erasing, GPU LRU, and renderer recovery.
+- QA **Check sampled brushes**: a real ABR tip, transparency, proportions, rotation, preview/commit, tile corners, cancel, undo/redo, erasing, and renderer recovery.
 - QA **Check canvas targets**: real GPU pixels for two sizes and cameras, HTML/offscreen replacement, detach/reattach, undo/redo; independent partial updates, preview removal, and cancel/commit are compared with a full redraw with VT enabled and disabled.
 - QA **Check execution modes**, **Run worker checks**, **Check readback queue**, **Check stroke filtering**: the existing Studio checks are kept.
 

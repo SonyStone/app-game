@@ -24,7 +24,7 @@ import { verifyStreaming } from '../gpu/streamingVerification';
 import { verifyStrokeFiltering } from '../gpu/strokeFilteringVerification';
 import { verifyPaintSymmetry } from '../gpu/symmetryVerification';
 import { verifyCanvasTargets } from '../gpu/targetVerification';
-import { verifyTexturedBrush } from '../gpu/texturedBrushVerification';
+import { verifySampledBrush } from '../gpu/sampledBrushVerification';
 import { verifyTipUploads } from '../gpu/tipUploadVerification';
 import { verifyGpu } from '../gpu/verification';
 import { verifyMainThread } from './mainThreadVerification';
@@ -80,7 +80,7 @@ export const verifications = {
   'abr-mixing': verifyAbrColorMixing,
   'abr-brush': verifyAbrBrush,
   'abr-mask-batches': verifyAbrMaskBatches,
-  'textured-brush': (report: Report) => verifyTexturedBrush(report, loadFixtureTip),
+  'sampled-brush': (report: Report) => verifySampledBrush(report, loadFixtureTip),
   'canvas-targets': verifyCanvasTargets,
   lasso: verifySelection,
   symmetry: verifyPaintSymmetry,
@@ -102,14 +102,14 @@ window.paintVerifications = verifications;
 
 /**
  * First decodable tip of Adobe's Spatter pack. The browser runner serves the pinned fixture at this path; on a plain dev
- * server the request fails and the textured-brush check reports the missing fixture.
+ * server the request fails and the sampled-brush check reports the missing fixture.
  */
 async function loadFixtureTip(): Promise<BrushResource> {
   const response = await fetch('/__fixtures/spatter_brushes.abr');
 
   if (!response.ok) {
     throw new Error(
-      'Serve spatter_brushes.abr at /__fixtures/ (the browser runner does this) to check textured brushes.'
+      'Serve spatter_brushes.abr at /__fixtures/ (the browser runner does this) to check sampled brushes.'
     );
   }
 

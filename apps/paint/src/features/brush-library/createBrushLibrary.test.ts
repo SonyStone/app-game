@@ -1,12 +1,15 @@
 // @vitest-environment jsdom
 import type { BrushResource } from '@app-game/abr-paint/resources';
+import { defaultBrush } from '@app-game/paint-core/brush';
 import { defaultStrokeSettings } from '@app-game/paint-core/strokeSettings';
+import { supportsPaintSymmetry } from '@app-game/paint-core/symmetry';
 import 'fake-indexeddb/auto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { BrushPreset } from './brushPresets';
 import { createBrushLibrary } from './createBrushLibrary';
 import { createBrushStorage } from './createBrushStorage';
+import { legacySampledId } from './nativeDocument';
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -167,7 +170,7 @@ function open(name: string, options: { onError?: () => void; imageBudget?: numbe
 }
 
 function preset(name: string, resourceIds: string[] = []): Omit<BrushPreset, 'id'> {
-  return { name, settings: { engine: { id: 'textured', settings: { tipId: 'tip' } }, size: 20 }, resourceIds };
+  return { name, settings: { size: 20 }, resourceIds };
 }
 
 function image(id: string): BrushResource {
@@ -181,20 +184,51 @@ it('migrates sampled coverage once, preserving the old resource and reporting a 
     const name = crypto.randomUUID();
     const onError = vi.fn();
     const { storage } = open(name);
-    const original = { ...preset('Nib', ['tip']), id: 'nib', created: 1 };
+    const original = {
+      ...preset('Nib', ['tip']),
+      settings: { engine: { id: legacySampledId, settings: { tipId: 'tip' } }, size: 20 },
+      id: 'nib',
+      created: 1
+    };
     await storage.putPreset(original, [image('tip')]);
     await storage.putPreset({ ...original, id: 'bad', created: 2, resourceIds: [] });
     for (let run = 0; run < 2; run++) {
       const reader = open(name, { onError });
       const write = vi.spyOn(reader.storage, 'putPreset');
       await Promise.all([reader.library.load('nib'), reader.library.loadAll()]);
-      expect(reader.library.find('nib')?.settings.engine?.id).toBe('abr');
-      expect(reader.library.find('bad')?.settings).toEqual(original.settings);
+      const migrated = reader.library.find('nib')!;
+      expect(migrated.settings.engine?.id).toBe('abr');
+      expect(supportsPaintSymmetry({ ...defaultBrush(), ...migrated.settings })).toBe(true);
+      const failed = reader.library.find('bad')!;
+      expect(failed.unavailable).toContain('Missing native tip');
+      expect((await reader.library.resources(failed))._unsafeUnwrapErr().message).toBe(failed.unavailable);
+      expect(failed.settings).toEqual(original.settings);
       expect(write).toHaveBeenCalledTimes(run ? 0 : 1);
       expect(onError).toHaveBeenCalledTimes(run + 1);
     }
     expect(await storage.readPreset('nib')).toMatchObject(original);
     expect(await storage.readResources(['tip'])).toHaveLength(1);
+    // Earlier versions cached a selection pointing at the source digest and had no enlarged mask on disk.
+    const saved = (await storage.readPreset('nib'))!;
+    const projection = saved.sampledDocument!;
+    const digest = projection.assetIds![0]!;
+    const engine = projection.settings.engine!;
+    await storage.putPreset({
+      ...saved,
+      sampledDocument: {
+        ...projection,
+        resourceIds: [digest],
+        settings: {
+          ...projection.settings,
+          engine: { ...engine, settings: { ...(engine.settings as object), tipId: digest } }
+        }
+      }
+    });
+    const reopened = open(name);
+    const nib = (await reopened.library.load('nib'))!;
+    const [working] = (await reopened.library.resources(nib))._unsafeUnwrap();
+    expect(working).toMatchObject({ id: nib.resourceIds[0], width: 128, height: 128 });
+    expect((await reopened.library.assets(nib))._unsafeUnwrap()[0]).toMatchObject({ id: digest, width: 2, height: 2 });
   } finally {
     vi.unstubAllGlobals();
   }

@@ -1,6 +1,5 @@
 import type { AbrRasterSettings } from '@app-game/abr-paint/gpu/abrStamps';
 import { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
-import type { BrushResource } from '@app-game/abr-paint/resources';
 import { gpuError, type GpuError } from '@app-game/solid-gpu/errors';
 import { makeGpuResources, type KeepGpuResource } from '@app-game/solid-gpu/gpu/resources';
 import { tgpu } from 'typegpu';
@@ -444,16 +443,9 @@ async function assemblePaintRenderer(
 
       return [...keys];
     },
-    /** Captures brush settings and the target layer until commit/cancel. Optional native coverage replaces hardness.
-     * Textured dabs must carry the tip's circumscribed radius; use texturedBrush to map brush size correctly.
-     */
-    begin(
-      layer: Layer,
-      brush: Brush,
-      tip?: { resource: BrushResource; angle: number },
-      abr?: AbrRasterSettings<Layer>
-    ) {
-      strokes.begin(layer, brush, tip, abr);
+    /** The shared ABR renderer contract passes its raster settings in the fourth argument. */
+    begin(layer: Layer, brush: Brush, _reserved?: undefined, abr?: AbrRasterSettings<Layer>) {
+      strokes.begin(layer, brush, abr);
     },
     /** Samples current pixels for canvas-dependent tools, excluding disposable previews.
      * The borrowed GPU patch remains valid until the next capture or renderer disposal.
