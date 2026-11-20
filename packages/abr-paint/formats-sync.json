@@ -1,8 +1,8 @@
 {
   "note": "Synced copy of photoshop-formats; edit it there and run `pnpm sync:formats` (scripts/sync-formats.mjs).",
   "repository": "photoshop-formats",
-  "commit": "3da9dae0f19ac201420bc78063eb93651f48c2c6",
-  "tree": "0be293268bb9fa95b0d2ab570eaa39800eb70ad8",
+  "commit": "623610d9073fb55f1e08c4b0eefd4b719fcc8d0a",
+  "tree": "5ba6ce33b9869c035af1dfb2779e2be871f097ca",
   "files": {
     "README.md": "82217ada3f3b9e82d2f04e187534e313f182f7fc20d88b1c9f2379d1c13de76e",
     "RUNTIME-FORMAT.md": "9e57563b560e9957e16c15a35c222bdf3c011ff18d6f1e5cdcb6248f901b1e3d",
@@ -46,7 +46,7 @@
     "src/gpu/toolState.ts": "b5af58328566b6653b19bca1e71f015f0a8e9ee7545f188efbac9167d7b7a6ad",
     "src/index.ts": "95186c4f606fb0a9de9486b529a6ec57c601dbea36456b936d2501788333ed68",
     "src/input.ts": "ee543502b87bf410e9a1c6d2635e323f6ce99e27c3d134eeb6a09713df5b43a2",
-    "src/megapack.test.ts": "4966b8f8a9ec603f4e3cf2318653cf96526e51a23bc36a108096d1ef73698a37",
+    "src/megapack.test.ts": "2b5127613746f4f150983302de677275b6754eb729d58dd93245f92e18c87419",
     "src/packageBoundary.test.ts": "257fd936853d18954be953ddf246bc09b310726bd1fa80fcfca83a3f74a5cf6f",
     "src/preset.test.ts": "b65c7180475f7058939420945ea4dfd6b16f4b93b093364cae0346f79bcf1ba4",
     "src/preset.ts": "4df478fa1ae546e1c7378ba4b7724fab63a56a30a501a49e9ac89bd83378f03d",
@@ -56,6 +56,7 @@
     "src/runtimeBrush.test.ts": "ddb4b0eb120c93f40931162f8f5b21ed26066ea97206db1941dcdc32b3012fe9",
     "src/runtimeBrush.ts": "148635f238507703b55f6d13320ca593fd74ef19e1d8f430d44d48a35da9d37a",
     "tests/initAbr.ts": "818022dc4afa4f6fdf75c812d210c592aabec689f629d776717e4dcafc6f3919",
+    "tests/normalizePreset.ts": "1aa2c169e02d3f7a60fcc775c5809dab5b5aa4dae2b0375e3fcaf9004c5be240",
     "tsconfig.json": "cd591f0d24b8e14f3ba71cde78658f050b55ea28df152be92c2c5788c605d76b",
     "vitest.config.ts": "9260fc2e18a4b80595bc9d5d0f49f71ff51f9f92d15207e396543679d8958a22"
   }

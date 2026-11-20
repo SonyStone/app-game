@@ -1,13 +1,13 @@
 import { brushToFormValues } from '@app-game/abr-brush/form';
 import { loadBrushLibrary } from '@app-game/abr-brush/library';
-import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { readAdobeBrushFixture } from '../../../scripts/adobe-brush-fixture.mjs';
+import { normalizePreset } from '../tests/normalizePreset';
 import { adaptiveBrushQuality } from './adaptiveQuality';
 import { prepareAbrBrush } from './preset';
 import { decodeRuntimeBrush, encodeRuntimeBrush } from './runtimeBrush';
 
-// The only suite that parses Adobe's full 465-preset Megapack (375 MB, pinned by SHA-256 and cached in
+// The suite that parses Adobe's full 465-preset Megapack (375 MB, pinned by SHA-256 and cached in
 // .tmp/adobe-brushes). Tests that need a few named presets use `@app-game/abr-brush/testing/adobeBrushes`.
 const megapack = loadBrushLibrary(await readAdobeBrushFixture('megapack.abr'));
 
@@ -21,7 +21,7 @@ it('preserves every prepared Megapack preset and every referenced coverage byte'
     const prepared = prepareAbrBrush(brush);
     const bytes = encodeRuntimeBrush(prepared);
     const loaded = decodeRuntimeBrush(bytes);
-    expect(normalize(loaded), brush.name).toEqual(normalize(prepared));
+    expect(normalizePreset(loaded), brush.name).toEqual(normalizePreset(prepared));
     const length = new DataView(bytes.buffer).getUint32(8, true);
     const manifest = new TextDecoder().decode(bytes.subarray(12, 12 + length));
 
@@ -53,27 +53,3 @@ it('gives every Megapack preset the same LOD sampling budget, including special 
     }
   }
 });
-
-/** Replaces random resource IDs with their positions and pixels with digests, so two preparations compare equal. */
-function normalize(preset: ReturnType<typeof prepareAbrBrush>) {
-  const id = (value: string | undefined) =>
-    value === undefined ? undefined : preset.resources.findIndex((r) => r.id === value);
-  return {
-    ...preset,
-    resource: { ...preset.resource, pixels: hash(preset.resource.pixels), id: id(preset.resource.id) },
-    resources: preset.resources.map((r) => ({ ...r, pixels: hash(r.pixels), id: id(r.id) })),
-    engine: {
-      ...preset.engine,
-      settings: {
-        ...preset.engine.settings,
-        tipId: id(preset.engine.settings.tipId),
-        patternId: id(preset.engine.settings.patternId),
-        dualId: id(preset.engine.settings.dualId)
-      }
-    }
-  };
-}
-
-function hash(pixels: Uint8Array) {
-  return createHash('sha256').update(pixels).digest('hex');
-}

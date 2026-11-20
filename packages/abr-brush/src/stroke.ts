@@ -1,3 +1,4 @@
+import { createPaintDistance } from './paintDistance';
 import { dabColor } from './colorDynamics';
 import type { ColorMixing } from './colorMixing';
 import { deviceControlInput, deviceControlValue } from './deviceControl';
@@ -146,6 +147,14 @@ export function createAbrStrokeSampler(
     'values' | 'color' | 'secondaryColor' | 'opacity' | 'flow' | 'stampRole' | 'randomState' | 'initialTangent'
   > & {
     size: number;
+    /** Defaults to Photoshop placement. Paint distance uses nominal size, preset spacing and
+     * clamped input pressure when size control is pen pressure. It ignores dynamic diameter,
+     * tipSpacing and timed build-up for placement. Each event still runs ABR shape, rotation,
+     * jitter, scatter/count and secondary-tip dynamics. Plain Paintbrush flow uses continuous
+     * tool flow and pressure; complex transfer retains ABR evaluation. minimumSpacing widens
+     * nominal spacing up to a quarter diameter and compensates flow including first contact.
+     */
+    placement?: 'photoshop-v1' | 'paint-distance-v1';
     seed?: number;
     /** Retains source geometry for consumers using Photoshop row rasterization. Defaults to false. */
     sampledTipGeometry?: boolean;
@@ -218,6 +227,18 @@ export function createAbrStrokeSampler(
   let foreground16 = previewColor(input.color).map((c) => Math.round(c * 32768));
   let background16 = previewColor(input.secondaryColor ?? '#477ca6').map((c) => Math.round(c * 32768));
   const size = input.size;
+  const paint = input.placement === 'paint-distance-v1'
+    ? createPaintDistance(
+        size,
+        v.spacingEnabled && v.spacing > 0 ? v.spacing / 100 : 0.01,
+        (v.useShapeDynamics || v.tool.pressureOverridesSize) && shape.sizeControl === 2,
+        input.minimumSpacing
+      )
+    : undefined;
+  const simpleFlow = paint && paintbrushTransfer && (
+    !v.useTransfer || (transfer.flowJitter === 0 && transfer.flowMinimum === 0 && [0, 2].includes(transfer.flowControl))
+  );
+  let remaining = 1;
   let data: number[] = [];
   let mixing: number[] = [];
   let spacingRatios: number[] = [];
@@ -243,7 +264,15 @@ export function createAbrStrokeSampler(
     spacingRatios = [];
     spacingSteps = [];
     sampledTips = [];
-    for (const b of points) {
+    for (let b of points) {
+      if (paint) {
+        if (![b.x, b.y, b.pressure, b.time].every(Number.isFinite)) {
+          continue;
+        }
+        if (b.pressure < 0 || b.pressure > 1) {
+          b = { ...b, pressure: Math.max(0, Math.min(1, b.pressure)) };
+        }
+      }
       if (data.length / stampStride >= (input.maxStamps ?? Infinity)) break;
       if (!previous) {
         previous = { ...b };
@@ -263,14 +292,21 @@ export function createAbrStrokeSampler(
           initialVector = directionVector;
         }
       }
-      for (; data.length / stampStride < (input.maxStamps ?? Infinity); ) {
-        const distanceT = length > 0 ? Math.max(0, (nextDistance - traveled) / length) : Infinity;
-        const timeT = buildUp && b.time > a.time ? Math.max(0, (nextTime - a.time) / (b.time - a.time)) : Infinity;
-        if (Math.min(distanceT, timeT) > 1) break;
-        if (distanceT <= timeT) nextDistance += stamp(interpolate(a, b, distanceT), direction);
-        else {
-          stamp(interpolate(a, b, timeT), direction, true);
-          nextTime += 30;
+      if (paint) {
+        remaining = paint.segment(length, a.pressure, b.pressure, remaining, (t) => {
+          stamp(interpolate(a, b, t), direction);
+          return data.length / stampStride < (input.maxStamps ?? Infinity);
+        });
+      } else {
+        for (; data.length / stampStride < (input.maxStamps ?? Infinity); ) {
+          const distanceT = length > 0 ? Math.max(0, (nextDistance - traveled) / length) : Infinity;
+          const timeT = buildUp && b.time > a.time ? Math.max(0, (nextTime - a.time) / (b.time - a.time)) : Infinity;
+          if (Math.min(distanceT, timeT) > 1) break;
+          if (distanceT <= timeT) nextDistance += stamp(interpolate(a, b, distanceT), direction);
+          else {
+            stamp(interpolate(a, b, timeT), direction, true);
+            nextTime += 30;
+          }
         }
       }
       traveled += length;
@@ -303,6 +339,7 @@ export function createAbrStrokeSampler(
     randomState: channels.snapshot,
     preview(points: readonly PreviewPoint[]) {
       const saved = {
+        remaining,
         nextDistance,
         traveled,
         step,
@@ -332,6 +369,7 @@ export function createAbrStrokeSampler(
         return add(points);
       } finally {
         ({
+          remaining,
           nextDistance,
           traveled,
           step,
@@ -539,22 +577,25 @@ export function createAbrStrokeSampler(
         : stampSize * (computedRaster ? computedTipScale(size, v.hardness) : 1);
       const flow = usesPencilCoverage(v.tool)
         ? 1
-        : paintbrushTransfer
-          ? transferValue(
-              Math.round(input.flow * 255) / 255,
-              v.useTransfer ? transfer.flowControl : 0,
-              transfer.flowFade,
-              transfer.flowMinimum,
-              v.useTransfer ? transfer.flowJitter : 0,
-              inputValue(transfer.flowControl, transfer.flowFade),
-              step,
-              flowRandom
-            )
-          : input.flow *
-            (v.useTransfer
-              ? (1 - (random() * v.transfer.flowJitter) / 100) *
-                inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
-              : 1);
+        : simpleFlow
+          ? input.flow * (v.useTransfer && transfer.flowControl === 2
+              ? (v.useBrushPose || p.pointerType === 'mouse' ? pressure : p.pressure) : 1)
+          : paintbrushTransfer
+            ? transferValue(
+                Math.round(input.flow * 255) / 255,
+                v.useTransfer ? transfer.flowControl : 0,
+                transfer.flowFade,
+                transfer.flowMinimum,
+                v.useTransfer ? transfer.flowJitter : 0,
+                inputValue(transfer.flowControl, transfer.flowFade),
+                step,
+                flowRandom
+              )
+            : input.flow *
+              (v.useTransfer
+                ? (1 - (random() * v.transfer.flowJitter) / 100) *
+                  inputValue(v.transfer.flowControl, v.transfer.flowFade, v.transfer.flowMinimum)
+                : 1);
       const opacity = ['MixB', 'ShTl', 'BlTl'].includes(v.tool.type)
         ? 1
         : paintbrushTransfer
@@ -630,7 +671,7 @@ export function createAbrStrokeSampler(
               : v.useShapeDynamics && shape.flipYJitter && random() < 0.5
                 ? -1
                 : 1),
-        flow,
+        paint && paint.ratio > 1 && !samplingTool ? 1 - (1 - flow) ** paint.ratio : flow,
         opacity,
         depth,
         random() * 1000,
@@ -701,6 +742,16 @@ export function createAbrStrokeSampler(
       }
     }
     step++;
+    if (paint) {
+      const spacing = paint.step(p.pressure);
+      if (retainSpacing) {
+        for (let at = firstStamp; at < data.length; at += stampStride) {
+          spacingRatios.push(paint.ratio);
+          spacingSteps.push(spacing);
+        }
+      }
+      return spacing;
+    }
     const percent = v.spacingEnabled ? Math.trunc(v.spacing) : 0;
     const advance =
       v.tipKind === 'sampledBrush'
