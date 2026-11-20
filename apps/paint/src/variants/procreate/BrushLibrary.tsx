@@ -244,7 +244,7 @@ export function BrushLibrary(props: {
                             disabled={props.disabled}
                             onClick={() => setRenaming(preset().id)}
                           >
-                            <SketchIcon name="pencil" size={18} />
+                            <SketchIcon name="rename" size={18} />
                           </button>
                           <button
                             type="button"
