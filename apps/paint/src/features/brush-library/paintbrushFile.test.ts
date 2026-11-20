@@ -41,7 +41,7 @@ it.each([
     throw new Error(archive.reason);
   }
   const host = { ...defaultBrush(), color: '#77aacc', opacity: 0.72 };
-  const resolved = await resolveDocument(archive.brushes[0]!.view, archive.assets, host, 'round');
+  const resolved = await resolveDocument(archive.brushes[0]!.view, archive.assets, host);
   expect(resolved.path).toBe('round');
   if (!resolved.brush) {
     throw new Error(resolved.reasons.join(', '));

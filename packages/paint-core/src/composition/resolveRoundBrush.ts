@@ -3,11 +3,19 @@ import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { Brush } from '../brush';
 import { roundSettings } from './roundBrushEngine';
 
-/** Selects the renderer for plain round Paint documents, including legacy tool slots and previews. */
-export const plainRoundRoute: 'round' | 'abr' = 'round';
+/**
+ * The renderer that draws plain round brushes when a stroke begins (`drawRound` in the studio recipe: the canvas, the
+ * drawing pad, calibration and the preview worker): `'abr'` is the ABR engine with Paint's placement and analytic
+ * round coverage, `'round'` the native round engine. Both give the same pixels (`softRoundComparison`); set `'round'`
+ * to go back. The brush itself stays a round selection either way, so nothing that reads it changes.
+ */
+export const plainRoundRoute: 'round' | 'abr' = 'abr';
 
-/** Resolves after host controls have been applied, so partial presets inherit the live pressure and tip settings. */
-export function resolveRoundBrush(brush: Brush, route: 'round' | 'abr' = plainRoundRoute): Brush {
+/**
+ * The brush `route` draws a plain round brush with: itself for `'round'`, its ABR selection for `'abr'`. Resolve after
+ * host controls have been applied, so partial presets inherit the live pressure and tip settings.
+ */
+export function resolveRoundBrush(brush: Brush, route: 'round' | 'abr'): Brush {
   if (route === 'round') {
     return brush;
   }

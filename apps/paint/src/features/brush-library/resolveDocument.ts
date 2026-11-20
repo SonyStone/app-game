@@ -1,4 +1,4 @@
-import { plainRoundRoute, resolveRoundBrush } from '@app-game/paint-core/composition/resolveRoundBrush';
+import { resolveRoundBrush } from '@app-game/paint-core/composition/resolveRoundBrush';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import type { Coverage } from '@app-game/paint-core/paintbrush/asset';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
@@ -7,12 +7,18 @@ import { photoshopExtensions, resolveAbr } from './abrDocument';
 import { hostExtension, hostSettings } from './abrHost';
 import { chooseRenderPath, paintDocumentFields, pressureBinding } from './nativeDocument';
 
-/** Chooses a stroke renderer from the document. Host values fill groups omitted by the preset. */
+/**
+ * Chooses a stroke renderer from the document. Host values fill groups omitted by the preset.
+ *
+ * A plain round document resolves to the round selection (`path: 'round'`), which the editor and the brush controls
+ * read; which renderer then draws it is the recipe's choice when a stroke begins (`plainRoundRoute`, `drawRound`).
+ * `roundRoute: 'abr'` instead resolves such a document to the ABR selection that route draws with, for comparisons.
+ */
 export async function resolveDocument(
   document: BrushDocument,
   assets: ReadonlyMap<string, Coverage>,
   host = defaultBrush(),
-  roundRoute: 'round' | 'abr' = plainRoundRoute
+  roundRoute: 'round' | 'abr' = 'round'
 ) {
   const native = chooseRenderPath(document);
   if (native.path === 'round') {
@@ -20,7 +26,7 @@ export async function resolveDocument(
     return {
       path: roundRoute,
       status: native.status,
-      reasons: roundRoute === 'round' ? ['Plain round route selects the native renderer'] : [],
+      reasons: [],
       settings: roundRoute === 'round' ? native.settings : { ...native.settings, engine: brush.engine },
       brush,
       resources: []

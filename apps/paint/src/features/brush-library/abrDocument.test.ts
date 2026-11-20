@@ -1,4 +1,3 @@
-import { plainRoundRoute } from '@app-game/paint-core/composition/resolveRoundBrush';
 import { loadBrushLibrary, type BrushAsset } from '@app-game/abr-brush/library';
 import { createAbrStrokeSampler } from '@app-game/abr-brush/stroke';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
@@ -335,7 +334,7 @@ it('switches a Paint round tip to the ABR sampler for scattering and back when d
   expect(dabs(resolved.prepared!)).toEqual(dabs(expected));
 
   values.scatteringEnabled = false;
-  expect(await resolveDocument(document, new Map())).toMatchObject({ path: plainRoundRoute, status: 'supported' });
+  expect(await resolveDocument(document, new Map())).toMatchObject({ path: 'round', status: 'supported' });
 });
 
 it('returns format compatibility reasons with the renderer decision', async () => {
