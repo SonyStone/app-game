@@ -108,14 +108,5 @@ const paths = {
   hue: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 12V4M12 12l6.9 4M12 12l-6.9 4',
   tilt: 'M4 20h16M8 20l8-16M14 20a6 6 0 0 0-3.3-5.4',
   bristles: 'M9 21h6l-1-6h-4ZM10 15 6 4M11 15 10 3M13 15l1-12M14 15l4-11',
-  pencil: 'M8 21V9l4-6 4 6v12M8 9h8M11 4.5h2',
-  /* What a value is, drawn to read at 10 px beside its number: no more than three strokes each. */
-  size: 'M3 16a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0M9 11a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0',
-  opacity: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0M12 4v16M12 8.5h6M12 12h7.5M12 15.5h6',
-  flow: 'M12 3s-6.5 7-6.5 11.5a6.5 6.5 0 0 0 13 0C18.5 10 12 3 12 3Z',
-  saturation: 'M4 12a8 8 0 1 0 16 0a8 8 0 1 0-16 0M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',
-  brightness:
-    'M8.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
-  smoothing: 'M2.5 17c2-9 4.5 1 6.5-5s3 2 4.5 0 3.5-1 8-1',
-  layerOpacity: 'm12 3 9 5-9 5-9-5ZM3 16l9 5 9-5M12 3v10'
+  pencil: 'M8 21V9l4-6 4 6v12M8 9h8M11 4.5h2'
 } as const;
