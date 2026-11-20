@@ -3,6 +3,7 @@ import type { JSX } from '@solidjs/web';
 import type { Result } from 'neverthrow';
 import { createEffect, createSignal, For, Show, untrack } from 'solid-js';
 import type { BrushPreset } from '../../features/brush-library';
+import { legacySampledId } from '../../features/brush-library/nativeDocument';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
 import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
@@ -122,7 +123,7 @@ export function BrushLibrary(props: {
             props.presets.some(
               (p) =>
                 p.id === props.preset &&
-                (!!p.abrDocument || ['round', 'textured'].includes(p.settings.engine?.id ?? 'round'))
+                (!!p.abrDocument || ['round', legacySampledId].includes(p.settings.engine?.id ?? 'round'))
             )
           }
         >
