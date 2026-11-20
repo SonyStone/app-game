@@ -33,7 +33,6 @@ import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
 import type { Popup } from './parts/definition';
 import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
-import { ValueFaceSwitch } from './parts/valueFaces';
 import { namedSliderSpan } from './parts/values';
 import { StudioSettingRow } from './StudioSettingRow';
 
@@ -325,8 +324,6 @@ export function LegoStudio(
                   <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
                 </button>
               </Show>
-              {/* TEMPORARY: the one-cell value trial's switch; goes once the user picks a treatment. */}
-              <ValueFaceSwitch />
               <button
                 type="button"
                 class={styles.editButton}

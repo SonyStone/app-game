@@ -1,144 +1,74 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createSignal, Show } from 'solid-js';
-import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
+import { createEffect, createSignal } from 'solid-js';
 import styles from '../LegoStudio.module.css';
 import { fitText, type TextStyle } from '../textFit';
 
 /**
- * How a value part too small for a caption tells which value it is: a knob, and a number look whose caption does not
- * fit. TEMPORARY: a trial of the treatments, chosen as a whole with `ValueFaceSwitch` until the user picks one; then
- * the chosen one stays, and this switch, `valueFaceKey` and the treatments not chosen go.
+ * How a value part too small for a caption, a knob or a captionless number look, tells which value it is: the
+ * channel's short name in small capitals above the number, and its full name with the value in a tag beside the part
+ * on hover and on a press (see `createNameTag` and `NameTag`).
  *
- * - `plain`: the number alone, as before the trial.
- * - `name`: the channel's short name set small above the number (see `oneCellFace`).
- * - `glyph`: an icon for the kind of value above the number (see `valueGlyph`).
- * - `approach`: the number alone, and the full name in a tag beside the part while a pen or mouse hovers over it or
- *   the part is pressed, with the value while it is pressed (see `createNameTag`).
- * - `gauge`: the knob's arc sweeps 270° like a hardware knob's scale, and the short name sits in the opening at the
- *   bottom, under the number; the tag of `approach` names it in full.
- */
-export type ValueFace = (typeof valueFaces)[number]['id'];
-
-/** The trial's treatments in the order the switch steps through them, each with the name the switch shows. */
-export const valueFaces = [
-  { id: 'plain', label: 'Plain' },
-  { id: 'name', label: '1 Name' },
-  { id: 'glyph', label: '2 Glyph' },
-  { id: 'approach', label: '3 Tag' },
-  { id: 'gauge', label: '4 Gauge' }
-] as const;
-
-/** TEMPORARY: the key the trial's treatment is kept under in `localStorage`, per device. */
-export const valueFaceKey = 'paint.lego.value-face-trial';
-
-const [face, setFace] = createSignal<ValueFace>(readValueFace());
-
-/** TEMPORARY: the treatment every one-cell value part shows now, the same across the board, its popups and the studio. */
-export function valueFace() {
-  return face();
-}
-
-/** TEMPORARY: shows `next` on every one-cell value part and keeps it; a refused write keeps it until the page closes. */
-export function chooseValueFace(next: ValueFace) {
-  setFace(next);
-  try {
-    localStorage.setItem(valueFaceKey, next);
-  } catch {
-    // Storage refused: the choice lasts for this page.
-  }
-}
-
-/** TEMPORARY: the stored treatment, `plain` when none is stored or the entry cannot be read or is unknown. */
-export function readValueFace(): ValueFace {
-  let stored: string | null = null;
-  try {
-    stored = localStorage.getItem(valueFaceKey);
-  } catch {
-    return 'plain';
-  }
-
-  return valueFaces.find((option) => option.id === stored)?.id ?? 'plain';
-}
-
-/**
- * TEMPORARY: the developer switch beside Edit, a small button naming the treatment shown now; a tap steps to the next
- * one (see `valueFaces`) and keeps it.
- */
-export function ValueFaceSwitch() {
-  const index = () => valueFaces.findIndex((option) => option.id === face());
-
-  return (
-    <button
-      type="button"
-      class={[styles.editButton, styles.trialButton]}
-      title="One-cell value trial (temporary)"
-      onClick={() => chooseValueFace(valueFaces[(index() + 1) % valueFaces.length]!.id)}
-    >
-      {valueFaces[index()]!.label}
-    </button>
-  );
-}
-
-/**
- * What a one-cell value of `part` shows beside its number with the treatment `face`, decided by the room it has, never
- * by the cell size alone:
+ * The name and the number are laid out by their ink, the height of their capitals and digits, so the room left over
+ * is shared out exactly: a third of it between the two lines (2 to 4 px) and the rest evenly above and below. The
+ * texts never shrink. What gives way where room is short is a knob's arc: 2 px around its face where the face then
+ * leaves at least 4 px above, between and below, 1.5 px below that (24 and 28 px cells).
  *
- * - `name`: the short name in capitals above the number, when the two stack within the face's height and the name
- *   fits its width. A short name too wide gives way to the label's initials ("Scatter count jitter" is SCJ), and
- *   those to their first two letters; the name goes only when even two letters do not fit.
- * - `glyph`: the value's icon above the number, when the two stack within the face's height.
- * - `gauge` (a knob only): the name, chosen as for `name`, in the arc's opening, whose width is the chord the 90°
- *   opening leaves; a number look shows it under the number. With the full name on approach.
- * - `approach`: nothing in the part; the full name on approach.
+ * The name is the short name when it fits the face's width less `nameSide` each side; a short name too wide gives way
+ * to the label's initials ("Scatter count jitter" is SCJ), and those to their first two letters. It goes only when
+ * even two letters do not fit, or when the two lines do not stack with 2 px between them and 1 px to each edge.
  *
- * `room` is the part's box. A knob's face is the box less its arc's ring on every side; a number look's is the box
- * less its compact padding.
+ * `room` is the part's box, never the cell size alone.
  */
 export function oneCellFace(
-  face: ValueFace,
   look: 'knob' | 'number',
   room: { width: number; height: number },
-  value: { id: string; label: string; short: string }
+  value: { label: string; short: string }
 ) {
-  const inset = look === 'knob' ? knobRing : numberInset;
-  const width = room.width - 2 * inset;
-  const height = room.height - 2 * inset;
-  const stacks = (top: number, gap: number) => top + gap + numberRow <= height;
-  const gauge = face === 'gauge' && look === 'knob';
-  const nameRoom = gauge ? gaugeOpening * Math.min(room.width, room.height) : width;
+  const numberInk = look === 'knob' ? knobDigits : numberDigits;
+  const ink = nameCaps + numberInk;
+  const ring = look === 'number' ? 0 : room.height - 2 * wideRing - ink >= 3 * maxGap ? wideRing : narrowRing;
+  const spare = room.height - 2 * ring - ink;
+  const gap = Math.min(maxGap, Math.max(minGap, Math.round((spare / 3) * 2) / 2));
+  const stacks = spare >= minGap + 2 * minMargin;
 
   return {
-    name:
-      (face === 'name' || face === 'gauge') && stacks(nameRow, stackGap)
-        ? faceName(nameRoom, value.label, value.short)
-        : undefined,
-    glyph: face === 'glyph' && stacks(glyphSize, 0) && glyphSize <= width ? valueGlyph(value.id) : undefined,
-    /** Whether the knob's arc is a gauge with an opening at the bottom. */
-    gauge,
-    /** Whether the name stands under the number, as the gauge sets it, rather than above. */
-    below: face === 'gauge',
-    /** Whether the full name shows in a tag on approach. */
-    approach: face === 'approach' || face === 'gauge'
+    name: stacks ? faceName(room.width - 2 * ring - 2 * nameSide, value.label, value.short) : undefined,
+    /** The arc around a knob's face in CSS pixels; 0 for the number look, which has none. */
+    ring,
+    /** The space between the name's capitals and the number's digits in CSS pixels. */
+    gap,
+    /** How far the number's centre sits below the face's centre with the name above it; half the name and gap. */
+    numberOffset: (nameCaps + gap) / 2,
+    /** How far the name's centre sits above the face's centre; half the number and gap. */
+    nameOffset: (numberInk + gap) / 2
   };
 }
 
-/** The ring of arc around a stacked knob's face, and the padding around a compact number look's field. */
-const knobRing = 2;
-const numberInset = 2;
+/**
+ * The height in CSS pixels of the face's inks, as `.faceName`, `.faceNumber` and the compact number set them: 10 px
+ * capitals stand 7 px, a knob's 12 px digits 9 px and a compact number look's 11 px digits 8 px. Each line's
+ * line-height is its ink, which in the system fonts (San Francisco, Roboto, Segoe) puts the capitals right inside it.
+ */
+const nameCaps = 7;
+const knobDigits = 9;
+const numberDigits = 8;
+
+/** The space between the name and the number: at least 2 px, at most 4, a third of the room left over between. */
+const minGap = 2;
+const maxGap = 4;
+
+/** The least room between the inks and the face's edge for the name to show. */
+const minMargin = 1;
+
+/** A knob's arc around its face: `wideRing` where the face keeps the full spacing, `narrowRing` otherwise. */
+const wideRing = 2;
+const narrowRing = 1.5;
 
 /**
- * The rows a face stacks its name or glyph and its number in, in CSS pixels: a row is a little taller than its text's
- * capitals (10 px capitals stand 7 px tall, 12 px digits 9), 2 px apart, so the stack fits a 20 px face, the smallest
- * a 24 px cell has. An icon sits right on the number: its box keeps a pixel of its own clear. As `.stackFace` lays
- * them out.
+ * Room kept clear between the name and either side of the face, besides the pixel `fitText` keeps spare: a third
+ * initial, as in SCF, still fits a 28 px knob.
  */
-const nameRow = 8;
-const glyphSize = 10;
-const numberRow = 10;
-const stackGap = 2;
-
-/** The share of a gauge knob's edge its 90° opening spans as a chord: 2 sin 45°, half of it per side of the centre. */
-const gaugeOpening = Math.SQRT1_2;
+const nameSide = 0.5;
 
 /** How a face sets the value's name, as `.faceName` does. */
 export const faceNameStyle: TextStyle = { size: 10, weight: 700, letterSpacing: 0.3 };
@@ -166,60 +96,27 @@ export function nameInitials(label: string) {
 }
 
 /**
- * The icon for the value `id`: its own for size, opacity, flow, hue, saturation, brightness and lightness, smoothing
- * and layer opacity, also for the ABR brush's flow and smoothing; sliders for every other value.
- */
-export function valueGlyph(id: string): SketchIconName {
-  return glyphs[id] ?? 'sliders';
-}
-
-const glyphs: Readonly<Record<string, SketchIconName>> = {
-  size: 'size',
-  opacity: 'opacity',
-  'brush:flow': 'flow',
-  'brush:abr-tool-flow': 'flow',
-  hue: 'hue',
-  saturation: 'saturation',
-  brightness: 'brightness',
-  lightness: 'brightness',
-  'brush:smoothing': 'smoothing',
-  'brush:abr-smoothing-amount': 'smoothing',
-  'layer-opacity': 'layerOpacity'
-};
-
-/** The value's icon as a face sets it above the number. */
-export function FaceGlyph(props: { name: SketchIconName }) {
-  return (
-    <span class={styles.faceGlyph}>
-      <SketchIcon name={props.name} size={glyphSize} />
-    </span>
-  );
-}
-
-/**
- * The name tag of the `approach` treatment: whether it shows, and the pointer handlers that show it, for the element
- * that holds a value part. It shows while a pen or mouse hovers over the part with no button down (a pen hovering
- * reports as `pen` in Chrome for Android, a finger never hovers), and from a press with any pointer, a finger too, until that pointer
- * lifts or is cancelled. A press reports itself as `pressed`, so the tag shows the value with the name meanwhile.
- * `onPointerDown` must be called from the element's own handler; the lift is heard on the window, so a part that
- * captures the pointer or goes away mid-press still hides its tag.
+ * Whether a one-cell value's name tag shows, and the pointer handlers that show it, for the element that holds the
+ * part. It shows while a pen or mouse hovers over the part with no button down (a hovering pen reports as `pen` in
+ * Chrome for Android; a finger never hovers), and from a press with any pointer, a finger too, at once on the press,
+ * until that pointer lifts or is cancelled. `onPointerDown` must be called from the element's own handler; the lift is
+ * heard on the window, so a part that captures the pointer or goes away mid-press still hides its tag.
  */
 export function createNameTag() {
   const [hovered, setHovered] = createSignal(false);
   const [press, setPress] = createSignal<number>();
+  const pressed = () => press() !== undefined;
   const lift = (event: PointerEvent) => {
     if (event.pointerId === press()) {
       setPress(undefined);
     }
   };
-  createEventListener(() => (press() === undefined ? undefined : window), 'pointerup', lift);
-  createEventListener(() => (press() === undefined ? undefined : window), 'pointercancel', lift);
+  createEventListener(() => (pressed() ? window : undefined), 'pointerup', lift);
+  createEventListener(() => (pressed() ? window : undefined), 'pointercancel', lift);
 
   return {
     /** Whether the tag shows. */
-    shown: () => hovered() || press() !== undefined,
-    /** Whether a press holds the part, so the tag shows the value too. */
-    pressed: () => press() !== undefined,
+    shown: () => hovered() || pressed(),
     onPointerDown(event: PointerEvent) {
       setPress(event.pointerId);
     },
@@ -237,52 +134,65 @@ export function createNameTag() {
   };
 }
 
-/** A press held this long without moving only shows the name tag: lifting it opens nothing. */
+/** A press on a knob held this long, however still, only shows the name tag: lifting it opens nothing. */
 export const peekHold = 450;
 
 /**
- * The full name of a value over everything beside its part, in the browser's top layer like the keypad (see
- * `ValueEntryCard`), never taking a press: above the part where there is room, otherwise under it, centred on it and
- * kept inside the window. While the part is pressed it shows the value after the name, so a finger over the number
- * still sees it change.
+ * A value's full name and its current value, as the part formats it with its unit (a dash for a value that does not
+ * apply), over everything beside its part in the browser's top layer like the keypad (see `ValueEntryCard`), so it
+ * shows above the brush studio's modal dialog too. It never takes a press. It stands above the part, clear of the pen
+ * or hand on it, or under it where there is no room above, centred on it and kept inside the window, and follows the
+ * part every frame while it shows, as on a floating plate being moved.
  */
-export function NameTag(props: { anchor: Element; label: string; value?: string }) {
+export function NameTag(props: { anchor: Element; label: string; value: string }) {
   const [tag, setTag] = createSignal<HTMLElement>();
 
-  createEffect(
-    () => ({ element: tag(), text: `${props.label}${props.value ?? ''}` }),
-    ({ element }) => {
-      if (!element) {
-        return;
-      }
-
-      try {
-        if (!element.matches(':popover-open')) {
-          element.showPopover?.();
-        }
-      } catch {
-        // Popovers unsupported, as in jsdom: the tag lies in place.
-      }
-
-      placeTag(element, props.anchor);
+  createEffect(tag, (element) => {
+    if (!element) {
+      return;
     }
-  );
+
+    try {
+      element.showPopover?.();
+    } catch {
+      // Popovers unsupported, as in jsdom: the tag lies in place.
+    }
+
+    // `@solid-primitives/raf` is no dependency of the app, and the loop is this one line.
+    let frame = 0;
+    const follow = () => {
+      placeTag(element, props.anchor);
+      frame = requestAnimationFrame(follow);
+    };
+    follow();
+    return () => cancelAnimationFrame(frame);
+  });
 
   return (
     <span ref={setTag} class={styles.nameTag} popover="manual" role="status">
       {props.label}
-      <Show when={props.value}>{(value) => <b>{value()}</b>}</Show>
+      <b>{props.value}</b>
     </span>
   );
 }
 
+/** Puts `tag` above `anchor`, or under it without room above, centred on it and inside the window. */
 function placeTag(tag: HTMLElement, anchor: Element) {
   const rect = anchor.getBoundingClientRect();
   const { width, height } = tag.getBoundingClientRect();
-  const margin = 6;
-  const above = rect.top - margin - height;
-  const top = above >= margin ? above : rect.bottom + margin;
-  const left = Math.max(margin, Math.min(window.innerWidth - margin - width, rect.left + rect.width / 2 - width / 2));
-  tag.style.left = `${left}px`;
-  tag.style.top = `${top}px`;
+  const above = rect.top - tagMargin - height;
+  const below = rect.bottom + tagMargin;
+  const top = above >= tagMargin ? above : Math.min(below, window.innerHeight - tagMargin - height);
+  const left = Math.max(
+    tagMargin,
+    Math.min(window.innerWidth - tagMargin - width, rect.left + rect.width / 2 - width / 2)
+  );
+  // Unchanged positions are not written again, so a still tag costs a frame no style change.
+  if (tag.style.left !== `${left}px` || tag.style.top !== `${top}px`) {
+    tag.style.left = `${left}px`;
+    tag.style.top = `${top}px`;
+  }
 }
+
+/** The space between the tag and its part, and between the tag and the window's edge. */
+const tagMargin = 6;
