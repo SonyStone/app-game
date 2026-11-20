@@ -216,3 +216,82 @@
 [data-narrow] .layerSelect :is(img, svg) {
   max-width: 100%;
 }
+
+/*
+ * The layer name's field. Too narrow for the whole name (see the `layers:name` part), it shows a "rename" glyph in
+ * place of a cut name until it takes focus, when the name shows for typing.
+ */
+.nameField {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+
+  &[data-pictured] .name:not(:focus) {
+    color: transparent;
+    cursor: pointer;
+  }
+
+  &:focus-within .nameGlyph {
+    display: none;
+  }
+}
+
+.nameGlyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--lego-ink);
+  pointer-events: none;
+}
+
+/* The blend mode, and over a compact one's preview the rings of its two circles (see `BlendRings`). */
+.blendPart {
+  position: relative;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.blendRings {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 24px;
+  height: 24px;
+  translate: -50% -50%;
+  fill: none;
+  stroke: var(--lego-ink);
+  stroke-width: 14;
+  pointer-events: none;
+}
+
+/*
+ * Smooth color's face: two colors mixed across a chip as the document mixes them, in linear light while Smooth color
+ * is on and in encoded sRGB, darkening the middle as Classic does, while it is off.
+ */
+.mixRamp {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--lego-r-badge);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
+  background: linear-gradient(to right in srgb, rgb(240 40 40), rgb(40 200 60));
+
+  &[data-linear] {
+    background: linear-gradient(to right in srgb-linear, rgb(240 40 40), rgb(40 200 60));
+  }
+}
+
+/* The layer list a picture opens: five cells wide, room for the wide rows, and seven cells high. */
+.popupList {
+  display: grid;
+  width: calc(5 * var(--lego-pitch) - var(--lego-gap));
+  height: calc(7 * var(--lego-pitch) - var(--lego-gap));
+  border-radius: var(--lego-r-popup-tile);
+  overflow: hidden;
+  background: var(--lego-tile);
+}

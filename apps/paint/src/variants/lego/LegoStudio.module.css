@@ -293,6 +293,21 @@
   overflow: hidden;
 }
 
+/* The brush glyph on a sample shown without its name (see `BrushMark`), on a badge of the tile's color. */
+.presetMark {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--lego-r-badge);
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  pointer-events: none;
+}
+
 /* Values */
 
 .knob {
@@ -979,9 +994,9 @@
 }
 
 .hex {
+  position: relative;
   display: grid;
   align-items: center;
-  container-type: inline-size;
   padding: 3px;
 
   input {
@@ -993,9 +1008,35 @@
     border-radius: var(--lego-r-inner);
     background: #ffffff;
     font:
-      600 clamp(7px, 14cqi, 12px) ui-monospace,
+      600 12px ui-monospace,
       monospace;
   }
+}
+
+/*
+ * A field too narrow for the code (see `HexPart`): the color itself under a "#" until the field takes focus, when the
+ * code shows for typing.
+ */
+.hex[data-pictured] input:not(:focus) {
+  border-color: rgb(0 0 0 / 0.18);
+  background: var(--hex-color);
+  color: transparent;
+}
+
+.hexMark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--hex-mark);
+  font:
+    700 15px ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+
+.hex:focus-within .hexMark {
+  display: none;
 }
 
 .chips {
@@ -1025,11 +1066,20 @@
   corner-shape: round;
 }
 
-/* A place in the history no color has taken yet. */
+/* A place in the history no color has taken yet; the first shows a clock turned back while the history is empty. */
 .slot {
+  display: grid;
+  place-items: center;
   border: 1px dashed rgb(0 0 0 / 0.25);
   box-shadow: none;
+  color: var(--lego-quiet);
   cursor: default;
+}
+
+/* A one-chip palette's four hues, two by two (see `PalettePart`). */
+.smallChips {
+  gap: 2px;
+  padding: 4px;
 }
 
 .square {
@@ -1831,6 +1881,57 @@
   }
 }
 
+/*
+ * A list too narrow for its choice: the guide's glyph in the middle, the list laid invisibly over the whole part to
+ * take presses and keys, and the part ringed while the list has focus.
+ */
+.wheelField[data-pictured] {
+  position: relative;
+  place-items: center;
+
+  label {
+    position: absolute;
+    inset: 0;
+  }
+
+  select {
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  &:focus-within {
+    box-shadow: inset 0 0 0 2px var(--lego-accent);
+  }
+}
+
+/* A harmony or gamut mask drawn as the icons are (see `HarmonyGlyph`). */
+.guideGlyph {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.guideGlyph[data-unlit] {
+  color: var(--lego-quiet);
+}
+
+.guideDot {
+  fill: currentColor;
+  stroke: var(--lego-tile);
+  stroke-width: 1.2;
+}
+
+.guideShape {
+  fill: currentColor;
+  fill-opacity: 0.35;
+}
+
 .editor .brokenPart,
 .brokenPart {
   display: flex;
@@ -2521,6 +2622,14 @@
     stroke: currentColor;
     stroke-width: 2.5;
     stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .curveFrame {
+    fill: none;
+    stroke: var(--lego-quiet);
+    stroke-opacity: 0.6;
+    stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
 }

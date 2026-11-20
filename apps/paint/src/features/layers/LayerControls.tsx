@@ -131,7 +131,7 @@ export function layerCommand(command: LayerCommand, state: DocumentState, ready:
     },
     lock: {
       label: 'Lock transparent pixels',
-      icon: selected.alphaLock ? 'lock' : 'unlock',
+      icon: selected.alphaLock ? 'alphaLock' : 'alphaUnlock',
       disabled: false,
       pressed: !!selected.alphaLock,
       action: { type: 'update', id: state.activeId, patch: { alphaLock: !selected.alphaLock } }

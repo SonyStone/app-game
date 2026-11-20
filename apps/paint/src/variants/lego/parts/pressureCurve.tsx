@@ -24,7 +24,7 @@ export const penPressureKind = 'value:pen-pressure-curve';
  * brush studio's Pen page, edits the one curve, so they always agree; edits apply at once to the next stroke. From
  * {@link pressureCurveMinimum} up it is the graph; where a head still leaves the graph that much room, two buttons
  * above it, Measure (the three calibration steps, which run on the brush studio's Pen page, opening the studio there
- * if needed) and Reset (the straight line), with its name before them where the name fits. Smaller, it is a small picture of the curve that opens the graph in a popup. A tap on a
+ * if needed) and Reset (the straight line), with its name before them where the name fits. Smaller, it is a small picture of the curve in the graph's frame, so that a straight curve does not read as a line, that opens the graph in a popup. A tap on a
  * point's value above the graph opens the keypad for it. While a pen presses the studio's pad or the graph, a dot
  * shows its raw pressure on the curve, over a histogram of the pressures drawn on the pad.
  */
@@ -96,6 +96,7 @@ function PressureCurvePart(props: ReturnType<typeof curveNeeds>) {
         fallback={
           <div class={styles.curvePicture} role="button" tabindex={0} aria-label={props.label} {...open}>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <path class={styles.curveFrame} d="M0 0H100V100H0ZM50 0V100M0 50H100" />
               <path d={props.picture} />
             </svg>
           </div>

@@ -176,7 +176,8 @@ it('owns list thumbnails through Edit and resize, releases in previews, and guar
   setMode('live');
   flush();
   expect(services.layers.wantThumbnails).toHaveBeenCalledExactlyOnceWith(26);
-  setSpan({ columns: 1, rows: 3 });
+  // Two columns keep the rows; one column would turn the list into its picture (see `layers:list`).
+  setSpan({ columns: 2, rows: 3 });
   setMode('edit');
   flush();
   expect(services.layers.wantThumbnails).toHaveBeenCalledOnce();

@@ -81,7 +81,20 @@ export const colorParts = [
     },
     View: PairPart
   }),
-  definePart({ kind: 'color:hex', family: 'color', group: 'colors', section: 'Color', label: 'Hex', needs: colorInput, View: HexPart }),
+  definePart({
+    kind: 'color:hex',
+    family: 'color',
+    group: 'colors',
+    section: 'Color',
+    label: 'Hex',
+    needs: (s, f) =>
+      merge(colorInput(s, f), {
+        get span() {
+          return f.span;
+        }
+      }),
+    View: HexPart
+  }),
   definePart({
     kind: 'color:history',
     family: 'color',

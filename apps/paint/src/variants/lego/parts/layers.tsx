@@ -9,13 +9,19 @@ import { fits, fitsLines, type TextStyle } from '../textFit';
 import { definePart, type PartBinding } from './definition';
 
 /**
- * The layer list's looks: rows wrapped under their name, and wide rows from where a row has room for its eye, its
- * thumbnail, a name and its grip side by side. Declared before the definitions, which read it as they are made.
+ * The layer list's looks: a picture of a stack of layers that opens the list in a popup, rows wrapped under their
+ * name, and wide rows from where a row has room for its eye, its thumbnail, a name and its grip side by side. The
+ * picture is the look of a part too narrow for a row's thumbnail and eye together. Declared before the definitions,
+ * which read it as they are made.
  */
 const listLooks: readonly LookSpec[] = [
+  { id: 'icon', label: 'Picture', min: anyRoom },
   { id: 'narrow', label: 'Narrow', min: anyRoom },
   { id: 'wide', label: 'Wide', min: { width: 136, height: 0 } }
 ];
+
+/** The width in CSS pixels from which the list shows its rows by itself: a row's eye beside a whole thumbnail. */
+const listRowsWidth = 52;
 
 /** Ordinary LEGO views of shared layer state. Only the mounted list acquires thumbnails, outside preview. */
 export const layerParts = [
@@ -25,34 +31,38 @@ export const layerParts = [
     group: 'layer-list',
     section: 'Layers',
     label: 'Layer list',
-    icon: 'book',
-    looks: { looks: listLooks, auto: (room) => (lookFits(listLooks[1]!, room) ? 'wide' : 'narrow') },
+    icon: 'layers',
+    looks: {
+      looks: listLooks,
+      auto: (room) => (lookFits(listLooks[2]!, room) ? 'wide' : room.width >= listRowsWidth ? 'narrow' : 'icon')
+    },
     needs: (s, f) =>
-      merge(layerNeeds(s, f), {
-        get narrow() {
-          return f.look === 'narrow';
+      merge(listNeeds(s, f), {
+        get look() {
+          return f.look;
         },
-        get acquire() {
-          return f.mode !== 'preview';
-        },
-        want: s.layers.wantThumbnails,
-        thumbnail: s.layers.thumbnail
+        onOpen: (anchor: Element) => f.onPopup(anchor, { kind: 'part', partKind: f.kind })
       }),
     View: (props) => (
-      <div class={styles.list} data-narrow={props.narrow ? '' : undefined}>
-        <Show when={props.acquire}>
-          <WantThumbnails want={props.want} />
-        </Show>
-        <LayerList
-          state={props.state}
-          ready={props.ready}
-          onAction={props.onAction}
-          classes={styles}
-          narrow={props.narrow}
-          thumbnail={props.acquire ? props.thumbnail : undefined}
-        />
-      </div>
-    )
+      <Show when={props.look === 'icon'} fallback={<LayerListView {...props} narrow={props.look === 'narrow'} />}>
+        <button
+          type="button"
+          class={styles.action}
+          aria-label="Layer list"
+          onClick={(event) => props.onOpen(event.currentTarget)}
+        >
+          <SketchIcon name="layers" size={20} />
+        </button>
+      </Show>
+    ),
+    popup: {
+      needs: listNeeds,
+      View: (props) => (
+        <div class={styles.popupList}>
+          <LayerListView {...props} narrow={false} />
+        </div>
+      )
+    }
   }),
   definePart({
     kind: 'layers:name',
@@ -60,14 +70,27 @@ export const layerParts = [
     group: 'layer-props',
     section: 'Layers',
     label: 'Layer name',
-    icon: 'paper',
-    needs: layerNeeds,
+    icon: 'rename',
+    needs: (s, f) =>
+      merge(layerNeeds(s, f), {
+        get pictured() {
+          const layer = s.layers.state().layers.find((candidate) => candidate.id === s.layers.state().activeId);
+          return !fits(layer?.name ?? '', nameStyle, f.width - nameChrome);
+        }
+      }),
     View: (props) => (
-      <LayerName
-        layer={props.state.layers.find((layer) => layer.id === props.state.activeId)!}
-        class={styles.name}
-        onAction={props.onAction}
-      />
+      <div class={styles.nameField} data-pictured={props.pictured ? '' : undefined}>
+        <LayerName
+          layer={props.state.layers.find((layer) => layer.id === props.state.activeId)!}
+          class={styles.name}
+          onAction={props.onAction}
+        />
+        <Show when={props.pictured}>
+          <span class={styles.nameGlyph} aria-hidden="true">
+            <SketchIcon name="rename" size={20} />
+          </span>
+        </Show>
+      </div>
     )
   }),
   definePart({
@@ -101,7 +124,14 @@ export const layerParts = [
         )
       };
     },
-    View: (props) => <BlendModePicker {...props} classes={styles} />
+    View: (props) => (
+      <div class={styles.blendPart} data-compact={props.compact ? '' : undefined}>
+        <BlendModePicker {...props} classes={styles} />
+        <Show when={props.compact}>
+          <BlendRings />
+        </Show>
+      </div>
+    )
   }),
   ...(['add', 'duplicate', 'delete', 'merge-down', 'up', 'down', 'lock', 'clip'] as const).map(commandPart),
   definePart({
@@ -125,9 +155,10 @@ export const layerParts = [
         class={styles.action}
         aria-label="Smooth color"
         aria-pressed={props.active ? 'true' : 'false'}
+        title={props.active ? 'Smooth color: on' : 'Smooth color: off, colors mix as Classic'}
         onClick={props.onPress}
       >
-        <SketchIcon name="gradient" size={20} />
+        <span class={styles.mixRamp} data-linear={props.active ? '' : undefined} />
         <Show when={props.wide}>
           <span>Smooth color</span>
         </Show>
@@ -135,6 +166,53 @@ export const layerParts = [
     )
   })
 ];
+
+/**
+ * The rings of the blend preview's two circles (see `blendPreview`), drawn over a compact blend mode's preview so that
+ * it reads as the blend of two layers rather than a blob of color.
+ */
+function BlendRings() {
+  return (
+    <svg class={styles.blendRings} viewBox="0 0 256 256" aria-hidden="true">
+      <circle cx="96" cy="128" r="80" />
+      <circle cx="160" cy="128" r="80" />
+    </svg>
+  );
+}
+
+/** How the layer name's field sets the name, and the pixels its padding takes beside it. */
+const nameStyle: TextStyle = { size: 13 };
+const nameChrome = 2 * 8;
+
+/** The list's own state: whether it may acquire thumbnails (never in previews) and the thumbnails' source. */
+function listNeeds(services: LegoServices, frame: PartBinding) {
+  return merge(layerNeeds(services, frame), {
+    get acquire() {
+      return frame.mode !== 'preview';
+    },
+    want: services.layers.wantThumbnails,
+    thumbnail: services.layers.thumbnail
+  });
+}
+
+/** The layer rows, `narrow` wrapped under their names, acquiring thumbnails while `acquire` holds. */
+function LayerListView(props: ReturnType<typeof listNeeds> & { narrow: boolean }) {
+  return (
+    <div class={styles.list} data-narrow={props.narrow ? '' : undefined}>
+      <Show when={props.acquire}>
+        <WantThumbnails want={props.want} />
+      </Show>
+      <LayerList
+        state={props.state}
+        ready={props.ready}
+        onAction={props.onAction}
+        classes={styles}
+        narrow={props.narrow}
+        thumbnail={props.acquire ? props.thumbnail : undefined}
+      />
+    </div>
+  );
+}
 
 /**
  * Whether a layer button's `label` fits beside its icon (see `.action` in `LayerParts.module.css`): on as many lines

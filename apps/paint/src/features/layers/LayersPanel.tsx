@@ -92,7 +92,7 @@ export function LayersPanel(props: {
           aria-pressed={selected().alphaLock ? 'true' : 'false'}
           onClick={() => props.onAction(command('lock').action)}
         >
-          <SketchIcon name={selected().alphaLock ? 'lock' : 'unlock'} size={18} />
+          <SketchIcon name={command('lock').icon} size={18} />
         </button>
         <button
           class={styles.layerToggle}
