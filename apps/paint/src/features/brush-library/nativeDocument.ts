@@ -11,6 +11,10 @@ import {
 } from '@app-game/paint-core/paintbrush/document';
 import { z } from 'zod';
 import type { BrushPreset } from './brushPresets';
+import { linearCoveragePrefix, paintCoverageScale } from './sampledCoverage';
+
+/** Engine identifier accepted only when decoding stored Paint presets and slot overrides. */
+export const legacySampledId = 'textured';
 
 /** Materializes the runtime settings from a round preset's saved document. */
 export function readRoundPreset<T extends BrushPreset>(
@@ -89,16 +93,25 @@ export function nativePresetText(preset: BrushPreset, resources?: BrushDocument[
 export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['resources']): BrushDocument {
   const b = preset.settings;
   const engine = b.engine;
-  if (engine && !['round', 'textured'].includes(engine.id)) {
+  if (engine && !['round', legacySampledId].includes(engine.id)) {
     throw new Error('Unsupported brush engine: ' + engine.id);
   }
   const overrides = engineSettings(engine?.id ?? 'round').parse(engine?.settings ?? {});
-  const sampled = engine?.id === 'textured';
+  const sampled = engine?.id === legacySampledId || !!resources?.tip;
+  if (sampled && !resources?.tip) {
+    throw new Error('Missing sampled tip coverage');
+  }
   const apply = ['/tool', '/tips', '/sequence', '/placement'];
   const definition: BrushDocument['definition'] = {
     tool: b.tool ?? 'brush',
     tips: sampled
-      ? { tip: { kind: 'sampled', resource: 'tip' } }
+      ? {
+          tip: {
+            kind: 'sampled',
+            resource: 'tip',
+            angleDeg: overrides.angle === undefined ? undefined : sampledAngleDegrees(overrides.angle)
+          }
+        }
       : { round: { kind: 'round', hardness: overrides.hardness ?? b.hardness ?? 1 } },
     sequence: { order: 'cycle', tips: [sampled ? 'tip' : 'round'] },
     placement: { law: 'paint-distance-v1', spacing: overrides.spacing ?? b.spacing ?? defaults.placement.spacing }
@@ -145,7 +158,7 @@ export function nativeDocument(preset: BrushPreset, resources?: BrushDocument['r
         impact: 'tool',
         value: {
           keys: Object.keys(b),
-          engine,
+          engine: sampled ? undefined : engine,
           hardness: b.hardness,
           spacing: b.spacing
         }
@@ -287,9 +300,6 @@ export function paintDocumentFields(doc: BrushDocument) {
     hardness: tip.hardness ?? 1,
     spacing: d.placement?.spacing ?? defaults.placement.spacing
   };
-  if (ref) {
-    settings.engine = { id: 'textured', settings: { tipId: ref.sha256 } };
-  }
   if (uses('/size')) {
     settings.size = d.size ?? defaults.size;
   }
@@ -332,14 +342,13 @@ export function paintDocumentFields(doc: BrushDocument) {
     if (engine) {
       if (
         !engineSettings(engine.id).safeParse(engine.settings ?? {}).success ||
-        (engine.id === 'textured') !== (tip.kind === 'sampled')
+        (engine.id === legacySampledId) !== (tip.kind === 'sampled')
       ) {
         return { status: 'unavailable' as const, reasons: ['Invalid Paint engine overrides'] };
       }
-      settings.engine = { id: engine.id, settings: engine.settings };
-    }
-    if (tip.kind === 'sampled' && (!keys.includes('engine') || engine?.id !== 'textured')) {
-      return { status: 'unavailable' as const, reasons: ['Sampled tip requires the textured engine'] };
+      if (engine.id === 'round') {
+        settings.engine = { id: engine.id, settings: engine.settings };
+      }
     }
     Object.assign(settings, { hardness, spacing });
     for (const key of Object.keys(settings) as (keyof Brush)[]) {
@@ -367,7 +376,7 @@ const nativeId = 'paint.native-settings.v1';
 const nativeFields = z.object({
   keys: z.array(z.string()),
   engine: z
-    .object({ id: z.enum(['round', 'textured']), settings: z.record(z.string(), z.json()).optional() })
+    .object({ id: z.enum(['round', legacySampledId]), settings: z.record(z.string(), z.json()).optional() })
     .optional(),
   hardness: z.number().min(0).max(1).optional(),
   spacing: z.number().positive().optional()
@@ -376,12 +385,75 @@ const nativeFields = z.object({
 function engineSettings(id: string) {
   return z
     .object({
-      tipId: id === 'textured' ? z.string().min(1).max(512) : z.never().optional(),
-      angle: id === 'textured' ? z.number().optional() : z.never().optional(),
+      tipId: id === legacySampledId ? z.string().min(1).max(512) : z.never().optional(),
+      angle: id === legacySampledId ? z.number().optional() : z.never().optional(),
       hardness: id === 'round' ? z.number().min(0).max(1).optional() : z.never().optional(),
       spacing: z.number().min(0.01).max(1).optional()
     })
     .strict();
+}
+
+/** Updates older cached ABR selections from the retained Paint tip and clockwise angle. */
+export function restoreSampledProjection<T extends BrushPreset>(preset: T): T {
+  const text = preset.abrDocument;
+  const engine = preset.settings.engine;
+  if (!text?.includes('paint-distance-v1') || engine?.id !== 'abr') {
+    return preset;
+  }
+  const doc = parseDocument(text, brushSchema);
+  const key = doc.definition.sequence.tips[0]!;
+  const tip = doc.definition.tips[key]!;
+  const native = nativeFields.safeParse(doc.definition.extensions?.[nativeId]?.value);
+  const legacy = native.data?.engine;
+  const angle = legacy?.settings?.angle;
+  if (tip.kind !== 'sampled' || doc.definition.placement?.law !== 'paint-distance-v1') {
+    return preset;
+  }
+  const cached = z
+    .object({ tipId: z.string(), values: z.object({}).passthrough() })
+    .passthrough()
+    .parse(engine.settings);
+  const ref = doc.resources?.[tip.resource!];
+  const resize = ref && cached.tipId === ref.sha256 && paintCoverageScale(ref.width, ref.height) > 1;
+  const degrees =
+    tip.angleDeg === undefined && legacy?.id === legacySampledId && typeof angle === 'number'
+      ? sampledAngleDegrees(angle)
+      : undefined;
+  if (!resize && degrees === undefined) {
+    return preset;
+  }
+
+  const pointerKey = key.replace(/~/g, '~0').replace(/\//g, '~1');
+  const tipId = resize ? linearCoveragePrefix + ref.sha256 : undefined;
+  return {
+    ...preset,
+    abrDocument: degrees === undefined ? text : patch(text, '/definition/tips/' + pointerKey + '/angleDeg', degrees),
+    resourceIds: tipId
+      ? [
+          ...new Set([
+            tipId,
+            ...preset.resourceIds.filter((id) => id !== cached.tipId || id === cached.patternId || id === cached.dualId)
+          ])
+        ]
+      : preset.resourceIds,
+    settings: {
+      ...preset.settings,
+      engine: {
+        ...engine,
+        settings: {
+          ...cached,
+          ...(tipId && { tipId }),
+          values: { ...cached.values, ...(degrees !== undefined && { angle: degrees }) }
+        }
+      }
+    }
+  };
+}
+
+/** Converts clockwise Paint radians to the ABR tip's signed counterclockwise degrees. */
+export function sampledAngleDegrees(radians: number) {
+  const degrees = (-(radians % (2 * Math.PI)) * 180) / Math.PI;
+  return degrees > 180 ? degrees - 360 : degrees < -180 ? degrees + 360 : degrees;
 }
 
 /** Identity pressure binding used by Paint's diameter and flow controls. */

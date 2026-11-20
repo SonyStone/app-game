@@ -10,7 +10,8 @@ import { ok } from 'neverthrow';
 import { createSignal, flush, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { PaintError } from '../../shared/errors';
-import { createAbrPresets, type AbrPreset } from '../abr';
+import { sampledPreset } from '../../../tests/sampledPreset';
+import { createAbrPresets } from '../abr';
 import { createBrushTools } from '../brush';
 import { createBrushLibrary, createPresetUploads } from '../brush-library';
 import { PaintCanvas } from '../canvas';
@@ -67,12 +68,12 @@ it.each([false, true])(
     expect(first.post).toHaveBeenLastCalledWith({ type: 'feature', feature: 'symmetry', command: settings });
 
     if (withTip) {
-      const applying = presets.usePreset(inkPreset(), 'abr:ink');
+      const applying = presets.usePreset(sampledPreset(), 'abr:ink');
       await vi.waitFor(() => expect(uploaded(first)).toBeDefined());
       confirmUpload(first);
       expect(await applying).toEqual(ok());
       flush();
-      expect(tools.brush().engine).toEqual(inkPreset().engine);
+      expect(tools.brush().engine).toEqual(sampledPreset().engine);
     }
 
     tools.updateBrush({ size: 123, color: '#123456', backgroundColor: '#abcdef' });
@@ -155,7 +156,7 @@ it.each([false, true])(
         flush();
         expect(engine.ready()).toBe(true);
       });
-      expect(tools.brush().engine).toEqual(inkPreset().engine);
+      expect(tools.brush().engine).toEqual(sampledPreset().engine);
     }
 
     expect(engine.switching()).toBe(false);
@@ -175,7 +176,7 @@ it.each([false, true])(
       tools.selectPreset(ink, 'brush');
       flush();
       expect(tools.brush().size).toBe(123);
-      expect(tools.brush().engine?.id).toBe('textured');
+      expect(tools.brush().engine?.id).toBe('abr');
     }
 
     expect(developer.adaptiveQuality()).toBe(false);
@@ -397,7 +398,7 @@ it('stays paused when the renderer fails while a preset is restored', async () =
   const { engine, presets } = await mount();
   const first = transports.opened[0]!;
   reply(first, { type: 'ready' });
-  const applying = presets.usePreset(inkPreset(), 'abr:ink');
+  const applying = presets.usePreset(sampledPreset(), 'abr:ink');
   await vi.waitFor(() => expect(uploaded(first)).toBeDefined());
   confirmUpload(first);
   expect(await applying).toEqual(ok());
@@ -584,14 +585,4 @@ function confirmUpload(transport: FakeTransport) {
     requestId: request.requestId,
     result: { ok: true, value: { evicted: [], stats: { bytes: 1, entries: 1, pinnedBytes: 0 } } }
   });
-}
-
-function inkPreset() {
-  return {
-    name: 'Ink',
-    engine: { id: 'textured', settings: { tipId: 'ink-tip' } },
-    resources: [{ id: 'ink-tip', width: 1, height: 1, format: 'r8unorm', pixels: new Uint8Array([255]) }],
-    size: defaultBrush().size,
-    spacing: defaultBrush().spacing
-  } as unknown as AbrPreset;
 }

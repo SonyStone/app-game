@@ -1,7 +1,6 @@
 import type { AbrRasterSettings, createAbrStamps } from '@app-game/abr-paint/gpu/abrStamps';
 import type { AbrCoverageSnapshot } from '@app-game/abr-paint/gpu/coverage';
 import type { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
-import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Result } from '../asyncResult';
 import { dabTiles, type Brush, type Dab } from '../brush';
 import type { Layer, TileChange } from '../document';
@@ -18,7 +17,7 @@ import type { TileResidency } from './tileResidency';
 export type StrokeData = {
   /** The stroke being painted, until finish/cancel/reset. */
   current: { layer: Layer; brush: Brush } | undefined;
-  /** Prepared ABR rasterizer when the stroke uses ABR stamps; undefined for round and textured brushes. */
+  /** Prepared ABR rasterizer when the stroke uses ABR stamps; undefined for round brushes. */
   abr: ReturnType<typeof createAbrStamps> | undefined;
   /** Smudge transports pixels between dabs. */
   smudge: boolean;
@@ -82,15 +81,8 @@ export function createStrokeState(
   const { residency, raster, retouch, targets } = deps;
 
   return {
-    /** Captures brush settings and the target layer until commit/cancel. Optional native coverage replaces hardness.
-     * Textured dabs must carry the tip's circumscribed radius; use texturedBrush to map brush size correctly.
-     */
-    begin(
-      layer: Layer,
-      brush: Brush,
-      tip?: { resource: BrushResource; angle: number },
-      abr?: AbrRasterSettings<Layer>
-    ) {
+    /** Captures the target and brush until the stroke finishes or is cancelled. */
+    begin(layer: Layer, brush: Brush, abr?: AbrRasterSettings<Layer>) {
       if (data.current) {
         throw new Error('Finish the current stroke before beginning another.');
       }
@@ -101,7 +93,6 @@ export function createStrokeState(
       data.transientCoverage = !!(abr?.smudge || abr?.filter || abr?.mixer) && !(abr?.values.useDualBrush && abr.dual);
       residency.configure(data.transientCoverage && deps.sharedScratch !== false);
       data.historySource = abr?.historySource;
-      raster.prepareTip(tip);
       setTail([]);
       for (const target of targets.all()) {
         // Without a complete view to reproject, a streaming target must rebuild before the stroke shows.

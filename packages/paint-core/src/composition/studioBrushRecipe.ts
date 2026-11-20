@@ -2,7 +2,6 @@ import { abrBrush } from './abrBrushEngine';
 import { createAbrProcessor } from './abrStrokeProcessor';
 import type { PaintModules } from './contracts';
 import { roundBrush } from './roundBrushEngine';
-import { texturedBrush } from './texturedBrushEngine';
 import { studioProcessors } from '../strokeProcessors';
 
 /**
@@ -20,7 +19,6 @@ export const studioBrushRecipe = {
   engines: {
     [roundBrush.id]: roundBrush.engine,
     eraser: roundBrush.engine,
-    [texturedBrush.id]: texturedBrush.engine,
     [abrBrush.id]: abrBrush.engine
   },
   selectEngine: (brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')

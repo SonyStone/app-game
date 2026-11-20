@@ -1,7 +1,8 @@
+import { equalDocuments } from './equalDocuments';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { degrees, initAbr, percent, pixels } from '@app-game/abr-parser';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
-import { texturedBrush } from '@app-game/paint-core/composition/texturedBrushEngine';
+import { sampledFixture } from '../gpu/sampledFixture';
 import { readPaintFile } from '@app-game/paint-core/paintFile';
 import type { PaintEvent, PaintRuntimeCommand } from '@app-game/paint-core/protocol';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
@@ -66,9 +67,9 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   const bytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
   const equal = async (a: Blob, b: Blob) => {
-    const x = await bytes(a),
-      y = await bytes(b);
-    if (x.length !== y.length || !x.every((v, i) => v === y[i])) throw new Error('Mode switch changed document pixels');
+    if (!(await equalDocuments(a, b))) {
+      throw new Error('Mode switch changed document pixels or metadata');
+    }
   };
   const paintMixer = async (y: number) => {
     const preset = prepareAbrBrush({
@@ -681,25 +682,20 @@ export async function verifyMainThread(report: (message: string) => void) {
   };
   try {
     await init(true);
+    const sampled = await sampledFixture();
     const uploaded = await command(
       {
         type: 'brush-resources',
-        requestId: 'textured-tip',
+        requestId: 'sampled-tip',
         action: 'put',
-        resource: {
-          id: 'qa-textured-tip',
-          width: 2,
-          height: 2,
-          format: 'r8unorm',
-          pixels: new Uint8Array([255, 255, 255, 255])
-        }
+        resource: sampled.resource
       },
       'brush-resources'
     );
     if (!uploaded.result.ok) throw new Error(uploaded.result.error);
     endpoint.postMessage({
       type: 'begin',
-      brush: { ...defaultBrush(), engine: texturedBrush.select({ tipId: 'qa-textured-tip', spacing: 0.04 }) },
+      brush: sampled.brush,
       samples: [{ x: -40, y: -40, pressure: 0.4, time: 1 }]
     });
     endpoint.postMessage({ type: 'samples', samples: [{ x: 40, y: 40, pressure: 0.8, time: 2 }] });
@@ -721,7 +717,7 @@ export async function verifyMainThread(report: (message: string) => void) {
       throw new Error('DOM canvas PNG lost the paper background');
     if (pixels[center]! >= 200 || pixels[center + 3] !== 255)
       throw new Error('DOM canvas PNG contains no visible ink at the stroke center');
-    report('PASS: textured main-thread engine draws on HTMLCanvasElement and exports visible ink to PNG');
+    report('PASS: sampled main-thread engine draws on HTMLCanvasElement and exports visible ink to PNG');
     await checkFilters();
     await checkPencil();
     await checkHistory();

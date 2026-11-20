@@ -27,7 +27,7 @@ policies too. The preview widget has no document import or selection API and sho
 ## Current engine seam
 
 This extraction proves application reuse, not complete independence from every brush engine.
-The provided renderer still orchestrates the round, textured and ABR raster paths, and this package
+The provided renderer still orchestrates the round and ABR raster paths, and this package
 currently depends on `abr-paint`/`abr-brush`. Registries allow custom engines and a paired renderer;
 a future Krita/Clip Studio implementation must not be forced into ABR stamp/settings structures.
 Smudge carry, Blur/Sharpen ordering, Mixer reservoirs and their lifecycle now live in

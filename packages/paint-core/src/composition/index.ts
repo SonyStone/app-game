@@ -47,6 +47,5 @@ export { symmetryFeature } from './symmetryFeature';
 export { createBrushResources } from '@app-game/abr-paint/resources';
 export type { BrushResource, BrushResourceReader, BrushResourcesFactory } from '@app-game/abr-paint/resources';
 
-export { texturedBrush } from './texturedBrushEngine';
 
 export { abrBrush } from './abrBrushEngine';

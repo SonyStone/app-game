@@ -1,6 +1,5 @@
 import {
   brushSizeCurve,
-  brushSpacingCurve,
   curvePosition,
   curveValue,
   type SliderCurve
@@ -127,17 +126,6 @@ export function BrushAdvancedControls(props: BrushControlsProps) {
           change={(hardness) => props.onChange({ hardness: hardness / 100 })}
         />
       </Show>
-      <Show when={props.brush.engine?.id === 'textured'}>
-        <Range
-          label="Tip spacing"
-          value={props.brush.spacing * 100}
-          min={1}
-          max={1000}
-          curve={brushSpacingCurve}
-          suffix="%"
-          change={(spacing) => props.onChange({ spacing: spacing / 100 })}
-        />
-      </Show>
       <Show when={props.brush.engine?.id !== 'abr'}>
         <label class={styles.check}>
           <input
@@ -197,7 +185,7 @@ type BrushControlsProps = {
 };
 
 /** Section headings by brush engine id. */
-const tipLabels: Record<string, string> = { round: 'Soft round', textured: 'Textured tip', abr: 'ABR brush' };
+const tipLabels: Record<string, string> = { round: 'Soft round', abr: 'ABR brush' };
 
 /** Merges stroke settings into the brush, keeping them normalized; Leonardo modes keep independent values. */
 function strokeUpdater(props: BrushControlsProps) {

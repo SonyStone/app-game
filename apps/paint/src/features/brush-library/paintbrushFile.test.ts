@@ -6,9 +6,10 @@ import { readFileSync } from 'node:fs';
 import { createRoot } from 'solid-js';
 import { expect, it } from 'vitest';
 import { createBrushTools } from '../brush/createBrushTools';
+import { convertSampled } from './abrPresetDocument';
 import { applyPreset, builtInPresets, presetSettings } from './brushPresets';
 import { createBrushLibrary } from './createBrushLibrary';
-import { nativeDocument, resolveNative } from './nativeDocument';
+import { legacySampledId, nativeDocument, resolveNative, restoreSampledProjection } from './nativeDocument';
 import { exportPaintbrush, importPaintbrush } from './paintbrushFile';
 import { resolveDocument } from './resolveDocument';
 
@@ -172,20 +173,35 @@ it('exports sampled tips with native rotation, independent spacing and decoded c
     pixels: Uint8Array.of(0, 255, 128, 0)
   };
   const preset = {
-    id: 'textured',
+    id: 'native-nib',
     name: 'Native nib',
     resourceIds: [image.id],
     settings: {
       ...defaultBrush(),
-      engine: { id: 'textured', settings: { tipId: image.id, angle: 0.3, spacing: 0.16 } }
+      engine: { id: legacySampledId, settings: { tipId: image.id, angle: 0.3, spacing: 0.16 } }
     }
   };
-  const archive = await readArchive(await exportPaintbrush(preset, [image]));
+  const migrated = await convertSampled(preset, [image]);
+  const archive = await readArchive(await exportPaintbrush({ ...preset, ...migrated.preset }, migrated.resources));
   if (archive.status !== 'editable') {
     throw new Error(archive.reason);
   }
-  expect(resolveNative(archive.brushes[0]!.view).settings).toEqual(preset.settings);
+  expect(archive.brushes[0]!.view.definition).toMatchObject({
+    tips: { tip: { kind: 'sampled', angleDeg: expect.closeTo((-0.3 * 180) / Math.PI) } },
+    placement: { spacing: 0.16 }
+  });
   expect([...archive.assets.values()][0]!.pixels).toEqual(image.pixels);
+  const previous = archive.brushes[0]!.view;
+  delete previous.definition.tips.tip!.angleDeg;
+  previous.definition.extensions!['paint.native-settings.v1']!.value = {
+    keys: ['engine'],
+    engine: preset.settings.engine
+  };
+  const repaired = restoreSampledProjection({ ...preset, ...migrated.preset, abrDocument: JSON.stringify(previous) });
+  expect(repaired.settings.engine?.settings).toMatchObject({
+    values: { angle: expect.closeTo((-0.3 * 180) / Math.PI) }
+  });
+  expect(JSON.parse(repaired.abrDocument).definition.tips.tip.angleDeg).toBeCloseTo((-0.3 * 180) / Math.PI);
 });
 
 it('commits an entire import to existing storage and can re-export after reopening', async () => {

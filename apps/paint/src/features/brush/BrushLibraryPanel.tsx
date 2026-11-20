@@ -86,11 +86,11 @@ export function BrushLibraryPanel(props: {
               <button
                 class={styles.presetTile}
                 aria-pressed={preset.id === props.preset ? 'true' : 'false'}
-                disabled={props.disabled}
-                title={preset.name}
+                disabled={props.disabled || !!preset.unavailable}
+                title={preset.unavailable ?? preset.name}
                 onClick={() => props.onSelect(preset.id)}
               >
-                <span class={styles.presetKind}>{presetKind(preset)}</span>
+                <span class={styles.presetKind}>{preset.unavailable ? 'Unavailable' : presetKind(preset)}</span>
                 <span class={styles.presetName}>{preset.name}</span>
                 <Show when={props.changed(preset.id)}>
                   <span class={styles.presetChanged} aria-label="changed" />
@@ -284,5 +284,5 @@ function presetKind(preset: BrushPreset) {
   }
 
   const engine = preset.settings.engine?.id;
-  return engine === 'abr' ? 'ABR' : engine === 'textured' ? 'Textured' : 'Round';
+  return engine === 'abr' ? 'ABR' : 'Round';
 }

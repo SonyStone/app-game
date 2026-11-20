@@ -7,7 +7,8 @@ import { syncAbrPreset } from './abrHost';
 import { builtInPresets, type BrushPreset } from './brushPresets';
 import type { BrushStorage, StoredPreset } from './createBrushStorage';
 import { roundFamily, writeSettings } from './documentSettings';
-import { readRoundPreset } from './nativeDocument';
+import { legacySampledId, readRoundPreset, restoreSampledProjection } from './nativeDocument';
+import { linearCoveragePrefix, paintSampledCoverage } from './sampledCoverage';
 
 /**
  * The brush library: built-in presets followed by the user's presets in creation order. Stored presets load lazily:
@@ -16,7 +17,7 @@ import { readRoundPreset } from './nativeDocument';
  * `storage` in the background; images not yet written stay in memory regardless of the budget.
  *
  * Loading a legacy preset converts it once before publishing it. Sampled presets read their coverage during conversion.
- * A failed conversion keeps the original settings and images.
+ * A failed sampled conversion keeps the original settings and images and exposes the reason selection failed.
  * Must be created within a Solid owner.
  */
 export function createBrushLibrary(options: {
@@ -207,13 +208,26 @@ export function createBrushLibrary(options: {
     preset: BrushPreset,
     ids = preset.resourceIds
   ): Promise<Result<BrushResource[], PaintError>> {
+    if (preset.unavailable) {
+      return err(brushError('invalid-preset', preset.unavailable));
+    }
     const missing = ids.filter((id) => !images.has(id));
     const stored = missing.length > 0 ? await options.storage?.readResources(missing) : [];
     stored?.forEach((resource) => images.put(resource, true));
-    const resources = ids.flatMap((id) => images.get(id) ?? []);
+    if (!stored && missing.some((id) => id.startsWith(linearCoveragePrefix))) {
+      // Older projections stored only the source. Derive the working mask on its first upload.
+      const sources = missing.map((id) =>
+        id.startsWith(linearCoveragePrefix) ? id.slice(linearCoveragePrefix.length) : id
+      );
+      const originals = await options.storage?.readResources(sources);
+      originals?.forEach((source, index) => {
+        images.put(missing[index] === source.id ? source : paintSampledCoverage(source), true);
+      });
+    }
+    const resident = ids.flatMap((id) => images.get(id) ?? []);
     images.trim();
-    return resources.length === ids.length
-      ? ok(resources)
+    return resident.length === ids.length
+      ? ok(resident)
       : err(brushError('storage', `The images of “${preset.name}” are missing. Import the brush again.`));
   }
 
@@ -280,8 +294,14 @@ export function createBrushLibrary(options: {
   }
 
   async function loadStored(record: StoredPreset) {
-    if (record.sampledDocument) {
-      remember(materializeSampled(record));
+    if (record.sampledDocument || record.abrDocument) {
+      const preset = materializeSampled(record);
+      try {
+        remember(restoreSampledProjection(preset));
+      } catch (cause) {
+        reportConversion(preset, cause);
+        remember({ ...preset, unavailable: String(cause) });
+      }
       return;
     }
     if (record.nativeDocument) {
@@ -291,11 +311,14 @@ export function createBrushLibrary(options: {
         reportConversion(record, cause);
         const fallback = { ...record };
         delete fallback.nativeDocument;
+        if (fallback.settings.engine?.id === legacySampledId) {
+          fallback.unavailable = String(cause);
+        }
         remember(fallback);
       }
       return;
     }
-    if (!record.abrDocument && (record.abrSource || isRound(record) || record.settings.engine?.id === 'textured')) {
+    if (record.abrSource || isRound(record) || record.settings.engine?.id === legacySampledId) {
       const pending = migrations.get(record.id);
       if (pending) {
         return pending;
@@ -329,11 +352,12 @@ export function createBrushLibrary(options: {
           },
           true
         );
-      } else if (record.settings.engine?.id === 'textured') {
+      } else if (record.settings.engine?.id === legacySampledId) {
         const { convertSampled } = await import('./abrPresetDocument');
         const images = await options.storage!.readResources(record.resourceIds);
         const item = await convertSampled(record, images ?? []);
         converted = { ...record, sampledDocument: item.preset };
+        delete converted.unavailable;
         resources = item.resources;
       } else {
         converted = readRoundPreset(record);
@@ -357,6 +381,9 @@ export function createBrushLibrary(options: {
       }
     } catch (cause) {
       reportConversion(record, cause);
+      if (record.settings.engine?.id === legacySampledId) {
+        record = { ...record, unavailable: String(cause) };
+      }
     }
     if (!removed.has(record.id) && !latestKnown().has(record.id)) {
       remember(record);

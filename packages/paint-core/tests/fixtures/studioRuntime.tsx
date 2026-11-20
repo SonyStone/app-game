@@ -17,7 +17,6 @@ import {
 } from '../../src/composition/PaintApplication';
 import { roundBrush } from '../../src/composition/roundBrushEngine';
 import { symmetryFeature } from '../../src/composition/symmetryFeature';
-import { texturedBrush } from '../../src/composition/texturedBrushEngine';
 import { createDocument } from '../../src/document';
 import type { PaintCommand, PaintEvent } from '../../src/protocol';
 import { studioProcessors } from '../../src/strokeProcessors';
@@ -55,7 +54,6 @@ export function startStudioRuntime(options: {
                 engines={{
                   [roundBrush.id]: roundBrush.engine,
                   eraser: roundBrush.engine,
-                  [texturedBrush.id]: texturedBrush.engine,
                   [abrBrush.id]: abrBrush.engine
                 }}
                 selectEngine={(brush) => (brush.tool === 'eraser' ? 'eraser' : 'round')}
