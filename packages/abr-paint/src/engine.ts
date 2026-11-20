@@ -15,6 +15,7 @@ import { z } from 'zod/v3';
 import type { AbrRasterSettings } from './gpu/abrStamps';
 import type { Dab, Sample } from './input';
 import type { AbrBrushInput, AbrStrokeContext, AbrStrokeSession } from './contracts';
+import { createPaintRoundStroke } from './paintRoundStroke';
 import { adaptiveBrushQuality } from './adaptiveQuality';
 import type { AbrBrushCommand } from './commands';
 import type { BrushResource } from './resources';
@@ -25,6 +26,10 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     settings.values.tool.type === 'ErTl' && (settings.values.tool.eraseToHistory || modifiers?.altKey === true);
   if (restoreHistory && !historySource)
     throw new Error('The selected history source does not contain this layer. Choose another source.');
+  if (renderer.supportsPaintRound && resolveAbrCoverage(settings, restoreHistory) === 'paint-round-v1') {
+    return createPaintRoundStroke({ settings, brush, layer, processor, renderer, adaptiveQuality, lod });
+  }
+
   const block = isBlockEraser(settings.values.tool);
   if (block) {
     settings = {
@@ -53,9 +58,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     brush.size,
     settings.values.tipKind === 'sampledBrush' ? tip : undefined
   );
-  const coverage = renderer.supportsPaintRound ? resolveAbrCoverage(settings, restoreHistory) : 'photoshop-v1';
   const input = {
-    coverage,
     placement: settings.placement,
     seed: settings.seed ?? seed ?? crypto.getRandomValues(new Uint32Array(1))[0]!,
     values: settings.values,
@@ -81,7 +84,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
   const sample = (samples: readonly Sample[], preview = false) => {
     const points = samples.map(tabletPoint);
     const mode = preview ? 'preview' : 'add';
-    return [...(secondary ? dabs(secondary[mode](points), true) : []), ...dabs(sampler[mode](points), false, coverage)];
+    return [...(secondary ? dabs(secondary[mode](points), true) : []), ...dabs(sampler[mode](points), false)];
   };
   const rasterSettings: AbrRasterSettings<Layer> = {
     values: settings.values,
@@ -89,7 +92,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
     pattern,
     dual,
     size: brush.size,
-    compositeOpacity: coverage === 'paint-round-v1' ? brush.opacity : strokeCompositeOpacity(input),
+    compositeOpacity: strokeCompositeOpacity(input),
     tipLodBias: quality?.lod,
     mixing: brush.mixing,
     blendMode: settings.blendMode,
@@ -129,7 +132,7 @@ export function createAbrStroke<Layer, Change, Brush extends AbrBrushInput>({ se
         : undefined
   };
   if (settings.coverage !== undefined) {
-    rasterSettings.coverage = coverage;
+    rasterSettings.coverage = 'photoshop-v1';
   }
   renderer.begin(layer, brush, undefined, rasterSettings);
 
@@ -261,7 +264,13 @@ export function resolveAbrCoverage(settings: AbrBrushSettings, restoreHistory = 
 
   if (v.tipKind !== 'computedBrush' || v.roundness !== 100 || v.useDualBrush || settings.dualId ||
       v.useTexture || v.useScattering || v.useBuildUp || v.useWetEdges || v.useNoise ||
-      v.useColorDynamics || v.useBrushPose || v.useTransfer || v.tool.pressureOverridesOpacity) {
+      v.useColorDynamics || v.useBrushPose || v.tool.pressureOverridesOpacity) {
+    return 'photoshop-v1';
+  }
+
+  const transfer = v.transfer;
+  if (v.useTransfer && (transfer.opacityControl || transfer.opacityJitter || transfer.opacityMinimum ||
+      transfer.flowJitter || transfer.flowMinimum || ![0, 2].includes(transfer.flowControl))) {
     return 'photoshop-v1';
   }
 
@@ -309,18 +318,9 @@ function computedDualResource(tip: ReturnType<typeof computedSecondaryTip>): Bru
 function tabletPoint(sample: Sample): PreviewPoint {
   return { ...sample, tiltX: sample.tiltX ?? 0, tiltY: sample.tiltY ?? 0, rotation: sample.rotation ?? 0 };
 }
-function dabs(stroke: PreviewStroke, secondary: boolean, coverage?: AbrBrushSettings['coverage']): Dab[] {
+function dabs(stroke: PreviewStroke, secondary: boolean): Dab[] {
   return Array.from({ length: stroke.count }, (_, i) => {
     const offset = i * 16;
-    if (coverage === 'paint-round-v1') {
-      return {
-        x: stroke.data[offset]!,
-        y: stroke.data[offset + 1]!,
-        radius: stroke.data[offset + 2]!,
-        flow: stroke.data[offset + 8]!
-      };
-    }
-
     const data = stroke.data.subarray(offset, offset + 16);
     const sampledTip = stroke.sampledTips?.[i];
     return {

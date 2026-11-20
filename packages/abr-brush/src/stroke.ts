@@ -1,4 +1,5 @@
 import { createPaintDistance } from './paintDistance';
+export { createPaintDistance } from './paintDistance';
 import { dabColor } from './colorDynamics';
 import type { ColorMixing } from './colorMixing';
 import { deviceControlInput, deviceControlValue } from './deviceControl';
@@ -410,7 +411,8 @@ export function createAbrStrokeSampler(
       const pressureSize = (v.useShapeDynamics || v.tool.pressureOverridesSize) && shape.sizeControl === 2;
       const scale = pressureSize ? Math.max(shape.minimumDiameter / 100, p.pressure) : 1;
       const radius = Math.max(0.25, size * 0.5 * scale);
-      const flow = paint.ratio > 1 ? 1 - (1 - input.flow) ** paint.ratio : input.flow;
+      const dose = input.flow * (v.useTransfer && transfer.flowControl === 2 ? p.pressure : 1);
+      const flow = paint.ratio > 1 ? 1 - (1 - dose) ** paint.ratio : dose;
       // Keep PreviewStroke's instance stride. The round pipeline binds color and opacity once per stroke.
       data.push(p.x, p.y, radius, radius, 1, 0, 1, 1, flow, 1, 0, 0, 0, 0, 0, 1);
       return paint.step(p.pressure);

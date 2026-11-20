@@ -50,7 +50,8 @@ export type AbrRasterSettings<Layer = unknown> = {
   /** Selected immutable document state; restoration interpolates premultiplied pixels by accumulated coverage. */
   historySource?: Layer;
   values: BrushFormValues;
-  tip: BrushResource;
+  /** Required for Photoshop coverage. Analytic round strokes have no tip texture. */
+  tip?: BrushResource;
   pattern?: BrushResource;
   dual?: BrushResource;
   /** Scales the secondary tip relative to the edited primary diameter. */
@@ -134,6 +135,10 @@ export function createAbrStamps(root: TgpuRoot, batchSampledMasks = true) {
      * Document layers and history are never retained past this call.
      */
     prepare(value: AbrRasterSettings) {
+      if (!value.tip) {
+        throw new Error('Photoshop coverage needs a primary tip.');
+      }
+
       const required = value.dual ? [value.tip, value.dual] : [value.tip];
       const plan = sources.plan(value, required);
       textures.validate(required, plan.bytes);

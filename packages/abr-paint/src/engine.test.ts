@@ -106,6 +106,19 @@ it('resolves the footprint before generating real or preview dabs', async () => 
     expect(host.dabs[0]).toEqual({ x: 0, y: 0, radius: 8, flow: 1 });
     stroke.cancel();
 
+    settings.values.useTransfer = true;
+    settings.values.transfer.flowControl = 2;
+    const pressured = createAbrStroke({ ...host.context, settings: { ...settings, tipId: 'unloaded' } });
+    expect(footprint()).toBe('paint-round-v1');
+    await pressured.add([{ x: 0, y: 0, time: 0, pressure: 0.25 }]);
+    expect(host.dabs.at(-1)?.flow).toBe(0.25);
+    pressured.cancel();
+
+    settings.values.transfer.flowMinimum = 1;
+    createAbrStroke(host.context).cancel();
+    expect(footprint()).toBe('photoshop-v1');
+    settings.values.useTransfer = false;
+
     settings.values.angle = 45;
     createAbrStroke(host.context).cancel();
     expect(footprint()).toBe('paint-round-v1');
