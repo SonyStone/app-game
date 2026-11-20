@@ -1,13 +1,23 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
 import { createMemo, createSignal, For, Show, useContext } from 'solid-js';
-import { HarmonyField, MaskField, WheelDisk } from '../../features/color-wheel';
+import {
+  gamutMasks,
+  harmonies,
+  HarmonyField,
+  MaskField,
+  maskPolygon,
+  toDisk,
+  WheelDisk,
+  type Harmony
+} from '../../features/color-wheel';
 import wheelStyles from '../../features/color-wheel/ColorWheel.module.css';
 import { hexToHsv, hsvToHex, luminance, type Hsv } from '../../features/color/hsv';
 import { CoolorusWheel } from '../../features/coolorus-wheel';
 import { HueTriangle } from '../../features/hue-triangle';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { pressHandlers, type Press } from '../../shared/ui/pressHandlers';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { ColorDisc } from '../zen/ColorDisc';
 import { type Span } from './board';
 import { useGrid } from './grid';
@@ -155,10 +165,24 @@ const pairSideBySide = 56;
 const pairNameStyle: TextStyle = { size: 11, weight: 600 };
 const pairHalfInset = 6 + 4;
 
-/** The brush color as `#rrggbb` to read or type; Enter or leaving the field applies it, a wrong entry is undone. */
-export function HexPart(props: ColorInputProps) {
+/**
+ * The brush color as `#rrggbb` to read or type; Enter or leaving the field applies it, a wrong entry is undone. Where
+ * the code does not fit the field whole, the field shows the color itself under a "#" until it takes focus, when the
+ * code shows for typing.
+ */
+export function HexPart(props: ColorInputProps & { span: Span }) {
+  const grid = useGrid();
+  const pictured = () => !fits(props.color, hexFieldStyle, grid.length(props.span.columns) - hexFieldChrome);
+
   return (
-    <label class={styles.hex}>
+    <label
+      class={styles.hex}
+      data-pictured={pictured() ? '' : undefined}
+      style={{
+        '--hex-color': props.color,
+        '--hex-mark': luminance(props.color) > 0.4 ? '#1c1c1e' : '#ffffff'
+      }}
+    >
       <input
         aria-label="Hex color"
         spellcheck={false}
@@ -177,13 +201,23 @@ export function HexPart(props: ColorInputProps) {
           }
         }}
       />
+      <Show when={pictured()}>
+        <span class={styles.hexMark} aria-hidden="true">
+          #
+        </span>
+      </Show>
     </label>
   );
 }
 
+/** How `.hex` sets the code, and the pixels its insets, the field's padding and its border take beside it. */
+const hexFieldStyle: TextStyle = { size: 12, weight: 600, family: legoMonoFamily };
+const hexFieldChrome = 2 * 3 + 2 * 3 + 2;
+
 /**
  * The recently used colors, newest first, as round chips filling the part as many as fit at about `chipPitch` pixels
- * each way, the places no color has taken yet outlined; a tap paints in one.
+ * each way, the places no color has taken yet outlined; a tap paints in one. Before any color is used, the first place
+ * shows a clock turned back, so the empty history still says what it is.
  */
 export function HistoryPart(props: ColorInputProps & { span: Span; colors: readonly string[] }) {
   const grid = useGrid();
@@ -207,7 +241,13 @@ export function HistoryPart(props: ColorInputProps & { span: Span; colors: reado
         )}
       </For>
       <For each={Array.from({ length: count() - colors().length })}>
-        {() => <span class={[styles.chip, styles.slot]} aria-hidden="true" />}
+        {(_, index) => (
+          <span class={[styles.chip, styles.slot]} aria-hidden="true">
+            <Show when={colors().length === 0 && index() === 0}>
+              <SketchIcon name="recent" size={16} />
+            </Show>
+          </span>
+        )}
       </For>
     </Chips>
   );
@@ -215,15 +255,25 @@ export function HistoryPart(props: ColorInputProps & { span: Span; colors: reado
 
 /**
  * Procreate's default palette, as many chips as fit at about `chipPitch` pixels each way; when they run out first,
- * the rows grow to fill the part.
+ * the rows grow to fill the part. A one-cell palette, which would show only the palette's first neutrals, shows four
+ * of its hues two by two instead, so that it reads as a palette rather than a swatch: as chips where four fit, and
+ * where only one would fit, smaller than a chip should be. Each still paints in its color.
  */
 export function PalettePart(props: ColorInputProps & { span: Span }) {
   const grid = useGrid();
   const across = () => chipsAlong(grid.length(props.span.columns));
-  const colors = () => defaultPalette.slice(0, across() * chipsAlong(grid.length(props.span.rows)));
+  const sampled = () => props.span.columns === 1 && props.span.rows === 1;
+  const colors = () =>
+    sampled() ? paletteSample : defaultPalette.slice(0, across() * chipsAlong(grid.length(props.span.rows)));
+  const columns = () => (sampled() ? 2 : across());
 
   return (
-    <Chips columns={across()} rows={Math.ceil(colors().length / across())} label="Palette">
+    <Chips
+      columns={columns()}
+      rows={Math.ceil(colors().length / columns())}
+      label="Palette"
+      small={sampled() && across() === 1}
+    >
       <For each={colors()}>
         {(color) => (
           <Chip
@@ -240,23 +290,43 @@ export function PalettePart(props: ColorInputProps & { span: Span }) {
   );
 }
 
-/** The OKLCH disk's harmony list, filling the part; its caption shows where it fits above the list. */
+/** The palette's hues a one-cell palette shows, red, yellow, green and blue, so that it reads as a palette. */
+const paletteSample = ['#c4463a', '#e6b93d', '#7aa05a', '#3d6a8c'];
+
+/**
+ * The OKLCH disk's harmony list, filling the part; its caption shows where it fits above the list. Where the chosen
+ * harmony's name does not fit the list, the part shows the harmony instead (see `HarmonyGlyph`) over a list that still
+ * opens on a press.
+ */
 export function HarmonyPart(props: {
   span: Span;
   settings: ReturnType<LegoServices['color']['oklch']['settings']>;
   onSettings: LegoServices['color']['oklch']['update'];
 }) {
   return (
-    <GuideField span={props.span} caption="Harmony">
+    <GuideField
+      span={props.span}
+      caption="Harmony"
+      choice={harmonies[props.settings.harmony].label}
+      glyph={<HarmonyGlyph harmony={props.settings.harmony} />}
+    >
       <HarmonyField settings={props.settings} onSettings={props.onSettings} />
     </GuideField>
   );
 }
 
-/** The OKLCH disk's gamut mask list, filling the part; its caption shows where it fits above the list. */
+/**
+ * The OKLCH disk's gamut mask list, filling the part; its caption shows where it fits above the list. Where the chosen
+ * mask's name does not fit, the part shows the mask's shape (see `MaskGlyph`) over a list that still opens on a press.
+ */
 export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
   return (
-    <GuideField span={props.span} caption="Gamut mask">
+    <GuideField
+      span={props.span}
+      caption="Gamut mask"
+      choice={props.settings.mask === 'custom' ? 'Custom' : gamutMasks[props.settings.mask].label}
+      glyph={<MaskGlyph settings={props.settings} />}
+    >
       <MaskField settings={props.settings} onSettings={props.onSettings} />
     </GuideField>
   );
@@ -264,18 +334,26 @@ export function MaskPart(props: Parameters<typeof HarmonyPart>[0]) {
 
 /**
  * A guide's list as a part (see `.wheelField`): a list one cell less its insets high, under its `caption` where the
- * part has the height for a line of it and the width for its text.
+ * part has the height for a line of it and the width for its text. Where the list cannot show its `choice` whole, the
+ * part shows `glyph` instead, the list laid invisibly over it to take presses and keys.
  */
-function GuideField(props: { span: Span; caption: string; children: JSX.Element }) {
+function GuideField(props: { span: Span; caption: string; choice: string; glyph: JSX.Element; children: JSX.Element }) {
   const grid = useGrid();
+  const width = () => grid.length(props.span.columns) - 2 * guideInset;
   const captioned = () =>
     grid.length(props.span.rows) - 2 * guideInset >=
       guideCaptionStyle.size * guideCaptionLine + guideGap + grid.cell() - 8 &&
-    fits(props.caption, guideCaptionStyle, grid.length(props.span.columns) - 2 * guideInset);
+    fits(props.caption, guideCaptionStyle, width());
+  const pictured = () => !fits(props.choice, guideChoiceStyle, width() - guideChoiceChrome);
 
   return (
-    <div class={[wheelStyles.guides, styles.wheelField]} data-captioned={captioned() ? '' : undefined}>
+    <div
+      class={[wheelStyles.guides, styles.wheelField]}
+      data-captioned={captioned() && !pictured() ? '' : undefined}
+      data-pictured={pictured() ? '' : undefined}
+    >
       {props.children}
+      <Show when={pictured()}>{props.glyph}</Show>
     </div>
   );
 }
@@ -285,6 +363,74 @@ const guideCaptionStyle: TextStyle = { size: 11 };
 const guideCaptionLine = 1.3;
 const guideGap = 4;
 const guideInset = 4;
+/** How a guide's list sets its choice, and the pixels its padding and arrow take beside it. */
+const guideChoiceStyle: TextStyle = { size: 13 };
+const guideChoiceChrome = 28;
+
+/**
+ * A harmony as the icons draw (see `SketchIcon`): the wheel's rim, and a spoke from its centre to a dot for the chosen
+ * color and for each color the harmony adds. With no harmony chosen it draws a triad unlit, in the quiet ink, so that
+ * the part still says what it chooses.
+ */
+export function HarmonyGlyph(props: { harmony: Harmony }) {
+  const shown = () => (props.harmony === 'none' ? 'triad' : props.harmony);
+  const dots = () => [0, ...harmonies[shown()].offsets].map((hue) => toDisk({ h: hue, s: 1 }));
+
+  return (
+    <svg
+      class={styles.guideGlyph}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      data-glyph={`harmony:${props.harmony}`}
+      data-unlit={props.harmony === 'none' ? '' : undefined}
+    >
+      <circle cx="12" cy="12" r={glyphRim} />
+      <For each={dots()}>
+        {(dot) => (
+          <>
+            <path d={`M12 12L${12 + dot.x * glyphRim} ${12 + dot.y * glyphRim}`} />
+            <circle class={styles.guideDot} cx={12 + dot.x * glyphRim} cy={12 + dot.y * glyphRim} r="2.3" />
+          </>
+        )}
+      </For>
+    </svg>
+  );
+}
+
+/**
+ * A gamut mask as the icons draw: the wheel's rim with the mask's shape shaded in it. With no mask chosen it draws the
+ * triad mask unlit, in the quiet ink, so that the part still says what it chooses.
+ */
+export function MaskGlyph(props: {
+  settings: Pick<ReturnType<LegoServices['color']['oklch']['settings']>, 'mask' | 'maskAngle' | 'customMask'>;
+}) {
+  const shape = () =>
+    (props.settings.mask === 'none'
+      ? maskPolygon('triangle', 0)
+      : maskPolygon(props.settings.mask, props.settings.maskAngle, props.settings.customMask)
+    )
+      .map(
+        (point, index) =>
+          `${index ? 'L' : 'M'}${(12 + point.x * glyphRim).toFixed(2)} ${(12 + point.y * glyphRim).toFixed(2)}`
+      )
+      .join('');
+
+  return (
+    <svg
+      class={styles.guideGlyph}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      data-glyph={`mask:${props.settings.mask}`}
+      data-unlit={props.settings.mask === 'none' ? '' : undefined}
+    >
+      <circle cx="12" cy="12" r={glyphRim} />
+      <Show when={shape()}>{(d) => <path class={styles.guideShape} d={`${d()}Z`} />}</Show>
+    </svg>
+  );
+}
+
+/** The radius of the wheel's rim in a guide's glyph, in the icons' 24-unit box. */
+const glyphRim = 9;
 
 /**
  * `children` laid out `width` pixels wide and scaled, keeping proportions, to fit `box`; never more than half again
@@ -413,11 +559,18 @@ export function chipsAlong(length: number) {
 /** The least distance in CSS pixels from one color chip to the next. */
 const chipPitch = 20;
 
-/** Chips in `columns` and `rows`, filling the part. */
-function Chips(props: { columns: number; rows: number; label: string; round?: boolean; children: JSX.Element }) {
+/** Chips in `columns` and `rows`, filling the part; `small` chips sit closer together. */
+function Chips(props: {
+  columns: number;
+  rows: number;
+  label: string;
+  round?: boolean;
+  small?: boolean;
+  children: JSX.Element;
+}) {
   return (
     <div
-      class={[styles.chips, props.round && styles.round]}
+      class={[styles.chips, props.round && styles.round, props.small && styles.smallChips]}
       role="group"
       aria-label={props.label}
       style={{

@@ -120,7 +120,7 @@ export const actionParts = [
     onPress: f.command(s.history.redo)
   })),
   tool('local-undo', 'Local undo', 'localUndo'),
-  action('mixing', 'colors', 'Mixing', 'picker', (s, f) => ({
+  action('mixing', 'colors', 'Mixing', 'mixing', (s, f) => ({
     get active() {
       return s.windows.isOpen('palette');
     },

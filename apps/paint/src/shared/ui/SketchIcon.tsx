@@ -1,5 +1,12 @@
-/** Small, consistent line icons for the sketchbook controls. */
+import { Show } from 'solid-js';
+
+/**
+ * Small, consistent line icons for the sketchbook controls. A few icons also have solid shapes (`solids`), drawn
+ * filled in the same ink under their lines, where an outline alone would not read at 20 px.
+ */
 export function SketchIcon(props: { name: SketchIconName; size?: number }) {
+  const solid = () => (solids as Partial<Record<SketchIconName, string>>)[props.name];
+
   return (
     <svg
       width={props.size ?? 20}
@@ -12,6 +19,7 @@ export function SketchIcon(props: { name: SketchIconName; size?: number }) {
       stroke-linejoin="round"
       aria-hidden="true"
     >
+      <Show when={solid()}>{(shape) => <path d={shape()} fill="currentColor" stroke="none" />}</Show>
       <path d={paths[props.name]} />
     </svg>
   );
@@ -19,6 +27,9 @@ export function SketchIcon(props: { name: SketchIconName; size?: number }) {
 
 /** Names of the available icons. */
 export type SketchIconName = keyof typeof paths;
+
+/** A board of checks, transparency as editors show it, in the icons' top left corner. */
+const checks = 'M2 2h3.5v3.5H2ZM9 2h3.5v3.5H9ZM5.5 5.5H9V9H5.5ZM2 9h3.5v3.5H2ZM9 9h3.5v3.5H9Z';
 
 const paths = {
   pin: 'm9 3 9 9-3 1-3 4-2-2-6 6 6-6-2-2 4-3Z',
@@ -79,7 +90,8 @@ const paths = {
   eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10-3a3 3 0 1 0 0 6 3 3 0 0 0 0-6',
   hidden: 'm3 3 18 18M9 5c7-2 13 7 13 7l-3 4M15 19C8 21 2 12 2 12l3-4',
   lock: 'M6 10h12v11H6Zm2 0V6a4 4 0 0 1 8 0v4M12 14v3',
-  clip: 'M7 4v9a3 3 0 0 0 3 3h10m-4-4 4 4-4 4',
+  /* An arrow hooked down onto the layer below it. */
+  clip: 'M4 4h8a3 3 0 0 1 3 3v6m-3-3 3 3 3-3M3 17h18v4H3Z',
   check: 'm5 12 5 5 9-11',
   cut: 'M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm0 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM8.5 7.5 20 19M8.5 16.5 20 5',
   paste: 'M9 3h6v3H9ZM7 4.5H5V21h14V4.5h-2M9 12h6M9 16h4',
@@ -117,5 +129,21 @@ const paths = {
   brightness:
     'M8.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4',
   smoothing: 'M2.5 17c2-9 4.5 1 6.5-5s3 2 4.5 0 3.5-1 8-1',
-  layerOpacity: 'm12 3 9 5-9 5-9-5ZM3 16l9 5 9-5M12 3v10'
+  layerOpacity: 'm12 3 9 5-9 5-9-5ZM3 16l9 5 9-5M12 3v10',
+  /* Transparency (the checks of `solids`) under a padlock, shut or open: lock transparent pixels, not the layer. */
+  alphaLock: 'M12 15h10v7H12ZM14 15v-2.5a3 3 0 0 1 6 0V15',
+  alphaUnlock: 'M12 15h10v7H12ZM14 15v-4a3 3 0 0 1 6 0',
+  /* An artist's palette with dabs of paint: mixing colors, not picking one. */
+  mixing:
+    'M12 3a9 9 0 0 0 0 18c1.4 0 2-.8 2-1.8 0-1.4-1.2-1.6-1.2-2.8 0-1 .8-1.6 2-1.6H17a4 4 0 0 0 4-4c0-4.4-4-7.8-9-7.8ZM6.6 11.5a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M9.8 7a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0M14.8 7.6a1.2 1.2 0 1 0 2.4 0a1.2 1.2 0 1 0-2.4 0',
+  /* A text field holding a T, a caret standing out of it: a name to type. */
+  rename: 'M13 7H3v10h10M19 7h2v10h-2M6 10h5M8.5 10v4.5M16 4.5v15M14.5 4.5h3M14.5 19.5h3',
+  /* A clock turned back: the colors used before. */
+  recent: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4M12 8v4.5l3 2'
 } as const;
+
+/** The filled shapes some icons draw under their lines (see `SketchIcon`). */
+const solids = {
+  alphaLock: checks,
+  alphaUnlock: checks
+};
