@@ -67,6 +67,9 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
   const output = process.env.PAINT_SOFT_ROUND_TRACES;
   const records: string[] = [];
   const rows = ['path sizeControl flowControl adaptive lod delivery | native count/xy/radius/flow | ABR'];
+  const paintRows = [
+    'path sizeControl flowControl adaptive lod delivery | native Float32 count/xy/radius/flow | paint-distance-v1'
+  ];
   for (const { name, points } of paths) {
     for (const pressureSize of [true, false]) {
       for (const pressureFlow of [false, true]) {
@@ -83,15 +86,21 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
           const run = (delivery: string, packets: Point[][]) => {
             const native = createStrokeSampler(brush, brushQualityAtLod(adaptive, lod)?.minimumSpacing);
             const quality = adaptiveBrushQuality(adaptive, values, lod);
-            const abr = createAbrStrokeSampler(
-              { ...brush, values, seed: 12345, ...quality, sampledTipGeometry: true },
-              preset.resource
-            );
+            const input = { ...brush, values, seed: 12345, ...quality, sampledTipGeometry: true };
+            const abr = createAbrStrokeSampler(input, preset.resource);
+            const paint = createAbrStrokeSampler({ ...input, placement: 'paint-distance-v1' }, preset.resource);
             const nativeDabs = packets.flatMap((packet) => native.add(packet).map((d) => [d.x, d.y, d.radius, d.flow]));
-            const abrDabs = packets.flatMap((packet) => {
-              const { data, count } = abr.add(packet);
-              return Array.from({ length: count }, (_, i) => [0, 1, 2, 8].map((j) => data[i * stampStride + j]!));
-            });
+            const readDabs = (sampler: typeof abr) =>
+              packets.flatMap((packet) => {
+                const { data, count } = sampler.add(packet);
+                return Array.from({ length: count }, (_, i) => [0, 1, 2, 8].map((j) => data[i * stampStride + j]!));
+              });
+            const abrDabs = readDabs(abr);
+            const paintDabs = readDabs(paint);
+            // Compare every stored coordinate and flow before the snapshot rounds values for display.
+            const packed = nativeDabs.map((dab) => dab.map(Math.fround));
+            expect(paintDabs.length).toBe(packed.length);
+            expect(paintDabs.every((dab, i) => [0, 1, 3].every((j) => dab[j] === packed[i]![j]))).toBe(true);
             if (output) {
               records.push(
                 JSON.stringify({
@@ -103,13 +112,19 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
                   delivery,
                   columns: ['x', 'y', 'radius', 'flow'],
                   native: nativeDabs,
-                  abr: abrDabs
+                  abr: abrDabs,
+                  paint: paintDabs
                 })
               );
             }
             const nativeTrace = trace(nativeDabs);
             const candidate = trace(abrDabs).map((v, i) => (v === nativeTrace[i] ? '=' : v));
-            return [nativeTrace.join('/'), candidate.join('/')];
+            const packedTrace = trace(packed);
+            const paintTrace = trace(paintDabs).map((v, i) => (v === packedTrace[i] ? '=' : v));
+            return {
+              photoshop: [nativeTrace.join('/'), candidate.join('/')],
+              paint: [packedTrace.join('/'), paintTrace.join('/')]
+            };
           };
           const reference = run('packet', [points]);
           expect(
@@ -120,9 +135,14 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
           ).toEqual(reference);
           const split = run('subdivided', [subdivide(points)]);
           const key = [name, +pressureSize, +pressureFlow, adaptive ? 'on' : 'off', lod].join(' ');
-          rows.push(key + ' packet | ' + reference.join(' | '));
-          if (split.join() !== reference.join()) {
-            rows.push(key + ' subdivided | ' + split.join(' | '));
+          for (const [law, table] of [
+            ['photoshop', rows],
+            ['paint', paintRows]
+          ] as const) {
+            table.push(key + ' packet | ' + reference[law].join(' | '));
+            if (split[law].join() !== reference[law].join()) {
+              table.push(key + ' subdivided | ' + split[law].join(' | '));
+            }
           }
         }
       }
@@ -131,6 +151,7 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
   if (output) {
     await writeFile(join(output, 'sampler-' + size + 'px.jsonl.gz'), gzipSync(records.join('\n')));
   }
+  await expect(paintRows.join('\n')).toMatchFileSnapshot('./__snapshots__/softRound-paint-distance-' + size + '.txt');
   // These columns document today's gaps. Replace an ABR column with "=" when that entire ordered channel agrees.
   await expect(rows.join('\n')).toMatchFileSnapshot('./__snapshots__/softRound-' + size + '.txt');
 });
