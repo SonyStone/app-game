@@ -1,8 +1,9 @@
-import { percent, pixels } from '@app-game/abr-parser';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
+import { percent, pixels } from '@app-game/abr-parser';
 import { describe, expect, it } from 'vitest';
 import { defaultBrush, type Sample } from './brush';
 import { createAbrProcessor } from './composition/abrStrokeProcessor';
+import { studioBrushRecipe } from './composition/studioBrushRecipe';
 import { createLeonardoProcessor } from './leonardoStroke';
 import { createStabilizerProcessor } from './stabilizerStroke';
 import { predictedTail, withPrediction } from './strokePrediction';
@@ -85,3 +86,15 @@ describe('withPrediction', () => {
     expect(processor.predict?.([sample(30, 10)]).map((point) => point.x)).toEqual([30]);
   });
 });
+
+it.each(['studio', 'none', 'stabilizer'] as const)(
+  'selects the production processor for both engines in %s mode',
+  (mode) => {
+    const brush = defaultBrush();
+    brush.stroke.mode = mode;
+    expect(studioBrushRecipe.selectProcessor(brush)).toBe(mode);
+    expect(studioBrushRecipe.selectProcessor({ ...brush, engine: { id: 'abr', settings: {} } })).toBe(
+      mode === 'studio' ? 'abr' : mode
+    );
+  }
+);
