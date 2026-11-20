@@ -3,12 +3,18 @@ import { initAbr } from '@app-game/abr-parser';
 import { createStrokeSampler, TILE_SIZE, type Brush, type Dab, type Sample } from '@app-game/paint-core/brush';
 import { defaultCamera } from '@app-game/paint-core/camera';
 import { createResourceSession } from '@app-game/paint-core/composition/resourceSession';
+import { roundBrush } from '@app-game/paint-core/composition/roundBrushEngine';
 import { studioBrushRecipe } from '@app-game/paint-core/composition/studioBrushRecipe';
+import { symmetryRenderer } from '@app-game/paint-core/composition/symmetryRenderer';
 import { createDocument } from '@app-game/paint-core/document';
 import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 import { withPrediction } from '@app-game/paint-core/strokePrediction';
 import { createStudioProcessor } from '@app-game/paint-core/strokeProcessors';
+import { defaultPaintSymmetry } from '@app-game/paint-core/symmetry';
 import { unpackTile } from '@app-game/paint-core/tilePixels';
+import { builtInPresets } from '../../src/features/brush-library/brushPresets';
+import { nativeDocument } from '../../src/features/brush-library/nativeDocument';
+import { resolveDocument } from '../../src/features/brush-library/resolveDocument';
 import { softRoundCandidate } from '../fixtures/softRound';
 import baseline from '../fixtures/softRoundCoverage.json';
 
@@ -25,6 +31,9 @@ type Row = {
   centres?: 'stationary' | 'native';
   mode?: Brush['stroke']['mode'];
   prediction?: boolean;
+  alphaLock?: boolean;
+  lod?: number;
+  symmetry?: boolean;
 };
 
 const width = 128,
@@ -77,6 +86,66 @@ export async function compareSoftRound(report: (message: string) => void) {
         });
       }
     }
+    const legacy = softRoundCandidate();
+    for (const preset of builtInPresets) {
+      for (const mode of ['studio', 'none', 'normal', 'smooth', 'stabilizer'] as const) {
+        for (const prediction of [false, true]) {
+          const label = [preset.name, mode, prediction ? 'predicted' : 'real'].join(' ');
+          const erase = preset.settings.tool === 'eraser';
+          const row: Row = {
+            label,
+            mode,
+            prediction,
+            erase,
+            size: mode === 'studio' ? preset.settings.size! : 4,
+            alphaLock: !erase && mode === 'smooth',
+            lod: mode === 'stabilizer' ? 2 : undefined,
+            symmetry: mode === 'normal',
+            points: [point(30, 20, 0.05), point(55, 20, 0.5, 8), point(55, 42, 1, 16)]
+          };
+          const doc = nativeDocument({
+            ...preset,
+            settings: {
+              ...preset.settings,
+              size: row.size,
+              stroke: { ...preset.settings.stroke!, mode },
+              pressureFlow: mode !== 'studio',
+              pressureSize: mode !== 'normal',
+              mixing: mode === 'smooth' ? 'classic' : 'linear'
+            }
+          });
+          const reference = new Map<string, Uint8Array>();
+          for (const route of ['round', 'abr'] as const) {
+            const resolved = await resolveDocument(doc, new Map(), undefined, route);
+            if (!resolved.brush || resolved.path !== route || resolved.resources?.length) {
+              throw new Error(label + ' failed to resolve ' + route);
+            }
+            await compareCell(
+              row,
+              route === 'abr' ? 'paint-round' : 'native',
+              legacy,
+              renderer,
+              canvas,
+              cache,
+              async () => {},
+              resolved.brush,
+              (phase, bytes) => {
+                if (route === 'round') {
+                  reference.set(phase, Uint8Array.from(bytes));
+                } else {
+                  assertBytes(bytes, reference.get(phase)!, label + ' ' + phase);
+                }
+              }
+            );
+          }
+          captured.add(label);
+          if ((baseline as Record<string, string>)[label] !== 'identical RGBA') {
+            errors.push('Missing production comparison ' + label);
+          }
+          report(label + ' identical RGBA');
+        }
+      }
+    }
     for (const label of Object.keys(baseline)) {
       if (!captured.has(label)) {
         errors.push('Missing coverage cell ' + label);
@@ -98,15 +167,26 @@ async function compareCell(
   renderer: Awaited<ReturnType<typeof createPaintRenderer>>,
   canvas: OffscreenCanvas,
   cache: ReturnType<typeof createBrushResources>,
-  captureBytes: (label: string, bytes: Uint8Array<ArrayBuffer>, count: number) => Promise<void>
+  captureBytes: (label: string, bytes: Uint8Array<ArrayBuffer>, count: number) => Promise<void>,
+  resolvedBrush?: Brush,
+  captureFull?: (phase: string, bytes: ArrayLike<number>) => void
 ) {
   const abr = variant !== 'native';
   const analytic = variant === 'paint-round' || variant === 'matched processor';
   const engine: typeof preset.engine = analytic
-    ? { ...preset.engine, settings: { ...preset.engine.settings, placement: 'paint-distance-v1', coverage: 'paint-round-v1' } }
+    ? {
+        ...preset.engine,
+        settings: { ...preset.engine.settings, placement: 'paint-distance-v1', coverage: 'paint-round-v1' }
+      }
     : preset.engine;
-  const brush: Brush = { ...preset.brush, engine: abr ? engine : undefined, opacity: row.opacity ?? 1 };
-  brush.stroke = { ...brush.stroke, mode: row.mode ?? 'studio' };
+  const brush: Brush = resolvedBrush ?? {
+    ...preset.brush,
+    engine: abr ? engine : undefined,
+    opacity: row.opacity ?? 1
+  };
+  if (!resolvedBrush) {
+    brush.stroke = { ...brush.stroke, mode: row.mode ?? 'studio' };
+  }
   const label = row.size + 'px ' + row.label + ' ' + variant;
   let count = 0;
   const capture = (phase: string, bytes: Uint8Array<ArrayBuffer>) => captureBytes(label + phase, bytes, count);
@@ -114,13 +194,18 @@ async function compareCell(
   for (const action of row.mode ? ['finish', 'preview', 'cancel'] : ['finish']) {
     count = 0;
     renderer.reset();
-    renderer.setLinearBlending(true);
+    renderer.setLinearBlending(resolvedBrush ? brush.mixing === 'linear' : true);
     const document = createDocument();
-    if (row.erase) {
+    if (row.erase || resolvedBrush) {
       const patch = new Uint8Array(TILE_SIZE * TILE_SIZE * 4);
       for (let i = 3; i < patch.length; i += 4) {
-        patch[i] = 255;
+        if (resolvedBrush) {
+          patch.set([24, 64, 80, 128], i - 3);
+        } else {
+          patch[i] = 255;
+        }
       }
+      document.active.alphaLock = row.alphaLock;
       document.active.tiles.set('0,0', patch);
     }
     const display = async () => {
@@ -135,12 +220,21 @@ async function compareCell(
       const last = row.points.at(-1)!;
       const predicted = [{ ...last, x: last.x + 8, time: last.time + 8 }];
       const processorBrush = variant === 'matched processor' ? { ...brush, engine: undefined } : brush;
+      // Preserve the historical processor-mismatch baseline. Production rows use the recipe below.
       const processor = row.mode
-        ? withPrediction(studioBrushRecipe.processors[studioBrushRecipe.selectProcessor(processorBrush)](brush, 1), () =>
-            row.prediction ? predicted : []
+        ? withPrediction(
+            studioBrushRecipe.processors[
+              !resolvedBrush && variant === 'paint-round' && row.mode === 'studio'
+                ? 'abr'
+                : studioBrushRecipe.selectProcessor(processorBrush)
+            ](brush, 1),
+            () => (row.prediction ? predicted : [])
           )
         : createStudioProcessor(brush);
-      const engine = studioBrushRecipe.engines[abr ? 'abr' : 'round'];
+      const engine = abr ? studioBrushRecipe.engines.abr : roundBrush.engine;
+      const target = row.symmetry
+        ? symmetryRenderer(renderer, { ...defaultPaintSymmetry(), mode: 'vertical', x: 64 })
+        : renderer;
       const session = createResourceSession(cache, (resources) =>
         engine({
           brush,
@@ -148,19 +242,21 @@ async function compareCell(
           resources,
           layer: document.active,
           seed: 12345,
+          adaptiveQuality: row.lod !== undefined,
+          lod: row.lod,
           processor,
           renderer: {
-            ...renderer,
+            ...target,
             begin(layer, activeBrush, tip, settings) {
               if (analytic && settings?.coverage !== 'paint-round-v1') {
                 throw new Error(label + ' did not select analytic coverage');
               }
-              renderer.begin(layer, activeBrush, tip, settings);
+              target.begin(layer, activeBrush, tip, settings);
             },
             async paint(dabs) {
               const stamps = row.centres && dabs.length ? attributionDabs(row, brush, dabs[0]!) : dabs;
               count += stamps.length;
-              return renderer.paint(stamps);
+              return target.paint(stamps);
             }
           }
         })
@@ -175,11 +271,12 @@ async function compareCell(
         if (action === 'cancel') {
           session.cancel();
           assertBytes(await display(), blank, label + ' cancelled display');
-          if (document.active.tiles.size) {
+          if (!resolvedBrush && document.active.tiles.size) {
             throw new Error(label + ' cancelled tiles');
           }
           break;
         }
+        captureFull?.('display', visible);
         // Display is opaque. Measure the red-channel darkening relative to the blank view.
         const darkness = Uint8Array.from({ length: width * height }, (_, i) => blank[i * 4]! - visible[i * 4]!);
         await capture(' displayed', darkness);
@@ -197,6 +294,7 @@ async function compareCell(
     if (reference) {
       assertBytes(bytes, reference, label + ' preview entered final tile');
     } else {
+      captureFull?.('tile', bytes);
       reference = bytes.slice();
       await capture(
         '',

@@ -1,3 +1,4 @@
+import { plainRoundRoute } from '@app-game/paint-core/composition/resolveRoundBrush';
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import { initAbr, pixels } from '@app-game/abr-parser';
@@ -154,7 +155,7 @@ describe('the brush studio registry', () => {
 
     const off = after(spread, use.write(spread, false));
     expect(off.photoshopPath).toBe(false);
-    expect(await resolveDocument(off.document, new Map(), round.brush)).toMatchObject({ path: 'round' });
+    expect(await resolveDocument(off.document, new Map(), round.brush)).toMatchObject({ path: plainRoundRoute });
     expect(numeric('abr-scattering-scatter').read(off)).toBe(150);
     expect(numeric('abr-scattering-scatter').enabled(off)).toBe(false);
 

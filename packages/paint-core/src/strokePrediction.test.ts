@@ -87,14 +87,17 @@ describe('withPrediction', () => {
   });
 });
 
-it.each(['studio', 'none', 'stabilizer'] as const)(
+it.each(['studio', 'normal', 'smooth', 'none', 'stabilizer'] as const)(
   'selects the production processor for both engines in %s mode',
   (mode) => {
     const brush = defaultBrush();
     brush.stroke.mode = mode;
     expect(studioBrushRecipe.selectProcessor(brush)).toBe(mode);
+    expect(studioBrushRecipe.selectProcessor({
+      ...brush, engine: { id: 'abr', settings: { placement: 'paint-distance-v1' } }
+    })).toBe(mode);
     expect(studioBrushRecipe.selectProcessor({ ...brush, engine: { id: 'abr', settings: {} } })).toBe(
-      mode === 'studio' ? 'abr' : mode
+      mode === 'none' || mode === 'stabilizer' ? mode : 'abr'
     );
   }
 );

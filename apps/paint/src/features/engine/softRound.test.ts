@@ -1,7 +1,10 @@
 import { createAbrStrokeSampler, stampStride } from '@app-game/abr-brush/stroke';
 import { adaptiveBrushQuality, brushQualityAtLod } from '@app-game/abr-paint/adaptiveQuality';
 import { initAbr } from '@app-game/abr-parser';
-import { createStrokeSampler, defaultBrush } from '@app-game/paint-core/brush';
+import { createStrokeSampler, defaultBrush, type Dab } from '@app-game/paint-core/brush';
+import type { PaintRenderer } from '@app-game/paint-core/composition/contracts';
+import { drawRound } from '@app-game/paint-core/composition/studioBrushRecipe';
+import { createDocument } from '@app-game/paint-core/document';
 import { createHash } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -65,6 +68,7 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
   const values = preset.engine.settings.values;
   // Optional full-resolution report for inspecting individual dabs behind a changed snapshot column.
   const output = process.env.PAINT_SOFT_ROUND_TRACES;
+  const layer = createDocument().active;
   const records: string[] = [];
   const rows = ['path sizeControl flowControl adaptive lod delivery | native count/xy/radius/flow | ABR'];
   const paintRows = [
@@ -83,7 +87,7 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
           [true, 0],
           [true, 2]
         ] as const) {
-          const run = (delivery: string, packets: Point[][]) => {
+          const run = async (delivery: string, packets: Point[][]) => {
             const native = createStrokeSampler(brush, brushQualityAtLod(adaptive, lod)?.minimumSpacing);
             const quality = adaptiveBrushQuality(adaptive, values, lod);
             const input = { ...brush, values, seed: 12345, ...quality, sampledTipGeometry: true };
@@ -95,10 +99,50 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
                 const { data, count } = sampler.add(packet);
                 return Array.from({ length: count }, (_, i) => [0, 1, 2, 8].map((j) => data[i * stampStride + j]!));
               });
+            const analytic = createAbrStrokeSampler(
+              { ...input, placement: 'paint-distance-v1', coverage: 'paint-round-v1' },
+              preset.resource
+            );
+            const analyticDabs = readDabs(analytic);
+            const direct: Dab[] = [];
+            const session = drawRound(
+              {
+                brush,
+                settings: undefined,
+                layer,
+                adaptiveQuality: adaptive,
+                lod,
+                processor: { add: (points) => [...points], preview: () => [], finish: () => [] },
+                resources: {
+                  get() {
+                    throw new Error('Analytic round requested coverage');
+                  }
+                },
+                renderer: {
+                  supportsPaintRound: true,
+                  begin() {},
+                  cancel() {},
+                  async paint(dabs: readonly Dab[]) {
+                    direct.push(...dabs);
+                  }
+                } as unknown as PaintRenderer
+              },
+              'abr'
+            );
+            for (const packet of packets) {
+              await session.add(packet);
+            }
+            session.cancel();
+            expect(direct.length).toBe(nativeDabs.length);
+            expect(direct.every((d, i) => [d.x, d.y, d.radius, d.flow].every((n, j) => n === nativeDabs[i]![j]))).toBe(
+              true
+            );
             const abrDabs = readDabs(abr);
             const paintDabs = readDabs(paint);
             // Compare every stored coordinate and flow before the snapshot rounds values for display.
             const packed = nativeDabs.map((dab) => dab.map(Math.fround));
+            expect(analyticDabs.length).toBe(packed.length);
+            expect(analyticDabs.every((dab, i) => dab.every((value, j) => value === packed[i]![j]))).toBe(true);
             expect(paintDabs.length).toBe(packed.length);
             expect(paintDabs.every((dab, i) => [0, 1, 3].every((j) => dab[j] === packed[i]![j]))).toBe(true);
             if (output) {
@@ -126,14 +170,14 @@ it.each([1, 2, 4, 32])('gates ordered sampler traces at %i px', async (size) => 
               paint: [packedTrace.join('/'), paintTrace.join('/')]
             };
           };
-          const reference = run('packet', [points]);
+          const reference = await run('packet', [points]);
           expect(
-            run(
+            await run(
               'single',
               points.map((point) => [point])
             )
           ).toEqual(reference);
-          const split = run('subdivided', [subdivide(points)]);
+          const split = await run('subdivided', [subdivide(points)]);
           const key = [name, +pressureSize, +pressureFlow, adaptive ? 'on' : 'off', lod].join(' ');
           for (const [law, table] of [
             ['photoshop', rows],

@@ -6,7 +6,7 @@ import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/docu
 import { abrDocument } from './abrDocument';
 import { syncAbrPreset } from './abrHost';
 import type { BrushPreset } from './brushPresets';
-import { nativePresetText } from './nativeDocument';
+import { chooseRenderPath, nativePresetText } from './nativeDocument';
 import { resolveDocument } from './resolveDocument';
 
 /** Converts viewer input, folding any saved descriptor edits into the retained document. */
@@ -62,11 +62,17 @@ export async function resolveAbrText(text: string, images: readonly BrushResourc
  * images the ABR renderer needs.
  */
 export async function resolveDraft(text: string, images: readonly BrushResource[]) {
+  const document = parseDocument(text, brushSchema);
+  const slot = chooseRenderPath(document);
+  if (slot.path === 'round') {
+    // Keep editable slot settings sparse. The studio recipe resolves live controls at pen-down.
+    return { engine: slot.settings.engine, resources: [] };
+  }
   const {
     settings,
     resources = [],
     reasons
-  } = await resolveDocument(parseDocument(text, brushSchema), coverageMap(images));
+  } = await resolveDocument(document, coverageMap(images));
   if (!settings) {
     throw new Error(reasons.join(', '));
   }

@@ -1,3 +1,4 @@
+import { plainRoundRoute, resolveRoundBrush } from '@app-game/paint-core/composition/resolveRoundBrush';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import type { Coverage } from '@app-game/paint-core/paintbrush/asset';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
@@ -10,16 +11,18 @@ import { chooseRenderPath, paintDocumentFields, pressureBinding } from './native
 export async function resolveDocument(
   document: BrushDocument,
   assets: ReadonlyMap<string, Coverage>,
-  host = defaultBrush()
+  host = defaultBrush(),
+  roundRoute: 'round' | 'abr' = plainRoundRoute
 ) {
   const native = chooseRenderPath(document);
   if (native.path === 'round') {
+    const brush = resolveRoundBrush({ ...host, ...native.settings, engine: native.settings.engine }, roundRoute);
     return {
-      path: 'round' as const,
+      path: roundRoute,
       status: native.status,
-      reasons: [],
-      settings: native.settings,
-      brush: { ...host, ...native.settings, engine: native.settings.engine },
+      reasons: roundRoute === 'round' ? ['Plain round route selects the native renderer'] : [],
+      settings: roundRoute === 'round' ? native.settings : { ...native.settings, engine: brush.engine },
+      brush,
       resources: []
     };
   }
