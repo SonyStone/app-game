@@ -3,6 +3,7 @@ import type { PreviewResourceSource } from '@app-game/abr-brush/resources';
 import type { PreviewInput, PreviewPoint } from '@app-game/abr-brush/stroke';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '../brush';
+import type { PressureCurve } from '../pressureCurve';
 
 /** A tiny document. ABR form snapshots and decoded Paint presets use the same engine registry. */
 export type PreviewConfiguration = {
@@ -17,6 +18,11 @@ export type PreviewConfiguration = {
   priority?: number;
   /** Persist only completed sample images, never intermediate gesture frames. */
   thumbnail?: boolean;
+  /**
+   * The pen's pressure curve, which maps the pressures of the sample path (`sample` jobs) as a calibrated pen's
+   * strokes on the drawing are mapped; omitted, the path's pressures are used as they are.
+   */
+  pressureCurve?: PressureCurve;
 } & (
   | { kind: 'abr'; input: PreviewInput; tip?: BrushTipImage; resources?: PreviewResourceSource }
   | { kind: 'brush'; brush: Partial<Brush>; resources?: readonly BrushResource[] }
