@@ -11,8 +11,6 @@ import wasm from 'vite-plugin-wasm';
 import { choicesBridge } from './apps/paint/choicesBridge';
 import { layoutsBridge } from './apps/paint/layoutsBridge';
 import { recordingBridge } from './apps/paint/recordingBridge';
-import { recordingBridge as tankiRecordingBridge } from './apps/tanki/recordingBridge';
-import { linkPreviews } from './apps/web/linkPreviews';
 import { workspaceUpdates } from './apps/web/workspaceUpdates';
 import vitePluginArraybuffer from './packages/vite-plugin-arraybuffer/src/main';
 import { vitePluginMarkdown } from './packages/vite-plugin-markdown/src';
@@ -64,28 +62,11 @@ export default defineConfig({
     typegpuPlugin({}),
     // Paint Studio at /paint/studio saves its input recordings through this dev server too.
     recordingBridge(),
-    // Tanki at /tanki saves its match recordings through it.
-    tankiRecordingBridge(),
     // The component canvas at /paint/components saves its stars and comments through it, and its built pages.
     choicesBridge(),
     layoutsBridge(),
     // The start page lists the projects changed last, from git.
-    workspaceUpdates(),
-    // A link to the game pasted into a chat shows its picture and name.
-    linkPreviews(
-      [
-        {
-          path: '/tanki',
-          site: 'Tanki',
-          title: 'Tanki: King of the Hill',
-          description:
-            'Top-down arcade tanks in the browser: red against blue for the hill, five classes, walls that break, and bots that fight as a team.',
-          image: resolve(apps, 'tanki/link-preview.jpg'),
-          color: '#c9473b'
-        }
-      ],
-      'https://app-game-one.vercel.app'
-    )
+    workspaceUpdates()
   ],
   server: {
     port: devServerPort,
@@ -102,7 +83,6 @@ export default defineConfig({
       '@app-game/dnd-playground': resolve(apps, 'dnd-playground/src'),
       '@app-game/grease-pencil-typegpu': resolve(apps, 'grease-pencil-typegpu/src'),
       '@app-game/night-defense': resolve(apps, 'night-defense/src'),
-      '@app-game/tanki': resolve(apps, 'tanki/src'),
       '@app-game/solid-svg-editor': resolve(apps, 'solid-svg-editor/src'),
       '@app-game/solidjs-patterns': resolve(apps, 'solidjs-patterns/src'),
       '@app-game/solid-props-proxy': resolve(packages, 'solid-props-proxy'),
