@@ -1,3 +1,4 @@
+import { createSignal } from 'solid-js';
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { pruneOwned, type Board } from './board';
@@ -5,17 +6,30 @@ import { createPartStorage, migrateParts, migrateWindows, storedPart } from './p
 import { swatchPanelParts } from './swatchPanelParts';
 
 /**
- * The LEGO variant's board on this device, kept in `localStorage`; missing or hard-corrupt storage starts from
- * `defaultBoard` after backing up corrupt data. Malformed parts remain on the board. Storage failures keep the
- * board until the page closes. `onSavingError` reports refused or failed saves.
+ * A LEGO board on this device, kept in `localStorage` under `key` (`paint.lego`, the user's own board, by default);
+ * missing or hard-corrupt storage starts from `original` (`defaultBoard` by default) after backing up corrupt data.
+ * Malformed parts remain on the board. Storage failures keep the board until the page closes. `onSavingError`
+ * reports refused or failed saves.
+ *
+ * A built-in workspace's board (`builtIn`) keeps only the user's edits under its key: `reset` removes them, so the
+ * board follows the built-in's `original` as the app updates it. The user's own board resets by storing `original`.
  */
-export function createBoard(onSavingError?: (message: string) => void) {
+export function createBoard(
+  onSavingError?: (message: string) => void,
+  {
+    key = 'paint.lego',
+    original = defaultBoard,
+    builtIn = false
+  }: { key?: string; original?: Board; builtIn?: boolean } = {}
+) {
   // Drags build on the last write, so several in one event compose.
-  const storage = createPartStorage('paint.lego', 'board', defaultBoard, read, onSavingError);
+  const storage = createPartStorage(key, 'board', original, read, onSavingError);
   const [board, setBoard, latest] = createImmediateSignal<Board>(storage.initial);
+  const [edited, setEdited] = createSignal(storage.present());
   const set = (next: Board) => {
     setBoard(next);
     storage.write(next);
+    setEdited(storage.present());
   };
 
   return {
@@ -24,8 +38,19 @@ export function createBoard(onSavingError?: (message: string) => void) {
     latest,
     /** Replaces the board and stores it. */
     set,
-    /** Puts the default board back. */
-    reset: () => set(defaultBoard)
+    /** Puts `original` back: stored for the user's own board, the stored edits removed for a built-in's. */
+    reset() {
+      if (!builtIn) {
+        set(original);
+        return;
+      }
+
+      setBoard(original);
+      storage.clear();
+      setEdited(storage.present());
+    },
+    /** Whether the device holds a stored board under the key: the user saved edits there. */
+    edited
   };
 }
 

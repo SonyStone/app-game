@@ -130,7 +130,9 @@ const paths = {
   /* A text field holding a T, a caret standing out of it: a name to type. */
   rename: 'M13 7H3v10h10M19 7h2v10h-2M6 10h5M8.5 10v4.5M16 4.5v15M14.5 4.5h3M14.5 19.5h3',
   /* A clock turned back: the colors used before. */
-  recent: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4M12 8v4.5l3 2'
+  recent: 'M4 12a8 8 0 1 0 2.3-5.7M4 4v4h4M12 8v4.5l3 2',
+  /* A screen laid out as a workspace: a bar along the top, a tool column at the left and a panel at the right. */
+  workspace: 'M3 4h18v16H3ZM3 8h18M7 8v12M16 8v12'
 } as const;
 
 /** The filled shapes some icons draw under their lines (see `SketchIcon`). */

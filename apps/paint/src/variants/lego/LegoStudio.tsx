@@ -16,7 +16,6 @@ import {
 } from '../../features/session';
 import { besideRect, findPart, safeArea, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
-import { createBoard } from './createBoard';
 import { FileApplicationControls, type FileCommandSet } from './FileMenu';
 import { cellGap, createGrid, GridContext, plateRadius, referenceCell } from './grid';
 import { createKits } from './kits';
@@ -34,6 +33,7 @@ import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
 import { namedSliderSpan } from './parts/values';
 import type { CatalogTarget } from './PartsTray';
 import { StudioSettingRow } from './StudioSettingRow';
+import { createWorkspaces, type WorkspaceControls } from './workspaces';
 
 /**
  * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing at 1:1 scale, each a plate
@@ -46,8 +46,11 @@ import { StudioSettingRow } from './StudioSettingRow';
  *
  * Layout editing is entered via File → Edit layout or Parts & Options → Interface → Edit layout; a browser Back with
  * nothing to close opens Parts & Options, whose File section holds the file commands too, so both are at hand on an
- * empty board. The drawing stays 1:1 throughout; a draggable Edit bar placed on a free spot opens the modal Parts catalog
- * (`PartsTray`) and finishes editing (see `BoardView`). The board is kept per device.
+ * empty board. The board shown is the active workspace's (`createWorkspaces`): Photoshop-like, Procreate-like or the
+ * user's Custom board, switched from Parts & Options → Workspaces or the Workspace part. The drawing stays 1:1
+ * throughout; a draggable Edit bar placed on a free spot opens the modal Parts catalog (`PartsTray`) and finishes
+ * editing (see `BoardView`). The boards and the active workspace are kept per device; the grid's cell is one for all
+ * workspaces.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
  * setting there is its value part itself, and the Pen page the pen pressure curve's part (`StudioSettingRow`); a
@@ -94,7 +97,9 @@ export function LegoStudio(
   const [boardControls, setBoardControls] = createSignal<BoardControls | undefined>(undefined, { ownedWrite: true });
   const reportSavingError = (message: string) =>
     session.setError((current) => current ?? { kind: 'lego', code: 'storage', message });
-  const board = createBoard(reportSavingError);
+  /** The workspaces on this device; the board shown and edited is the active one's. */
+  const workspaces = createWorkspaces(reportSavingError);
+  const board = workspaces.board;
   /** The editor's options on this device, read before the first layout. */
   const options = createLegoOptions();
   /** The cell: the user's choice, else the host's, else the device's default. */
@@ -102,6 +107,25 @@ export function LegoStudio(
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
+
+  /**
+   * The workspaces as the lists and the Workspace part see them. A switch first closes the popup and the open swatch
+   * panel, which belong to the board being left; edit mode and Parts & Options stay as they are, and the board drops
+   * its drag and selection itself (see `BoardView`).
+   */
+  const workspaceControls: WorkspaceControls = {
+    list: workspaces.list,
+    active: workspaces.active,
+    boardOf: workspaces.boardOf,
+    edited: workspaces.edited,
+    reset: workspaces.reset,
+    view: session.size,
+    switchTo(id) {
+      setPopup(undefined);
+      setOpenPanel(undefined);
+      workspaces.switchTo(id);
+    }
+  };
 
   const enterEdit = () => {
     setPopup(undefined);
@@ -143,7 +167,8 @@ export function LegoStudio(
         setPopup(undefined);
         setCatalog('interface');
       },
-      editLayout: enterEdit
+      editLayout: enterEdit,
+      workspaces: workspaceControls
     }
   );
   /** A setting's part as it leaves the studio: a slider with room for its full name and value. */
@@ -265,6 +290,7 @@ export function LegoStudio(
             <FileApplicationControls value={props.applicationControls ? () => props.applicationControls : null}>
               <BoardView
                 board={board}
+                workspaces={workspaceControls}
                 kits={kits}
                 session={session}
                 editing={editing()}

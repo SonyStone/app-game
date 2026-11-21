@@ -9,6 +9,7 @@ import { downloadBlob } from '../../shared/downloadBlob';
 import { createMockLayers } from './layersPrototype/mockLayers';
 import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
+import type { WorkspaceControls } from './workspaces';
 
 /**
  * Creates the LEGO capability facade once under the studio owner. Scalar memos stop unrelated brush changes at
@@ -16,14 +17,21 @@ import { runPartCommand } from './partCommand';
  * `openBrushStudio` is what the "Brush settings" part runs. `openPen` opens the
  * brush studio on its Pen page, where the pen's pressure lives, with the calibration steps started when `measure`.
  * `options` are the editor's own options, which the "Options" part opens (see `PartsTray`): the grid's cell in
- * use, choosing one, and opening the sheet.
+ * use, choosing one, opening the sheet, and the workspaces the Workspace part switches between, absent where the host
+ * keeps a single board.
  */
 export function createLegoServices(
   session: PaintSession,
   openBrushStudio: () => void = () => {},
   openPen: (measure: boolean) => void = () => {},
   openAbr?: () => void,
-  options: { cell: () => number; setCell: (cell: number) => void; open: () => void; editLayout?: () => void } = {
+  options: {
+    cell: () => number;
+    setCell: (cell: number) => void;
+    open: () => void;
+    editLayout?: () => void;
+    workspaces?: WorkspaceControls;
+  } = {
     cell: deviceCell,
     setCell: () => {},
     open: () => {},

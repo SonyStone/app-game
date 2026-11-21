@@ -230,12 +230,14 @@ it.each([
   expect(button(action)).toBeDefined();
   wiring.services!.options.open();
   flush();
-  click('Reset board');
+  document.querySelector<HTMLButtonElement>('[data-item="workspaces"]')!.click();
+  flush();
+  click('Reset workspace');
   expect(wiring.session!.error()).toBe(failure);
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(title);
   expect(button(action)).toBeDefined();
   click('Dismiss');
-  click('Reset board');
+  click('Reset workspace');
   expect(wiring.session!.error()).toMatchObject({ kind: 'lego', code: 'storage' });
 });
 
@@ -246,12 +248,104 @@ it('mounts no catalog content while closed, including after opening and closing 
   expect(document.querySelector('[class*="kitPreview"]')).toBeNull();
   const dialog = openParts();
   expect(dialog.querySelector('nav[aria-label="Parts and options"]')).not.toBeNull();
-  dialog.querySelector<HTMLButtonElement>('[data-item="interface"]')!.click();
+  dialog.querySelector<HTMLButtonElement>('[data-item="workspaces"]')!.click();
   flush();
-  expect(button('Reset board')).toBeDefined();
+  expect(button('Reset workspace')).toBeDefined();
   click('Done');
   expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
-  expect(button('Reset board')).toBeUndefined();
+  expect(button('Reset workspace')).toBeUndefined();
+});
+
+it('switches workspaces from Parts & Options at once, the dialog staying open', () => {
+  mount();
+  wiring.services!.options.open();
+  flush();
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Parts and Options"]')!;
+  const items = [...dialog.querySelectorAll<HTMLElement>('nav [data-item]')].map((item) => item.dataset.item);
+  expect(items.slice(0, 3)).toEqual(['file', 'workspaces', 'interface']);
+  dialog.querySelector<HTMLButtonElement>('[data-item="workspaces"]')!.click();
+  flush();
+  const card = (id: string) => dialog.querySelector<HTMLButtonElement>(`[data-workspace="${id}"]`)!;
+  expect(card('custom').getAttribute('aria-selected')).toBe('true');
+  expect(card('photoshop').querySelector('svg')).not.toBeNull();
+
+  card('photoshop').click();
+  flush();
+  expect(card('photoshop').getAttribute('aria-selected')).toBe('true');
+  expect(card('custom').getAttribute('aria-selected')).toBe('false');
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBe(dialog);
+  expect(document.querySelector('[data-part="ps-menu"]')).not.toBeNull();
+  expect(JSON.parse(localStorage.getItem('paint.lego.workspaces')!)).toEqual({ version: 1, active: 'photoshop' });
+});
+
+it('resets the active built-in workspace to its original from Workspaces', () => {
+  const undo = { id: 'mine-undo', kind: 'action:undo', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 1 } };
+  const edited = { panels: [{ id: 'mine', at: { x: 0.5, y: 0.5 }, parts: [undo] }] };
+  localStorage.setItem('paint.lego.workspace.procreate', JSON.stringify({ version: 5, board: edited }));
+  localStorage.setItem('paint.lego.workspaces', JSON.stringify({ version: 1, active: 'procreate' }));
+  mount();
+  expect(document.querySelector('[data-part="mine-undo"]')).not.toBeNull();
+  wiring.services!.options.open();
+  flush();
+  document.querySelector<HTMLButtonElement>('[data-item="workspaces"]')!.click();
+  flush();
+  expect(document.querySelector('[data-workspace="procreate"]')?.textContent).toContain('Active');
+  click('Reset workspace');
+  expect(document.querySelector('[data-part="mine-undo"]')).toBeNull();
+  expect(document.querySelector('[data-part="pc-menu"]')).not.toBeNull();
+  expect(localStorage.getItem('paint.lego.workspace.procreate')).toBeNull();
+  // Custom, the stored board, is untouched.
+  expect(JSON.parse(localStorage.getItem('paint.lego')!).board).toEqual({ panels: [] });
+});
+
+it('switches workspaces from the Workspace part’s list, which names the active one', () => {
+  storeParts(['action:workspace']);
+  mount();
+  const part = document.querySelector<HTMLButtonElement>('[data-part="test-0"] button[aria-label="Workspace"]')!;
+  expect(part.title).toBe('Workspace: Custom');
+  part.click();
+  flush();
+  const list = document.querySelector<HTMLElement>('[role="listbox"][aria-label="Workspaces"]')!;
+  const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(options.map((option) => option.textContent)).toEqual(['Photoshop-like', 'Procreate-like', 'Custom']);
+  expect(options[2]!.getAttribute('aria-selected')).toBe('true');
+
+  options[1]!.click();
+  flush();
+  expect(document.querySelector('[role="listbox"][aria-label="Workspaces"]')).toBeNull();
+  expect(document.querySelector('[data-part="pc-menu"]')).not.toBeNull();
+  expect(JSON.parse(localStorage.getItem('paint.lego.workspaces')!).active).toBe('procreate');
+});
+
+it('switching workspaces closes the popup and drops the selection, staying in edit mode', () => {
+  storeParts(['action:workspace', 'color:pair']);
+  mount();
+  document.querySelector<HTMLButtonElement>('[data-part="test-0"] button')!.click();
+  flush();
+  expect(document.querySelector('[role="listbox"][aria-label="Workspaces"]')).not.toBeNull();
+  wiring.services!.options.workspaces!.switchTo('photoshop');
+  flush();
+  expect(document.querySelector('[role="listbox"][aria-label="Workspaces"]')).toBeNull();
+
+  wiring.services!.options.workspaces!.switchTo('custom');
+  flush();
+  enterEdit();
+  const part = document.querySelector<HTMLElement>('[data-part="test-1"]')!;
+  part.getBoundingClientRect = () => new DOMRect(12, 12, 92, 44);
+  pointer(part, 'pointerdown', 25, 25);
+  pointer(window, 'pointerup', 25, 25);
+  expect(document.querySelector('[aria-label="Selected parts"]')).not.toBeNull();
+  // Mid-drag too: a press that has not ended is dropped with the board it began on.
+  pointer(part, 'pointerdown', 25, 25);
+  wiring.services!.options.workspaces!.switchTo('procreate');
+  flush();
+  pointer(window, 'pointermove', 300, 300);
+  pointer(window, 'pointerup', 300, 300);
+  expect(document.querySelector('[aria-label="Selected parts"]')).toBeNull();
+  expect(button('Done')).toBeDefined();
+  expect(document.querySelector('[data-part="pc-menu"]')).not.toBeNull();
+  expect(JSON.parse(localStorage.getItem('paint.lego')!).board.panels[0].parts).toHaveLength(2);
+  expect(localStorage.getItem('paint.lego.workspace.procreate')).toBeNull();
 });
 
 it('keeps a board part mounted through an edit tap', () => {
@@ -1659,6 +1753,8 @@ it('composes the default board at 28 px with every caption the 44 px board showe
   localStorage.clear();
   document.body.replaceChildren();
 
+  // The default board is the Custom workspace's; a new user would start in a built-in one.
+  localStorage.setItem('paint.lego.workspaces', JSON.stringify({ version: 1, active: 'custom' }));
   mount(28);
   const after = boardText();
   for (const [id, text] of before) {

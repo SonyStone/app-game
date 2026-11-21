@@ -40,7 +40,6 @@ import {
   type Rect,
   type Span
 } from './board';
-import type { createBoard } from './createBoard';
 import type { FileCommandSet } from './FileMenu';
 import { FloatingGrip } from './FloatingGrip';
 import { joinsAttribute, panelEdges, partEdges, partJoins, sameCells } from './fusion';
@@ -64,6 +63,7 @@ import { BlockView, PartsTray, type CatalogTarget } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
 import { canDropParts, openChain, visiblePanels } from './windows';
+import type { BoardStore, WorkspaceControls } from './workspaces';
 
 /**
  * The board over the drawing, always at 1:1 scale: its panels, and in edit mode the studs, the floating draggable
@@ -84,7 +84,9 @@ import { canDropParts, openChain, visiblePanels } from './windows';
  * `lift`, in edit mode or not.
  */
 export function BoardView(props: {
-  board: ReturnType<typeof createBoard>;
+  board: BoardStore;
+  /** The workspaces whose active board `board` is; a switch drops what is being dragged, the selection and menus. */
+  workspaces?: WorkspaceControls;
   kits: ReturnType<typeof createKits>;
   session: Pick<PaintSession, 'size' | 'library' | 'brush'>;
   editing: boolean;
@@ -110,14 +112,19 @@ export function BoardView(props: {
   const [discardZone, setDiscardZone] = createSignal<HTMLElement>();
   const [editBar, setEditBar] = createSignal<HTMLElement>();
   const editBarMeasured = createElementSize(editBar);
-  const [drag, setDrag] = createSignal<Drag>();
+  /** What is being dragged; dropped when the workspace changes, as the board it started on is no longer shown. */
+  const [drag, setDrag] = createSignal<Drag | undefined>(() => {
+    void props.workspaces?.active();
+    return undefined;
+  });
   /** The kit just kept, or the one a kept part or group already matched, lit for a moment; see `keepKit`. */
   const [flashKit, setFlashKit] = createSignal<string>();
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(flashTimer));
-  /** The selected parts on the board, reset when leaving edit mode. */
+  /** The selected parts on the board, reset when leaving edit mode or switching workspaces. */
   const [selected, setSelected] = createSignal<ReadonlySet<string>>(() => {
     void props.editing;
+    void props.workspaces?.active();
     return new Set<string>();
   });
   /** Whether the edit mode's hint still shows; it goes for good once something is selected. */
@@ -138,6 +145,7 @@ export function BoardView(props: {
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
   const [spawn, setSpawn] = createSignal<{ at: Point; held?: number } | undefined>(() => {
     void props.editing;
+    void props.workspaces?.active();
     return undefined;
   });
 
@@ -293,6 +301,14 @@ export function BoardView(props: {
     press = undefined;
   };
   onCleanup(stopPress);
+  // A switch of workspace leaves no wait of the board before it running: no push or join, no spawn menu to open.
+  createEffect(
+    () => props.workspaces?.active(),
+    () => {
+      stopWaiting();
+      stopPress();
+    }
+  );
 
   const lifted = () => {
     const current = drag();
@@ -1139,6 +1155,7 @@ export function BoardView(props: {
         onLift={(event, kind) => startNewPart(event, kind)}
         onLiftKit={(event, kit) => startKitDrag(event, kit)}
         onReset={() => props.board.reset()}
+        workspaces={props.workspaces}
         onEditLayout={() => props.onEnterEdit()}
         onClose={() => props.onCloseCatalog()}
       />

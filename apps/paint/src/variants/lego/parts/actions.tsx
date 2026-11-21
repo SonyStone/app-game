@@ -215,10 +215,10 @@ export const actionParts = [
 
 /**
  * Controlled action look. Its callback owns command policy; the view only sizes and labels the button. Beside the
- * icon it names the action (or its status) when the name fits the room the button leaves it, the short name when only
- * that fits, and nothing otherwise.
+ * icon it names the action (or its status) when the name fits the room the button leaves it, the short name (or
+ * `statusShort`) when only that fits, and nothing otherwise.
  */
-function ActionPart(props: {
+export function ActionPart(props: {
   label: string;
   /** A shorter name, shown when the label does not fit. */
   short?: string;
@@ -228,6 +228,8 @@ function ActionPart(props: {
   disabled?: boolean;
   onPress: (anchor: Element) => void;
   status?: string;
+  /** A shorter status, shown when `status` does not fit. */
+  statusShort?: string;
 }) {
   const grid = useGrid();
   const name = () =>
@@ -235,7 +237,7 @@ function ActionPart(props: {
       grid.length(props.span.columns) - actionChrome,
       actionNameStyle,
       props.status ?? props.label,
-      props.status ? undefined : props.short
+      props.status ? props.statusShort : props.short
     );
   return (
     <button
