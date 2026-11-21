@@ -1,10 +1,24 @@
 import type { PsdNewDocumentContext } from '@app-game/psd';
+import {
+  editLayerTree,
+  MAX_FOLDERS,
+  orderLayerTree,
+  shownLayers,
+  siblingBelow,
+  subtreeIds,
+  withParent,
+  type LayerPlace
+} from './layerTree';
 import { packTile, type TileData } from './tilePixels';
 export { TILE_BYTES } from './tilePixels';
 
 /** A raster layer. Immutable tiles store raw or losslessly packed premultiplied sRGB RGBA8. */
 export type Layer = {
+  /** Marks a raster layer where saved nodes need it; the document's own rasters leave it out. */
+  kind?: 'raster';
   id: string;
+  /** The folder the layer is in; absent at the root. See `layerTree`. */
+  parentId?: string;
   name: string;
   visible: boolean;
   opacity: number;
@@ -24,8 +38,32 @@ export type Layer = {
  * the document's `linearBlending`.
  */
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
-/** The serializable user-visible layer properties. */
-export type LayerInfo = Omit<Layer, 'tiles'>;
+/**
+ * A folder of the layer tree. It owns no pixels; it shows its layers as they are (Pass Through at full strength), so
+ * wrapping layers in a visible folder changes nothing on the canvas, and hiding it hides everything inside it. A
+ * folder's `opacity`, `blend` and `clipping` are always 1, `pass-through` and absent: Paint has no isolated folders
+ * yet, and the document refuses other values rather than show them wrongly.
+ */
+export type LayerGroup = {
+  kind: 'group';
+  id: string;
+  /** The folder the folder is in; absent at the root. */
+  parentId?: string;
+  name: string;
+  /** Hides the folder and everything inside it, whatever their own visibility. */
+  visible: boolean;
+  opacity: number;
+  blend: GroupBlendMode;
+  clipping?: boolean;
+};
+/** How a folder blends; only `pass-through` is supported, see {@link LayerGroup}. */
+export type GroupBlendMode = 'pass-through' | BlendMode;
+/** A node of the layer tree: a raster layer or a folder. */
+export type DocumentNode = Layer | LayerGroup;
+/** The serializable user-visible properties of a raster layer. */
+export type RasterInfo = Omit<Layer, 'tiles'>;
+/** The serializable user-visible properties of a node: a raster layer's or a folder's. */
+export type LayerInfo = RasterInfo | LayerGroup;
 /** Before/after tile snapshots for one user action. Undefined means the tile did not exist. */
 export type TileChange = {
   layerId: string;
@@ -55,9 +93,15 @@ export type PsdDocumentIdentity = {
   layers: Record<string, { id: number; time: number }>;
 };
 
-/** Owns layer order and bounded tile-snapshot history. GPU resources are disposable caches of these pixels. */
+/**
+ * Owns the layer tree and bounded tile-snapshot history. GPU resources are disposable caches of these pixels.
+ *
+ * The tree is one list of nodes, raster layers and folders, in canonical order (see `layerTree`). Every command that
+ * changes it, or a node's properties, is one undo step that records the whole list before and after; history replays
+ * those lists, so undoing restores structure and pixels together.
+ */
 export function createDocument(options: { paged?: boolean } = {}) {
-  let layers: Layer[] = [newLayer('layer-1', 'Layer 1')];
+  let nodes: DocumentNode[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
   let psdIdentity = newPsdIdentity();
   /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
@@ -65,16 +109,25 @@ export function createDocument(options: { paged?: boolean } = {}) {
   let revision = 0;
   let nextHistoryId = 0,
     baseHistoryId = 0;
-  let historySource: HistorySource = { id: 0, label: 'Opened document', layers: cloneLayers(layers) };
+  let historySource: HistorySource = { id: 0, label: 'Opened document', layers: cloneLayers(rasters(nodes)) };
   const undo: HistoryEntry[] = [],
     redo: HistoryEntry[] = [];
   let historyBytes = 0;
-  const info = () => layers.map(({ tiles: _tiles, ...layer }) => ({ ...layer }));
+  /** `shownLayers` of `nodes`, made again whenever a change replaces `nodes`. */
+  let shown = { nodes, layers: shownLayers(nodes) };
+  const shownNow = () => {
+    if (shown.nodes !== nodes) {
+      shown = { nodes, layers: shownLayers(nodes) };
+    }
+
+    return shown.layers;
+  };
+  const info = (): LayerInfo[] => nodes.map(nodeInfo);
   const apply = (entry: HistoryEntry, direction: 'before' | 'after') => {
-    const old = new Map(layers.map((layer) => [layer.id, layer]));
-    layers = entry[direction].map((layer) => ({ ...layer, tiles: old.get(layer.id)?.tiles ?? new Map() }));
+    nodes = withTiles(entry[direction], nodes);
+    const byId = new Map(rasters(nodes).map((layer) => [layer.id, layer]));
     for (const change of entry.tiles) {
-      const layer = layers.find((layer) => layer.id === change.layerId);
+      const layer = byId.get(change.layerId);
       const pixels = change[direction];
       if (pixels) layer?.tiles.set(change.key, pixels);
       else layer?.tiles.delete(change.key);
@@ -96,6 +149,13 @@ export function createDocument(options: { paged?: boolean } = {}) {
     }
     revision++;
   };
+  const node = (id: string) => nodes.find((candidate) => candidate.id === id);
+  const activeLayer = () => shownNow().find((layer) => layer.id === active);
+  /** The topmost raster layer, which becomes active when the active node goes. */
+  const topLayer = () => rasters(nodes).at(-1)!.id;
+  const pixelBytes = () =>
+    rasters(nodes).reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0);
+  const tileCount = () => rasters(nodes).reduce((n, layer) => n + layer.tiles.size, 0);
   return {
     /** Selects a retained history state without changing current pixels or undo/redo position.
      * Selected immutable versions stay pinned even if their undo entry is pruned or branched away.
@@ -105,7 +165,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
       const states = [baseHistoryId, ...undo.map((entry) => entry.id), ...[...redo].reverse().map((entry) => entry.id)];
       const target = states.indexOf(id);
       if (target < 0) throw new Error('This history state is no longer available.');
-      let snapshot = cloneLayers(layers);
+      let snapshot = cloneLayers(historyLayers(nodes));
       for (let index = undo.length; index > target; index--)
         snapshot = projectHistory(snapshot, undo[index - 1]!, 'before');
       for (let index = undo.length; index < target; index++)
@@ -130,7 +190,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
     },
     /** Replaces resident snapshots with immutable disk references, including history. */
     persist(capture: (pixels: TileData) => TileData) {
-      for (const layer of [...layers, ...historySource.layers])
+      for (const layer of [...rasters(nodes), ...historySource.layers])
         for (const [key, pixels] of layer.tiles) layer.tiles.set(key, capture(pixels));
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
@@ -140,28 +200,62 @@ export function createDocument(options: { paged?: boolean } = {}) {
     },
     /** Current, undoable and selected-source versions that must survive storage garbage collection. */
     *snapshots(): Generator<TileData> {
-      for (const layer of [...layers, ...historySource.layers]) yield* layer.tiles.values();
+      for (const layer of [...rasters(nodes), ...historySource.layers]) yield* layer.tiles.values();
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
           if (tile.before) yield tile.before;
           if (tile.after) yield tile.after;
         }
     },
-    get layers() {
-      return layers;
+    /**
+     * The layer tree: raster layers and folders in canonical order (see `layerTree`), each with its own properties.
+     * Read-only; change it through `changeLayer`, `commit` and `mergeDown`.
+     */
+    get nodes(): readonly DocumentNode[] {
+      return nodes;
+    },
+    /**
+     * The raster layers bottom to top, in compositing order, as they show on the canvas (see `shownLayers`): a layer
+     * inside a hidden folder reads as hidden, a clipped one without a clipping base among its siblings as unclipped.
+     * What renders, exports and samples the drawing reads; a layer's own properties are in `nodes`. Without folders,
+     * the same objects as `nodes`.
+     */
+    get layers(): Layer[] {
+      return shownNow() as Layer[];
     },
     /** Changes only when committed document metadata or pixels change; excludes active preview stamps. */
     get revision() {
       return revision;
     },
-    get active() {
-      return layers.find((layer) => layer.id === active)!;
+    /** Id of the active node: the raster layer strokes paint on, or a folder, which nothing paints on. */
+    get activeId() {
+      return active;
     },
+    /** The active node, raster layer or folder, with its own properties. */
+    get activeNode(): DocumentNode {
+      return node(active)!;
+    },
+    /** The active raster layer as it shows (see `layers`), or undefined while a folder is active. */
+    get activeLayer(): Layer | undefined {
+      return activeLayer();
+    },
+    /**
+     * The active raster layer as it shows (see `layers`). Throws while a folder is active: code that may run then
+     * reads `activeLayer`.
+     */
+    get active(): Layer {
+      const layer = activeLayer();
+      if (!layer) throw new Error('A folder is selected; select a layer to paint on.');
+      return layer;
+    },
+    /** Node `id` with its own properties, if the drawing has it. */
+    node,
     get historyBytes() {
       return historyBytes;
     },
     /** Returns a lightweight snapshot for the UI; never sends pixels over this interface. */
     state() {
+      const layer = activeLayer();
       return {
         revision,
         historySource: { id: historySource.id, label: historySource.label },
@@ -170,39 +264,44 @@ export function createDocument(options: { paged?: boolean } = {}) {
           { id: baseHistoryId, label: baseHistoryId === 0 ? 'Opened document' : `State ${baseHistoryId}` },
           ...[...undo, ...[...redo].reverse()].map((entry) => ({ id: entry.id, label: `State ${entry.id}` }))
         ],
-        /** Layers bottom to top; `tileCount` is the number of tiles holding paint, 0 for an empty layer. */
-        layers: layers.map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
+        /**
+         * The raster layers bottom to top, in compositing order, each with its own properties, `parentId` naming its
+         * folder; `tileCount` is the number of tiles holding paint, 0 for an empty layer. Folders are in `nodes`.
+         */
+        layers: rasters(nodes).map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
+        /** The layer tree in canonical order (see `layerTree`): raster layers and folders, told apart by `kind`. */
+        nodes: nodes.map(nodeState),
+        /** The active node: a raster layer, or a folder, which strokes and pixel edits cannot change. */
         activeId: active,
+        /**
+         * Whether strokes and pixel edits can change the active node: it is a raster layer that shows, itself and
+         * every folder it is in visible. Strokes on anything else are ignored, and pixel edits refused.
+         */
+        activePaintable: !!layer?.visible,
         /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB; see `setLinearBlending`. */
         linearBlending,
         canUndo: undo.length > 0,
         canRedo: redo.length > 0,
-        pixelBytes: layers.reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0),
-        tileCount: layers.reduce((n, l) => n + l.tiles.size, 0)
+        pixelBytes: pixelBytes(),
+        tileCount: tileCount()
       };
     },
-    /** Commits pixels and an optional new layer above the active layer as one atomic history entry. */
-    commit(tiles: TileChange[], addedLayer?: LayerInfo) {
+    /**
+     * Commits pixels and an optional new raster layer, which goes right above the active node in the same folder, as
+     * one atomic history entry.
+     */
+    commit(tiles: TileChange[], addedLayer?: RasterInfo) {
       if (!tiles.length) return;
-      if (addedLayer && (layers.length >= 128 || layers.some((layer) => layer.id === addedLayer.id)))
+      if (addedLayer && (rasters(nodes).length >= MAX_LAYERS || node(addedLayer.id)))
         throw new Error('Cannot add this layer. A drawing can contain at most 128 unique layers.');
       tiles = tiles.map((tile) => ({
         ...tile,
         after: tile.after instanceof Uint8Array ? packTile(tile.after) : tile.after
       }));
-      const current = {
-        pixelBytes: layers.reduce(
-          (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
-          0
-        ),
-        tileCount: layers.reduce((n, layer) => n + layer.tiles.size, 0)
-      };
       const bytes =
-        current.pixelBytes +
-        tiles.reduce((n, tile) => n + (tile.after?.byteLength ?? 0) - (tile.before?.byteLength ?? 0), 0);
+        pixelBytes() + tiles.reduce((n, tile) => n + (tile.after?.byteLength ?? 0) - (tile.before?.byteLength ?? 0), 0);
       const count =
-        current.tileCount +
-        tiles.reduce((n, tile) => n + Number(Boolean(tile.after)) - Number(Boolean(tile.before)), 0);
+        tileCount() + tiles.reduce((n, tile) => n + Number(Boolean(tile.after)) - Number(Boolean(tile.before)), 0);
       if ((!options.paged && bytes > MAX_DOCUMENT_BYTES) || count > MAX_DOCUMENT_TILES)
         throw new Error(
           'The drawing reached its storage budget. The last stroke was not added. Save your drawing before freeing space.'
@@ -216,16 +315,23 @@ export function createDocument(options: { paged?: boolean } = {}) {
         bytes: tileBytes(tiles)
       };
       if (addedLayer) {
-        entry.after.splice(layers.findIndex((layer) => layer.id === active) + 1, 0, addedLayer);
+        const anchor = node(active)!;
+        const tree = editLayerTree(entry.after);
+        tree.insert(addedLayer, { parentId: anchor.parentId ?? null, anchorId: anchor.id, side: 'above' });
+        entry.after = tree.result();
         entry.activeAfter = addedLayer.id;
       }
       apply({ ...entry, id: nextHistoryId + 1 }, 'after');
       record(entry);
     },
-    /** Changes layer properties/order in a single undoable action. Selection itself is not history. */
+    /**
+     * Changes the layer tree or a node's properties as a single undoable action; see {@link LayerAction}. Validates
+     * before changing anything: a command that cannot apply throws, or does nothing where `LayerAction` says so, and
+     * then records no undo step. Selection itself is not history.
+     */
     changeLayer(action: LayerAction) {
       if (action.type === 'select') {
-        if (layers.some((l) => l.id === action.id)) {
+        if (node(action.id)) {
           active = action.id;
           revision++;
         }
@@ -234,85 +340,150 @@ export function createDocument(options: { paged?: boolean } = {}) {
       const before = info(),
         activeBefore = active;
       const tiles: TileChange[] = [];
+      let next: DocumentNode[] = nodes;
       switch (action.type) {
-        case 'add': {
-          if (layers.length >= 128) throw new Error('A drawing can contain at most 128 layers.');
-          const layer = newLayer(crypto.randomUUID(), `Layer ${layers.length + 1}`);
-          layers.push(layer);
-          active = layer.id;
+        case 'add':
+        case 'add-group': {
+          const created =
+            action.type === 'add'
+              ? newLayer(crypto.randomUUID(), `Layer ${rasters(nodes).length + 1}`)
+              : newGroup(crypto.randomUUID(), `Group ${folders(nodes).length + 1}`);
+          checkCapacity(nodes, created.kind === 'group' ? 0 : 1, created.kind === 'group' ? 1 : 0);
+          const tree = editLayerTree(nodes);
+          tree.insert(created, action.place ?? { parentId: null, side: 'above' });
+          next = tree.result();
+          active = created.id;
           break;
         }
         case 'update': {
-          const layer = layers.find((l) => l.id === action.id);
-          if (layer) Object.assign(layer, action.patch);
+          const current = node(action.id);
+          if (!current) return;
+          if (current.kind === 'group') checkFolderPatch(action.patch);
+          next = nodes.map((node) => (node.id === action.id ? ({ ...node, ...action.patch } as DocumentNode) : node));
           break;
         }
         case 'merge-down':
           throw new Error('Merge layers through the runtime, which reads their pixels.');
         case 'duplicate': {
-          const index = layers.findIndex((l) => l.id === action.id);
-          if (index < 0) return;
-          if (layers.length >= 128) throw new Error('A drawing can contain at most 128 layers.');
-          const source = layers[index]!;
-          const tileCount = layers.reduce((n, layer) => n + layer.tiles.size, 0) + source.tiles.size;
-          const pixelBytes = layers.reduce(
+          const ids = subtreeIds(nodes, action.id);
+          if (!ids.length) return;
+          const copied = ids.map((id) => node(id)!);
+          checkCapacity(nodes, rasters(copied).length, folders(copied).length);
+          const copiedTiles = rasters(copied).reduce((n, layer) => n + layer.tiles.size, 0);
+          const copiedBytes = rasters(copied).reduce(
             (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
             0
           );
-          const sourceBytes = [...source.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0);
-          if ((!options.paged && pixelBytes + sourceBytes > MAX_DOCUMENT_BYTES) || tileCount > MAX_DOCUMENT_TILES)
+          if (
+            (!options.paged && pixelBytes() + copiedBytes > MAX_DOCUMENT_BYTES) ||
+            tileCount() + copiedTiles > MAX_DOCUMENT_TILES
+          )
             throw new Error('The drawing reached its storage budget. The layer was not duplicated.');
-          // Tile versions are immutable, so the copy shares them until either layer is painted.
-          const layer: Layer = {
-            ...source,
-            id: crypto.randomUUID(),
-            name: `${source.name} copy`,
-            tiles: new Map(source.tiles)
-          };
-          for (const [key, after] of layer.tiles) tiles.push({ layerId: layer.id, key, before: undefined, after });
-          layers.splice(index + 1, 0, layer);
-          active = layer.id;
+          const fresh = new Map(ids.map((id) => [id, crypto.randomUUID()]));
+          // Tile versions are immutable, so the copies share them until either layer is painted.
+          const copies = copied.map((source): DocumentNode => {
+            const top = source.id === action.id;
+            const placed = withParent(
+              { ...source, id: fresh.get(source.id)!, name: top ? `${source.name} copy` : source.name },
+              top ? source.parentId : fresh.get(source.parentId!)
+            );
+            return placed.kind === 'group' ? placed : { ...placed, tiles: new Map(placed.tiles) };
+          });
+          for (const layer of rasters(copies))
+            for (const [key, after] of layer.tiles) tiles.push({ layerId: layer.id, key, before: undefined, after });
+          // Right after the source's subtree, which ends with the source, the copy is its sibling right above it.
+          const end = nodes.findIndex((node) => node.id === action.id) + 1;
+          next = [...nodes.slice(0, end), ...copies, ...nodes.slice(end)];
+          active = fresh.get(action.id)!;
           break;
         }
         case 'move': {
-          const index = layers.findIndex((l) => l.id === action.id);
-          const next = index + action.direction;
-          if (index >= 0 && next >= 0 && next < layers.length) {
-            const [layer] = layers.splice(index, 1);
-            layers.splice(next, 0, layer!);
-          }
+          const current = node(action.id);
+          if (!current) return;
+          const tree = editLayerTree(nodes);
+          const parentId = current.parentId ?? null;
+          const siblings = tree.children(parentId);
+          const anchorId = siblings[siblings.indexOf(action.id) + action.direction];
+          if (anchorId === undefined) return;
+          tree.move(action.id, { parentId, anchorId, side: action.direction > 0 ? 'above' : 'below' });
+          next = tree.result();
           break;
         }
         case 'reorder': {
-          const index = layers.findIndex((l) => l.id === action.id);
-          if (index < 0 || index === action.index || !Number.isInteger(action.index)) return;
-          if (action.index < 0 || action.index >= layers.length) return;
-          const [layer] = layers.splice(index, 1);
-          layers.splice(action.index, 0, layer!);
+          const current = node(action.id);
+          if (!current || !Number.isInteger(action.index)) return;
+          const tree = editLayerTree(nodes);
+          const parentId = current.parentId ?? null;
+          const siblings = tree.children(parentId);
+          const index = siblings.indexOf(action.id);
+          if (index === action.index || action.index < 0 || action.index >= siblings.length) return;
+          // Past its old place, the layer lands above the sibling now at `index`; otherwise below it.
+          const anchorId = siblings[action.index]!;
+          tree.move(action.id, { parentId, anchorId, side: action.index > index ? 'above' : 'below' });
+          next = tree.result();
+          break;
+        }
+        case 'relocate': {
+          if (!node(action.id)) return;
+          const tree = editLayerTree(nodes);
+          tree.move(action.id, { parentId: action.parentId, anchorId: action.anchorId, side: action.side });
+          next = tree.result();
+          break;
+        }
+        case 'group': {
+          const members = outermost(nodes, action.ids);
+          if (!members.length) return;
+          checkCapacity(nodes, 0, 1);
+          const top = node(members.at(-1)!)!;
+          const group = newGroup(crypto.randomUUID(), `Group ${folders(nodes).length + 1}`);
+          const tree = editLayerTree(nodes);
+          tree.insert(group, { parentId: top.parentId ?? null, anchorId: top.id, side: 'above' });
+          // Bottom first, each member goes on top of the ones before it, keeping their order.
+          for (const id of members) tree.move(id, { parentId: group.id, side: 'above' });
+          next = tree.result();
+          active = group.id;
+          break;
+        }
+        case 'ungroup': {
+          const group = node(action.id);
+          if (group?.kind !== 'group') return;
+          const tree = editLayerTree(nodes);
+          const children = [...tree.children(group.id)];
+          // Bottom first, each child goes right below the folder, so they keep their order in its place.
+          for (const id of children)
+            tree.move(id, { parentId: group.parentId ?? null, anchorId: group.id, side: 'below' });
+          tree.remove(group.id);
+          next = tree.result();
+          if (active === group.id) active = children.at(-1) ?? '';
           break;
         }
         case 'delete': {
-          if (layers.length <= 1) return;
-          const layer = layers.find((l) => l.id === action.id);
-          if (!layer) return;
-          for (const [key, before] of layer.tiles) tiles.push({ layerId: layer.id, key, before, after: undefined });
-          layers = layers.filter((l) => l.id !== action.id);
-          if (active === action.id) active = layers.at(-1)!.id;
+          const roots = outermost(nodes, 'ids' in action ? action.ids : [action.id]);
+          const removed = new Set(roots.flatMap((id) => subtreeIds(nodes, id)));
+          next = nodes.filter((node) => !removed.has(node.id));
+          // A drawing keeps at least one raster layer.
+          if (!removed.size || !rasters(next).length) return;
+          for (const layer of rasters(nodes.filter((node) => removed.has(node.id))))
+            for (const [key, before] of layer.tiles) tiles.push({ layerId: layer.id, key, before, after: undefined });
           break;
         }
       }
+      if (next === nodes || sameNodes(next, nodes)) return;
+      nodes = next;
+      if (!node(active)) active = topLayer();
       record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
     },
     /**
-     * Merges the layer `upperId` into the layer below it as one undoable change. `merged` holds the lower layer's new
-     * pixels for every tile the upper layer covers (`mergeTilePixels`; `undefined` removes the tile). The lower layer
-     * keeps its name, visibility, opacity and blend mode, and becomes active. Throws for the bottom layer.
+     * Merges the raster layer `upperId` into the raster layer right below it in the same folder as one undoable
+     * change. `merged` holds the lower layer's new pixels for every tile the upper layer covers (`mergeTilePixels`;
+     * `undefined` removes the tile). The lower layer keeps its name, visibility, opacity and blend mode, and becomes
+     * active. Throws when no raster sibling is right below, as for the bottom layer of a folder or a folder below.
      */
     mergeDown(upperId: string, merged: ReadonlyMap<string, Uint8Array | undefined>) {
-      const index = layers.findIndex((layer) => layer.id === upperId);
-      if (index <= 0) throw new Error('There is no layer below to merge into.');
-      const upper = layers[index]!,
-        lower = layers[index - 1]!;
+      const upper = node(upperId),
+        lower = siblingBelow(nodes, upperId);
+      if (!upper || upper.kind === 'group' || !lower || lower.kind === 'group')
+        throw new Error('There is no layer below to merge into.');
       const before = info(),
         activeBefore = active;
       const tiles: TileChange[] = [];
@@ -327,7 +498,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
         else lower.tiles.delete(change.key);
       }
 
-      layers = layers.filter((layer) => layer.id !== upperId);
+      nodes = nodes.filter((node) => node.id !== upperId);
       active = lower.id;
       record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
     },
@@ -385,7 +556,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
      * facts; the flat initializer does not accumulate earlier PSD saved events. Legacy imports get a new identity.
      */
     psdIdentity(): PsdDocumentIdentity {
-      for (const layer of layers) {
+      for (const layer of rasters(nodes)) {
         if (!Object.hasOwn(psdIdentity.layers, layer.id)) {
           Object.defineProperty(psdIdentity.layers, layer.id, {
             value: { id: psdIdentity.nextLayerId++, time: Date.parse(psdIdentity.creation.when) / 1000 },
@@ -410,16 +581,25 @@ export function createDocument(options: { paged?: boolean } = {}) {
         revision++;
       }
     },
-    /** Replaces a validated drawing and clears undo history. Missing identity starts new Paint creation facts. */
-    replace(next: Layer[], selected: string, linear = true, identity?: PsdDocumentIdentity) {
-      layers = next;
+    /**
+     * Replaces the drawing with `next`, a validated one whose node `selected` becomes active, and clears undo history.
+     * Missing identity starts new Paint creation facts. Throws, changing nothing, for a tree `orderLayerTree` refuses,
+     * one without a raster layer, or a `selected` it does not have; puts the nodes in canonical order.
+     */
+    replace(next: readonly DocumentNode[], selected: string, linear = true, identity?: PsdDocumentIdentity) {
+      const ordered = orderLayerTree(next);
+      if (!rasters(ordered).length || !ordered.some((node) => node.id === selected)) {
+        throw new Error('Invalid layer identifiers.');
+      }
+
+      nodes = ordered;
       psdIdentity = identity ? structuredClone(identity) : newPsdIdentity();
       active = selected;
       linearBlending = linear;
       undo.length = redo.length = 0;
       historyBytes = 0;
       nextHistoryId = baseHistoryId = 0;
-      historySource = { id: 0, label: 'Opened document', layers: cloneLayers(layers) };
+      historySource = { id: 0, label: 'Opened document', layers: cloneLayers(rasters(nodes)) };
       revision++;
     },
     /**
@@ -445,7 +625,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
     restoreHistory(next: DocumentHistory) {
       const latest = next.undo.at(-1);
       const ids = (infos: readonly { id: string }[]) => infos.map((layer) => layer.id).join('\n');
-      if (latest && (ids(latest.after) !== ids(layers) || latest.activeAfter !== active)) {
+      if (latest && (ids(latest.after) !== ids(nodes) || latest.activeAfter !== active)) {
         throw new Error('This history belongs to another drawing.');
       }
 
@@ -475,25 +655,147 @@ export type DocumentHistory = {
   source: HistorySource;
 };
 
-/** Layer commands shared by UI and worker. Layer order runs from bottom to top. */
+/**
+ * Layer commands shared by UI and worker; each one that changes the drawing is one undo step. Siblings run from bottom
+ * to top; a node is a raster layer or a folder, and a command on a folder takes everything inside it along.
+ */
 export type LayerAction =
   /**
-   * `duplicate` inserts a copy above the layer, with the same pixels and properties, and selects it. `merge-down`
-   * needs the layers' pixels, so the runtime computes it and applies it with `mergeDown`; `changeLayer` rejects it.
+   * `select` makes a node active, a folder too. `delete` removes the node and everything inside it, unless that would
+   * leave no raster layer, when it does nothing. `duplicate` inserts a copy right above the node, with the same pixels
+   * and properties (a folder's copy holds copies of its contents), and selects it. `ungroup` puts a folder's contents
+   * in its place, in their order, and removes it. `merge-down` needs the layers' pixels, so the runtime computes it
+   * and applies it with `mergeDown`; `changeLayer` rejects it.
    */
-  | { type: 'select' | 'delete' | 'duplicate' | 'merge-down'; id: string }
-  | { type: 'add' }
+  | { type: 'select' | 'delete' | 'duplicate' | 'merge-down' | 'ungroup'; id: string }
+  /** Deletes several nodes and everything inside them at once; ids inside other deleted folders are skipped. */
+  | { type: 'delete'; ids: readonly string[] }
+  /**
+   * Adds an empty raster layer (`add`) or folder (`add-group`) at `place`, the top of the root without one, and
+   * selects it; for example, right above the active node in its folder.
+   */
+  | { type: 'add' | 'add-group'; place?: LayerPlace }
+  /**
+   * Puts nodes `ids` into a new folder, in their order on the canvas, and selects it. The folder takes the place of
+   * the topmost of them; ids inside other grouped folders are skipped, and unknown ones ignored. The folder shows its
+   * layers as they are, so grouping siblings that are next to each other changes nothing on the canvas, apart from
+   * clipping, which is resolved among siblings (see `shownLayers`).
+   */
+  | { type: 'group'; ids: readonly string[] }
+  /**
+   * Moves node `id`, and everything inside a folder, to a `LayerPlace`: into a folder, out of it or across folders.
+   * Throws for a folder that does not exist, an anchor that is not in it, or a folder moved into itself.
+   */
+  | ({ type: 'relocate'; id: string } & LayerPlace)
+  /** Swaps the node with the sibling above (1) or below (-1) it; nothing happens at the end of its folder. */
   | { type: 'move'; id: string; direction: -1 | 1 }
-  /** Moves the layer to position `index`, bottom first, shifting the layers in between; out-of-range is ignored. */
+  /**
+   * Moves the node to position `index` among its siblings, bottom first, shifting the ones in between; out-of-range
+   * is ignored. In a drawing without folders, the position in the layer stack.
+   */
   | { type: 'reorder'; id: string; index: number }
+  /** Changes node properties. A folder takes only `name` and `visible`; anything else throws (see `LayerGroup`). */
   | {
       type: 'update';
       id: string;
-      patch: Partial<Pick<LayerInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock' | 'clipping'>>;
+      patch: Partial<Pick<RasterInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock' | 'clipping'>>;
     };
+
+/** A drawing holds at most this many raster layers. */
+export const MAX_LAYERS = 128;
 
 function newLayer(id: string, name: string): Layer {
   return { id, name, visible: true, opacity: 1, blend: 'normal', tiles: new Map() };
+}
+
+function newGroup(id: string, name: string): LayerGroup {
+  return { kind: 'group', id, name, visible: true, opacity: 1, blend: 'pass-through' };
+}
+
+/** The raster layers of `nodes`, in their order. */
+function rasters<T extends { kind?: string }>(nodes: readonly T[]): Exclude<T, { kind: 'group' }>[] {
+  return nodes.filter((node): node is Exclude<T, { kind: 'group' }> => node.kind !== 'group');
+}
+
+/** The folders of `nodes`, in their order. */
+function folders<T extends { kind?: string }>(nodes: readonly T[]): Extract<T, { kind: 'group' }>[] {
+  return nodes.filter((node): node is Extract<T, { kind: 'group' }> => node.kind === 'group');
+}
+
+/** A node's properties without its pixels. */
+function nodeInfo(node: DocumentNode): LayerInfo {
+  if (node.kind === 'group') {
+    return { ...node };
+  }
+
+  const { tiles: _tiles, ...info } = node;
+  return info;
+}
+
+/** A node as the UI state has it: a raster with its `kind` and the number of tiles it paints, or a folder. */
+function nodeState(node: DocumentNode) {
+  if (node.kind === 'group') {
+    return { ...node };
+  }
+
+  const { tiles, ...layer } = node;
+  return { ...layer, kind: 'raster' as const, tileCount: tiles.size };
+}
+
+/** Nodes for `infos`, each raster keeping the tiles map it has among `current`, or an empty one. */
+function withTiles(infos: readonly LayerInfo[], current: readonly DocumentNode[]): DocumentNode[] {
+  const tiles = new Map(rasters(current).map((layer) => [layer.id, layer.tiles]));
+  return infos.map((info) =>
+    info.kind === 'group' ? { ...info } : { ...info, tiles: tiles.get(info.id) ?? new Map<string, TileData>() }
+  );
+}
+
+/** Whether two node lists have the same nodes, order and properties; tiles are not compared. */
+function sameNodes(a: readonly DocumentNode[], b: readonly DocumentNode[]) {
+  return (
+    a.length === b.length &&
+    a.every((node, index) => JSON.stringify(nodeInfo(node)) === JSON.stringify(nodeInfo(b[index]!)))
+  );
+}
+
+/**
+ * The ids among `ids` that the drawing has and that are not inside another of them, bottom first. In canonical order
+ * subtrees do not interleave, so the order of the nodes themselves is their order on the canvas.
+ */
+function outermost(nodes: readonly DocumentNode[], ids: readonly string[]): string[] {
+  const wanted = new Set(ids);
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const inside = (node: DocumentNode) => {
+    for (let parent = node.parentId; parent !== undefined; parent = byId.get(parent)?.parentId) {
+      if (wanted.has(parent)) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+  return nodes.filter((node) => wanted.has(node.id) && !inside(node)).map((node) => node.id);
+}
+
+/** Throws when adding `layers` raster layers and `groups` folders would exceed the drawing's limits. */
+function checkCapacity(nodes: readonly DocumentNode[], layers: number, groups: number) {
+  if (layers && rasters(nodes).length + layers > MAX_LAYERS) {
+    throw new Error(`A drawing can contain at most ${MAX_LAYERS} layers.`);
+  }
+
+  if (groups && folders(nodes).length + groups > MAX_FOLDERS) {
+    throw new Error(`A drawing can contain at most ${MAX_FOLDERS} folders.`);
+  }
+}
+
+/** Throws for a folder patch that sets anything but its name and visibility to another than its fixed value. */
+function checkFolderPatch(patch: Extract<LayerAction, { type: 'update' }>['patch']) {
+  const fixed = { opacity: 1, blend: 'pass-through', clipping: false, alphaLock: false } as const;
+  for (const [key, value] of Object.entries(patch)) {
+    if (key !== 'name' && key !== 'visible' && value !== undefined && value !== fixed[key as keyof typeof fixed]) {
+      throw new Error('A folder has only a name and visibility: it shows its layers as they are.');
+    }
+  }
 }
 /** Starts a Paint identity, independently of future save events and imported PSD provenance. */
 function newPsdIdentity(): PsdDocumentIdentity {
@@ -526,11 +828,14 @@ function cloneLayers(layers: readonly Layer[]): Layer[] {
   return layers.map((layer) => ({ ...layer, tiles: new Map(layer.tiles) }));
 }
 
-/** Records actual edit clocks only for layers whose metadata or committed pixels changed, including undo/redo. */
+/**
+ * Records actual edit clocks only for raster layers whose metadata or committed pixels changed, including undo/redo;
+ * folders are not PSD layers of their own (see `writePsdFile`).
+ */
 function touchPsdLayers(identity: PsdDocumentIdentity, entry: Pick<HistoryEntry, 'before' | 'after' | 'tiles'>) {
   const changed = new Set(entry.tiles.map((tile) => tile.layerId));
   const before = new Map(entry.before.map((layer) => [layer.id, layer]));
-  for (const layer of entry.after) {
+  for (const layer of rasters(entry.after)) {
     if (JSON.stringify(before.get(layer.id)) !== JSON.stringify(layer)) {
       changed.add(layer.id);
     }
@@ -548,10 +853,18 @@ function touchPsdLayers(identity: PsdDocumentIdentity, entry: Pick<HistoryEntry,
   }
 }
 
-/** Applies one retained history delta to private snapshot maps, including deleted/recreated layers. */
+/** The raster layers whose pixels the Erase to History source keeps: the drawing's own, with their own properties. */
+function historyLayers(nodes: readonly DocumentNode[]): Layer[] {
+  return rasters(nodes);
+}
+
+/**
+ * Applies one retained history delta to private snapshot maps, including deleted/recreated layers. Keeps raster
+ * layers only: the source is read for pixels, by layer id.
+ */
 function projectHistory(layers: Layer[], entry: HistoryEntry, direction: 'before' | 'after'): Layer[] {
   const old = new Map(layers.map((layer) => [layer.id, layer]));
-  const next = entry[direction].map((info) => ({
+  const next = rasters(entry[direction]).map((info) => ({
     ...info,
     tiles: old.get(info.id)?.tiles ?? new Map<string, TileData>()
   }));

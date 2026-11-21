@@ -10,7 +10,7 @@ import { PartFrame } from '../PartFrame';
 import { partDefinition } from '../parts';
 import type { PartMode } from '../parts/definition';
 import { createTestServices } from '../testServices';
-import { createDocumentLayers, reorderIndex } from './documentLayers';
+import { createDocumentLayers } from './documentLayers';
 import type { LayersModel } from './layersModel';
 import { LayersStripPart } from './LayersStripPart';
 
@@ -74,18 +74,12 @@ describe('createDocumentLayers', () => {
       blendIf: false,
       colorTags: false,
       reference: false,
-      dropZones: ['before', 'after']
+      dropZones: ['before', 'after', 'into']
     });
-    for (const feature of [
-      'groups',
-      'masks',
-      'solo',
-      'selection',
-      'paper',
-      'favoriteBlends',
-      'clear',
-      'localUndo'
-    ] as const) {
+    // Folders that only organise, and several layers selected for grouping and deleting.
+    expect(model.groups).toMatchObject({ passThroughOnly: true });
+    expect(model.selection).toBeDefined();
+    for (const feature of ['masks', 'solo', 'paper', 'favoriteBlends', 'clear', 'localUndo'] as const) {
       expect(model[feature], feature).toBeUndefined();
     }
   });
@@ -124,7 +118,8 @@ describe('createDocumentLayers', () => {
     model.delete(ids.flat);
     model.mergeDown(ids.shadows);
     expect(action.mock.calls.map(([sent]) => sent)).toEqual([
-      { type: 'add' },
+      // A new layer goes right above the active one.
+      { type: 'add', place: { parentId: null, anchorId: ids.ink, side: 'above' } },
       { type: 'duplicate', id: ids.ink },
       { type: 'delete', id: ids.flat },
       { type: 'merge-down', id: ids.shadows }
@@ -146,22 +141,27 @@ describe('createDocumentLayers', () => {
     expect(single.layers.action).not.toHaveBeenCalled();
   });
 
-  it('turns a drop above or below a tile into one engine reorder to the dropped place', () => {
-    const order = [{ id: 'flat' }, { id: 'shadows' }, { id: 'ink' }, { id: 'sketch' }];
-
-    expect(reorderIndex(order, 'flat', 'sketch', 'before')).toBe(3);
-    expect(reorderIndex(order, 'flat', 'ink', 'after')).toBe(1);
-    expect(reorderIndex(order, 'sketch', 'flat', 'after')).toBe(0);
-    expect(reorderIndex(order, 'sketch', 'shadows', 'before')).toBe(2);
-    expect(reorderIndex(order, 'ink', 'shadows', 'before')).toBeUndefined();
-    expect(reorderIndex(order, 'ink', 'sketch', 'after')).toBeUndefined();
-    expect(reorderIndex(order, 'ink', 'flat', 'into')).toBeUndefined();
-    expect(reorderIndex(order, 'ink', 'missing', 'before')).toBeUndefined();
-
-    const { model, ids } = owned(() => seeded());
+  it('turns a drop above or below a tile into one engine relocate to the dropped place', () => {
+    const { model, layers, ids } = owned(() => seeded());
     model.reorder(ids.flat, ids.ink, 'after');
     flush();
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.flat,
+      parentId: null,
+      anchorId: ids.ink,
+      side: 'below'
+    });
     expect(model.layers().map((node) => node.name)).toEqual(['Sketch', 'Ink', 'Flat colors', 'Shadows']);
+
+    // Drops that leave the layer where it is, onto itself, into a layer or clipped onto it send nothing.
+    vi.mocked(layers.action).mockClear();
+    model.reorder(ids.ink, ids.flat, 'before');
+    model.reorder(ids.ink, ids.ink, 'after');
+    model.reorder(ids.ink, ids.shadows, 'into');
+    model.reorder(ids.ink, ids.shadows, 'clip');
+    model.reorder(ids.ink, 'missing', 'before');
+    expect(layers.action).not.toHaveBeenCalled();
   });
 
   it('reads thumbnails only while asked to', () => {
@@ -177,7 +177,7 @@ describe('createDocumentLayers', () => {
 });
 
 describe('layers:strip over the drawing', () => {
-  it('shows real layers and badges, and none of the group, mask, Solo, selection or Paper controls', () => {
+  it('shows real layers and badges, the group and selection controls, and none of the mask, Solo or Paper ones', () => {
     vi.useFakeTimers();
     const { model, ids, layers } = owned(() => seeded(fourLayers, () => true));
     mountStrip(model);
@@ -190,16 +190,21 @@ describe('layers:strip over the drawing', () => {
     expect(tile(ids.ink).querySelector('img')?.getAttribute('src')).toBe(`blob:${ids.ink}`);
 
     expect(document.querySelector('[aria-label="New layer"]')).not.toBeNull();
-    expect(document.querySelector('[aria-label="New group"]')).toBeNull();
+    expect(document.querySelector('[aria-label="New group"]')).not.toBeNull();
     expect(document.querySelector('[aria-label^="Toggle mask target"]')).toBeNull();
+    // No folder yet, so none to open.
     expect(document.querySelector('[aria-label^="Open group"]')).toBeNull();
     expect(document.querySelector('[aria-label="Paper settings"]')).toBeNull();
 
-    // A right swipe selects nothing, and a long press on the eye only toggles visibility once released.
+    // A right swipe selects the layer for grouping or deleting; a long press on the eye only toggles visibility once
+    // released.
     pointer(tile(ids.ink), 'pointerdown', { x: 10, y: 20 });
     pointer(window, 'pointermove', { x: 70, y: 20 });
     pointer(window, 'pointerup', { x: 70, y: 20 });
-    expect(document.querySelector('[aria-label="Selected layers"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Selected layers"]')?.textContent).toContain('1 sel');
+    expect(layers.action).not.toHaveBeenCalled();
+    document.querySelector<HTMLButtonElement>('[aria-label="Clear selection"]')!.click();
+    flush();
 
     const eye = document.querySelector<HTMLButtonElement>('[aria-label="Toggle visibility for Ink"]')!;
     pointer(eye, 'pointerdown', { x: 5, y: 5 });
@@ -225,8 +230,8 @@ describe('layers:strip over the drawing', () => {
     const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Ink"]')!;
     expect(popover).not.toBeNull();
     const labels = [...popover.querySelectorAll('button')].map((button) => button.textContent?.trim());
-    expect(labels).toEqual(expect.arrayContaining(['αLock', '↳Clip', 'Dup', 'Merge', 'Delete']));
-    for (const absent of ['◐Mask', 'Group', 'Clear']) {
+    expect(labels).toEqual(expect.arrayContaining(['αLock', '↳Clip', 'Dup', 'Group', 'Merge', 'Delete']));
+    for (const absent of ['◐Mask', 'Ungroup', 'Clear']) {
       expect(labels).not.toContain(absent);
     }
     expect(popover.querySelector('[aria-label="More layer settings"]')).toBeNull();
@@ -273,7 +278,7 @@ describe('layers:strip over the drawing', () => {
     expect(layers.action).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: ids.ink, patch: { name: 'Lines' } });
   });
 
-  it('reorders by drag to the dropped place in one engine step', () => {
+  it('moves by drag to the dropped place in one engine step', () => {
     const { model, ids, layers } = owned(() => seeded());
     mountStrip(model);
     const flat = tile(ids.flat);
@@ -287,7 +292,13 @@ describe('layers:strip over the drawing', () => {
     expect(sketch.getAttribute('data-drop')).toBe('before');
     pointer(window, 'pointerup', { x: 30, y: 5 });
 
-    expect(layers.action).toHaveBeenCalledExactlyOnceWith({ type: 'reorder', id: ids.flat, index: 3 });
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.flat,
+      parentId: null,
+      anchorId: ids.sketch,
+      side: 'above'
+    });
     expect(model.layers().map((node) => node.name)).toEqual(['Flat colors', 'Sketch', 'Ink', 'Shadows']);
 
     // The right of a layer's middle is no clip drop here, only a drop above it: the engine cannot move and clip in
@@ -301,7 +312,13 @@ describe('layers:strip over the drawing', () => {
     pointer(window, 'pointermove', { x: 55, y: 25 });
     expect(ink.getAttribute('data-drop')).toBe('before');
     pointer(window, 'pointerup', { x: 55, y: 25 });
-    expect(layers.action).toHaveBeenCalledExactlyOnceWith({ type: 'reorder', id: ids.shadows, index: 1 });
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.shadows,
+      parentId: null,
+      anchorId: ids.ink,
+      side: 'above'
+    });
   });
 
   it('disables structural commands until the engine is ready', () => {
@@ -329,6 +346,7 @@ describe('layers:strip over the drawing', () => {
       ])
     ).toEqual([
       ['Dup', true],
+      ['Group', true],
       ['Merge', true],
       ['Delete', true]
     ]);
@@ -339,7 +357,7 @@ describe('layers:strip over the drawing', () => {
     expect(document.querySelector<HTMLButtonElement>('[aria-label="New layer"]')!.disabled).toBe(false);
   });
 
-  it('never shows an undo toast of its own: pinching sends nothing', () => {
+  it('groups the pinched layers in one engine step, with a toast but no undo of its own', () => {
     const { model, ids, layers } = owned(() => seeded());
     mountStrip(model);
 
@@ -350,8 +368,215 @@ describe('layers:strip over the drawing', () => {
     pointer(window, 'pointerup', { x: 30, y: 55, pointerId: 10, pointerType: 'touch' });
     pointer(window, 'pointerup', { x: 30, y: 75, pointerId: 11, pointerType: 'touch' });
 
-    expect(document.querySelector('[role="status"]')).toBeNull();
+    // One structural action; a lifted finger may select a tile, which is no undo step.
+    const sent = vi.mocked(layers.action).mock.calls.map(([action]) => action);
+    expect(sent.filter((action) => action.type !== 'select')).toEqual([{ type: 'group', ids: [ids.sketch, ids.ink] }]);
+    expect(model.layers().map((node) => [node.name, node.children?.map((child) => child.name)])).toEqual([
+      ['Group 1', ['Sketch', 'Ink']],
+      ['Shadows', undefined],
+      ['Flat colors', undefined]
+    ]);
+    // The board's Undo takes the grouping back.
+    expect(document.querySelector('[role="status"]')?.textContent).toBe('Grouped 2 layers');
+  });
+});
+
+describe('folders on the drawing', () => {
+  /** The seeded drawing with Ink and Shadows grouped into `Group 1`; groups them outside the model's owner. */
+  function withFolder() {
+    const seededModel = owned(() => seeded());
+    seededModel.model.groups!.group([seededModel.ids.ink, seededModel.ids.shadows]);
+    flush();
+    vi.mocked(seededModel.layers.action).mockClear();
+    const folder = seededModel.model.layers()[1]!.id;
+    return { ...seededModel, folder };
+  }
+
+  it('maps the tree top first, folders Pass Through at full strength without a thumbnail', () => {
+    const { model, ids, folder } = withFolder();
+
+    expect(model.layers().map((node) => [node.name, node.children?.map((child) => child.name)])).toEqual([
+      ['Sketch', undefined],
+      ['Group 1', ['Ink', 'Shadows']],
+      ['Flat colors', undefined]
+    ]);
+    expect(model.layers()[1]).toMatchObject({
+      id: folder,
+      type: 'group',
+      blend: 'pass-through',
+      opacity: 100,
+      clipping: false,
+      thumb: undefined
+    });
+    expect(model.totalCount()).toBe(5);
+    expect(model.activeLayer()?.id).toBe(folder);
+    expect(model.layers()[1]!.children![0]!.id).toBe(ids.ink);
+  });
+
+  it('sends one engine action per folder command, and keeps only a folder’s name and visibility', () => {
+    const { model, layers, ids, folder } = withFolder();
+    const sent = () => vi.mocked(layers.action).mock.calls.map(([action]) => action);
+    const groups = model.groups!;
+    const innerFolder = () => model.layers()[1]!.children!.find((child) => child.name === 'Group 2')?.id;
+
+    model.update(folder, { opacity: 40, blend: 'multiply', clipping: true, locks: { alpha: true } });
     expect(layers.action).not.toHaveBeenCalled();
+    // Commands come from separate events, each after the state of the one before.
+    for (const command of [
+      () => model.update(folder, { name: ' Lines ', visible: false }),
+      () => model.update(folder, { visible: true }),
+      () => model.select(ids.ink),
+      () => groups.add(),
+      () => model.addLayer()
+    ]) {
+      command();
+      flush();
+    }
+    expect(sent()).toEqual([
+      { type: 'update', id: folder, patch: { name: 'Lines', visible: false } },
+      { type: 'update', id: folder, patch: { visible: true } },
+      { type: 'select', id: ids.ink },
+      // New nodes go right above the active layer, inside its folder.
+      { type: 'add-group', place: { parentId: folder, anchorId: ids.ink, side: 'above' } },
+      // The new folder is active then.
+      { type: 'add', place: { parentId: folder, anchorId: innerFolder(), side: 'above' } }
+    ]);
+    expect(model.layers()[1]!.children!.map((child) => child.name)).toEqual(['Layer 5', 'Group 2', 'Ink', 'Shadows']);
+
+    vi.mocked(layers.action).mockClear();
+    for (const command of [
+      () => groups.moveOut(ids.shadows),
+      () => model.reorder(ids.flat, folder, 'into'),
+      () => model.reorder(ids.sketch, ids.ink, 'after'),
+      // A folder cannot go into itself or a folder inside it; the engine would refuse, so nothing is sent.
+      () => model.reorder(folder, ids.ink, 'before'),
+      () => model.reorder(folder, folder, 'into'),
+      () => groups.ungroup!(folder)
+    ]) {
+      command();
+      flush();
+    }
+    expect(sent()).toEqual([
+      { type: 'relocate', id: ids.shadows, parentId: null, anchorId: folder, side: 'above' },
+      { type: 'relocate', id: ids.flat, parentId: folder, side: 'above' },
+      { type: 'relocate', id: ids.sketch, parentId: folder, anchorId: ids.ink, side: 'below' },
+      { type: 'ungroup', id: folder }
+    ]);
+  });
+
+  it('deletes and groups a multi-selection as one action each, and merges only within a folder', () => {
+    const { model, layers, ids, folder } = withFolder();
+    const selection = model.selection!;
+
+    for (const id of [ids.sketch, ids.flat, ids.sketch, ids.ink]) {
+      selection.toggle(id);
+      flush();
+    }
+    expect(selection.ids()).toEqual([ids.flat, ids.ink]);
+    selection.delete(selection.ids());
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'delete', ids: [ids.flat, ids.ink] });
+    expect(selection.ids()).toEqual([]);
+    expect(model.layers().map((node) => node.name)).toEqual(['Sketch', 'Group 1']);
+
+    selection.toggle(ids.sketch);
+    flush();
+    model.groups!.group(selection.ids());
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'group', ids: [ids.sketch] });
+    expect(selection.ids()).toEqual([]);
+    vi.mocked(layers.action).mockClear();
+
+    // Shadows is the only layer left outside Sketch's new folder: deleting it with its folder would leave Sketch.
+    expect(model.canDelete(folder)).toBe(true);
+    const fresh = withFolder();
+    expect(fresh.model.canMergeDown(fresh.ids.ink)).toBe(true);
+    expect(fresh.model.canMergeDown(fresh.ids.shadows)).toBe(false);
+    // A folder below is no layer to merge into.
+    expect(fresh.model.canMergeDown(fresh.ids.sketch)).toBe(false);
+    expect(fresh.model.canMergeDown(fresh.folder)).toBe(false);
+    fresh.model.update(fresh.folder, { visible: false });
+    flush();
+    expect(fresh.model.canMergeDown(fresh.ids.ink)).toBe(false);
+  });
+
+  it('opens a folder in the narrow strip with a Back row, and drops a layer into a folder in one relocate', () => {
+    const { model, layers, ids, folder } = withFolder();
+    mountStrip(model);
+
+    expect(tiles()).toEqual(['Sketch', 'Group 1', 'Flat colors']);
+    document.querySelector<HTMLButtonElement>('[aria-label="Open group Group 1"]')!.click();
+    flush();
+    expect(tiles()).toEqual(['Ink', 'Shadows']);
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink });
+    document.querySelector<HTMLButtonElement>('[aria-label="Back from Group 1"]')!.click();
+    flush();
+    expect(tiles()).toEqual(['Sketch', 'Group 1', 'Flat colors']);
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'select', id: folder });
+
+    vi.mocked(layers.action).mockClear();
+    const target = tile(folder);
+    target.getBoundingClientRect = () => new DOMRect(0, 0, 60, 60);
+    document.elementFromPoint = vi.fn(() => target);
+    pointer(tile(ids.flat), 'pointerdown', { x: 30, y: 200 });
+    pointer(window, 'pointermove', { x: 30, y: 100 });
+    pointer(window, 'pointermove', { x: 20, y: 30 });
+    expect(target.getAttribute('data-drop')).toBe('into');
+    pointer(window, 'pointerup', { x: 20, y: 30 });
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.flat,
+      parentId: folder,
+      side: 'above'
+    });
+    expect(model.layers()[1]!.children!.map((child) => child.name)).toEqual(['Flat colors', 'Ink', 'Shadows']);
+  });
+
+  it('shows the folders as an indented tree in the wide look, open until collapsed', () => {
+    const { model, folder } = withFolder();
+    mountView(() => <LayersStripPart model={model} wide interactive acquireThumbnails />);
+
+    const rows = () =>
+      [...document.querySelectorAll<HTMLElement>('[data-layer-tile]')].map((row) => [
+        row.getAttribute('aria-label'),
+        row.dataset.depth
+      ]);
+    expect(rows()).toEqual([
+      ['Sketch', '0'],
+      ['Group 1', '0'],
+      ['Ink', '1'],
+      ['Shadows', '1'],
+      ['Flat colors', '0']
+    ]);
+    document.querySelector<HTMLButtonElement>('[aria-label="Collapse Group 1"]')!.click();
+    flush();
+    expect(rows().map(([name]) => name)).toEqual(['Sketch', 'Group 1', 'Flat colors']);
+    expect(model.groups!.expandedIds()).not.toContain(folder);
+  });
+
+  it('offers a folder its name, visibility, Dup, Group, Ungroup and Delete, and still no masks', () => {
+    const { model, layers, folder } = withFolder();
+    mountStrip(model);
+    document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Group 1"]')!.click();
+    flush();
+
+    const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Group 1"]')!;
+    const labels = [...popover.querySelectorAll('button')].map((button) => button.textContent?.trim());
+    expect(labels).toEqual(['Group 1', 'Shown', 'Dup', 'Group', 'Ungroup', 'Delete']);
+    expect(popover.querySelector('[aria-label="Open blend modes"]')).toBeNull();
+    expect(popover.querySelector('[role="slider"]')).toBeNull();
+    expect(document.querySelector('[aria-label^="Toggle mask target"]')).toBeNull();
+
+    [...popover.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Shown')!
+      .click();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'update', id: folder, patch: { visible: false } });
+    [...popover.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'Ungroup')!
+      .click();
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'ungroup', id: folder });
+    expect(tiles()).toEqual(['Sketch', 'Ink', 'Shadows', 'Flat colors']);
   });
 });
 
@@ -454,6 +679,12 @@ function owned<T>(create: () => T) {
     disposers.push(dispose);
     return create();
   });
+}
+
+function tiles() {
+  return [...document.querySelectorAll<HTMLElement>('[data-layer-tile]')].map((tile) =>
+    tile.getAttribute('aria-label')
+  );
 }
 
 function tile(id: string) {

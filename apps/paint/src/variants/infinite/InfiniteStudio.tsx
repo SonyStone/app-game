@@ -462,6 +462,7 @@ export function InfiniteStudio(props: PaintVariantProps) {
             <div class={styles.layers}>
               <LayerPanel
                 layers={engine.state().layers}
+                nodes={engine.state().nodes}
                 activeId={engine.state().activeId}
                 thumbnail={(id) => session.layerThumbnails.thumbnail(id)?.src}
                 expanded={layersExpanded()}

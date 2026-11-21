@@ -1,4 +1,12 @@
-import { restoreDocument, restoreHandoff, restoreView, snapshotView, type EngineHandoff } from '../storage';
+import {
+  checkpointDocument,
+  restoreDocument,
+  restoreHandoff,
+  restoreView,
+  savedTiles,
+  snapshotView,
+  type EngineHandoff
+} from '../storage';
 import type { TileData, TileReference } from '../tilePixels';
 import type { PaintStorage, StorageFactory } from './contracts';
 
@@ -56,14 +64,7 @@ export function createMemoryStorage(): StorageFactory {
       },
       async save(snapshot, handoff) {
         check();
-        const checkpoint = structuredClone({
-          ...snapshot,
-          version: 3,
-          layers: snapshot.layers.map((layer) => ({
-            ...layer,
-            tiles: layer.tiles.map((tile) => ({ ...tile, pixels: capture(tile.pixels) }))
-          }))
-        });
+        const checkpoint = structuredClone(checkpointDocument(snapshot, capture));
         // Validate completely before publishing a replacement checkpoint.
         restoreDocument(checkpoint);
         document.checkpoint = checkpoint;
@@ -81,7 +82,7 @@ export function createMemoryStorage(): StorageFactory {
           if (!(tile instanceof Uint8Array)) keep.add(tile.storageId);
         };
         for (const tile of live()) retain(tile);
-        for (const layer of document.checkpoint?.layers ?? []) for (const tile of layer.tiles) retain(tile.pixels);
+        for (const pixels of savedTiles(document.checkpoint)) retain(pixels as TileData);
         for (const id of document.tiles.keys()) if (!keep.has(id)) document.tiles.delete(id);
         for (const key of document.overviews.keys())
           if (!document.retained.has(key) && !document.savedOverviews.has(key)) document.overviews.delete(key);

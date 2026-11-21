@@ -55,14 +55,16 @@ describe('portable paged drawings', () => {
   });
   it('still reads version 3 drawings', async () => {
     const source = fixture();
-    const tiles = source.layers.flatMap((layer) => layer.tiles.map(({ pixels }) => pixels as Uint8Array));
+    const tiles = source.layers.flatMap((layer) =>
+      ('tiles' in layer ? layer.tiles : []).map(({ pixels }) => pixels as Uint8Array)
+    );
     const metadata = {
       ...source,
       version: 3,
       brush: { stroke: { minimum: 0.2, maximum: 0.6, firmness: 3 } },
       layers: source.layers.map((layer) => ({
         ...layer,
-        tiles: layer.tiles.map(({ key, pixels }) => ({
+        tiles: ('tiles' in layer ? layer.tiles : []).map(({ key, pixels }) => ({
           key,
           pixels: { storageId: '00000000-0000-4000-8000-000000000000', byteLength: pixels.byteLength }
         }))

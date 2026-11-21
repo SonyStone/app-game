@@ -1,5 +1,9 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
-import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
+import {
+  defineDocumentEdit,
+  editedLayer,
+  type DocumentEditContext
+} from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { createRegionHistory, type RegionPart } from '@app-game/paint-core/regionHistory';
 import {
@@ -53,13 +57,13 @@ export const localUndoEdit = defineDocumentEdit({
         changes: [...current.shown].map(([key, after]) => ({
           layerId: current.layerId,
           key,
-          before: context.active.tiles.get(key),
+          before: editedLayer(context).tiles.get(key),
           after
         }))
       };
     }
 
-    if (!context.active.visible) {
+    if (!editedLayer(context).visible) {
       throw new Error('Show the active layer before undoing part of it.');
     }
 
@@ -186,7 +190,7 @@ type Session = {
 /** What every new session starts with, on the active layer. */
 function start(context: DocumentEditContext) {
   return {
-    layerId: context.active.id,
+    layerId: editedLayer(context).id,
     revision: context.revision,
     history: createRegionHistory(context.readTile),
     shown: new Map<string, Uint8Array | undefined>()
@@ -239,7 +243,7 @@ async function mark(
   const past =
     returned === undefined
       ? new Map<string, Uint8Array | undefined>()
-      : await session.history.past(history, context.active, [{ region: session.region, depth: returned }], keys);
+      : await session.history.past(history, editedLayer(context), [{ region: session.region, depth: returned }], keys);
   if (keys) {
     for (const key of keys) {
       session.shown.delete(key);
@@ -286,7 +290,7 @@ async function tap(
     checkSize(region);
     session.parts.push({ region, depth: found });
     const keys = new Set(region.tiles.keys());
-    const past = await session.history.past(history, context.active, session.parts, keys);
+    const past = await session.history.past(history, editedLayer(context), session.parts, keys);
     for (const key of keys) {
       session.shown.delete(key);
     }

@@ -170,6 +170,7 @@ export function Cluster(props: {
         <LayersCard
           box={props.layout.boxes.layers}
           layers={engine.state().layers}
+          nodes={engine.state().nodes}
           activeId={engine.state().activeId}
           ready={session.ready()}
           onAction={(action) => session.edit({ type: 'layer', action })}

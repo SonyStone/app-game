@@ -5,6 +5,7 @@ import { attempt, createTaskQueue, unwrapResult, type Result } from './asyncResu
 import { defaultCamera, screenToWorld } from './camera';
 import { averageOpaque, defaultColorSample, sampleLayer, type PickedColor } from './colorSample';
 import { layersInRect, layersInView, type DocumentRect } from './layersInView';
+import { siblingBelow } from './layerTree';
 import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { PreviewTile } from './composition/documentEdit';
@@ -217,7 +218,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       cancel();
       // A selection belongs to the drawing it was made in.
       changeSelection(emptySelection);
-      document.replace(next.layers, next.activeId, next.linearBlending, next.psdIdentity);
+      document.replace(next.nodes, next.activeId, next.linearBlending, next.psdIdentity);
       syncBlending();
       camera = next.camera;
       featureData = restoreFeatureData(modules.features, next.features);
@@ -250,12 +251,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     const enqueue = (action: () => Promise<void>) => {
       void queue.run(() => (active ? action() : undefined)).then(reportResult);
     };
-    /** Bakes a layer into the layer below with its blend mode and opacity, clipped to the lower layer when that is
-     * its clipping base. Returns the lower layer's changed tiles for `renderer.restore`, which reloads them by key. */
+    /**
+     * Bakes a raster layer into the raster layer right below it in the same folder with its blend mode and opacity,
+     * clipped to the lower layer when that is its clipping base. Both must show, folders included; they are next to
+     * each other on the canvas, so the result composites as they did. Returns the lower layer's changed tiles for
+     * `renderer.restore`, which reloads them by key.
+     */
     const mergeDown = async (upperId: string) => {
-      const index = document.layers.findIndex((layer) => layer.id === upperId);
-      const upper = document.layers[index],
-        lower = document.layers[index - 1];
+      const below = siblingBelow(document.nodes, upperId);
+      const upper = document.layers.find((layer) => layer.id === upperId),
+        lower = document.layers.find((layer) => layer.id === below?.id);
       if (!upper || !lower) throw new Error('There is no layer below to merge into.');
       if (!upper.visible || !lower.visible) throw new Error('Show both layers before merging them.');
       const read = async (pixels: TileData | undefined) =>
@@ -280,6 +285,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
 
       document.mergeDown(upperId, merged);
       return [...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined }));
+    };
+    /** The active raster layer, for a command that edits its pixels; throws while a folder is active. */
+    const paintTarget = () => {
+      const layer = document.activeLayer;
+      if (!layer) throw new Error('Select a layer to edit its pixels: a folder has none of its own.');
+      return layer;
     };
     /** Data that each document edit keeps between its commands; see `DocumentEditContext.state`. */
     const editStates = new Map<string, unknown>();
@@ -377,7 +388,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         result = await edit.run(
           {
             layers: document.layers,
-            active: document.active,
+            active: document.activeLayer,
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
             linearBlending: document.linearBlending(),
@@ -591,8 +602,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       try {
         await tileStore.save(
           snapshotDocument(
-            document.layers,
-            document.active.id,
+            document.nodes,
+            document.activeId,
             camera,
             featureData,
             document.linearBlending(),
@@ -828,8 +839,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       await renderer.prepareOverview(document.layers);
       await tileStore.save(
         snapshotDocument(
-          document.layers,
-          document.active.id,
+          document.nodes,
+          document.activeId,
           camera,
           featureData,
           document.linearBlending(),
@@ -941,7 +952,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             tileStore = lockedStorage(await modules.storage(storageName), lock.held);
             const previous = await tileStore.load();
             if (previous) {
-              document.replace(previous.layers, previous.activeId, previous.linearBlending, previous.psdIdentity);
+              document.replace(previous.nodes, previous.activeId, previous.linearBlending, previous.psdIdentity);
               camera = previous.camera;
               featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
@@ -975,6 +986,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               const id = command.brush.engine?.id ?? modules.selectEngine(command.brush);
               const engine = Object.hasOwn(modules.engines, id) ? modules.engines[id] : undefined;
               if (!engine?.command) throw new Error(`Brush engine "${id}" does not support commands.`);
+              const layer = paintTarget();
               const scope = resources.open();
               try {
                 await engine.command({
@@ -982,7 +994,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                   renderer,
                   brush: command.brush,
                   settings: command.brush.engine?.settings,
-                  layer: document.active,
+                  layer,
                   layers: document.layers,
                   command: command.command
                 });
@@ -1049,7 +1061,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'begin': {
             processedInputTime = undefined;
             prediction = [];
-            if (!renderer || lost || !document.active.visible) return;
+            // A stroke needs a raster layer that shows; otherwise it is ignored, and the editor reads why from
+            // `activePaintable`.
+            const target = document.activeLayer;
+            if (!renderer || lost || !target?.visible) return;
             await end();
             // Strokes paint over the layer's own resident tiles.
             dropPreview();
@@ -1076,13 +1091,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               context: {
                 settings: brush.engine?.settings,
                 brush,
-                layer: document.active,
+                layer: target,
                 layers: document.layers,
-                historySource: document.historySourceLayer(document.active.id),
+                historySource: document.historySourceLayer(target.id),
                 modifiers: command.modifiers,
                 view: { zoom, angle: camera.angle, mirrored: camera.mirrored },
                 adaptiveQuality,
-                lod: renderer.brushLod?.(document.layers, document.active, camera, size, dpr) ?? 0,
+                lod: renderer.brushLod?.(document.layers, target, camera, size, dpr) ?? 0,
                 seed: crypto.getRandomValues(new Uint32Array(1))[0]!,
                 renderer: strokeRenderer
               }
@@ -1137,14 +1152,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           }
           case 'layer': {
             await end();
-            const before = [...document.layers];
+            const before = document.layers.map((layer) => layer.id);
             const merged = command.action.type === 'merge-down' ? await mergeDown(command.action.id) : undefined;
             if (command.action.type !== 'merge-down') document.changeLayer(command.action);
             // Selection changes no pixels or composition. Other actions recomposite; only a deleted
             // layer's resident tiles are released, and every other layer's GPU cache survives.
             if (command.action.type !== 'select' && renderer) {
-              for (const layer of before) {
-                if (!document.layers.includes(layer)) renderer.releaseLayer(layer.id);
+              const kept = new Set(document.layers.map((layer) => layer.id));
+              for (const id of before) {
+                if (!kept.has(id)) renderer.releaseLayer(id);
               }
               if (merged) renderer.restore(merged, document.layers);
               renderer.recomposite();
@@ -1160,29 +1176,31 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             try {
               await end();
               if (lost || !renderer) throw new Error('Restore the renderer before editing a selection.');
-              if (document.active.id !== command.layerId || document.revision !== command.revision)
+              if (document.activeId !== command.layerId || document.revision !== command.revision)
                 throw new Error('The layer changed. Select the pixels again.');
-              if (!document.active.visible) throw new Error('Show the active layer before editing its pixels.');
+              const target = paintTarget();
+              if (!target.visible) throw new Error('Show the active layer before editing its pixels.');
               const storage = { read: tileStore.read, write: stage };
               const selected =
-                command.action === 'paste' ? clipboard : await captureSelection(document.active, selection, storage);
+                command.action === 'paste' ? clipboard : await captureSelection(target, selection, storage);
               if (!selected) throw new Error('Copy or cut a selection before pasting.');
               if (command.action === 'copy') {
                 await tileStore.flush();
                 clipboard = selected;
                 break;
               }
-              const { tiles: _tiles, ...properties } = document.active;
+              // A layer made from the selection takes the active layer's own properties, not those it shows with.
+              const { tiles: _tiles, ...properties } = document.activeNode as Layer;
               const added =
                 command.action === 'new-layer'
                   ? { ...properties, id: crypto.randomUUID(), name: `${properties.name} selection`, tiles: new Map() }
                   : undefined;
               const removing = command.action !== 'paste';
               const destination =
-                command.action === 'cut' || command.action === 'delete' ? undefined : (added ?? document.active);
+                command.action === 'cut' || command.action === 'delete' ? undefined : (added ?? target);
               const changes = await editSelection({
                 selection: selected,
-                source: removing ? document.active : undefined,
+                source: removing ? target : undefined,
                 destination,
                 offset: command.action === 'move' ? command.offset : undefined,
                 storage
@@ -1230,8 +1248,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               type: 'download',
               blob: await writePaintFile(
                 snapshotDocument(
-                  document.layers,
-                  document.active.id,
+                  document.nodes,
+                  document.activeId,
                   camera,
                   featureData,
                   document.linearBlending(),
@@ -1245,8 +1263,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'live-list': {
             const result = await attempt(async () => {
+              // A viewer gets the drawing flat; while a folder is active, it sees the topmost layer active.
               const listed = listLiveTiles(
-                { layers: document.layers, activeId: document.active.id, linearBlending: document.linearBlending() },
+                {
+                  layers: document.layers,
+                  activeId: document.activeLayer?.id ?? document.layers.at(-1)!.id,
+                  linearBlending: document.linearBlending()
+                },
                 command.region,
                 tileStore.capture,
                 command.limit
@@ -1292,8 +1315,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               if (sample.exact && sample.source === 'view') await draw(true);
               const color =
                 sample.source === 'layer'
-                  ? await sampleLayer(document.active, screenToWorld(command.point, camera, size), sample.size, (pixels) =>
-                      pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels)
+                  ? await sampleLayer(
+                      // A folder has no paint of its own to pick.
+                      document.activeLayer ?? { ...document.layers[0]!, tiles: new Map() },
+                      screenToWorld(command.point, camera, size),
+                      sample.size,
+                      (pixels) => (pixels instanceof Uint8Array ? Promise.resolve(pixels) : tileStore.read(pixels))
                     )
                   : averageOpaque(await renderer.readPresentedArea(command.point, size, sample.size));
               if (!sample.loupe) return { color };

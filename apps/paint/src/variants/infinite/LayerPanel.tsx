@@ -1,4 +1,5 @@
-import type { LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { LayerAction, RasterInfo } from '@app-game/paint-core/document';
+import { flatLayerMove, type TreeNode } from '@app-game/paint-core/layerTree';
 import { createSignal, For, Show } from 'solid-js';
 import { InfiniteIcon } from './icons';
 import { blendName, LayerOptions } from './LayerOptions';
@@ -24,7 +25,12 @@ import theme from './theme.module.css';
  */
 export function LayerPanel(props: {
   /** The layers, bottom first, as the engine reports them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
+  /**
+   * The layer tree in canonical order, which `state().nodes` reports: drags and Merge down follow the layers' folders.
+   * Without it, `layers` are the whole tree. The panel lists raster layers only.
+   */
+  nodes?: readonly TreeNode[];
   activeId: string;
   /** A thumbnail image of layer `id`, such as an object URL; the tile stays blank without one. */
   thumbnail?: (id: string) => string | undefined;
@@ -96,9 +102,9 @@ export function LayerPanel(props: {
     setDragging(undefined);
     const slot = slotAt(event.clientY);
     const index = props.layers.length - 1 - slot;
-    const current = props.layers.findIndex((layer) => layer.id === drag.id);
-    if (!cancelled && index !== current) {
-      props.onAction({ type: 'reorder', id: drag.id, index });
+    const move = cancelled ? undefined : flatLayerMove(props.nodes ?? props.layers, drag.id, index);
+    if (move) {
+      props.onAction(move);
     }
   };
 

@@ -1,4 +1,5 @@
-import type { BlendMode, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { BlendMode, LayerAction, RasterInfo } from '@app-game/paint-core/document';
+import { flatLayerMove, siblingBelow, type TreeNode } from '@app-game/paint-core/layerTree';
 import { createSignal, For, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import css from './cluster.module.css';
@@ -23,7 +24,12 @@ import { percentSetting } from './values';
 export function LayersCard(props: {
   box: Box;
   /** The layers, bottom first, as the document lists them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
+  /**
+   * The layer tree in canonical order, which `state().nodes` reports: drags and Merge down follow the layers' folders.
+   * Without it, `layers` are the whole tree. The panel lists raster layers only.
+   */
+  nodes?: readonly TreeNode[];
   activeId: string;
   /** Layer commands wait while the engine is not ready. */
   ready: boolean;
@@ -167,9 +173,13 @@ export function LayersCard(props: {
                     } else if (finished?.mode === 'reorder') {
                       const count = rows().length;
                       const target = targetIndex(finished, count);
-                      if (target !== finished.index) {
-                        // The card lists layers top first; the document counts from the bottom.
-                        act({ type: 'reorder', id: pressed, index: count - 1 - target });
+                      // The card lists layers top first; the document counts from the bottom.
+                      const move =
+                        target !== finished.index
+                          ? flatLayerMove(props.nodes ?? props.layers, pressed, count - 1 - target)
+                          : undefined;
+                      if (move) {
+                        act(move);
                       }
                     }
                   },
@@ -292,10 +302,10 @@ export function LayersCard(props: {
     </section>
   );
 
-  /** The layer under `id`, which Merge down merges it into. */
+  /** The raster layer right below `id` in its folder, which Merge down merges it into. */
   function belowOf(id: string) {
-    const index = props.layers.findIndex((layer) => layer.id === id);
-    return index > 0 ? props.layers[index - 1] : undefined;
+    const sibling = siblingBelow(props.nodes ?? props.layers, id);
+    return props.layers.find((layer) => layer.id === sibling?.id);
   }
 }
 
@@ -304,8 +314,8 @@ export function LayersCard(props: {
  * a drag lifts, so that a drag is one undo step.
  */
 function BlendSheet(props: {
-  layer: LayerInfo;
-  below: LayerInfo | undefined;
+  layer: RasterInfo;
+  below: RasterInfo | undefined;
   act: (action: LayerAction) => void;
   back: () => void;
 }) {

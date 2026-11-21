@@ -154,14 +154,14 @@ export const layerParts = [
     needs: (s, f) =>
       merge(layerNeeds(s, f), {
         get pictured() {
-          const layer = s.layers.state().layers.find((candidate) => candidate.id === s.layers.state().activeId);
-          return !fits(layer?.name ?? '', nameStyle, f.width - nameChrome);
+          const node = s.layers.state().nodes.find((candidate) => candidate.id === s.layers.state().activeId);
+          return !fits(node?.name ?? '', nameStyle, f.width - nameChrome);
         }
       }),
     View: (props) => (
       <div class={styles.nameField} data-pictured={props.pictured ? '' : undefined}>
         <LayerName
-          layer={props.state.layers.find((layer) => layer.id === props.state.activeId)!}
+          layer={props.state.nodes.find((node) => node.id === props.state.activeId)!}
           class={styles.name}
           onAction={props.onAction}
         />
@@ -182,9 +182,9 @@ export const layerParts = [
     icon: 'gradient',
     defaultSpan: { columns: 3, rows: 1 },
     needs: (s, f) => {
-      const mode = createMemo(
-        () => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId)!.blend
-      );
+      // A folder shows its layers as they are: it shows Normal here and takes no blend mode.
+      const active = createMemo(() => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId));
+      const mode = createMemo(() => active()?.blend ?? 'normal');
       const linear = createMemo(() => s.layers.state().linearBlending);
       return {
         get mode() {
@@ -196,13 +196,12 @@ export const layerParts = [
         get compact() {
           return !fits(blendModeLabel(mode()), blendStyle, f.width - blendChrome);
         },
-        onChange: f.command((blend: Parameters<typeof BlendModePicker>[0]['mode']) =>
-          s.layers.action({
-            type: 'update',
-            id: s.layers.state().activeId,
-            patch: { blend }
-          })
-        )
+        onChange: f.command((blend: Parameters<typeof BlendModePicker>[0]['mode']) => {
+          const layer = active();
+          if (layer) {
+            s.layers.action({ type: 'update', id: layer.id, patch: { blend } });
+          }
+        })
       };
     },
     View: (props) => (

@@ -1,4 +1,5 @@
-import type { BlendMode, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { BlendMode, LayerAction, RasterInfo } from '@app-game/paint-core/document';
+import { flatLayerMove, siblingBelow, type TreeNode } from '@app-game/paint-core/layerTree';
 import { createSignal, For, Show } from 'solid-js';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
@@ -17,7 +18,12 @@ import styles from './panels.module.css';
  */
 export function LayersPanel(props: {
   /** The layers, bottom first, as the document lists them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
+  /**
+   * The layer tree in canonical order, which `state().nodes` reports: drags and Merge down follow the layers' folders.
+   * Without it, `layers` are the whole tree. The panel lists raster layers only.
+   */
+  nodes?: readonly TreeNode[];
   activeId: string;
   /** Layer commands wait while the engine is not ready. */
   ready: boolean;
@@ -29,9 +35,10 @@ export function LayersPanel(props: {
   /** Top first, as the panel shows them. */
   const rows = () => [...props.layers].reverse();
   const active = () => props.layers.find((layer) => layer.id === props.activeId);
+  /** The raster layer right below the active one in its folder, which Merge down merges into. */
   const below = () => {
-    const index = props.layers.findIndex((layer) => layer.id === props.activeId);
-    return index > 0 ? props.layers[index - 1] : undefined;
+    const sibling = siblingBelow(props.nodes ?? props.layers, props.activeId);
+    return props.layers.find((layer) => layer.id === sibling?.id);
   };
   const act = (action: LayerAction) => {
     if (props.ready) {
@@ -137,9 +144,13 @@ export function LayersPanel(props: {
                 setDrag(undefined);
                 if (finished) {
                   const place = target(finished);
-                  if (place !== finished.index) {
-                    // The panel lists layers top first; the document counts from the bottom.
-                    act({ type: 'reorder', id: finished.id, index: rows().length - 1 - place });
+                  // The panel lists layers top first; the document counts from the bottom.
+                  const move =
+                    place !== finished.index
+                      ? flatLayerMove(props.nodes ?? props.layers, finished.id, rows().length - 1 - place)
+                      : undefined;
+                  if (move) {
+                    act(move);
                   }
                 }
               },

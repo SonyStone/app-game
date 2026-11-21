@@ -1,4 +1,4 @@
-import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
+import { editedLayer, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
 import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 import { areaTiles, type FillArea } from './floodFill';
@@ -61,9 +61,11 @@ export async function sampleArea(
     const stored = layer.tiles.get(key);
     return stored && (await context.readTile(stored));
   };
+  // The active layer's pixels need a layer: a folder has none of its own.
+  const active = source === 'layer' ? editedLayer(context) : undefined;
   for (const key of areaTiles(area)) {
-    if (source === 'layer') {
-      const pixels = await read(context.active, key);
+    if (active) {
+      const pixels = await read(active, key);
       if (pixels) {
         tiles.set(key, pixels);
       }

@@ -27,7 +27,8 @@ type PopoverPage = 'main' | 'blending' | 'mask' | 'locks' | 'color' | 'blendif';
  * `Color tag`, and touch `Blend If`). Follows selection across tiles without closing-and-reopening flicker.
  *
  * Shows only what `model` offers (see `LayersModel`): its blend modes, and fill, locks, masks, groups, clearing,
- * colour tags and Blend If where it has them. A name is committed on Enter or blur and a slider on release, so each
+ * colour tags and Blend If where it has them. A folder of a model whose folders only organise
+ * (`groups.passThroughOnly`) shows its name, visibility, and Dup, Group, Ungroup and Delete. A name is committed on Enter or blur and a slider on release, so each
  * edit is one change of the model. Duplicate, Group, Merge and Delete wait for `model.ready()`.
  */
 export function LayerPropertiesPopover(props: {
@@ -158,6 +159,8 @@ export function LayerPropertiesPopover(props: {
   };
 
   const modeLabel = () => blendModeInfo(layer().blend).label;
+  /** A folder that only organises: it has a name and visibility, and nothing that blends. */
+  const organises = () => layer().type === 'group' && !!model().groups?.passThroughOnly;
   const isActiveMask = () => model().activeId() === layer().id && model().masks?.target() === 'mask';
   const availableModes = () =>
     capabilities().blendModes.filter((mode) => (layer().type === 'group' ? true : !mode.groupOnly));
@@ -247,27 +250,44 @@ export function LayerPropertiesPopover(props: {
             </Show>
           </div>
 
-          {/* 2. Blend mode light tile */}
-          <button
-            type="button"
-            class={styles.tileRowBtn}
-            aria-label="Open blend modes"
-            onClick={() => setPage('blending')}
+          <Show
+            when={!organises()}
+            fallback={
+              <div class={styles.fusedRow} role="group" aria-label="Folder visibility">
+                <button
+                  type="button"
+                  class={styles.fusedBtn}
+                  aria-pressed={layer().visible ? 'true' : 'false'}
+                  onClick={() => update({ visible: !layer().visible })}
+                >
+                  <SketchIcon name={layer().visible ? 'eye' : 'hidden'} size={14} />
+                  <span>{layer().visible ? 'Shown' : 'Hidden'}</span>
+                </button>
+              </div>
+            }
           >
-            <span class={styles.tileRowLead}>
-              <SketchIcon name="gradient" size={16} />
-              <span>Blend mode</span>
-            </span>
-            <span class={styles.tileRowValue}>
-              {modeLabel()} <span aria-hidden="true">›</span>
-            </span>
-          </button>
+            {/* 2. Blend mode light tile */}
+            <button
+              type="button"
+              class={styles.tileRowBtn}
+              aria-label="Open blend modes"
+              onClick={() => setPage('blending')}
+            >
+              <span class={styles.tileRowLead}>
+                <SketchIcon name="gradient" size={16} />
+                <span>Blend mode</span>
+              </span>
+              <span class={styles.tileRowValue}>
+                {modeLabel()} <span aria-hidden="true">›</span>
+              </span>
+            </button>
 
-          {/* 3. Native LEGO Opacity slider tile (no native <input type="range">) */}
-          <LegoSlider label="Opacity" value={layer().opacity} onChange={(opacity) => update({ opacity })} />
+            {/* 3. Native LEGO Opacity slider tile (no native <input type="range">) */}
+            <LegoSlider label="Opacity" value={layer().opacity} onChange={(opacity) => update({ opacity })} />
+          </Show>
 
           {/* 4. Fused main toggle tiles: α Lock | ↳ Clip | ◐ Mask › */}
-          <Show when={hasQuickToggles()}>
+          <Show when={hasQuickToggles() && !organises()}>
             <div class={styles.fusedRow} role="group" aria-label="Layer quick toggles">
               <Show when={hasLock('alpha')}>
                 <button
@@ -344,18 +364,38 @@ export function LayerPropertiesPopover(props: {
                 </button>
               )}
             </Show>
-            <button
-              type="button"
-              class={styles.actionTile}
-              disabled={busy() || !model().canMergeDown(layer().id)}
-              onClick={() => {
-                model().mergeDown(layer().id);
-                props.onClose();
-              }}
+            <Show
+              when={organises() && model().groups?.ungroup}
+              fallback={
+                <button
+                  type="button"
+                  class={styles.actionTile}
+                  disabled={busy() || !model().canMergeDown(layer().id)}
+                  onClick={() => {
+                    model().mergeDown(layer().id);
+                    props.onClose();
+                  }}
+                >
+                  <SketchIcon name="mergeDown" size={16} />
+                  <span>Merge</span>
+                </button>
+              }
             >
-              <SketchIcon name="mergeDown" size={16} />
-              <span>Merge</span>
-            </button>
+              {(ungroup) => (
+                <button
+                  type="button"
+                  class={styles.actionTile}
+                  disabled={busy()}
+                  onClick={() => {
+                    ungroup()(layer().id);
+                    props.onClose();
+                  }}
+                >
+                  <SketchIcon name="folder" size={16} />
+                  <span>Ungroup</span>
+                </button>
+              )}
+            </Show>
             <Show when={model().clear}>
               {(clear) => (
                 <button type="button" class={styles.actionTile} onClick={() => clear()(layer().id)}>

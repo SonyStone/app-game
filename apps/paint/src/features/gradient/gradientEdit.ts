@@ -1,5 +1,5 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
-import { defineDocumentEdit } from '@app-game/paint-core/composition/documentEdit';
+import { defineDocumentEdit, editedLayer } from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { selectionBounds, tileCoverage, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
@@ -18,7 +18,7 @@ export const gradientEdit = defineDocumentEdit({
   id: 'gradient',
   parse: (input: unknown) => gradientCommandSchema.parse(input),
   async run(context, command) {
-    const layer = context.active;
+    const layer = editedLayer(context);
     if (!layer.visible) {
       throw new Error('Show the active layer before drawing a gradient on it.');
     }

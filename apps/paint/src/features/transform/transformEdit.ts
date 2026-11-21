@@ -1,6 +1,10 @@
 import { TILE_SIZE } from '@app-game/paint-core/brush';
 import type { Point } from '@app-game/paint-core/camera';
-import { defineDocumentEdit, type DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
+import {
+  defineDocumentEdit,
+  editedLayer,
+  type DocumentEditContext
+} from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { captureSelection } from '@app-game/paint-core/selection';
 import {
@@ -124,7 +128,7 @@ type TransformSession = {
 
 /** Captures the pixels of the selection, or the whole active layer, and their bounds. */
 async function begin(context: DocumentEditContext): Promise<TransformSession> {
-  const layer = context.active;
+  const layer = editedLayer(context);
   if (!layer.visible) {
     throw new Error('Show the active layer before transforming it.');
   }

@@ -74,7 +74,8 @@ it.each(['paint', 'finish'] as const)(
     // Let the ordinary 300ms autosave execute, without an explicit save command.
     await vi.advanceTimersByTimeAsync(301);
     await wait((event) => event.type === 'state' && event.saveState === 'saved');
-    const tiles = checkpoint!.layers[0]!.tiles;
+    const saved = checkpoint!.layers[0]!;
+    const tiles = 'tiles' in saved ? saved.tiles : [];
     expect(tiles.map((tile) => tile.key)).toEqual(['0,0', '2,0']);
     expect(tiles.map((tile) => unpackTile(tile.pixels)[0])).toEqual([100, 200]);
     // Only the simulated failure was reported; the recovered stroke and autosave raised nothing.

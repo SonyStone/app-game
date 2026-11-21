@@ -36,7 +36,10 @@ export function LayersPanel(props: {
   };
 }) {
   const command = (name: LayerCommand) => layerCommand(name, props.state, props.ready);
-  const selected = () => props.state.layers.find((item) => item.id === props.state.activeId)!;
+  /** The active raster layer, whose properties the controls show; undefined while a folder is active. */
+  const selected = () => props.state.layers.find((item) => item.id === props.state.activeId);
+  /** The active node, a folder too, whose name the name field edits. */
+  const active = () => props.state.nodes.find((item) => item.id === props.state.activeId)!;
 
   return (
     <section class={['paint-layers', { [styles.fillContainer!]: props.fillContainer }]}>
@@ -57,7 +60,7 @@ export function LayersPanel(props: {
             <SketchIcon name="plus" size={18} />
           </button>
         </div>
-        <LayerName layer={selected()} onAction={props.onAction} />
+        <LayerName layer={active()} onAction={props.onAction} />
         <Show when={props.fillContainer}>
           <details class={styles.moreSettings}>
             <summary aria-label="Layer settings" title="Layer settings">
@@ -69,41 +72,45 @@ export function LayersPanel(props: {
           </details>
         </Show>
       </div>
-      <div class={styles.layerControls}>
-        <BlendModePicker
-          mode={selected().blend}
-          linear={props.state.linearBlending}
-          onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
-        />
-        <ScrubNumber
-          label="Layer opacity"
-          min={0}
-          max={100}
-          unit="%"
-          value={Math.round(selected().opacity * 100)}
-          onChange={(percent) =>
-            props.onAction({ type: 'update', id: props.state.activeId, patch: { opacity: percent / 100 } })
-          }
-        />
-        <button
-          class={styles.layerToggle}
-          aria-label="Lock transparent pixels"
-          title="Lock transparent pixels: paint only recolors existing pixels"
-          aria-pressed={selected().alphaLock ? 'true' : 'false'}
-          onClick={() => props.onAction(command('lock').action)}
-        >
-          <SketchIcon name={command('lock').icon} size={18} />
-        </button>
-        <button
-          class={styles.layerToggle}
-          aria-label="Clip to layer below"
-          title="Clip to layer below: show this layer only where the layer below has pixels"
-          aria-pressed={selected().clipping ? 'true' : 'false'}
-          onClick={() => props.onAction(command('clip').action)}
-        >
-          <SketchIcon name="clip" size={18} />
-        </button>
-      </div>
+      <Show when={selected()}>
+        {(selected) => (
+          <div class={styles.layerControls}>
+            <BlendModePicker
+              mode={selected().blend}
+              linear={props.state.linearBlending}
+              onChange={(blend) => props.onAction({ type: 'update', id: props.state.activeId, patch: { blend } })}
+            />
+            <ScrubNumber
+              label="Layer opacity"
+              min={0}
+              max={100}
+              unit="%"
+              value={Math.round(selected().opacity * 100)}
+              onChange={(percent) =>
+                props.onAction({ type: 'update', id: props.state.activeId, patch: { opacity: percent / 100 } })
+              }
+            />
+            <button
+              class={styles.layerToggle}
+              aria-label="Lock transparent pixels"
+              title="Lock transparent pixels: paint only recolors existing pixels"
+              aria-pressed={selected().alphaLock ? 'true' : 'false'}
+              onClick={() => props.onAction(command('lock').action)}
+            >
+              <SketchIcon name={command('lock').icon} size={18} />
+            </button>
+            <button
+              class={styles.layerToggle}
+              aria-label="Clip to layer below"
+              title="Clip to layer below: show this layer only where the layer below has pixels"
+              aria-pressed={selected().clipping ? 'true' : 'false'}
+              onClick={() => props.onAction(command('clip').action)}
+            >
+              <SketchIcon name="clip" size={18} />
+            </button>
+          </div>
+        )}
+      </Show>
       <Show when={!props.fillContainer}>
         <SmoothColor linear={props.state.linearBlending} onChange={props.onLinearBlending} />
       </Show>

@@ -95,6 +95,11 @@ export type LayersCapabilities = {
 
 /** Folders of layers: drill-in in the narrow strip, an expandable tree in the wide one. */
 export type LayerGroups = {
+  /**
+   * Folders only organise: they show their layers as they are (Pass Through at full strength) and keep a name and
+   * visibility only, so the properties popover offers no blend mode, opacity, locks, clipping or merging for them.
+   */
+  passThroughOnly?: boolean;
   /** The groups the narrow strip has entered, outermost first. */
   stack: () => readonly string[];
   /** The groups open in the wide tree. */
@@ -108,6 +113,8 @@ export type LayerGroups = {
   group: (ids: readonly string[]) => void;
   /** Moves `id` out of its group to right above the group. */
   moveOut: (id: string) => void;
+  /** Puts the contents of group `id` in its place, in their order, and removes the group. */
+  ungroup?: (id: string) => void;
 };
 
 /** Layer masks and painting on them, with the red overlay that shows a mask on the canvas. */
