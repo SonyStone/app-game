@@ -26,6 +26,7 @@ export function createTestServices() {
   const errors = vi.fn();
   const [penCurve, setPenCurve] = createSignal<PressureCurve>();
   const [gridCell, setGridCell] = createSignal(defaultCell);
+  const [view, setView] = createSignal({ zoom: 1, angle: 0 });
   const services: LegoServices = {
     brushEditor: { ...createBrushEditor(brush, setBrush), open: () => {} },
     brush: {
@@ -105,6 +106,13 @@ export function createTestServices() {
       psd: vi.fn(),
       place: vi.fn()
     },
+    view: {
+      zoom: createMemo(() => view().zoom),
+      angle: createMemo(() => view().angle),
+      resetZoom: vi.fn(() => setView((current) => ({ ...current, zoom: 1 }))),
+      resetRotation: vi.fn(() => setView((current) => ({ ...current, angle: 0 }))),
+      fullscreen: { available: () => true, active: () => false, toggle: vi.fn(async () => {}) }
+    },
     options: {
       cell: () => gridCell(),
       setCell: vi.fn((cell: number) => setGridCell(cell)),
@@ -113,7 +121,7 @@ export function createTestServices() {
     },
     run: (command: () => unknown) => runPartCommand({ setError: errors }, command)
   };
-  return { services, setBrush, brush, errors };
+  return { services, setBrush, brush, errors, setView };
 }
 
 /**

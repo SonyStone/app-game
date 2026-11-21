@@ -8,6 +8,7 @@ import {
   canDock,
   cellGap,
   dockedLayout,
+  dockedRoom,
   findPart,
   floatingGripHeight,
   frameAt,
@@ -462,14 +463,15 @@ export function BoardView(props: {
         canDock(pitch, current.base, panel.id, side, size, partStretch)
       );
 
-      if (dockPreview) {
+      // Free panels can intentionally merge into another panel by dwelling `joinDelay` over it. Over a docked panel
+      // that wins over docking beside it: the pointer there is at the screen edge, where a dock would preview too.
+      const candidateTarget = carried && !panel.floating ? panelJoinTarget(current, panel, pointer) : undefined;
+      if (dockPreview && !candidateTarget?.panel.dock) {
         stopWaiting();
         setDrag({ ...current, point, carried, dockPreview, hoverTarget: undefined, joined: undefined });
         return;
       }
 
-      // Single-part / non-docked free panels can intentionally merge into another panel by dwelling 550ms over it.
-      const candidateTarget = carried && !panel.floating ? panelJoinTarget(current, panel, pointer) : undefined;
       if (!candidateTarget) {
         stopWaiting();
         setDrag({ ...current, point, carried, dockPreview: undefined, hoverTarget: undefined, joined: undefined });
@@ -834,6 +836,7 @@ export function BoardView(props: {
         data-panel={panel().id}
         data-dock={panel().dock}
         data-dock-preview={isDockPreview() ? '' : undefined}
+        data-moving={panelDrag()?.panel === panel().id ? '' : undefined}
         data-join-target={joinHoverId() === panel().id ? '' : undefined}
         data-floating={panel().floating ? '' : undefined}
         data-empty={panel().parts.length === 0 ? '' : undefined}
@@ -1247,6 +1250,11 @@ export function BoardView(props: {
     const size = view();
     const area = safeArea(grid.pitch(), props.board.latest(), size, true, partStretch);
     const bar = editBarSize();
+    const kept = readEditBarAt();
+    if (kept) {
+      return clampEditBar({ x: kept.x * size.width, y: kept.y * size.height }, bar, area);
+    }
+
     const span = grid.minimumSpan(bar);
     const at = freeSpot(grid.pitch(), props.board.latest(), size, span, 16, partStretch);
     return clampEditBar({ x: at.x * size.width - panelPadding, y: at.y * size.height - panelPadding }, bar, area);
@@ -1294,6 +1302,11 @@ export function BoardView(props: {
       }
 
       cleanup();
+      const left = editBarPos();
+      const size = view();
+      if (left && size.width > 0 && size.height > 0) {
+        keepEditBarAt({ x: left.x / size.width, y: left.y / size.height });
+      }
     };
     const cleanup = () => {
       window.removeEventListener('pointermove', move, true);
@@ -1746,7 +1759,6 @@ export function BoardView(props: {
       .filter(
         (entry) =>
           entry.panel.id !== panel.id &&
-          entry.panel.dock === undefined &&
           canDropParts(drag.base, entry.panel, carried)
       );
     return pointerTarget(entries, pointer, pitch);
@@ -1766,8 +1778,11 @@ export function BoardView(props: {
       ...drag.base,
       panels: drag.base.panels.filter((candidate) => candidate.id !== panel.id)
     };
-    const placed = placeBlock(target.panel.parts, fromOrigin(panel.parts), cell);
-    return putPanel(withoutSource, { ...target.panel, parts: placed });
+    const block = fromOrigin(panel.parts);
+    const room = target.panel.dock
+      ? dockedRoom(target.panel.parts, cell, partsBounds(block), partStretch)
+      : { parts: target.panel.parts, cell };
+    return putPanel(withoutSource, { ...target.panel, parts: placeBlock(room.parts, block, room.cell) });
   }
 
   /**
@@ -1799,11 +1814,16 @@ export function BoardView(props: {
           }
         : board;
     /** `drag` placed on `panel` with its top-left at `cell`. */
-    const placeOn = (panel: Panel, cell: Cell) => {
+    const placeOn = (panel: Panel, wanted: Cell) => {
       const prevBounds = panel.parts.length > 0 ? partsBounds(panel.parts) : undefined;
+      const blockBounds = drag.block ? partsBounds(drag.block.parts) : undefined;
+      const room = panel.dock
+        ? dockedRoom(panel.parts, wanted, blockBounds ?? drag.span, partStretch)
+        : { parts: panel.parts, cell: wanted };
+      const cell = room.cell;
       const placed = drag.block
-        ? placeBlock(panel.parts, drag.block.parts, cell)
-        : placePart(panel.parts, { ...part, cell });
+        ? placeBlock(room.parts, drag.block.parts, cell)
+        : placePart(room.parts, { ...part, cell });
       const nextBounds = partsBounds(placed);
       const expands =
         prevBounds !== undefined &&
@@ -1848,7 +1868,7 @@ export function BoardView(props: {
       ? undefined
       : pointerTarget(
           visiblePanels(pitch, drag.base, props.openPanel, props.editing, size, drag.pinned, partStretch).filter(
-            (entry) => entry.panel.dock === undefined && accepts(entry.panel)
+            (entry) => accepts(entry.panel)
           ),
           pointer,
           pitch
@@ -1998,6 +2018,36 @@ function readHinted() {
 }
 
 const hintKey = 'paint.lego.hinted';
+
+/**
+ * Where the user last left the Edit bar, as fractions of the view, kept on the device: the bar comes back there the
+ * next time editing starts, shifted into the view if it no longer fits. Absent until the bar is first moved.
+ */
+const editBarKey = 'paint.lego.editBar';
+
+function readEditBarAt(): Point | undefined {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(editBarKey) ?? 'null');
+    if (stored && typeof stored === 'object' && 'x' in stored && 'y' in stored) {
+      const { x, y } = stored;
+      return typeof x === 'number' && typeof y === 'number' && Number.isFinite(x) && Number.isFinite(y)
+        ? { x, y }
+        : undefined;
+    }
+  } catch {
+    // Unreadable: the bar takes a free spot.
+  }
+
+  return undefined;
+}
+
+function keepEditBarAt(at: Point) {
+  try {
+    localStorage.setItem(editBarKey, JSON.stringify(at));
+  } catch {
+    // Storage refused: the place lasts until editing ends.
+  }
+}
 
 /** `parts` moved so that their bounds start at cell (0, 0). */
 function fromOrigin(parts: readonly Part[]) {

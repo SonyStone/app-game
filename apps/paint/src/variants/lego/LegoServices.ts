@@ -180,6 +180,21 @@ export function createLegoServices(
         await session.choosePreset(id, 'brush');
       }
     },
+    /**
+     * The canvas view: the zoom (1 is 100%) and the rotation in radians with their resets, and full screen, which is
+     * `available` only where the browser offers it and the app does not already run full screen.
+     */
+    view: {
+      zoom: createMemo(() => session.camera.camera().zoom),
+      angle: createMemo(() => session.camera.camera().angle),
+      resetZoom: session.camera.resetZoom,
+      resetRotation: session.camera.resetRotation,
+      fullscreen: {
+        available: () => session.fullscreen.shown && !session.fullscreen.props.disabled,
+        active: session.fullscreen.isActive,
+        toggle: session.fullscreen.props.onClick
+      }
+    },
     transform: { active: session.transform.active, toggle: session.toggleTransform },
     selection: { selected: session.selection.selected },
     layers: {

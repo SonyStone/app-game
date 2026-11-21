@@ -14,7 +14,6 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
-import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart, safeArea, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
@@ -205,6 +204,13 @@ export function LegoStudio(
   // The library lists the user's presets for the board and the catalog.
   void session.library.loadAll();
 
+  /** The width the panels docked to the right edge take, which the Exit link stands clear of. */
+  const rightInset = () => {
+    const size = session.size();
+    const area = safeArea(grid.pitch(), board.board(), size, editing());
+    return Math.max(0, size.width - area.left - area.width);
+  };
+
   const popupPlace = () => {
     const open = popup();
     if (!open) {
@@ -311,21 +317,13 @@ export function LegoStudio(
                 </div>
               )}
             </Show>
-            <div class={styles.controls}>
-              <Show when={props.experimentsHref}>
-                {(href) => (
-                  <a class={styles.editButton} href={href()}>
-                    Exit
-                  </a>
-                )}
-              </Show>
-              <Show when={session.fullscreen.shown}>
-                {/* On a tablet, full screen also hides Android's bars and makes its edge swipes take two tries. */}
-                <button type="button" class={[styles.editButton, styles.iconButton]} {...session.fullscreen.props}>
-                  <SketchIcon name={session.fullscreen.isActive() ? 'fullscreenExit' : 'fullscreen'} size={18} />
-                </button>
-              </Show>
-            </div>
+            <Show when={props.experimentsHref}>
+              {(href) => (
+                <a class={styles.editButton} style={{ right: `${12 + rightInset()}px` }} href={href()}>
+                  Exit
+                </a>
+              )}
+            </Show>
             <Show when={abrViewer() !== undefined}>
               <AbrViewerDialog
                 open={abrViewer() === 'open'}

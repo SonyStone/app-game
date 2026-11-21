@@ -3,6 +3,7 @@ import {
   canDock,
   dockedFrames,
   dockedLayout,
+  dockedRoom,
   dockGap,
   frameAt,
   freeSpot,
@@ -216,4 +217,26 @@ it('computes safeArea around docked sidebars, shifts overlapping panels without 
   // Refuses docking when remaining safeArea would be narrower than 6 * pitch.
   const narrowView = { width: 7 * cell28Pitch, height: 800 };
   expect(canDock(cell28Pitch, { panels: [dockedStrip] }, 'strip-panel', 'right', narrowView)).toBe(false);
+});
+
+it('shortens a docked stretched part to make room for a part dropped on it', () => {
+  const strip = { id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 5, rows: 20 } };
+  const stretch = (kind: string) => (kind === 'layers:strip' ? ('rows' as const) : undefined);
+
+  // Over its lower half: the strip gives up its last rows and the drop lies under it.
+  const low = dockedRoom([strip], { column: 1, row: 17 }, { columns: 2, rows: 2 }, stretch);
+  expect(low.parts[0]!.span).toEqual({ columns: 5, rows: 18 });
+  expect(low.parts[0]!.cell).toEqual({ column: 0, row: 0 });
+  expect(low.cell).toEqual({ column: 1, row: 18 });
+
+  // Over its upper half: the strip starts lower and the drop takes its first rows.
+  const high = dockedRoom([strip], { column: 0, row: 3 }, { columns: 1, rows: 1 }, stretch);
+  expect(high.parts[0]!.span).toEqual({ columns: 5, rows: 19 });
+  expect(high.parts[0]!.cell).toEqual({ column: 0, row: 1 });
+  expect(high.cell).toEqual({ column: 0, row: 0 });
+
+  // Beside the strip nothing changes.
+  const beside = dockedRoom([strip], { column: 5, row: 3 }, { columns: 1, rows: 1 }, stretch);
+  expect(beside.parts).toEqual([strip]);
+  expect(beside.cell).toEqual({ column: 5, row: 3 });
 });

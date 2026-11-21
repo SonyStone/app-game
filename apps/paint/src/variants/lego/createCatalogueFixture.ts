@@ -137,6 +137,13 @@ export function createCatalogueFixture() {
         await tools.selectPreset(id, 'brush');
       }
     },
+    view: {
+      zoom: createMemo(() => 1.5),
+      angle: createMemo(() => Math.PI / 12),
+      resetZoom: () => {},
+      resetRotation: () => {},
+      fullscreen: { available: () => true, active: () => false, toggle: async () => {} }
+    },
     transform: { active: () => false, toggle: () => {} },
     selection: { selected: () => false },
     layers: {

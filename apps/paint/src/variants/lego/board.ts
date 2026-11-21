@@ -148,8 +148,11 @@ export function partsBounds(parts: readonly Part[]) {
   return { column, row, columns: right - column, rows: bottom - row };
 }
 
-/** Gap in CSS pixels kept between docked edge sidebars and free panels inside `safeArea`. */
-export const dockGap = 8;
+/**
+ * Gap in CSS pixels kept between docked edge sidebars and free panels inside `safeArea`: none, so a panel lies against
+ * a docked sidebar as it lies against the screen edge.
+ */
+export const dockGap = 0;
 
 /**
  * Derived render layout for `panel` in `view`, without mutating stored `Part.span`:
@@ -519,6 +522,38 @@ export function placeBlock(parts: readonly Part[], block: readonly Part[], cell:
           }
         }))
   );
+}
+
+/**
+ * Makes room on a docked panel for a part or block of `span` dropped at `cell`. A docked panel's stretched part fills
+ * every row the view has, so a drop always lands on it: rather than push it out of the view, the stretched part gives
+ * up the dropped rows, at its top when the drop is over its upper half and at its bottom otherwise. Returns the parts
+ * with the stretched part shortened and the cell the drop takes; both unchanged when the drop touches no stretched
+ * part or that part has no rows to give.
+ */
+export function dockedRoom(
+  parts: readonly Part[],
+  cell: Cell,
+  span: Span,
+  stretch: StretchResolver = defaultStretch
+): { parts: Part[]; cell: Cell } {
+  const dropped = { id: '', kind: '', cell, span };
+  const host = parts.find((part) => stretch(part.kind) === 'rows' && overlaps(part, dropped));
+  const rows = host ? Math.min(span.rows, host.span.rows - 1) : 0;
+  if (!host || rows < span.rows) {
+    return { parts: [...parts], cell };
+  }
+
+  const atTop = cell.row + span.rows / 2 < host.cell.row + host.span.rows / 2;
+  const shortened = {
+    ...host,
+    cell: atTop ? { ...host.cell, row: host.cell.row + rows } : host.cell,
+    span: { ...host.span, rows: host.span.rows - rows }
+  };
+  return {
+    parts: parts.map((part) => (part.id === host.id ? shortened : part)),
+    cell: { ...cell, row: atTop ? host.cell.row : host.cell.row + shortened.span.rows }
+  };
 }
 
 /** The panel part `owner` opens, if it has one. */

@@ -54,6 +54,7 @@ export type PartBinding = {
  * - `layer-list`: the list of layers.
  * - `layer-blending`: how the document mixes its colors (Smooth color).
  * - `interface`: the editor's own options: the Options part and the grid size on its sheet.
+ * - `view`: how the canvas is seen: full screen, the zoom level and the rotation.
  */
 export type PartGroup =
   | 'brush'
@@ -71,7 +72,8 @@ export type PartGroup =
   | 'layer-manage'
   | 'layer-list'
   | 'layer-blending'
-  | 'interface';
+  | 'interface'
+  | 'view';
 
 /**
  * Defines inert registry data. `needs` runs only when mounted under PartFrame, and may create owned memos.

@@ -1,4 +1,5 @@
 import { editable } from '@app-game/paint-core/input';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { SettingsBack, SettingsList, SettingsSplit, type SettingsListItem } from '../../shared/ui/SettingsList';
@@ -19,8 +20,8 @@ import dialogStyles from './PartsTray.module.css';
 export type CatalogTarget = 'interface' | 'parts';
 
 /**
- * The unified Options & Parts modal Sidebar dialog, matching `BrushStudioDialog`: a search bar and `Done` across the
- * top, above a `SettingsSplit` whose sidebar lists two groups (`Settings` with `Interface`, and `Parts` with `Kits`
+ * The unified Options & Parts modal Sidebar dialog: one plate, a `SettingsSplit` whose sidebar holds the title with
+ * `Done`, the search field, and under them two groups (`Settings` with `Interface`, and `Parts` with `Kits`
  * and every part family with counts); on narrow screens, sections and their content become two screens with
  * `SettingsBack`.
  *
@@ -58,6 +59,10 @@ export function PartsTray(props: {
 
     return props.initial === 'interface' ? interfaceCategoryId : untrack(lastPartCategory);
   });
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const frameSize = createElementSize(frame);
+  /** Whether the sidebar and a section's content are two screens, as `.sheet` turns narrow in the stylesheet. */
+  const narrow = () => (frameSize.width ?? Infinity) < narrowFrame;
   /** The screen shown where the sidebar and a section's content are two screens. */
   const [view, setView] = createSignal<'list' | 'detail'>('list');
   const [query, setQuery] = createSignal(() => {
@@ -83,8 +88,7 @@ export function PartsTray(props: {
       group: 'parts'
     }))
   ]);
-  const selectedItem = () =>
-    sidebarItems().find((candidate) => candidate.id === categoryId()) ?? sidebarItems()[0]!;
+  const selectedItem = () => sidebarItems().find((candidate) => candidate.id === categoryId()) ?? sidebarItems()[0]!;
   const selectedFamily = () => families().find((candidate) => candidate.id === categoryId());
 
   const needle = createMemo(() => query().trim().toLowerCase());
@@ -136,6 +140,56 @@ export function PartsTray(props: {
       }
     });
 
+    /**
+     * What the search found: kits, then parts by family. It takes the section's place beside the sidebar, and where
+     * the two are separate screens it takes the list's place under the search field, so the field stays in hand.
+     */
+    const Results = () => (
+      <section class={dialogStyles.pane} aria-label="Search results">
+        <Show
+          when={matchingKits().length > 0 || matchingFamilies().length > 0}
+          fallback={<p class={dialogStyles.empty}>No matching parts or kits for “{query().trim()}”</p>}
+        >
+          <Show when={matchingKits().length > 0}>
+            <div class={dialogStyles.group}>
+              <h4 class={dialogStyles.groupHeading}>Kits</h4>
+              <div class={dialogStyles.kitsGrid}>
+                <For each={matchingKits()} keyed={(kit) => kit.id}>
+                  {(kit) => (
+                    <KitTile
+                      kit={kit()}
+                      kits={props.kits}
+                      flash={props.flashKit === kit().id}
+                      onLift={(event) => props.onLiftKit(event, kit())}
+                    />
+                  )}
+                </For>
+              </div>
+            </div>
+          </Show>
+          <For each={matchingFamilies()} keyed={(group) => group.id}>
+            {(group) => (
+              <div class={dialogStyles.group}>
+                <h4 class={dialogStyles.groupHeading}>{group().title}</h4>
+                <div class={dialogStyles.grid}>
+                  <For each={group().kinds}>
+                    {(kind) => (
+                      <PartTile
+                        kind={kind}
+                        presets={props.presets}
+                        onBoard={props.onBoard?.has(kind)}
+                        onLift={(event) => props.onLift(event, kind)}
+                      />
+                    )}
+                  </For>
+                </div>
+              </div>
+            )}
+          </For>
+        </Show>
+      </section>
+    );
+
     return (
       <dialog
         ref={setDialog}
@@ -173,121 +227,71 @@ export function PartsTray(props: {
         onPointerUp={(event) => event.stopPropagation()}
         onPointerCancel={(event) => event.stopPropagation()}
       >
-        <div class={dialogStyles.frame}>
-          <div class={dialogStyles.header}>
-            <div class={dialogStyles.searchPlate}>
-              <label class={dialogStyles.search}>
-                <SketchIcon name="zoom" size={16} />
-                <input
-                  type="search"
-                  class={dialogStyles.searchInput}
-                  aria-label="Search parts"
-                  placeholder="Search parts and kits…"
-                  value={query()}
-                  onInput={(event) => setQuery(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Escape' && query()) {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setQuery('');
-                    }
-                  }}
-                />
-                <Show when={query().length > 0}>
-                  <button
-                    type="button"
-                    class={dialogStyles.searchClear}
-                    aria-label="Clear search"
-                    onClick={() => setQuery('')}
-                  >
-                    <SketchIcon name="close" size={14} />
-                  </button>
-                </Show>
-              </label>
-            </div>
-            <div class={dialogStyles.actions}>
-              <button type="button" class={dialogStyles.done} onClick={() => props.onClose()}>
-                Done
-              </button>
-            </div>
-          </div>
-
+        <div ref={setFrame} class={dialogStyles.frame}>
           <SettingsSplit
             class={dialogStyles.sheet}
-            view={needle() ? 'detail' : view()}
+            view={needle() ? (narrow() ? 'list' : 'detail') : view()}
             list={
               <div class={dialogStyles.side}>
-                <h1 class={dialogStyles.name}>Parts &amp; Options</h1>
-                <SettingsList
-                  class={dialogStyles.list}
-                  label="Parts and options"
-                  groups={sidebarGroups}
-                  items={sidebarItems()}
-                  selected={selectedItem().id}
-                  onSelect={(id) => {
-                    if (query()) {
-                      setQuery('');
-                    }
+                <div class={dialogStyles.sideHead}>
+                  <h1 class={dialogStyles.name}>Parts &amp; Options</h1>
+                  <button type="button" class={dialogStyles.done} onClick={() => props.onClose()}>
+                    Done
+                  </button>
+                </div>
+                <label class={dialogStyles.search}>
+                  <SketchIcon name="zoom" size={16} />
+                  <input
+                    type="search"
+                    class={dialogStyles.searchInput}
+                    aria-label="Search parts"
+                    placeholder="Search parts and kits…"
+                    value={query()}
+                    onInput={(event) => setQuery(event.currentTarget.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape' && query()) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setQuery('');
+                      }
+                    }}
+                  />
+                  <Show when={query().length > 0}>
+                    <button
+                      type="button"
+                      class={dialogStyles.searchClear}
+                      aria-label="Clear search"
+                      onClick={() => setQuery('')}
+                    >
+                      <SketchIcon name="close" size={14} />
+                    </button>
+                  </Show>
+                </label>
+                <Show when={!(needle() && narrow())} fallback={<Results />}>
+                  <SettingsList
+                    class={dialogStyles.list}
+                    label="Parts and options"
+                    groups={sidebarGroups}
+                    items={sidebarItems()}
+                    selected={selectedItem().id}
+                    onSelect={(id) => {
+                      if (query()) {
+                        setQuery('');
+                      }
 
-                    if (id !== interfaceCategoryId) {
-                      setLastPartCategory(id);
-                    }
+                      if (id !== interfaceCategoryId) {
+                        setLastPartCategory(id);
+                      }
 
-                    setCategoryId(id);
-                    setView('detail');
-                  }}
-                />
+                      setCategoryId(id);
+                      setView('detail');
+                    }}
+                  />
+                </Show>
               </div>
             }
           >
-            <Show
-              when={!needle()}
-              fallback={
-                <section class={dialogStyles.pane} aria-label="Search results">
-                  <Show
-                    when={matchingKits().length > 0 || matchingFamilies().length > 0}
-                    fallback={<p class={dialogStyles.empty}>No matching parts or kits for “{query().trim()}”</p>}
-                  >
-                    <Show when={matchingKits().length > 0}>
-                      <div class={dialogStyles.group}>
-                        <h4 class={dialogStyles.groupHeading}>Kits</h4>
-                        <div class={dialogStyles.kitsGrid}>
-                          <For each={matchingKits()} keyed={(kit) => kit.id}>
-                            {(kit) => (
-                              <KitTile
-                                kit={kit()}
-                                kits={props.kits}
-                                flash={props.flashKit === kit().id}
-                                onLift={(event) => props.onLiftKit(event, kit())}
-                              />
-                            )}
-                          </For>
-                        </div>
-                      </div>
-                    </Show>
-                    <For each={matchingFamilies()} keyed={(group) => group.id}>
-                      {(group) => (
-                        <div class={dialogStyles.group}>
-                          <h4 class={dialogStyles.groupHeading}>{group().title}</h4>
-                          <div class={dialogStyles.grid}>
-                            <For each={group().kinds}>
-                              {(kind) => (
-                                <PartTile
-                                  kind={kind}
-                                  presets={props.presets}
-                                  onBoard={props.onBoard?.has(kind)}
-                                  onLift={(event) => props.onLift(event, kind)}
-                                />
-                              )}
-                            </For>
-                          </div>
-                        </div>
-                      )}
-                    </For>
-                  </Show>
-                </section>
-              }
-            >
+            <Show when={!needle()} fallback={<Results />}>
               <section class={dialogStyles.pane} aria-label={selectedItem().label} data-section={selectedItem().id}>
                 <SettingsBack label="Sections" title={selectedItem().label} onBack={() => setView('list')} />
                 <h2 class={dialogStyles.title}>{selectedItem().label}</h2>
@@ -322,9 +326,7 @@ export function PartsTray(props: {
                       <Show
                         when={props.kits.kits().length > 0}
                         fallback={
-                          <p class={dialogStyles.empty}>
-                            No kits yet — select parts on the board and tap Keep as kit
-                          </p>
+                          <p class={dialogStyles.empty}>No kits yet — select parts on the board and tap Keep as kit</p>
                         }
                       >
                         <div class={dialogStyles.kitsGrid}>
@@ -364,6 +366,9 @@ export function PartsTray(props: {
     );
   }
 }
+
+/** The frame width in CSS pixels under which the dialog shows one screen at a time; `PartsTray.module.css` agrees. */
+const narrowFrame = 560;
 
 const interfaceCategoryId = 'interface';
 const kitsCategoryId = 'Kits';
@@ -421,7 +426,11 @@ export function PartTile(props: {
   const multiCell = () => span().columns > 1 || span().rows > 1;
 
   return (
-    <div class={styles.trayItem} data-on-board={props.onBoard ? '' : undefined} data-compact={props.compact ? '' : undefined}>
+    <div
+      class={styles.trayItem}
+      data-on-board={props.onBoard ? '' : undefined}
+      data-compact={props.compact ? '' : undefined}
+    >
       <div class={styles.trayPreviewSlot} data-compact={props.compact ? '' : undefined}>
         <div
           class={styles.trayTile}

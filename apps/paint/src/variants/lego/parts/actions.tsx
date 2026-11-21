@@ -144,6 +144,37 @@ export const actionParts = [
     }),
     View: FolderButtonPart
   }),
+  action('fullscreen', 'view', 'Full screen', 'fullscreen', (s, f) => ({
+    get icon(): SketchIconName {
+      return s.view.fullscreen.active() ? 'fullscreenExit' : 'fullscreen';
+    },
+    get active() {
+      return s.view.fullscreen.active();
+    },
+    get disabled() {
+      return !s.view.fullscreen.available();
+    },
+    // The browser takes full screen only from the press itself, so the request starts inside the click.
+    onPress: f.command(() => s.view.fullscreen.toggle())
+  })),
+  readout('zoom', 'Zoom', 'zoom', (s, f) => ({
+    get text() {
+      return `${Math.round(s.view.zoom() * 100)}%`;
+    },
+    get disabled() {
+      return Math.abs(s.view.zoom() - 1) < 0.005;
+    },
+    onPress: f.command(s.view.resetZoom)
+  })),
+  readout('rotation', 'Rotation', 'rotate', (s, f) => ({
+    get text() {
+      return `${Math.round((s.view.angle() * 180) / Math.PI)}°`;
+    },
+    get disabled() {
+      return Math.abs(s.view.angle()) <= 0.005;
+    },
+    onPress: f.command(s.view.resetRotation)
+  })),
   action('quickshape', 'aids', 'QuickShape', 'quickshape', (s, f) => ({
     get active() {
       return s.quickShape.enabled();
@@ -276,6 +307,70 @@ function action<N extends object, P extends object = N>(
       ),
     View: ActionPart
   });
+}
+
+/**
+ * A number of the canvas view that a press returns to its rest: the zoom level to 100%, the rotation to 0°. The part
+ * shows the number, alone in one cell and beside its icon with more room, and is inert while the view is at rest.
+ */
+function readout(
+  id: string,
+  label: string,
+  icon: SketchIconName,
+  needs: (services: LegoServices, frame: PartBinding) => { text: string; disabled: boolean; onPress: () => void }
+) {
+  return definePart({
+    kind: `action:${id}`,
+    family: 'action',
+    group: 'view',
+    section: 'Tools',
+    label,
+    icon,
+    defaultSpan: { columns: 2, rows: 1 },
+    needs: (services, frame) =>
+      merge(
+        {
+          label,
+          icon,
+          get span() {
+            return frame.span;
+          }
+        },
+        needs(services, frame)
+      ),
+    View: ReadoutPart
+  });
+}
+
+function ReadoutPart(props: {
+  label: string;
+  icon: SketchIconName;
+  span: Span;
+  text: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const grid = useGrid();
+  const width = () => grid.length(props.span.columns);
+  /** The number beside the icon where both fit, else the number alone, else the icon. */
+  const withIcon = () => fitText(width() - actionChrome, actionNameStyle, props.text) !== undefined;
+  const alone = () => fitText(width() - 2 * 4, actionNameStyle, props.text);
+
+  return (
+    <button
+      type="button"
+      class={styles.action}
+      disabled={props.disabled}
+      title={`Reset ${props.label.toLowerCase()}`}
+      aria-label={`${props.label} ${props.text}`}
+      onClick={() => props.onPress()}
+    >
+      <Show when={withIcon() || !alone()}>
+        <SketchIcon name={props.icon} size={20} />
+      </Show>
+      <Show when={alone()}>{(shown) => <span class={styles.name}>{shown()}</span>}</Show>
+    </button>
+  );
 }
 
 function tool(

@@ -1,7 +1,6 @@
 /*
- * The unified Options & Parts modal dialog over the whole viewport, matching BrushStudioDialog: a search bar and
- * Done plate across the top, and under it one plate holding the two-group sidebar (Settings and Parts) beside the
- * chosen section (`SettingsSplit`), lying on paper. While a part or kit is carried off onto the 1:1 board
+ * The unified Options & Parts modal dialog over the whole viewport: one plate lying on paper, holding the sidebar
+ * (title with Done, search, then the Settings and Parts groups) beside the chosen section (`SettingsSplit`). While a part or kit is carried off onto the 1:1 board
  * (`data-away`), the dialog fades and slides out on the GPU without blocking pointer events.
  */
 .dialog {
@@ -39,8 +38,7 @@
 .frame {
   container: lego-parts / size;
   display: grid;
-  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
-  gap: 8px;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   width: 100%;
   max-width: 1000px;
   height: 100%;
@@ -48,23 +46,9 @@
   padding: 8px;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.searchPlate {
-  flex: 1;
-  min-width: 0;
-  padding: 4px;
-  border-radius: var(--lego-r-outline);
-  background: var(--lego-plate);
-}
-
 .search {
   position: relative;
+  margin: 0 10px 6px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -121,19 +105,10 @@
   }
 }
 
-/* Done on a plate, matching BrushStudioDialog's top-right actions plate. */
-.actions {
-  display: flex;
-  flex: none;
-  gap: 4px;
-  padding: 4px;
-  border-radius: var(--lego-r-outline);
-  background: var(--lego-plate);
-}
-
+/* Done, in the sidebar's head beside the title. */
 .done {
-  min-width: 72px;
-  min-height: var(--lego-hit-size);
+  flex: none;
+  min-height: calc(var(--lego-hit-size) - 8px);
   padding: 0 16px;
   border: 0;
   border-radius: var(--lego-r-tile);
@@ -159,18 +134,6 @@
 }
 
 @container lego-parts (width < 560px) {
-  .header {
-    flex-wrap: wrap;
-  }
-
-  .searchPlate {
-    flex-basis: 100%;
-  }
-
-  .actions {
-    margin-inline-start: auto;
-  }
-
   .sheet {
     --settings-split: narrow;
   }
@@ -179,14 +142,28 @@
 .side {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+
+  /* Search results in the list's place, where the sidebar is a screen of its own. */
+  > .pane {
+    padding-inline: 12px;
+  }
+}
+
+.sideHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 10px 8px 14px;
 }
 
 .name {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  padding: 14px 14px 6px;
   overflow: hidden;
   font-size: 18px;
   font-weight: 700;

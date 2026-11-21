@@ -134,6 +134,11 @@
   touch-action: none;
 }
 
+/* The panel being carried lies over every other, floating plates too, whatever their order on the board. */
+.panel[data-moving] {
+  z-index: 3;
+}
+
 .panel[data-dock-preview] {
   outline: 2px dashed var(--lego-accent);
   outline-offset: -2px;
@@ -643,14 +648,6 @@
 
 /* Top-right chrome buttons (Exit, Fullscreen, trial switch) */
 
-.controls {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: flex;
-  gap: 8px;
-}
-
 .editButton {
   padding: 8px 16px;
   border: 0;
@@ -664,14 +661,13 @@
   cursor: pointer;
 }
 
-/* A round button holding an icon, such as full screen. */
-.iconButton {
-  display: grid;
-  place-items: center;
-  width: calc(var(--lego-hit-size) - 8px);
-  padding: 0;
+/* The way back to the experiments list, where a host gives one: top right, clear of a docked panel. */
+a.editButton {
+  position: absolute;
+  top: 12px;
 }
 
+/* A round button holding an icon, such as full screen. */
 /* Looks */
 
 /* A picker scaled into its part, centered whatever its scale. */
