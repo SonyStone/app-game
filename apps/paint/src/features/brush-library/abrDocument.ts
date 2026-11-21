@@ -36,7 +36,11 @@ type Definition = BrushDocument['definition'];
  * Paint mixing and stroke correction are independent host settings. ABR imports inherit both
  * unless supplied by the host. Photoshop smoothing always stays in photoshop.smoothing.v1.
  */
-export async function abrDocument(asset: BrushAsset, host: Partial<Pick<Brush, 'mixing' | 'stroke'>> = {}) {
+export async function abrDocument(
+  asset: BrushAsset,
+  host: Partial<Pick<Brush, 'mixing' | 'stroke'>> = {},
+  decoded?: { pattern?: BrushTipImage; dualTip?: BrushTipImage }
+) {
   await initAbr();
   const tip = asset.preset.tip;
   const kind = tip?.kind ?? 'computed';
@@ -90,15 +94,7 @@ export async function abrDocument(asset: BrushAsset, host: Partial<Pick<Brush, '
     primary[key] = percent('tip.' + key, tip?.[key] ?? 100, '/tips/primary/' + key, 'tip');
   }
   // Look up both auxiliary selections even when their effects are currently disabled.
-  const sources = brushPreviewResources({
-    ...asset,
-    preset: {
-      ...asset.preset,
-      textureEnabled: true,
-      dualBrush: { ...asset.preset.dualBrush, kind: 'dualBrush', enabled: true }
-    }
-  });
-  const { pattern, dualTip } = decodePreviewResources({ pattern: sources.pattern, dualSample: sources.dualSample });
+  const { pattern, dualTip } = decoded ?? auxiliaryImages(asset);
   // A dormant effect can reference data the parser cannot decode. Preserve its controls;
   // resolving the enabled effect must then report the missing coverage.
   if (pattern) {
@@ -196,6 +192,18 @@ export async function abrDocument(asset: BrushAsset, host: Partial<Pick<Brush, '
     origin: { format: 'photoshop.abr', presetKey: asset.preset.sourceId, importer: 'paint-abr/1', mappings }
   });
   return { document, assets };
+}
+
+function auxiliaryImages(asset: BrushAsset) {
+  const sources = brushPreviewResources({
+    ...asset,
+    preset: {
+      ...asset.preset,
+      textureEnabled: true,
+      dualBrush: { ...asset.preset.dualBrush, kind: 'dualBrush', enabled: true }
+    }
+  });
+  return decodePreviewResources({ pattern: sources.pattern, dualSample: sources.dualSample });
 }
 
 /**

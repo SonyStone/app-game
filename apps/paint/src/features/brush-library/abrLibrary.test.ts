@@ -4,6 +4,7 @@ import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import { prepareAbrBrush } from '@app-game/abr-paint/preset';
 import { initAbr, pixels } from '@app-game/abr-parser';
 import type { Brush } from '@app-game/paint-core/brush';
+import { assetId } from '@app-game/paint-core/paintbrush/asset';
 import 'fake-indexeddb/auto';
 import { ok } from 'neverthrow';
 import { Blob } from 'node:buffer';
@@ -14,7 +15,7 @@ import { clearAbrBrush } from '../abr/clearAbrBrush';
 import { createBrushSettingsEditor } from '../brush/createBrushSettingsEditor';
 import { createBrushTools } from '../brush/createBrushTools';
 import type { PaintSession } from '../session';
-import { convertAbr } from './abrPresetDocument';
+import { convertAbr, resolveAbrText } from './abrPresetDocument';
 import { createBrushLibrary } from './createBrushLibrary';
 import { createBrushStorage } from './createBrushStorage';
 import { patchFormValues } from './documentSettings';
@@ -84,17 +85,90 @@ it('migrates shared legacy presets once, preserving saved controls, ordering and
     const writes = vi.spyOn(s.storage, 'putPreset');
     await Promise.all([s.library.load('first'), s.library.loadAll()]);
     flush();
-    expect(writes).toHaveBeenCalledTimes(pass === 0 ? 2 : 0);
+    expect(writes).toHaveBeenCalledTimes(pass === 0 ? 3 : 0);
     expect(s.onError).toHaveBeenCalledTimes(1);
     const list = s.library.presets().filter((p) => !p.builtIn);
     expect(list.map((p) => p.id)).toEqual(['first', 'second', 'copy', 'broken']);
-    expect(list.map((p) => !!p.abrDocument)).toEqual([true, true, false, false]);
+    expect(list.map((p) => !!p.abrDocument)).toEqual([true, true, true, false]);
     expect(JSON.stringify(list[0]?.abrSource)).toEqual(JSON.stringify(asset));
     expect(list[1]?.settings).toMatchObject({ size: 70, engine: { settings: { values: { diameter: 50 } } } });
     expect(list[1]?.resourceIds).toEqual(list[0]?.assetIds);
     expect(await s.storage.readResources(original.resourceIds)).toHaveLength(1);
   }
 });
+
+it.each([false, true])(
+  'migrates a prepared ABR preset once with identical engine inputs (dual enabled: %s)',
+  async (dualEnabled) => {
+    const db = crypto.randomUUID();
+    const { storage } = open(db);
+
+    const { engine, resource } = prepareAbrBrush(asset);
+    const name = "Kyle's Drawing Box - Animator Pencil 2016";
+    const pattern = { ...resource, id: 'pattern', pixels: Uint8Array.of(22, 33) };
+    const dual = { ...resource, id: 'dual', pixels: Uint8Array.of(4, 3) };
+    const values = {
+      ...engine.settings.values,
+      name,
+      diameter: 7,
+      angle: 39,
+      spacing: 1,
+      useTexture: true,
+      useShapeDynamics: true,
+      useScattering: true,
+      useTransfer: true,
+      useSmoothing: true,
+      texture: { ...engine.settings.values.texture, patternId: 'pattern-uuid', brightness: -122, depth: 22 },
+      useDualBrush: dualEnabled,
+      dualBrush: { ...engine.settings.values.dualBrush, tipId: 'dual-uuid', angle: 21 }
+    };
+    const settings = { ...engine.settings, values, patternId: pattern.id, dualId: dualEnabled ? dual.id : undefined };
+    const original = {
+      id: 'pencil',
+      name,
+      source: 'abr:3120ea76-a970-4d12-9aa6-c9b114a48ab9',
+      created: 123,
+      settings: { size: 7, engine: { id: 'abr', settings } },
+      resourceIds: [resource.id, pattern.id, ...(dualEnabled ? [dual.id] : [])]
+    };
+    await storage.putPreset(original, [resource, pattern, ...(dualEnabled ? [dual] : [])]);
+    const broken = { ...original, id: 'missing', resourceIds: [pattern.id] };
+    await storage.putPreset(broken);
+    for (let run = 0; run < 2; run++) {
+      const { library, storage: reader, editor, tools, onError } = open(db);
+      const write = vi.spyOn(reader, 'putPreset');
+      await Promise.all([library.load(original.id), library.loadAll()]);
+      const migrated = library.find(original.id)!;
+      expect(migrated.abrDocument, JSON.stringify(onError.mock.calls)).toBeDefined();
+      tools.selectPreset(original.id, 'brush');
+      flush();
+      expect(editor.view()?.values.useSmoothing).toBe(true);
+      const resolved = await resolveAbrText(migrated.abrDocument!, (await library.assets(migrated))._unsafeUnwrap());
+      expect(resolved.engine).toEqual({
+        id: 'abr',
+        settings: {
+          ...settings,
+          tipId: await assetId(resource),
+          patternId: await assetId(pattern),
+          dualId: dualEnabled ? await assetId(dual) : undefined
+        }
+      });
+      expect(migrated.settings).toEqual({ size: 7, engine: resolved.engine });
+      expect(await reader.readPreset(original.id)).toMatchObject({
+        id: original.id,
+        name,
+        source: original.source,
+        created: original.created,
+        abrDocument: migrated.abrDocument
+      });
+      expect(library.find(broken.id)?.abrDocument).toBeUndefined();
+      expect(library.find(broken.id)?.settings).toEqual(broken.settings);
+      expect(await reader.readPreset(broken.id)).toEqual(broken);
+      expect(write).toHaveBeenCalledTimes(run ? 0 : 1);
+      expect(onError).toHaveBeenCalledTimes(1);
+    }
+  }
+);
 
 it('copies, edits, saves, reloads and round-trips a Photoshop document and releases its last image', async () => {
   const db = crypto.randomUUID();

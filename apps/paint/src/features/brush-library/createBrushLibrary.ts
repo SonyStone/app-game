@@ -12,11 +12,11 @@ import { linearCoveragePrefix, paintSampledCoverage } from './sampledCoverage';
 
 /**
  * The brush library: built-in presets followed by the user's presets in creation order. Stored presets load lazily:
- * `load` reads one preset, `loadAll` the list, and neither reads images. `resources` reads a preset's images when it
+ * `load` reads one preset, `loadAll` the list, and only legacy conversions read images. `resources` reads a preset's images when it
  * is used, keeping recently used images in memory within `imageBudget`. Changes apply at once and are written to
  * `storage` in the background; images not yet written stay in memory regardless of the budget.
  *
- * Loading a legacy preset converts it once before publishing it. Sampled presets read their coverage during conversion.
+ * Loading a legacy preset converts it once before publishing it. Sampled and prepared ABR presets read their coverage during conversion.
  * A failed sampled conversion keeps the original settings and images and exposes the reason selection failed.
  * Must be created within a Solid owner.
  */
@@ -318,7 +318,12 @@ export function createBrushLibrary(options: {
       }
       return;
     }
-    if (record.abrSource || isRound(record) || record.settings.engine?.id === legacySampledId) {
+    if (
+      record.abrSource ||
+      isRound(record) ||
+      record.settings.engine?.id === 'abr' ||
+      record.settings.engine?.id === legacySampledId
+    ) {
       const pending = migrations.get(record.id);
       if (pending) {
         return pending;
@@ -352,6 +357,12 @@ export function createBrushLibrary(options: {
           },
           true
         );
+      } else if (record.settings.engine?.id === 'abr') {
+        const { convertStoredAbr } = await import('./abrPresetDocument');
+        const images = await options.storage!.readResources(record.resourceIds);
+        const item = await convertStoredAbr(record, images ?? []);
+        converted = item.preset;
+        resources = item.resources;
       } else if (record.settings.engine?.id === legacySampledId) {
         const { convertSampled } = await import('./abrPresetDocument');
         const images = await options.storage!.readResources(record.resourceIds);
