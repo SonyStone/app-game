@@ -577,17 +577,22 @@ export function createPaintSession(options: {
   function createShortcuts(variant: {
     closePanel: () => boolean;
     /**
-     * Opens the variant's menu. With it, a browser Back that finds nothing to close opens the menu, so the menu
-     * stays in reach whatever is on screen. The Android shell app keeps its own answer to Back: it offers to exit.
+     * Opens the variant's menu. With it, a Back that finds nothing to close opens the menu, so the menu stays in
+     * reach whatever is on screen: in the browser and in the Android shell app alike, where the Back then counts as
+     * handled and the shell does not offer to exit. Without it the shell offers to exit, as before.
      */
     openMenu?: () => void;
   }) {
-    nativeShell.onBack(variant.closePanel);
-    pageBack = () => {
-      if (!variant.closePanel()) {
-        variant.openMenu?.();
+    const back = () => {
+      if (variant.closePanel()) {
+        return true;
       }
+
+      variant.openMenu?.();
+      return variant.openMenu !== undefined;
     };
+    nativeShell.onBack(back);
+    pageBack = back;
     createPaintShortcuts({
       closePanel: variant.closePanel,
       tool,
