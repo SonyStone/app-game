@@ -1,18 +1,19 @@
 import type { Brush } from './brush';
-import { maskBrushColor, maskGoal, storedGoal, type LayerMask } from './layerMask';
+import { maskBrushColor, storedGoal, type LayerMask } from './layerMask';
 
 /**
- * `brush` as it paints a mask: the grey of its colour (`maskGoal`) is the effective coverage it paints towards, white
- * revealing and black hiding, written into the stored coverage, reversed for an inverted mask. It mixes in encoded
- * values, so a stroke of coverage `c` moves the mask by `c × (goal − old)`. An eraser keeps erasing: it lowers the
- * plane's alpha, which the commit and the display read as Hide (`coverageFromRgba`).
+ * `brush` as it paints a mask towards effective coverage `goal`, 255 Reveal or 0 Hide (the runtime's `mask-paint`
+ * setting), written into the stored coverage, reversed for an inverted mask; a background colour, as Pencil Auto
+ * Erase paints, takes the other goal. It mixes in encoded values, so a stroke of coverage `c` moves the mask by
+ * `c × (goal − old)`. An eraser keeps erasing: it lowers the plane's alpha, which the commit and the display read as
+ * Hide (`coverageFromRgba`).
  */
-export function maskStrokeBrush(brush: Brush, mask: Pick<LayerMask, 'inverted'>): Brush {
-  const grey = (color: string) => maskBrushColor(storedGoal(maskGoal(color), mask.inverted));
+export function maskStrokeBrush(brush: Brush, mask: Pick<LayerMask, 'inverted'>, goal: number): Brush {
+  const grey = (value: number) => maskBrushColor(storedGoal(value, mask.inverted));
   return {
     ...brush,
-    color: grey(brush.color),
-    ...(brush.backgroundColor ? { backgroundColor: grey(brush.backgroundColor) } : {}),
+    color: grey(goal),
+    ...(brush.backgroundColor ? { backgroundColor: grey(255 - goal) } : {}),
     mixing: 'classic'
   };
 }

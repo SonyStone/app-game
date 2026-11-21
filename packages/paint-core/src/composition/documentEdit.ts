@@ -82,6 +82,11 @@ export type DocumentEditContext = {
    * mask refuses, as `editedLayer` does for it.
    */
   mask?: LayerMask;
+  /**
+   * The effective coverage an edit paints into `mask`: 255 for Reveal, 0 for Hide (the runtime's `mask-paint`
+   * setting); 255 when absent.
+   */
+  maskGoal?: number;
   /** Unpacked premultiplied sRGB RGBA8 pixels of a tile, reading paged-out tiles from storage. */
   readTile: (pixels: TileData) => Promise<Uint8Array>;
   /** The stored coverage of `mask` at tile `key`, one byte per pixel, `outside` where it has no tile. */

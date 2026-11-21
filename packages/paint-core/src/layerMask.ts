@@ -200,16 +200,6 @@ export function storedGoal(goal: number, inverted: boolean): number {
   return inverted ? 255 - goal : goal;
 }
 
-/** The effective coverage, 0–255, a `#rrggbb` colour paints into a mask: its luma, white 255 and black 0. */
-export function maskGoal(color: string): number {
-  const [r, g, b] = [1, 3, 5].map((start) => parseInt(color.slice(start, start + 2), 16) || 0) as [
-    number,
-    number,
-    number
-  ];
-  return Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-}
-
 /** The grey `#rrggbb` a brush paints with to move a mask towards stored value `stored`. */
 export function maskBrushColor(stored: number): string {
   const hex = Math.round(Math.min(255, Math.max(0, stored)))

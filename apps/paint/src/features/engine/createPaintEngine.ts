@@ -81,6 +81,10 @@ export function createPaintEngine(options: {
   const [saveState, setSaveState] = createSignal<StateEvent['saveState']>('saved');
   const [metrics, setMetrics] = createSignal({ tiles: 0, gpu: 0, ms: 0 });
   const [paging, setPaging] = createSignal<EnginePaging>({});
+  const [maskView, setMaskView] = createSignal<MaskView>(
+    { overlay: false, paint: 'reveal' },
+    { equals: (a, b) => a.overlay === b.overlay && a.paint === b.paint }
+  );
   /** Whether the drawing's storage belongs to another engine; see the `storage-lock` event and `moveOut`. */
   const [storageLock, setStorageLock] = createSignal<'busy' | 'lost' | 'moved'>();
   /** The next engine takes the drawing's storage from the one holding it; see `takeOver`. */
@@ -189,6 +193,11 @@ export function createPaintEngine(options: {
     metrics,
     /** Storage, virtual texture and readback statistics for the canvas wireframe. */
     paging,
+    /**
+     * How masks are painted, as the engine last reported: whether the red overlay shows (`mask-overlay`) and whether
+     * strokes and fills on a mask reveal or hide (`mask-paint`).
+     */
+    maskView,
     /** Occupied tile keys while the canvas wireframe is enabled; empty while it is off. */
     debugTiles,
     /** Camera and symmetry of a loaded, imported or replaced document; UI state resets from it. */
@@ -488,6 +497,7 @@ export function createPaintEngine(options: {
         setLayersInRegions(event.layersInRegions);
       }
 
+      setMaskView({ overlay: event.maskOverlay ?? false, paint: event.maskPaint ?? 'reveal' });
       setSaveState(event.saveState);
       if (event.saveState !== 'saved') {
         requestPersistentStorage();
@@ -844,3 +854,6 @@ function transportFailureMessage(failure: WorkerFailure): string {
 
   return 'The drawing engine stopped.';
 }
+
+/** How masks are painted; see `maskView` of `createPaintEngine`. */
+export type MaskView = { overlay: boolean; paint: 'reveal' | 'hide' };

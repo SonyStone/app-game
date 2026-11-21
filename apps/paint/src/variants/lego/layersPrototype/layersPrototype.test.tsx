@@ -79,7 +79,7 @@ describe('mockLayers', () => {
     expect(glow.colorTag).toBe('none');
     expect(glow.mask).toBeDefined();
     expect(glow.thumb!.startsWith('data:image/svg+xml;utf8,')).toBe(true);
-    expect(glow.mask!.thumb.startsWith('data:image/svg+xml;utf8,')).toBe(true);
+    expect(glow.mask!.thumb!.startsWith('data:image/svg+xml;utf8,')).toBe(true);
     expect(service.layers().every((node) => node.colorTag === 'none')).toBe(true);
   });
 

@@ -64,6 +64,11 @@ export type PaintCommand =
    */
   | { type: 'mask-overlay'; enabled: boolean }
   /**
+   * What strokes and fills on a mask paint: `reveal` (white, the default) or `hide` (black); the eraser always hides.
+   * A view setting outside the drawing and its history; see `maskStrokeBrush`.
+   */
+  | { type: 'mask-paint'; paint: 'reveal' | 'hide' }
+  /**
    * How the selection is outlined: whether its ants move, and the selection gesture in progress, if any, shown
    * before it applies; see `SelectionPreview`.
    */
@@ -187,6 +192,8 @@ export type PaintEvent =
       camera: Camera;
       /** Whether the red overlay of the mask being painted is on; see the `mask-overlay` command. */
       maskOverlay?: boolean;
+      /** What strokes and fills on a mask paint; see the `mask-paint` command. */
+      maskPaint?: 'reveal' | 'hide';
       /** Ids of the layers with tiles in the primary view, in layer order; see `layersInView`. */
       layersInView?: string[];
       /** For each region named by `watch-regions`, the ids of the layers with tiles in it, in layer order. */

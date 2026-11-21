@@ -93,6 +93,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     let pixelView = { smooth: true, grid: false };
     /** Whether the red overlay of the mask being painted shows; see the `mask-overlay` command. */
     let maskOverlay = false;
+    /** What strokes and fills on a mask paint; see the `mask-paint` command. */
+    let maskPaint: 'reveal' | 'hide' = 'reveal';
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -172,6 +174,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         document: documentState,
         camera,
         maskOverlay,
+        maskPaint,
         layersInView: inView.ids,
         layersInRegions: watched.layers,
         features: reportedFeatures(),
@@ -307,7 +310,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     /**
      * What a stroke beginning now paints, pinned for the whole stroke: the active raster layer's pixels with `brush` as
-     * it is, or the active mask's plane (`maskPlane`) with `brush` painting its stored goal grey (see
+     * it is, or the active mask's plane (`maskPlane`) with `brush` painting the `mask-paint` goal, Reveal or Hide (see
      * `maskStrokeBrush`). Undefined when the target does not show or nothing can be painted; throws, changing nothing,
      * for a tool that cannot paint a mask (`maskStrokeRefusal`).
      */
@@ -322,7 +325,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (target.type !== 'mask' || !mask || !nodeShows(document.nodes, document.activeId)) return undefined;
       const refusal = maskStrokeRefusal(brush, modifiers, modules.selectEngine(brush));
       if (refusal) throw new Error(refusal);
-      return { layer: maskPlane(mask) as Layer, brush: maskStrokeBrush(brush, mask) };
+      return { layer: maskPlane(mask) as Layer, brush: maskStrokeBrush(brush, mask, maskPaint === 'reveal' ? 255 : 0) };
     };
     /** The active raster layer, for a command that edits its pixels; throws while a folder is active. */
     const paintTarget = () => {
@@ -429,6 +432,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             layers: document.layers,
             active: document.activeLayer,
             mask: document.activeMask,
+            maskGoal: maskPaint === 'reveal' ? 255 : 0,
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
             readCoverage: coverageReader(loadTile),
@@ -934,6 +938,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         maskOverlay = command.enabled;
         status();
         scheduleDraw();
+        return;
+      }
+      if (command.type === 'mask-paint') {
+        maskPaint = command.paint;
+        status();
         return;
       }
       if (command.type === 'watch-regions') {

@@ -65,7 +65,7 @@ export async function verifyMaskPainting(report: (message: string) => void) {
         flow: 1,
         pressureSize: false
       };
-      renderer.begin(maskPlane(mask), maskStrokeBrush(brush, mask));
+      renderer.begin(maskPlane(mask), maskStrokeBrush(brush, mask, test.color === '#000000' ? 0 : 255));
       await renderer.paint([{ x: 128.5, y: 128.5, radius: 40, flow: 1 }]);
       await renderer.render(doc.layers, camera, size, 1);
       const during = await renderer.readPresented();
@@ -215,7 +215,7 @@ async function strokeFrame(target: 'pixels' | 'mask') {
     const mask = doc.node(id)!.mask!;
     renderer.begin(
       target === 'mask' ? maskPlane(mask) : doc.layers[0]!,
-      target === 'mask' ? maskStrokeBrush(brush, mask) : brush
+      target === 'mask' ? maskStrokeBrush(brush, mask, 0) : brush
     );
     const times: number[] = [];
     for (let step = 0; step < 30; step++) {

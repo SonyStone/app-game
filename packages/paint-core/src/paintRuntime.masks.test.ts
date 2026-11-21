@@ -7,7 +7,7 @@ import type { BrushEngine, PaintModules } from './composition/contracts';
 import { createMemoryStorage } from './composition/memoryStorage';
 import { createDocument, type Layer } from './document';
 import { isMaskPlane } from './gpu/maskPlane';
-import { MASK_TILE_PIXELS, maskGoal, packMaskTile } from './layerMask';
+import { MASK_TILE_PIXELS, packMaskTile } from './layerMask';
 import { maskStrokeBrush, maskStrokeRefusal } from './maskStroke';
 import { createPaintRuntime } from './paintRuntime';
 import type { PaintEvent } from './protocol';
@@ -20,21 +20,24 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('paints towards the grey of the brush colour, written reversed into an inverted mask, mixing encoded values', () => {
-  expect(maskGoal('#ffffff')).toBe(255);
-  expect(maskGoal('#000000')).toBe(0);
-  expect(maskGoal('#808080')).toBe(128);
-  expect(maskGoal('#ff0000')).toBe(76);
-  const brush = { ...defaultBrush(), color: '#ffffff', backgroundColor: '#000000' };
-  expect(maskStrokeBrush(brush, { inverted: false })).toMatchObject({
+it('paints Reveal or Hide, written reversed into an inverted mask, mixing encoded values', () => {
+  const brush = { ...defaultBrush(), color: '#ff0000', backgroundColor: '#00ff00' };
+  expect(maskStrokeBrush(brush, { inverted: false }, 255)).toMatchObject({
     color: '#ffffff',
     backgroundColor: '#000000',
     mixing: 'classic',
     tool: 'brush'
   });
-  expect(maskStrokeBrush(brush, { inverted: true })).toMatchObject({ color: '#000000', backgroundColor: '#ffffff' });
+  expect(maskStrokeBrush(brush, { inverted: false }, 0)).toMatchObject({
+    color: '#000000',
+    backgroundColor: '#ffffff'
+  });
+  expect(maskStrokeBrush(brush, { inverted: true }, 255)).toMatchObject({
+    color: '#000000',
+    backgroundColor: '#ffffff'
+  });
   // The eraser stays an eraser: it hides.
-  expect(maskStrokeBrush({ ...brush, tool: 'eraser' }, { inverted: false }).tool).toBe('eraser');
+  expect(maskStrokeBrush({ ...brush, tool: 'eraser' }, { inverted: false }, 255).tool).toBe('eraser');
 });
 
 it('refuses tools that sample the canvas or a history state on a mask', () => {
@@ -62,7 +65,8 @@ it('pins a stroke to the mask it began on, commits coverage there, and paints pi
   const coverage = packMaskTile(new Uint8Array(MASK_TILE_PIXELS).fill(9));
   renderer.finish.mockResolvedValueOnce([{ layerId: maskId, key: '0,0', before: undefined, after: coverage }]);
 
-  runtime.send({ type: 'begin', brush: { ...defaultBrush(), color: '#000000' }, samples: [sample(1)] });
+  runtime.send({ type: 'mask-paint', paint: 'hide' });
+  runtime.send({ type: 'begin', brush: { ...defaultBrush(), color: '#ff0000' }, samples: [sample(1)] });
   await waitFor(() => context.begun.length === 1);
   const [first] = context.begun;
   expect(isMaskPlane(first!.layer)).toBe(true);

@@ -225,6 +225,10 @@ export function LegoStudio(
     return Math.max(0, size.width - area.left - area.width);
   };
 
+  /** Whether the engine draws the drawing's red mask overlay: a mask is painted and its overlay is on. */
+  const drawingOverlay = () =>
+    services.layers.state().activeTarget.type === 'mask' && services.layers.maskView().overlay;
+
   const popupPlace = () => {
     const open = popup();
     if (!open) {
@@ -257,7 +261,15 @@ export function LegoStudio(
           <PaintStage session={session} class={styles.workspace}>
             <StageGuides session={session} />
             <StageOverlays session={session} />
-            <Show when={services.layersPrototype.target() === 'mask' && services.layersPrototype.maskOverlay()}>
+            {/* The drawing's red overlay is drawn by the engine over the canvas; this stand-in shows the prototype's
+                mock mask, and never while the drawing's own overlay is on. */}
+            <Show
+              when={
+                services.layersPrototype.target() === 'mask' &&
+                services.layersPrototype.maskOverlay() &&
+                !drawingOverlay()
+              }
+            >
               <div class={layerProtoStyles.rubylithOverlay} data-rubylith-overlay="" aria-hidden="true" />
             </Show>
           </PaintStage>

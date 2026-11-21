@@ -138,6 +138,14 @@ export type LayerMasks = {
   remove: (id: string) => void;
   toggleOverlay: () => void;
   setBrush: (brush: 'reveal' | 'hide') => void;
+  /** Links the mask of `id` to its pixels, so they move together, or unlinks it; present when the model keeps links. */
+  toggleLinked?: (id: string) => void;
+  /**
+   * Multiplies the mask of `id` into its pixels and removes it, as one undo step; present when the model can, and
+   * offered for the layers `canApply` accepts.
+   */
+  apply?: (id: string) => void;
+  canApply?: (id: string) => boolean;
 };
 
 /** One node of the layer tree as the layers UI shows it. Properties a model does not keep hold their defaults. */
@@ -312,7 +320,8 @@ export type LayerLocks = {
 export type LayerLockKind = keyof LayerLocks;
 
 export type LayerMask = {
-  thumb: string;
+  /** The mask's picture as an image URL; undefined while there is none, as before the engine has made one. */
+  thumb: string | undefined;
   enabled: boolean;
   linked: boolean;
   inverted: boolean;

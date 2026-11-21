@@ -204,6 +204,11 @@ export function createLegoServices(
       ready: session.ready,
       action: (action: Extract<Parameters<PaintSession['edit']>[0], { type: 'layer' }>['action']) =>
         session.edit({ type: 'layer', action }),
+      /** Whether the red overlay shows and whether painting a mask reveals or hides; see `maskView`. */
+      maskView: session.engine.maskView,
+      /** Changes how masks are painted: the red overlay, or Reveal and Hide. */
+      maskCommand: (command: Extract<Parameters<PaintSession['edit']>[0], { type: 'mask-overlay' | 'mask-paint' }>) =>
+        session.edit(command),
       blending: (linear: boolean) => session.edit({ type: 'blending', linear })
     },
     /** Self-contained PSD layers UI prototype state for `layers:strip-prototype` and the canvas's red mask overlay. */

@@ -245,15 +245,21 @@ function index(x: number, y: number) {
   return (y * 256 + x) * 4;
 }
 
-it('fills a mask with the grey of its colour through the selection, reversed for an inverted mask', async () => {
+it('fills a mask with Reveal or Hide through the selection, whatever its colour, reversed for an inverted mask', async () => {
   const paint: Layer = layer('paint', new Map());
   const mask = { ...newMask('m'), outside: 0 };
-  const run = (command: Partial<FillCommand>, target: typeof mask, selection: SelectionMask = emptySelection) =>
+  const run = (
+    command: Partial<FillCommand>,
+    target: typeof mask,
+    selection: SelectionMask = emptySelection,
+    maskGoal = 255
+  ) =>
     fillEdit.run(
       {
         layers: [paint],
         active: paint,
         mask: target,
+        maskGoal,
         readTile: async (pixels) => pixels as Uint8Array,
         readCoverage: coverageReader((data) => data as Uint8Array),
         linearBlending: false,
@@ -273,17 +279,17 @@ it('fills a mask with the grey of its colour through the selection, reversed for
     { x: 2, y: 8 }
   ]);
 
-  // White at half opacity reveals half way inside the selection: 0 + 0.5 × (255 − 0), rounded.
-  const revealed = await run({ point: { x: 5, y: 5 }, color: '#ffffff', opacity: 0.5 }, mask, square);
+  // Reveal at half opacity reveals half way inside the selection: 0 + 0.5 × (255 − 0), rounded.
+  const revealed = await run({ point: { x: 5, y: 5 }, color: '#ff0000', opacity: 0.5 }, mask, square);
   expect(revealed.changes.map(({ layerId }) => layerId)).toEqual(['m']);
   const coverage = revealed.changes[0]!.after as Uint8Array;
   expect(coverage.byteLength).toBe(MASK_TILE_PIXELS);
   expect([coverage[5 * 256 + 5], coverage[0], coverage[5 * 256 + 20]]).toEqual([128, 0, 0]);
 
-  // Black on an inverted mask stores white: hiding there means raising the stored coverage.
-  const inverted = await run({ point: { x: 5, y: 5 }, color: '#000000', opacity: 1 }, { ...mask, inverted: true });
+  // Hide on an inverted mask stores white: hiding there means raising the stored coverage.
+  const inverted = await run({ point: { x: 5, y: 5 }, opacity: 1 }, { ...mask, inverted: true }, emptySelection, 0);
   expect((inverted.changes[0]!.after as Uint8Array)[5 * 256 + 5]).toBe(255);
 
   // A fill that changes nothing commits nothing.
-  expect((await run({ point: { x: 5, y: 5 }, color: '#000000', opacity: 1 }, mask)).changes).toEqual([]);
+  expect((await run({ point: { x: 5, y: 5 }, opacity: 1 }, mask, emptySelection, 0)).changes).toEqual([]);
 });

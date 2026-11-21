@@ -5,7 +5,7 @@ import {
   type DocumentEditContext
 } from '@app-game/paint-core/composition/documentEdit';
 import type { LayerMask, TileChange } from '@app-game/paint-core/document';
-import { effectiveCoverage, maskGoal, maskRgba, storedGoal } from '@app-game/paint-core/layerMask';
+import { effectiveCoverage, maskRgba, storedGoal } from '@app-game/paint-core/layerMask';
 import { areaCoverage, isSelected } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
 import { areaTiles, expandMask, fillTile, floodMask, smoothMask } from '../../shared/floodFill';
@@ -19,8 +19,9 @@ import { areaAround, reachesLimit, sampleArea } from '../../shared/sampleArea';
  * around the point on each side are examined: a fill that would continue past that limit inside the view is refused
  * rather than cut off. Runs in the drawing engine's realm.
  *
- * While a mask is the paint target, the fill writes the grey of its colour into the mask (see `maskGoal`), moving each
- * pixel's coverage by the fill's coverage times its opacity; `layer` decides similar pixels on the mask's own coverage.
+ * While a mask is the paint target, the fill paints Reveal or Hide into the mask (`maskGoal`) instead of its colour,
+ * moving each pixel's coverage by the fill's coverage times its opacity; `layer` decides similar pixels on the mask's
+ * own coverage.
  */
 export const fillEdit = defineDocumentEdit({
   id: 'fill',
@@ -58,7 +59,7 @@ export const fillEdit = defineDocumentEdit({
       });
     }
     if (context.mask) {
-      return { changes: await fillCoverage(context, context.mask, area, mask, command) };
+      return { changes: await fillCoverage(context, context.mask, area, mask, command.opacity) };
     }
 
     const color = parseColor(command.color);
@@ -96,17 +97,17 @@ async function coverageArea(context: DocumentEditContext, mask: LayerMask, area:
 
 /**
  * The changes of `mask`'s coverage tiles that fill `area` where `fill` is set (1 full, 2–255 partial, as `fillTile`
- * reads it): each pixel moves by the fill's coverage times `opacity` towards the grey of `color`, stored reversed for
- * an inverted mask.
+ * reads it): each pixel moves by the fill's coverage times `opacity` towards the context's `maskGoal`, stored reversed
+ * for an inverted mask.
  */
 async function fillCoverage(
   context: DocumentEditContext,
   mask: LayerMask,
   area: Parameters<typeof areaTiles>[0],
   fill: Uint8Array,
-  command: Pick<FillCommand, 'color' | 'opacity'>
+  opacity: number
 ): Promise<TileChange[]> {
-  const goal = storedGoal(maskGoal(command.color), mask.inverted);
+  const goal = storedGoal(context.maskGoal ?? 255, mask.inverted);
   const changes: TileChange[] = [];
   for (const key of areaTiles(area)) {
     const [tx, ty] = key.split(',').map(Number) as [number, number];
@@ -121,7 +122,7 @@ async function fillCoverage(
           continue;
         }
 
-        const amount = value === 1 ? command.opacity : (command.opacity * value) / 255;
+        const amount = value === 1 ? opacity : (opacity * value) / 255;
         const index = (y - top) * TILE_SIZE + (x - left);
         const old = coverage[index]!;
         const next = Math.round(old + (goal - old) * amount);
