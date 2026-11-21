@@ -66,7 +66,13 @@ describe('createDocumentLayers', () => {
   it('offers only what the engine keeps', () => {
     const { model } = owned(() => seeded());
 
-    expect(model.capabilities.blendModes.map((mode) => mode.id)).toEqual(['normal', 'multiply', 'screen', 'overlay']);
+    expect(model.capabilities.blendModes.map((mode) => mode.id)).toEqual([
+      'pass-through',
+      'normal',
+      'multiply',
+      'screen',
+      'overlay'
+    ]);
     expect(model.capabilities).toMatchObject({
       locks: ['alpha'],
       clipping: true,
@@ -74,10 +80,10 @@ describe('createDocumentLayers', () => {
       blendIf: false,
       colorTags: false,
       reference: false,
-      dropZones: ['before', 'after', 'into']
+      dropZones: ['before', 'after', 'into', 'clip']
     });
-    // Folders that only organise, and several layers selected for grouping and deleting.
-    expect(model.groups).toMatchObject({ passThroughOnly: true });
+    // Folders that blend but are no layers otherwise, and several layers selected for grouping and deleting.
+    expect(model.groups).toMatchObject({ blendOnly: true });
     expect(model.selection).toBeDefined();
     for (const feature of ['masks', 'solo', 'paper', 'favoriteBlends', 'clear', 'localUndo'] as const) {
       expect(model[feature], feature).toBeUndefined();
@@ -154,14 +160,47 @@ describe('createDocumentLayers', () => {
     });
     expect(model.layers().map((node) => node.name)).toEqual(['Sketch', 'Ink', 'Flat colors', 'Shadows']);
 
-    // Drops that leave the layer where it is, onto itself, into a layer or clipped onto it send nothing.
+    // Drops that leave the layer where it is, onto itself or into a layer send nothing.
     vi.mocked(layers.action).mockClear();
     model.reorder(ids.ink, ids.flat, 'before');
     model.reorder(ids.ink, ids.ink, 'after');
     model.reorder(ids.ink, ids.shadows, 'into');
-    model.reorder(ids.ink, ids.shadows, 'clip');
+    model.reorder(ids.ink, ids.ink, 'clip');
     model.reorder(ids.ink, 'missing', 'before');
     expect(layers.action).not.toHaveBeenCalled();
+  });
+
+  it('turns a clip drop into one relocate that clips, and sends none for a layer clipped there already', () => {
+    const { model, layers, ids } = owned(() => seeded());
+    model.reorder(ids.sketch, ids.flat, 'clip');
+    flush();
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.sketch,
+      parentId: null,
+      anchorId: ids.flat,
+      side: 'above',
+      clipping: true
+    });
+    expect(model.layers().map((node) => [node.name, node.clipping])).toEqual([
+      ['Ink', false],
+      ['Shadows', true],
+      ['Sketch', true],
+      ['Flat colors', false]
+    ]);
+
+    // Clipping a layer in place is the same step; one clipped there already, or a folder, sends nothing.
+    vi.mocked(layers.action).mockClear();
+    model.reorder(ids.ink, ids.shadows, 'clip');
+    model.reorder(ids.sketch, ids.flat, 'clip');
+    model.groups!.group([ids.flat]);
+    flush();
+    const folder = model.layers().at(-1)!.id;
+    model.reorder(folder, ids.ink, 'clip');
+    expect(vi.mocked(layers.action).mock.calls.map(([action]) => action)).toEqual([
+      { type: 'relocate', id: ids.ink, parentId: null, anchorId: ids.shadows, side: 'above', clipping: true },
+      { type: 'group', ids: [ids.flat] }
+    ]);
   });
 
   it('reads thumbnails only while asked to', () => {
@@ -301,8 +340,7 @@ describe('layers:strip over the drawing', () => {
     });
     expect(model.layers().map((node) => node.name)).toEqual(['Flat colors', 'Sketch', 'Ink', 'Shadows']);
 
-    // The right of a layer's middle is no clip drop here, only a drop above it: the engine cannot move and clip in
-    // one step.
+    // The right of a layer's middle is a clip drop: above it and clipped to it, in one engine step.
     vi.mocked(layers.action).mockClear();
     const ink = tile(ids.ink);
     ink.getBoundingClientRect = () => new DOMRect(0, 0, 60, 60);
@@ -310,14 +348,15 @@ describe('layers:strip over the drawing', () => {
     pointer(tile(ids.shadows), 'pointerdown', { x: 30, y: 200 });
     pointer(window, 'pointermove', { x: 55, y: 100 });
     pointer(window, 'pointermove', { x: 55, y: 25 });
-    expect(ink.getAttribute('data-drop')).toBe('before');
+    expect(ink.getAttribute('data-drop')).toBe('clip');
     pointer(window, 'pointerup', { x: 55, y: 25 });
     expect(layers.action).toHaveBeenCalledExactlyOnceWith({
       type: 'relocate',
       id: ids.shadows,
       parentId: null,
       anchorId: ids.ink,
-      side: 'above'
+      side: 'above',
+      clipping: true
     });
   });
 
@@ -392,7 +431,7 @@ describe('folders on the drawing', () => {
     return { ...seededModel, folder };
   }
 
-  it('maps the tree top first, folders Pass Through at full strength without a thumbnail', () => {
+  it('maps the tree top first, a new folder Pass Through at full strength without a thumbnail', () => {
     const { model, ids, folder } = withFolder();
 
     expect(model.layers().map((node) => [node.name, node.children?.map((child) => child.name)])).toEqual([
@@ -411,18 +450,25 @@ describe('folders on the drawing', () => {
     expect(model.totalCount()).toBe(5);
     expect(model.activeLayer()?.id).toBe(folder);
     expect(model.layers()[1]!.children![0]!.id).toBe(ids.ink);
+    model.update(folder, { blend: 'screen', opacity: 35 });
+    flush();
+    expect(model.layers()[1]).toMatchObject({ blend: 'screen', opacity: 35 });
   });
 
-  it('sends one engine action per folder command, and keeps only a folder’s name and visibility', () => {
+  it('sends one engine action per folder command, and keeps a folder’s blending but no clipping or locks', () => {
     const { model, layers, ids, folder } = withFolder();
     const sent = () => vi.mocked(layers.action).mock.calls.map(([action]) => action);
     const groups = model.groups!;
     const innerFolder = () => model.layers()[1]!.children!.find((child) => child.name === 'Group 2')?.id;
 
-    model.update(folder, { opacity: 40, blend: 'multiply', clipping: true, locks: { alpha: true } });
+    model.update(folder, { clipping: true, locks: { alpha: true }, blend: 'pass-through', opacity: 100 });
+    model.update(folder, { blend: 'color-dodge' });
     expect(layers.action).not.toHaveBeenCalled();
     // Commands come from separate events, each after the state of the one before.
     for (const command of [
+      () => model.update(folder, { opacity: 40, blend: 'multiply', clipping: true, locks: { alpha: true } }),
+      () => model.update(folder, { blend: 'pass-through' }),
+      () => model.update(ids.ink, { blend: 'pass-through' }),
       () => model.update(folder, { name: ' Lines ', visible: false }),
       () => model.update(folder, { visible: true }),
       () => model.select(ids.ink),
@@ -433,6 +479,9 @@ describe('folders on the drawing', () => {
       flush();
     }
     expect(sent()).toEqual([
+      { type: 'update', id: folder, patch: { opacity: 0.4, blend: 'multiply' } },
+      { type: 'update', id: folder, patch: { blend: 'pass-through' } },
+      // A layer cannot be Pass Through, so nothing went for Ink.
       { type: 'update', id: folder, patch: { name: 'Lines', visible: false } },
       { type: 'update', id: folder, patch: { visible: true } },
       { type: 'select', id: ids.ink },
@@ -554,7 +603,7 @@ describe('folders on the drawing', () => {
     expect(model.groups!.expandedIds()).not.toContain(folder);
   });
 
-  it('offers a folder its name, visibility, Dup, Group, Ungroup and Delete, and still no masks', () => {
+  it('offers a folder its name, blending, visibility, Dup, Group, Ungroup and Delete, and still no masks', () => {
     const { model, layers, folder } = withFolder();
     mountStrip(model);
     document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Group 1"]')!.click();
@@ -562,9 +611,8 @@ describe('folders on the drawing', () => {
 
     const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Group 1"]')!;
     const labels = [...popover.querySelectorAll('button')].map((button) => button.textContent?.trim());
-    expect(labels).toEqual(['Group 1', 'Shown', 'Dup', 'Group', 'Ungroup', 'Delete']);
-    expect(popover.querySelector('[aria-label="Open blend modes"]')).toBeNull();
-    expect(popover.querySelector('[role="slider"]')).toBeNull();
+    expect(labels).toEqual(['Group 1', 'Blend modePass Through ›', 'Shown', 'Dup', 'Group', 'Ungroup', 'Delete']);
+    expect(popover.querySelectorAll('[role="slider"]')).toHaveLength(1);
     expect(document.querySelector('[aria-label^="Toggle mask target"]')).toBeNull();
 
     [...popover.querySelectorAll<HTMLButtonElement>('button')]
@@ -579,6 +627,83 @@ describe('folders on the drawing', () => {
     expect(tiles()).toEqual(['Sketch', 'Ink', 'Shadows', 'Flat colors']);
   });
 });
+
+describe('blending folders on the drawing', () => {
+  it('lists Pass Through first for a folder, sends its blend mode and opacity, and badges its tile', () => {
+    const { model, layers, folder } = withFolderOutside();
+    mountStrip(model);
+    document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Group 1"]')!.click();
+    flush();
+    const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Group 1"]')!;
+
+    vi.mocked(layers.action).mockClear();
+    const slider = popover.querySelector<HTMLElement>('[role="slider"][aria-label="Opacity"]')!;
+    slider.getBoundingClientRect = () => new DOMRect(0, 0, 200, 34);
+    pointer(slider, 'pointerdown', { x: 160, y: 17 });
+    pointer(window, 'pointermove', { x: 120, y: 17 });
+    pointer(window, 'pointerup', { x: 120, y: 17 });
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({ type: 'update', id: folder, patch: { opacity: 0.6 } });
+
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open blend modes"]')!.click();
+    flush();
+    const options = [...popover.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Pass ThroughPT',
+      'NormalN',
+      'MultiplyM',
+      'ScreenSc',
+      'OverlayOv'
+    ]);
+    expect(options[0]!.getAttribute('aria-selected')).toBe('true');
+    options[2]!.click();
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'update', id: folder, patch: { blend: 'multiply' } });
+    expect(tile(folder).querySelector('[class*="modeBadge"]')?.textContent).toBe('M 60%');
+  });
+
+  it('clips a layer onto a folder by a drop on the folder’s right, and offers no clip drop for a dragged folder', () => {
+    const { model, layers, ids, folder } = withFolderOutside();
+    mountStrip(model);
+    const target = tile(folder);
+    target.getBoundingClientRect = () => new DOMRect(0, 0, 60, 60);
+    document.elementFromPoint = vi.fn(() => target);
+
+    vi.mocked(layers.action).mockClear();
+    pointer(tile(ids.sketch), 'pointerdown', { x: 30, y: -100 });
+    pointer(window, 'pointermove', { x: 55, y: -50 });
+    pointer(window, 'pointermove', { x: 55, y: 30 });
+    expect(target.getAttribute('data-drop')).toBe('clip');
+    pointer(window, 'pointerup', { x: 55, y: 30 });
+    expect(layers.action).toHaveBeenCalledExactlyOnceWith({
+      type: 'relocate',
+      id: ids.sketch,
+      parentId: null,
+      anchorId: folder,
+      side: 'above',
+      clipping: true
+    });
+    // The clip toggle of a layer right above a folder clips it to the folder.
+    expect(model.layers()[0]).toMatchObject({ name: 'Sketch', clipping: true });
+
+    const flat = tile(ids.flat);
+    flat.getBoundingClientRect = () => new DOMRect(0, 0, 60, 60);
+    document.elementFromPoint = vi.fn(() => flat);
+    pointer(tile(folder), 'pointerdown', { x: 30, y: -100 });
+    pointer(window, 'pointermove', { x: 55, y: -50 });
+    pointer(window, 'pointermove', { x: 55, y: 30 });
+    expect(flat.getAttribute('data-drop')).not.toBe('clip');
+    pointer(window, 'pointerup', { x: 55, y: 30 });
+  });
+});
+
+/** The seeded drawing with Ink and Shadows grouped into `Group 1`. */
+function withFolderOutside() {
+  const seededModel = owned(() => seeded());
+  seededModel.model.groups!.group([seededModel.ids.ink, seededModel.ids.shadows]);
+  flush();
+  const folder = seededModel.model.layers()[1]!.id;
+  return { ...seededModel, folder };
+}
 
 describe('layers parts', () => {
   it.each(['layers:strip', 'layers:opener'])(

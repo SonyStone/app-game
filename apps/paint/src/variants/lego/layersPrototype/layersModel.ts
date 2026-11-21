@@ -96,10 +96,13 @@ export type LayersCapabilities = {
 /** Folders of layers: drill-in in the narrow strip, an expandable tree in the wide one. */
 export type LayerGroups = {
   /**
-   * Folders only organise: they show their layers as they are (Pass Through at full strength) and keep a name and
-   * visibility only, so the properties popover offers no blend mode, opacity, locks, clipping or merging for them.
+   * Folders blend but have nothing else a layer has: a blend mode, Pass Through too, and an opacity, and they can be
+   * the clipping base of the layers right above them (a clip drop onto a folder), but they have no locks, mask or
+   * clipping of their own and cannot merge. The properties popover then offers a folder its blending and visibility in
+   * place of the layer toggles, and Ungroup in place of Merge. Without it a folder has everything a layer has, as in the
+   * prototype.
    */
-  passThroughOnly?: boolean;
+  blendOnly?: boolean;
   /** The groups the narrow strip has entered, outermost first. */
   stack: () => readonly string[];
   /** The groups open in the wide tree. */

@@ -196,9 +196,14 @@ export function LayersStripPart(props: {
     return true;
   };
 
-  /** The drop zone under the pointer: the top and bottom bands, the middle of a group, the right of a layer. */
-  const zoneAt = (node: LayerNode, relX: number, relY: number): ReorderZone => {
+  /**
+   * The drop zone under the pointer: the top and bottom bands, the right of a layer (clipped onto it), the right of a
+   * group when its folders can be clipping bases (`groups.blendOnly`), and the middle of a group. A group dragged in a
+   * model whose folders cannot be clipped has no clip zone.
+   */
+  const zoneAt = (node: LayerNode, relX: number, relY: number, dragged: LayerNode | undefined): ReorderZone => {
     const zones = props.model.capabilities.dropZones;
+    const folderBases = !!props.model.groups?.blendOnly;
     if (relY < 0.28) {
       return 'before';
     }
@@ -207,12 +212,13 @@ export function LayersStripPart(props: {
       return 'after';
     }
 
-    if (node.type === 'group' && zones.includes('into')) {
-      return 'into';
+    const clips = zones.includes('clip') && !(folderBases && dragged?.type === 'group');
+    if (clips && relX > 0.68 && (node.type !== 'group' || folderBases)) {
+      return 'clip';
     }
 
-    if (node.type !== 'group' && relX > 0.68 && zones.includes('clip')) {
-      return 'clip';
+    if (node.type === 'group' && zones.includes('into')) {
+      return 'into';
     }
 
     return relY < 0.5 ? 'before' : 'after';
@@ -263,7 +269,7 @@ export function LayersStripPart(props: {
     const rect = tileEl.getBoundingClientRect();
     const relY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0.5;
     const relX = rect.width > 0 ? (clientX - rect.left) / rect.width : 0.5;
-    const zone = zoneAt(targetNode, relX, relY);
+    const zone = zoneAt(targetNode, relX, relY, findNode(props.model.layers(), dragId));
     setDropTarget({ id: targetId, zone });
 
     if (zone === 'into' && groups && !props.wide) {

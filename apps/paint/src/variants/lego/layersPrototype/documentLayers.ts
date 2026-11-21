@@ -20,12 +20,13 @@ import {
  * change that would leave the drawing as it is sends nothing, so it adds no empty undo step.
  *
  * The engine keeps a tree of raster layers and folders. Raster layers have name, visibility, opacity, four blend
- * modes, alpha lock and clipping; folders only organise: they show their layers as they are (Pass Through at full
- * strength), so a folder has a name and visibility only (`groups.passThroughOnly`). So this model offers groups
- * (enter a folder in the narrow strip, expand it in the wide tree, add, group, ungroup, drag into and out of
- * folders), and multi-selection for grouping and deleting several layers, each one engine action and one undo step.
- * It offers no masks, adjustment layers, fill, Blend If, colour tags, Reference, other locks, Paper or clearing, and
- * no Solo: the engine has no action that shows one layer alone, so hiding the others would take one undo step each.
+ * modes, alpha lock and clipping; folders have name, visibility, opacity and the same blend modes or Pass Through,
+ * and can be the clipping base of the layers right above them, but cannot be clipped, locked or merged
+ * (`groups.blendOnly`). So this model offers groups (enter a folder in the narrow strip, expand it in the wide tree,
+ * add, group, ungroup, drag into and out of folders, drop a layer clipped onto a layer or folder), and multi-selection
+ * for grouping and deleting several layers, each one engine action and one undo step. It offers no masks, adjustment
+ * layers, fill, Blend If, colour tags, Reference, other locks, Paper or clearing, and no Solo: the engine has no
+ * action that shows one layer alone, so hiding the others would take one undo step each.
  *
  * `send` is the part's guarded command (`frame.command(layers.action)`), so previews never edit. Thumbnails are read
  * only while `thumbnails()` holds (never in a catalog preview); the view that shows them asks for them through
@@ -105,7 +106,7 @@ export function createDocumentLayers(options: {
   };
   /** Sends `relocate` to `place` when the engine would accept it and it moves the node. */
   const relocate = (id: string, place: LayerPlace) => {
-    if (moves(engineNodes(), id, place)) {
+    if (placed(engineNodes(), id, place) === 'moved') {
       send({ type: 'relocate', id, ...place });
     }
   };
@@ -117,14 +118,15 @@ export function createDocumentLayers(options: {
 
   return {
     capabilities: {
-      blendModes: psdBlendModes.filter((mode) => isDocumentBlend(mode.id)),
+      // Pass Through is a folder's only (`groupOnly`), first for folders.
+      blendModes: psdBlendModes.filter((mode) => isDocumentBlend(mode.id) || mode.id === 'pass-through'),
       locks: ['alpha'],
       clipping: true,
       fill: false,
       blendIf: false,
       colorTags: false,
       reference: false,
-      dropZones: ['before', 'after', 'into']
+      dropZones: ['before', 'after', 'into', 'clip']
     },
     ready: document.ready,
     layers: tree,
@@ -138,7 +140,7 @@ export function createDocumentLayers(options: {
         return;
       }
 
-      const changes = node.kind === 'group' ? folderPatch(node, patch) : documentPatch(node, patch);
+      const changes = node.kind === 'group' ? folderPatch(node, patch) : layerPatch(node, patch);
       if (Object.keys(changes).length > 0) {
         send({ type: 'update', id, patch: changes });
       }
@@ -159,7 +161,21 @@ export function createDocumentLayers(options: {
       }
     },
     reorder(dragId, targetId, zone) {
-      const place = dropPlace(find(targetId), zone);
+      const dragged = find(dragId);
+      const target = find(targetId);
+      if (zone === 'clip') {
+        // Right above the target and clipped to it, a layer or folder, in one step; a folder cannot be clipped.
+        const place: LayerPlace = { parentId: target?.parentId ?? null, anchorId: targetId, side: 'above' };
+        const moved =
+          target && dragged?.kind === 'raster' && dragId !== targetId && placed(engineNodes(), dragId, place);
+        if (moved && (moved === 'moved' || !dragged.clipping)) {
+          send({ type: 'relocate', id: dragId, ...place, clipping: true });
+        }
+
+        return;
+      }
+
+      const place = dropPlace(target, zone);
       if (place && dragId !== targetId) {
         relocate(dragId, place);
       }
@@ -181,7 +197,7 @@ export function createDocumentLayers(options: {
       }
     },
     groups: {
-      passThroughOnly: true,
+      blendOnly: true,
       stack,
       expandedIds,
       add: () => send({ type: 'add-group', place: newPlace() }),
@@ -269,8 +285,7 @@ export function layerTree(
 
 /**
  * Where a drop in `zone` of `target` puts the dragged node: right above (`before`) or below (`after`) it in its
- * folder, or at the top of it (`into`) when it is a folder. Clip drops have no place: the engine cannot move and clip
- * in one step.
+ * folder, or at the top of it (`into`) when it is a folder. A clip drop moves and clips in one step of its own.
  */
 function dropPlace(target: DocumentNode | undefined, zone: ReorderZone): LayerPlace | undefined {
   if (!target || zone === 'clip' || (zone === 'into' && target.kind !== 'group')) {
@@ -285,17 +300,19 @@ function dropPlace(target: DocumentNode | undefined, zone: ReorderZone): LayerPl
 }
 
 /**
- * Whether the engine would move node `id` to `place`: it accepts the place (no folder into itself, an anchor in the
- * folder) and the tree changes.
+ * What moving node `id` to `place` does in the engine: `moved` when it accepts the place (no folder into itself, an
+ * anchor in the folder) and the tree changes, `same` when the node is there already, `undefined` when it refuses.
  */
-function moves(nodes: readonly DocumentNode[], id: string, place: LayerPlace) {
+function placed(nodes: readonly DocumentNode[], id: string, place: LayerPlace): 'moved' | 'same' | undefined {
   try {
     const draft = editLayerTree(nodes);
     draft.move(id, place);
     const moved = draft.result();
-    return moved.some((node, index) => node.id !== nodes[index]!.id || node.parentId !== nodes[index]!.parentId);
+    return moved.some((node, index) => node.id !== nodes[index]!.id || node.parentId !== nodes[index]!.parentId)
+      ? 'moved'
+      : 'same';
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -318,15 +335,15 @@ function layerNode(layer: DocumentLayer, thumb: string | undefined): LayerNode {
   };
 }
 
-/** An engine folder as the layers UI shows it: Pass Through at full strength, without a thumbnail. */
+/** An engine folder as the layers UI shows it, with its blend mode and opacity, without a thumbnail. */
 function folderNode(folder: DocumentFolder, children: readonly LayerNode[]): LayerNode {
   return {
     id: folder.id,
     name: folder.name,
     type: 'group',
     visible: folder.visible,
-    blend: 'pass-through',
-    opacity: 100,
+    blend: folder.blend,
+    opacity: Math.round(folder.opacity * 100),
     fill: 100,
     clipping: false,
     reference: false,
@@ -338,16 +355,9 @@ function folderNode(folder: DocumentFolder, children: readonly LayerNode[]): Lay
   };
 }
 
-/** The engine fields of `patch` that differ from `layer`; fields the engine does not keep are left out. */
-function documentPatch(layer: DocumentLayer, patch: LayerPatch) {
-  const changes: Extract<LayerAction, { type: 'update' }>['patch'] = { ...folderPatch(layer, patch) };
-  if (patch.opacity !== undefined) {
-    const percent = Math.max(0, Math.min(100, Math.round(patch.opacity)));
-    if (percent !== Math.round(layer.opacity * 100)) {
-      changes.opacity = percent / 100;
-    }
-  }
-
+/** The engine fields of `patch` that differ from raster `layer`; fields the engine does not keep are left out. */
+function layerPatch(layer: DocumentLayer, patch: LayerPatch) {
+  const changes = sharedPatch(layer, patch);
   if (patch.blend !== undefined && isDocumentBlend(patch.blend) && patch.blend !== layer.blend) {
     changes.blend = patch.blend;
   }
@@ -363,8 +373,25 @@ function documentPatch(layer: DocumentLayer, patch: LayerPatch) {
   return changes;
 }
 
-/** The name and visibility of `patch` that differ from `node`: all a folder keeps. */
-function folderPatch(node: { name: string; visible: boolean }, patch: LayerPatch) {
+/**
+ * The fields of `patch` that differ from `folder`, which keeps a name, visibility, opacity and a blend mode or Pass
+ * Through; clipping, locks and the rest are left out.
+ */
+function folderPatch(folder: DocumentFolder, patch: LayerPatch) {
+  const changes = sharedPatch(folder, patch);
+  if (
+    patch.blend !== undefined &&
+    (patch.blend === 'pass-through' || isDocumentBlend(patch.blend)) &&
+    patch.blend !== folder.blend
+  ) {
+    changes.blend = patch.blend;
+  }
+
+  return changes;
+}
+
+/** The name, visibility and opacity of `patch` that differ from `node`, which raster layers and folders share. */
+function sharedPatch(node: { name: string; visible: boolean; opacity: number }, patch: LayerPatch) {
   const changes: Extract<LayerAction, { type: 'update' }>['patch'] = {};
   const name = patch.name?.trim();
   if (name && name !== node.name) {
@@ -373,6 +400,13 @@ function folderPatch(node: { name: string; visible: boolean }, patch: LayerPatch
 
   if (patch.visible !== undefined && patch.visible !== node.visible) {
     changes.visible = patch.visible;
+  }
+
+  if (patch.opacity !== undefined) {
+    const percent = Math.max(0, Math.min(100, Math.round(patch.opacity)));
+    if (percent !== Math.round(node.opacity * 100)) {
+      changes.opacity = percent / 100;
+    }
   }
 
   return changes;

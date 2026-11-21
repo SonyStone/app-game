@@ -27,9 +27,10 @@ type PopoverPage = 'main' | 'blending' | 'mask' | 'locks' | 'color' | 'blendif';
  * `Color tag`, and touch `Blend If`). Follows selection across tiles without closing-and-reopening flicker.
  *
  * Shows only what `model` offers (see `LayersModel`): its blend modes, and fill, locks, masks, groups, clearing,
- * colour tags and Blend If where it has them. A folder of a model whose folders only organise
- * (`groups.passThroughOnly`) shows its name, visibility, and Dup, Group, Ungroup and Delete. A name is committed on Enter or blur and a slider on release, so each
- * edit is one change of the model. Duplicate, Group, Merge and Delete wait for `model.ready()`.
+ * colour tags and Blend If where it has them. A folder of a model whose folders only blend (`groups.blendOnly`) shows
+ * its name, blend mode (Pass Through first) and opacity, visibility in place of the layer toggles, and Dup, Group,
+ * Ungroup and Delete. A name is committed on Enter or blur and a slider on release, so each edit is one change of the
+ * model. Duplicate, Group, Merge and Delete wait for `model.ready()`.
  */
 export function LayerPropertiesPopover(props: {
   anchor: Element;
@@ -159,8 +160,8 @@ export function LayerPropertiesPopover(props: {
   };
 
   const modeLabel = () => blendModeInfo(layer().blend).label;
-  /** A folder that only organises: it has a name and visibility, and nothing that blends. */
-  const organises = () => layer().type === 'group' && !!model().groups?.passThroughOnly;
+  /** A folder that blends but has no locks, clipping, mask or merging of its own; see `groups.blendOnly`. */
+  const blendOnly = () => layer().type === 'group' && !!model().groups?.blendOnly;
   const isActiveMask = () => model().activeId() === layer().id && model().masks?.target() === 'mask';
   const availableModes = () =>
     capabilities().blendModes.filter((mode) => (layer().type === 'group' ? true : !mode.groupOnly));
@@ -250,44 +251,42 @@ export function LayerPropertiesPopover(props: {
             </Show>
           </div>
 
-          <Show
-            when={!organises()}
-            fallback={
-              <div class={styles.fusedRow} role="group" aria-label="Folder visibility">
-                <button
-                  type="button"
-                  class={styles.fusedBtn}
-                  aria-pressed={layer().visible ? 'true' : 'false'}
-                  onClick={() => update({ visible: !layer().visible })}
-                >
-                  <SketchIcon name={layer().visible ? 'eye' : 'hidden'} size={14} />
-                  <span>{layer().visible ? 'Shown' : 'Hidden'}</span>
-                </button>
-              </div>
-            }
+          {/* 2. Blend mode light tile */}
+          <button
+            type="button"
+            class={styles.tileRowBtn}
+            aria-label="Open blend modes"
+            onClick={() => setPage('blending')}
           >
-            {/* 2. Blend mode light tile */}
-            <button
-              type="button"
-              class={styles.tileRowBtn}
-              aria-label="Open blend modes"
-              onClick={() => setPage('blending')}
-            >
-              <span class={styles.tileRowLead}>
-                <SketchIcon name="gradient" size={16} />
-                <span>Blend mode</span>
-              </span>
-              <span class={styles.tileRowValue}>
-                {modeLabel()} <span aria-hidden="true">›</span>
-              </span>
-            </button>
+            <span class={styles.tileRowLead}>
+              <SketchIcon name="gradient" size={16} />
+              <span>Blend mode</span>
+            </span>
+            <span class={styles.tileRowValue}>
+              {modeLabel()} <span aria-hidden="true">›</span>
+            </span>
+          </button>
 
-            {/* 3. Native LEGO Opacity slider tile (no native <input type="range">) */}
-            <LegoSlider label="Opacity" value={layer().opacity} onChange={(opacity) => update({ opacity })} />
+          {/* 3. Native LEGO Opacity slider tile (no native <input type="range">) */}
+          <LegoSlider label="Opacity" value={layer().opacity} onChange={(opacity) => update({ opacity })} />
+
+          {/* 4. A blending folder's visibility, in place of the layer toggles it does not have */}
+          <Show when={blendOnly()}>
+            <div class={styles.fusedRow} role="group" aria-label="Folder visibility">
+              <button
+                type="button"
+                class={styles.fusedBtn}
+                aria-pressed={layer().visible ? 'true' : 'false'}
+                onClick={() => update({ visible: !layer().visible })}
+              >
+                <SketchIcon name={layer().visible ? 'eye' : 'hidden'} size={14} />
+                <span>{layer().visible ? 'Shown' : 'Hidden'}</span>
+              </button>
+            </div>
           </Show>
 
           {/* 4. Fused main toggle tiles: α Lock | ↳ Clip | ◐ Mask › */}
-          <Show when={hasQuickToggles() && !organises()}>
+          <Show when={hasQuickToggles() && !blendOnly()}>
             <div class={styles.fusedRow} role="group" aria-label="Layer quick toggles">
               <Show when={hasLock('alpha')}>
                 <button
@@ -365,7 +364,7 @@ export function LayerPropertiesPopover(props: {
               )}
             </Show>
             <Show
-              when={organises() && model().groups?.ungroup}
+              when={blendOnly() && model().groups?.ungroup}
               fallback={
                 <button
                   type="button"
