@@ -1,5 +1,6 @@
 import type { DocumentEditContext, PreviewTile } from '@app-game/paint-core/composition/documentEdit';
 import { createDocument, TILE_BYTES } from '@app-game/paint-core/document';
+import { coverageReader } from '@app-game/paint-core/layerMask';
 import { emptySelection } from '@app-game/paint-core/selectionMask';
 import { snapshotDocument } from '@app-game/paint-core/storage';
 import { defaultCamera } from '@app-game/paint-core/camera';
@@ -204,6 +205,7 @@ function context(
     layers: document.layers,
     active: document.active,
     readTile: async (pixels) => unpackTile(pixels),
+    readCoverage: coverageReader((data) => data as Uint8Array),
     linearBlending: false,
     selection: emptySelection,
     state,

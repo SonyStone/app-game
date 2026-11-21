@@ -84,6 +84,8 @@ export type DocumentEditContext = {
   mask?: LayerMask;
   /** Unpacked premultiplied sRGB RGBA8 pixels of a tile, reading paged-out tiles from storage. */
   readTile: (pixels: TileData) => Promise<Uint8Array>;
+  /** The stored coverage of `mask` at tile `key`, one byte per pixel, `outside` where it has no tile. */
+  readCoverage: (mask: LayerMask, key: string) => Promise<Uint8Array>;
   /** Whether the document blends its layers in linear light; see `mergeTilePixels`. */
   linearBlending: boolean;
   /**

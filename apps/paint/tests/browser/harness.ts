@@ -11,6 +11,7 @@ import { verifyLargeBrush } from '../gpu/largeBrushVerification';
 import { verifyLayerComposite } from '../gpu/layerCompositeVerification';
 import { verifyIsolatedFolders } from '../gpu/isolatedFolderVerification';
 import { verifyLayerFolders } from '../gpu/layerFolderVerification';
+import { verifyLayerMasks } from '../gpu/layerMaskVerification';
 import { verifyLayerMerge } from '../gpu/layerMergeVerification';
 import { verifyLiveTail } from '../gpu/liveTailVerification';
 import { verifyColdNavigation } from '../gpu/navigationStreamingVerification';
@@ -75,6 +76,7 @@ export const verifications = {
   'layer-merge': verifyLayerMerge,
   'layer-folders': verifyLayerFolders,
   'isolated-folders': verifyIsolatedFolders,
+  'layer-masks': verifyLayerMasks,
   pressure: verifyPressureSpacing,
   'stroke-filtering': verifyStrokeFiltering,
   'live-tail': verifyLiveTail,

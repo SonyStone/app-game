@@ -18,6 +18,7 @@ import { readPaintFile, writePaintFile } from './paintFile';
 import { isPsdFile, psdExportLayers, readPsdFile, writePsdFile } from './psdFile';
 import srgbProfileUrl from './assets/sRGB.icc?url';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
+import { coverageReader } from './layerMask';
 import { appliedMaskTiles, mergeDownTiles } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
 import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
@@ -196,6 +197,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
      */
     const thumbnails = createLayerThumbnailer({
       layers: () => document.layers,
+      masks: () => document.nodes.flatMap((node) => (node.mask ? [node.mask] : [])),
       read: (data) => tileStore.read(data),
       storage: {
         read: (key) => tileStore.overviews.read(key),
@@ -405,6 +407,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             mask: document.activeMask,
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+            readCoverage: coverageReader(loadTile),
             linearBlending: document.linearBlending(),
             selection,
             state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },

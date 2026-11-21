@@ -5,6 +5,7 @@ import { attempt, unwrapResult, type Result } from '../asyncResult';
 import type { Layer } from '../document';
 import { tileHasAlpha, unpackTile, type TileData } from '../tilePixels';
 import { evictionVictims } from './evictionVictims';
+import { planePixels } from './maskPlane';
 import { createReadbackQueue } from './readbackQueue';
 import type { StrokeData } from './strokeState';
 import {
@@ -82,7 +83,10 @@ export function createTileResidency(
       const active = stroke.tiles.get(id);
       await awaitSnapshots([active?.pending]);
 
-      const pixels = await readTile(active?.output ?? layer.tiles.get(key));
+      // Stroke output is uploaded as it was read back; committed tiles of a mask plane expand from coverage.
+      const pixels = active?.output
+        ? await readTile(active.output)
+        : planePixels(layer, await readTile(layer.tiles.get(key)));
       tile = spareTiles.pop();
       if (tile) {
         replacePixels(device, root.unwrap(tile.texture), pixels, batch);
@@ -97,7 +101,7 @@ export function createTileResidency(
         if (active && !sharedScratch) {
           const scratch = prepareStroke(root, tile);
           if (!stroke.transientCoverage) {
-            replacePixels(device, root.unwrap(scratch.base), await readTile(active.before), batch);
+            replacePixels(device, root.unwrap(scratch.base), planePixels(layer, await readTile(active.before)), batch);
             if (!stroke.abr) {
               replaceTransmittance(device, root.unwrap(scratch.transmittance), active.transmittance, batch);
             }

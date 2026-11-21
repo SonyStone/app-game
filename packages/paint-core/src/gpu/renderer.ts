@@ -523,6 +523,16 @@ async function assemblePaintRenderer(
       }
 
       const present = new Set(layers.map((layer) => layer.id));
+      // Mask planes keep their tiles while their masks are there; see `maskPlane`.
+      for (const layer of layers as readonly ShownLayer[]) {
+        if (layer.mask) present.add(layer.mask.id);
+        for (const chain of [layer.group, layer.clipGroup]) {
+          for (let folder = chain; folder; folder = folder.parent) {
+            if (folder.mask) present.add(folder.mask.id);
+          }
+        }
+      }
+
       const changed = new Set(changes.map((change) => tileId(change.layerId, change.key)));
       // Tile keys never contain '/', so the last separator ends the layer id even if the id contains one.
       const stale = (id: string) => changed.has(id) || !present.has(id.slice(0, id.lastIndexOf('/')));

@@ -131,6 +131,17 @@ export function maskCoverage(data: TileData | undefined, outside: number): Uint8
   return unpackMaskTile(data);
 }
 
+/**
+ * Reads a mask's stored coverage at a tile key, `outside` where it has no tile (`maskCoverage`); `load` gives a tile
+ * version's bytes, from storage when it is there. What `DocumentEditContext.readCoverage` is.
+ */
+export function coverageReader(load: (data: TileData) => Promise<Uint8Array> | Uint8Array) {
+  return async (mask: Pick<LayerMask, 'tiles' | 'outside'>, key: string): Promise<Uint8Array> => {
+    const data = mask.tiles.get(key);
+    return maskCoverage(data && (await load(data)), mask.outside);
+  };
+}
+
 /** The mask tile holding `coverage`, or undefined when every pixel equals `outside`, which needs no tile. */
 export function coverageTile(coverage: Uint8Array, outside: number): Uint8Array | undefined {
   for (let index = 0; index < coverage.length; index++) {

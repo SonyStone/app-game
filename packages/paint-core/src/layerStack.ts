@@ -1,6 +1,8 @@
 import type { BlendMode } from './document';
+import { coverageFactors, maskCoverage, type LayerMask } from './layerMask';
 import { blendModes } from './layerMerge';
-import { groupMode, type CompositeGroup, type ShownLayer } from './layerTree';
+import { groupMode, shownMask, type CompositeGroup, type ShownLayer } from './layerTree';
+import { unpackTile, type TileData } from './tilePixels';
 
 /**
  * How the layer stack composites with folders that composite on their own (see `CompositeGroup`): one walk over the
@@ -158,17 +160,31 @@ export async function walkStack(items: readonly StackItem[], visitor: StackVisit
  * floats throughout, as the screen keeps its levels in 16-bit floats until output. `read` gives a layer's own
  * premultiplied RGBA8 pixels in the area, or nothing where it has none; `linear` is the document's `linearBlending`.
  * `backdrop`, when given, is what the stack composites onto (transparent otherwise) and is not changed.
+ *
+ * Masks apply as the screen applies them (see `LayerMask`): `readMask` gives a mask's stored coverage in the area, one
+ * byte per pixel. An enabled mask scales its layer's pixels before clipping and opacity, so the layers clipped to it
+ * see the masked shape; a folder's scales its composite, or for a fading folder the fade, and its coverage as a
+ * clipping base. Throws for a masked layer without `readMask`; {@link tileSources} reads both for one tile.
  */
 export async function composeStack(
   layers: readonly ShownLayer[],
   pixels: number,
   read: (layer: ShownLayer) => Promise<Uint8Array | undefined> | Uint8Array | undefined,
   linear: boolean,
-  backdrop?: Float32Array
+  backdrop?: Float32Array,
+  readMask?: (mask: LayerMask) => Promise<Uint8Array> | Uint8Array
 ): Promise<Float32Array> {
   const levels: { image: Float32Array; kept?: Float32Array; rasterBase?: Float32Array }[] = [
     { image: backdrop ? backdrop.slice() : new Float32Array(pixels * 4) }
   ];
+  /** The effective coverage of `mask` in the area, 0–1 per pixel. */
+  const factors = async (mask: LayerMask) => {
+    if (!readMask) {
+      throw new Error('Read the masks of a masked stack to composite it.');
+    }
+
+    return coverageFactors(await readMask(mask), mask.inverted);
+  };
   await walkStack(stackItems(layers), {
     async layer(layer, clip, base) {
       const level = levels.at(-1)!;
@@ -182,7 +198,8 @@ export async function composeStack(
         return false;
       }
 
-      const source = normalized(own);
+      const mask = shownMask(layer);
+      const source = mask ? scaledPixels(normalized(own), await factors(mask)) : normalized(own);
       const coverage = clip ? (clip.type === 'layer' ? level.rasterBase : level.kept) : undefined;
       if (!clip && base) {
         level.rasterBase = source;
@@ -196,19 +213,52 @@ export async function composeStack(
       level.kept = undefined;
       levels.push({ image: mode === 'fade' ? level.image.slice() : new Float32Array(pixels * 4) });
     },
-    leave(group, mode, drew, keep) {
-      const { image } = levels.pop()!;
+    async leave(group, mode, drew, keep) {
+      const popped = levels.pop()!.image;
       const level = levels.at(-1)!;
+      const k = group.mask && (await factors(group.mask));
+      // A fade's mask scales how far it goes; any other level's mask scales the folder's own composite.
+      const image = k && mode !== 'fade' ? scaledPixels(popped, k) : popped;
       if (drew && mode === 'isolated') {
         level.image = compositePixels(level.image, image, undefined, group.opacity, group.blend as BlendMode, linear);
       } else if (drew && mode === 'fade') {
-        level.image = fadePixels(level.image, image, group.opacity, linear);
+        level.image = fadePixels(level.image, image, group.opacity, linear, k);
       }
 
       level.kept = keep ? image : undefined;
     }
   });
   return levels[0]!.image;
+}
+
+/**
+ * Readers of one tile for {@link composeStack}: `read` for a layer's unpacked pixels at tile `key`, `readMask` for a
+ * mask's stored coverage there. `load` gives a tile version's bytes, from storage when it is there.
+ */
+export function tileSources(key: string, load: (data: TileData) => Promise<Uint8Array> | Uint8Array) {
+  return {
+    read: async (layer: ShownLayer) => {
+      const data = layer.tiles.get(key);
+      return data && unpackTile(await load(data));
+    },
+    readMask: async (mask: LayerMask) => {
+      const data = mask.tiles.get(key);
+      return maskCoverage(data && (await load(data)), mask.outside);
+    }
+  };
+}
+
+/** Premultiplied `image` with every pixel scaled by `factors`, one 0–1 value per pixel; returns a new one. */
+export function scaledPixels(image: Float32Array, factors: Float32Array): Float32Array {
+  const out = new Float32Array(image.length);
+  for (let index = 0; index < factors.length; index++) {
+    const k = factors[index]!;
+    for (let channel = 0; channel < 4; channel++) {
+      out[index * 4 + channel] = image[index * 4 + channel]! * k;
+    }
+  }
+
+  return out;
 }
 
 /** RGBA8 pixels as 0–1 floats. */
@@ -281,13 +331,27 @@ export function compositePixels(
 
 /**
  * `from` interpolated towards `to` by `amount` in premultiplied working space, linear light with `linear`, as
- * `mixPremultiplied` does it: a fading Pass Through folder's result over the backdrop it entered with.
+ * `mixPremultiplied` does it: a fading Pass Through folder's result over the backdrop it entered with. `factors`, one
+ * 0–1 value per pixel such as a folder mask's coverage, scale `amount` pixel by pixel.
  */
-export function fadePixels(from: Float32Array, to: Float32Array, amount: number, linear: boolean): Float32Array {
+export function fadePixels(
+  from: Float32Array,
+  to: Float32Array,
+  amount: number,
+  linear: boolean,
+  factors?: Float32Array
+): Float32Array {
   const out = new Float32Array(from.length);
   const a = [0, 0, 0, 0],
     b = [0, 0, 0, 0];
   for (let index = 0; index < from.length; index += 4) {
+    const t = factors ? amount * factors[index / 4]! : amount;
+    if (t <= 0 || t >= 1) {
+      // As `mixPremultiplied`, which returns either end unchanged.
+      out.set((t <= 0 ? from : to).subarray(index, index + 4), index);
+      continue;
+    }
+
     for (let channel = 0; channel < 4; channel++) {
       a[channel] = from[index + channel]!;
       b[channel] = to[index + channel]!;
@@ -299,7 +363,7 @@ export function fadePixels(from: Float32Array, to: Float32Array, amount: number,
     }
 
     for (let channel = 0; channel < 4; channel++) {
-      a[channel] = a[channel]! + (b[channel]! - a[channel]!) * amount;
+      a[channel] = a[channel]! + (b[channel]! - a[channel]!) * t;
     }
 
     if (linear) {

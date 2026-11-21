@@ -1,5 +1,6 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
+import { coverageReader } from '@app-game/paint-core/layerMask';
 import {
   coverageAt,
   emptySelection,
@@ -179,6 +180,7 @@ function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptyS
     layers: [layer],
     active: layer,
     readTile: async (pixels) => unpackTile(pixels),
+    readCoverage: coverageReader((data) => data as Uint8Array),
     linearBlending: false,
     selection,
     state: { get: () => state, set: (value) => (state = value) },

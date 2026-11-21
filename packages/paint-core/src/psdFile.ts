@@ -5,8 +5,9 @@ import type { Camera, ViewSize } from './camera';
 import type { BlendMode, Layer } from './document';
 import { imageTiles } from './imageTiles';
 import type { DocumentRect } from './layersInView';
-import { composeStack, normalized, quantized, stackItems, type StackItem } from './layerStack';
-import { groupMode, isFlatStack, type CompositeGroup, type ShownLayer } from './layerTree';
+import { coverageFactors, maskCoverage, maskPixels, type LayerMask } from './layerMask';
+import { composeStack, normalized, quantized, scaledPixels, stackItems, type StackItem } from './layerStack';
+import { groupMode, isFlatStack, shownMask, type CompositeGroup, type ShownLayer } from './layerTree';
 import { packTile, unpackTile, type TileData } from './tilePixels';
 
 /**
@@ -114,6 +115,10 @@ export async function writePsdFile(
  *   darkened by the folder's layers, no such layer exists, and it is the closest one, clamped;
  * - a layer clipped to a folder is written unclipped, its pixels multiplied by the folder's coverage.
  *
+ * Masks are baked: a layer with an enabled mask is written with the mask multiplied into its pixels (`maskPixels`), a
+ * rasterized folder with its own mask's coverage multiplied in, and a disabled mask is left out, so the file
+ * composites as the drawing shows; Photoshop layer masks of their own are not written yet.
+ *
  * A hidden folder writes its layers flat and hidden, as a hidden Pass Through folder does. Composites on the CPU
  * (`composeStack`) in the document's blending, `linear`; `read` loads stored tiles.
  */
@@ -123,14 +128,36 @@ export async function psdExportLayers(
   read: (data: TileData) => Promise<Uint8Array>,
   linear: boolean
 ): Promise<PsdExportLayer[]> {
-  const plain = (layer: ShownLayer): PsdExportLayer => {
-    const { group: _group, clipGroup: _clipGroup, ...own } = layer;
-    return { ...own, sources: [layer.id] };
+  const load = async (data: TileData) => (data instanceof Uint8Array ? data : await read(data));
+  /** The stored coverage of `mask` at tile `key`. */
+  const coverageOf = async (mask: LayerMask, key: string) => {
+    const data = mask.tiles.get(key);
+    return maskCoverage(data && (await load(data)), mask.outside);
+  };
+  const plain = async (layer: ShownLayer): Promise<PsdExportLayer> => {
+    const { group: _group, clipGroup: _clipGroup, mask: _mask, ...own } = layer;
+    const mask = shownMask(layer);
+    if (!mask) {
+      return { ...own, sources: [layer.id] };
+    }
+
+    const tiles = new Map<string, TileData>();
+    for (const [key, data] of layer.tiles) {
+      const baked = maskPixels(unpackTile(await load(data)), await coverageOf(mask, key), mask.inverted);
+      if (baked.some((value, index) => index % 4 === 3 && value > 0)) {
+        tiles.set(key, baked);
+      }
+    }
+
+    return { ...own, tiles, sources: [layer.id] };
   };
   if (isFlatStack(layers)) {
-    return layers.map(plain);
+    return Promise.all(layers.map(plain));
   }
 
+  /** The effective coverage of folder `group`'s mask at tile `key`, 0–1 per pixel, if it has an enabled one. */
+  const folderFactors = async (group: CompositeGroup, key: string) =>
+    group.mask && coverageFactors(await coverageOf(group.mask, key), group.mask.inverted);
   const loaded = new Map<Layer, Map<string, Promise<Uint8Array>>>();
   const tile = (layer: Layer, key: string) => {
     const data = layer.tiles.get(key);
@@ -153,7 +180,19 @@ export async function psdExportLayers(
     return pixels;
   };
   const compose = (stack: readonly ShownLayer[], key: string, backdrop?: Float32Array) =>
-    composeStack(stack, TILE_SIZE * TILE_SIZE, (layer) => tile(layer, key), linear, backdrop);
+    composeStack(
+      stack,
+      TILE_SIZE * TILE_SIZE,
+      (layer) => tile(layer, key),
+      linear,
+      backdrop,
+      (mask) => coverageOf(mask, key)
+    );
+  /** `image` of folder `group` at tile `key`, scaled by the folder's mask when it has an enabled one. */
+  const masked = async (group: CompositeGroup, key: string, image: Float32Array) => {
+    const factors = await folderFactors(group, key);
+    return factors ? scaledPixels(image, factors) : image;
+  };
   const keysOf = (stack: readonly Layer[]) => new Set(stack.flatMap((layer) => [...layer.tiles.keys()]));
   const inside = (group: CompositeGroup) => layers.filter((layer) => within(layer.group, group));
   /** The layers of `group` as a stack of their own, without the folder and the folders around it. */
@@ -210,24 +249,27 @@ export async function psdExportLayers(
       if (item.type === 'layer') {
         const { layer } = item;
         if (!layer.clipGroup) {
-          out.push(plain(layer));
+          out.push(await plain(layer));
           continue;
         }
 
         // Clipped to a folder: the folder's coverage, which a hidden folder or one at zero opacity does not have.
         const base = layer.clipGroup;
         const covered = base.visible && base.opacity > 0 ? isolated(base) : [];
+        const mask = shownMask(layer);
         const tiles = new Map<string, Uint8Array>();
         for (const [key] of layer.tiles) {
-          const own = await tile(layer, key)!;
-          const coverage = await compose(covered, key);
+          const pixels = await tile(layer, key)!;
+          const own = mask ? maskPixels(pixels, await coverageOf(mask, key), mask.inverted) : pixels;
+          const coverage = await masked(base, key, await compose(covered, key));
           const baked = quantized(scaledByAlpha(normalized(own), coverage));
           if (baked.some((value, index) => index % 4 === 3 && value > 0)) {
             tiles.set(key, baked);
           }
         }
 
-        out.push({ ...plain(layer), clipping: false, tiles });
+        const { mask: _mask, ...unmasked } = layer;
+        out.push({ ...(await plain(unmasked)), clipping: false, tiles });
         continue;
       }
 
@@ -240,7 +282,11 @@ export async function psdExportLayers(
 
       if (mode === 'isolated') {
         const stack = isolated(group);
-        out.push(await rasterized(group, async (key) => opaqueOrNothing(quantized(await compose(stack, key)))));
+        out.push(
+          await rasterized(group, async (key) =>
+            opaqueOrNothing(quantized(await masked(group, key, await compose(stack, key))))
+          )
+        );
         continue;
       }
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { TILE_SIZE } from './brush';
 import type { Layer } from './document';
+import { MASK_TILE_PIXELS, newMask, packMaskTile, type LayerMask } from './layerMask';
 import {
   createLayerThumbnailer,
   resampleThumbnail,
@@ -158,6 +159,43 @@ it('reads derived pages from the shared overview storage and writes the ones it 
   second.thumbnailer.dispose();
 });
 
+it('shows a layer through its enabled mask, and every mask on its own, keyed by its id', async () => {
+  const half = packMaskTile(new Uint8Array(MASK_TILE_PIXELS).fill(128));
+  const mask = { ...newMask('m'), tiles: new Map<string, TileData>([['0,0', half]]) };
+  const masked = { ...layer('a', { '0,0': solid(255), '1,0': solid(255) }), mask };
+  const masks = [mask];
+  const { thumbnailer, posts, encoded } = setup(
+    [masked],
+    () => true,
+    undefined,
+    () => masks
+  );
+  thumbnailer.resize(16);
+  await vi.advanceTimersByTimeAsync(1000);
+  /** The first and last pixels of the first row of a 16 × 8 image: inside tile 0,0 and inside tile 1,0. */
+  const ends = (pixels: Uint8ClampedArray) => [...pixels.subarray(0, 4), ...pixels.subarray(60, 64)];
+  expect(posts[0]).toMatchObject({ layerIds: ['a', 'm'] });
+  expect(posts[0]!.thumbnails.map(({ layerId }) => layerId)).toEqual(['a', 'm']);
+  // Left: half revealed by the tile; right: revealed by `outside`, 255.
+  expect(ends(encoded[0]!)).toEqual([255, 0, 0, 128, 255, 0, 0, 255]);
+  expect(ends(encoded[1]!)).toEqual([128, 128, 128, 255, 255, 255, 255, 255]);
+
+  // Inverted, both thumbnails change; disabled, the layer shows all its pixels and the mask keeps its image.
+  masks[0] = mask.inverted ? mask : { ...mask, inverted: true };
+  masked.mask = masks[0];
+  thumbnailer.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(posts[1]!.thumbnails.map(({ layerId }) => layerId)).toEqual(['a', 'm']);
+  expect(ends(encoded[3]!)).toEqual([127, 127, 127, 255, 0, 0, 0, 255]);
+  masks[0] = { ...masks[0], enabled: false };
+  masked.mask = masks[0];
+  thumbnailer.changed();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(posts[2]!.thumbnails.map(({ layerId }) => layerId)).toEqual(['a']);
+  expect(ends(encoded[4]!)).toEqual([255, 0, 0, 255, 255, 0, 0, 255]);
+  thumbnailer.dispose();
+});
+
 /** Advances fake time until `condition` holds; content keys hash with real asynchronous I/O that fake timers skip. */
 async function waitFor(condition: () => boolean) {
   const deadline = vi.getRealSystemTime() + 2000;
@@ -169,11 +207,17 @@ async function waitFor(condition: () => boolean) {
 }
 
 /** A thumbnailer over `layers`, whose posts and encoded pixels the test reads. */
-function setup(layers: Layer[], idle = () => true, storage?: Parameters<typeof createLayerThumbnailer>[0]['storage']) {
+function setup(
+  layers: Layer[],
+  idle = () => true,
+  storage?: Parameters<typeof createLayerThumbnailer>[0]['storage'],
+  masks?: () => LayerMask[]
+) {
   const posts: LayerThumbnailsUpdate[] = [];
   const encoded: Uint8ClampedArray[] = [];
   const thumbnailer = createLayerThumbnailer({
     layers: () => layers,
+    masks,
     read: async (data) => (data instanceof Uint8Array ? data : solid(255)),
     storage,
     idle,

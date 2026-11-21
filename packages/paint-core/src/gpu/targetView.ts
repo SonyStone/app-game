@@ -168,9 +168,11 @@ function createTargetView(
      */
     bytes() {
       const pixels = this.view ? this.view.width * this.view.height : 0;
-      // Two rgba16float composition textures, those of folders that composite on their own, and three rgba8unorm images.
+      // Two rgba16float composition textures, those of folders that composite on their own, three rgba8unorm images
+      // and, once a mask has been composited, the rgba8unorm mask texture.
       const levels = 2 + (this.view?.scratchCount() ?? 0);
-      return (this.fallback?.bytes() ?? 0) + pixels * (8 * levels + 4 * 3 + swapChainBytesPerPixel);
+      const images = 3 + (this.view?.hasMask() ? 1 : 0);
+      return (this.fallback?.bytes() ?? 0) + pixels * (8 * levels + 4 * images + swapChainBytesPerPixel);
     },
 
     /** Releases every GPU resource of this target and unconfigures its context. */
@@ -192,7 +194,8 @@ function createTargetView(
  * into `a`/`b` in rgba16float, so rounding does not accumulate across many translucent layers; `layer` holds 8-bit
  * tile pixels, `clip` a copy of the clipping base layer's pixels for the layers clipped to it, and `composed` the
  * 8-bit result. Folders that composite on their own blend into further rgba16float textures of the same size, made
- * on first use by `scratch` and kept with the others.
+ * on first use by `scratch` and kept with the others; a mask's coverage is drawn into the rgba8unorm `mask` texture,
+ * made on first use too, so a drawing without masks never allocates it.
  */
 export type ViewTextures = ReturnType<typeof createViewTextures>;
 
@@ -222,8 +225,9 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     render: root.unwrap(texture).createView(),
     id: nextId++
   });
-  const entries = { a: entry(a), b: entry(b), layer: entry(layer), clip: entry(clip) };
+  const entries = { a: entry(a), b: entry(b), layer: entry(layer), clip: entry(clip), composed: entry(composed) };
   const scratch: ViewTexture[] = [];
+  let mask: ViewTexture | undefined;
   const resolves = new Map<number, TgpuBindGroup>();
   return {
     width,
@@ -274,6 +278,53 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     },
     /** How many further composition textures `scratch` has made. */
     scratchCount: () => scratch.length,
+    /** The rgba8unorm texture a mask's coverage is drawn into before a masked pass reads it; made on first use. */
+    mask(): ViewTexture {
+      return (mask ??= entry(texture('rgba8unorm')));
+    },
+    /** Whether `mask` has made its texture. */
+    hasMask: () => !!mask,
+    /**
+     * The `slot`-th settings buffer bound for a masked pass: `maskedCompositeFragment` reading `base`, `source`, `clip`
+     * and `mask`, `maskedFadeFragment` reading `base`, `source` and `mask`, or `maskApplyFragment` reading `source` and
+     * `mask`. Bindings are cached by slot, pass and textures.
+     */
+    bindMasked(
+      slot: number,
+      pass: 'composite' | 'fade' | 'apply',
+      textures: { base?: ViewTexture; source: ViewTexture; clip?: ViewTexture; mask: ViewTexture }
+    ) {
+      const target = this.composite(slot);
+      const { base, source, clip, mask } = textures;
+      const key = `masked-${pass}|${base?.id}|${source.id}|${clip?.id}|${mask.id}`;
+      let binding = target.bindings.get(key);
+      if (!binding) {
+        binding =
+          pass === 'composite'
+            ? root.createBindGroup(shader.maskedCompositeLayout, {
+                base: base!.texture,
+                layer: source.texture,
+                clip: clip!.texture,
+                mask: mask.texture,
+                settings: target.settings
+              })
+            : pass === 'fade'
+              ? root.createBindGroup(shader.maskedFadeLayout, {
+                  base: base!.texture,
+                  layer: source.texture,
+                  mask: mask.texture,
+                  settings: target.settings
+                })
+              : root.createBindGroup(shader.maskApplyLayout, {
+                  layer: source.texture,
+                  mask: mask.texture,
+                  settings: target.settings
+                });
+        target.bindings.set(key, binding);
+      }
+
+      return { settings: target.settings, binding };
+    },
     /**
      * The `slot`-th settings buffer bound with `base`, `layer` and `clip` for `compositeFragment`, or with `base` and
      * `layer` for `fadeFragment` (`fade`). Bindings are cached by slot and textures.
@@ -328,6 +379,8 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       for (const extra of scratch) {
         extra.texture.destroy();
       }
+
+      mask?.texture.destroy();
 
       for (const slot of slots) {
         slot.settings.destroy();

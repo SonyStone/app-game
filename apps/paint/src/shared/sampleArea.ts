@@ -2,7 +2,7 @@ import { editedLayer, type DocumentEditContext } from '@app-game/paint-core/comp
 import type { Layer } from '@app-game/paint-core/document';
 import { mergeTilePixels } from '@app-game/paint-core/layerMerge';
 import { composeStack, quantized } from '@app-game/paint-core/layerStack';
-import { isFlatStack } from '@app-game/paint-core/layerTree';
+import { isFlatStack, shownMask } from '@app-game/paint-core/layerTree';
 import { TILE_BYTES } from '@app-game/paint-core/tilePixels';
 import { areaTiles, type FillArea } from './floodFill';
 
@@ -53,11 +53,11 @@ export function reachesLimit(mask: Uint8Array, area: FillArea, view: ViewArea): 
 /**
  * Unpacked tiles of the area: the active layer's (`layer`), or the visible layers composited bottom to top as
  * displayed (`all`), with clipped layers clipped to their base, in linear light when the document blends so. A stack
- * with folders that composite on their own is composited by `composeStack`, as the display does, and rounded to 8 bits
- * once at the end.
+ * with folders that composite on their own, or with masks, is composited by `composeStack`, as the display does, and
+ * rounded to 8 bits once at the end. The active layer's pixels are its own, without its mask.
  */
 export async function sampleArea(
-  context: Pick<DocumentEditContext, 'layers' | 'active' | 'readTile' | 'linearBlending'>,
+  context: Pick<DocumentEditContext, 'layers' | 'active' | 'mask' | 'readTile' | 'readCoverage' | 'linearBlending'>,
   area: FillArea,
   source: 'layer' | 'all'
 ): Promise<Map<string, Uint8Array>> {
@@ -68,7 +68,8 @@ export async function sampleArea(
   };
   // The active layer's pixels need a layer: a folder has none of its own.
   const active = source === 'layer' ? editedLayer(context) : undefined;
-  const flat = isFlatStack(context.layers);
+  const flat = isFlatStack(context.layers) && !context.layers.some((layer) => shownMask(layer));
+
   for (const key of areaTiles(area)) {
     if (active) {
       const pixels = await read(active, key);
@@ -81,7 +82,14 @@ export async function sampleArea(
 
     if (!flat) {
       const composite = quantized(
-        await composeStack(context.layers, TILE_BYTES / 4, (layer) => read(layer, key), context.linearBlending)
+        await composeStack(
+          context.layers,
+          TILE_BYTES / 4,
+          (layer) => read(layer, key),
+          context.linearBlending,
+          undefined,
+          (mask) => context.readCoverage(mask, key)
+        )
       );
       if (composite.some((value, index) => index % 4 === 3 && value > 0)) {
         tiles.set(key, composite);

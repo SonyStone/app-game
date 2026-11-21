@@ -1,4 +1,5 @@
 import type { Layer } from '@app-game/paint-core/document';
+import { coverageReader } from '@app-game/paint-core/layerMask';
 import { emptySelection, featherSelection, polygonSelection, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { expect, it } from 'vitest';
 import { fillEdit, type FillCommand } from './fillEdit';
@@ -87,7 +88,12 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const read = async (pixels: unknown) => pixels as Uint8Array;
   const state = { get: () => undefined, set: () => {} };
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
-  const edits = { history: [], revision: 0, preview: { show: () => {}, clear: () => {} } };
+  const edits = {
+    history: [],
+    revision: 0,
+    preview: { show: () => {}, clear: () => {} },
+    readCoverage: coverageReader((data) => data as Uint8Array)
+  };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
       { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
@@ -148,6 +154,7 @@ it('stays inside the selection, also when it grows under edges, fades across a f
         layers: [paint],
         active: paint,
         readTile: async (pixels) => pixels as Uint8Array,
+        readCoverage: coverageReader((data) => data as Uint8Array),
         linearBlending: false,
         selection,
         state: { get: () => undefined, set: () => {} },

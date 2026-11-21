@@ -1,7 +1,9 @@
+import { openPsd } from '@app-game/psd/viewer';
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { defaultCamera } from './camera';
 import { createDocument, TILE_BYTES, type DocumentNode, type Layer, type LayerMask } from './document';
+import { compositionSignature } from './gpu/frameComposer';
 import {
   coverageFromRgba,
   coverageTile,
@@ -18,8 +20,10 @@ import {
   unpackMaskTile
 } from './layerMask';
 import { appliedMaskTiles, mergeDownTiles } from './layerMerge';
+import { composeStack, tileSources } from './layerStack';
 import { applyLiveState, listLiveTiles } from './liveDrawing';
 import { readPaintFile, writePaintFile } from './paintFile';
+import { psdExportLayers, writePsdFile } from './psdFile';
 import { createRegionHistory } from './regionHistory';
 import { wholeSelection } from './selectionMask';
 import { decodeDocument, encodeDocument, restoreDocument, savedTiles, snapshotDocument } from './storage';
@@ -642,4 +646,331 @@ describe('merging and applying masks', () => {
     expect(gone.get('0,0')).toBeUndefined();
     expect(gone.has('0,0')).toBe(true);
   });
+});
+
+describe('masks on the CPU composite', () => {
+  const decode = (value: number) => (value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const encode = (value: number) => (value <= 0.0031308 ? value * 12.92 : 1.055 * value ** (1 / 2.4) - 0.055);
+  /** Opaque `from` mixed towards opaque `to` by `t`, in linear light with `linear`, 0–1 straight RGB. */
+  const mix = (from: number[], to: number[], t: number, linear: boolean) =>
+    from.map((value, channel) =>
+      linear ? encode(decode(value) + (decode(to[channel]!) - decode(value)) * t) : value + (to[channel]! - value) * t
+    );
+  const B = [102 / 255, 204 / 255, 153 / 255];
+  const C = [153 / 255, 255 / 255, 51 / 255];
+  const D = [51 / 255, 0, 255 / 255];
+  /** Coverage of the first three pixels of every mask: hidden, half and revealed. */
+  const K = [0, 51, 255];
+
+  /** Adds an opaque raster of straight `rgb` (0–1) at tile 0,0 to `place`; returns its id. */
+  function opaqueLayer(doc: Doc, rgb: number[], place?: { parentId: string | null; side: 'above' }, patch = {}) {
+    doc.changeLayer({ type: 'add', ...(place ? { place } : {}) });
+    const id = doc.activeId;
+    doc.commit([
+      {
+        layerId: id,
+        key: '0,0',
+        before: undefined,
+        after: pixelsOf([...rgb.map((v) => Math.round(v * 255)), 255] as never)
+      }
+    ]);
+    if (Object.keys(patch).length) doc.changeLayer({ type: 'update', id, patch });
+    return id;
+  }
+
+  /** Gives node `id` a mask whose tile 0,0 starts with `K`, with `patch`. */
+  function maskWith(doc: Doc, id: string, patch: Partial<Pick<LayerMask, 'enabled' | 'inverted'>> = {}) {
+    doc.changeLayer({ type: 'add-mask', id });
+    paintMask(doc, id, '0,0', coverage(255, K));
+    if (Object.keys(patch).length) doc.changeLayer({ type: 'update-mask', id, patch });
+  }
+
+  /** A drawing whose bottom layer is opaque `B` with its own empty first layer removed. */
+  function backdrop() {
+    const doc = createDocument();
+    const empty = doc.activeId;
+    opaqueLayer(doc, B);
+    doc.changeLayer({ type: 'delete', id: empty });
+    return doc;
+  }
+
+  /** The first three pixels of the CPU composite of tile 0,0, straight RGB, opaque results expected. */
+  async function firstPixels(doc: Doc, linear: boolean) {
+    const sources = tileSources('0,0', (data) => data as Uint8Array);
+    const image = await composeStack(doc.layers, TILE_BYTES / 4, sources.read, linear, undefined, sources.readMask);
+    return [0, 1, 2].map((pixel) => [...image.subarray(pixel * 4, pixel * 4 + 4)]);
+  }
+
+  function expectPixels(actual: number[][], expected: number[][]) {
+    const round = (values: number[]) => values.map((value) => Number(value.toFixed(4)));
+    expect(actual.map(round)).toEqual(expected.map((rgb) => round([...rgb, 1])));
+  }
+
+  for (const linear of [false, true]) {
+    const setting = linear ? 'in linear light' : 'in encoded sRGB';
+
+    it(`scales a masked raster by its coverage before compositing, ${setting}`, async () => {
+      const doc = backdrop();
+      const top = opaqueLayer(doc, C);
+      maskWith(doc, top);
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(B, C, k / 255, linear))
+      );
+      doc.changeLayer({ type: 'update-mask', id: top, patch: { inverted: true } });
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(B, C, 1 - k / 255, linear))
+      );
+      doc.changeLayer({ type: 'update-mask', id: top, patch: { enabled: false } });
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map(() => C)
+      );
+    });
+
+    it(`scales a masked isolated folder's composite, ${setting}`, async () => {
+      const doc = backdrop();
+      doc.changeLayer({ type: 'add-group' });
+      const folder = doc.activeId;
+      doc.changeLayer({ type: 'update', id: folder, patch: { blend: 'normal', opacity: 0.5 } });
+      opaqueLayer(doc, C, { parentId: folder, side: 'above' });
+      maskWith(doc, folder);
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(B, C, (0.5 * k) / 255, linear))
+      );
+    });
+
+    it(`fades a masked Pass Through folder by its opacity times the mask, ${setting}`, async () => {
+      const doc = backdrop();
+      doc.changeLayer({ type: 'add-group' });
+      const folder = doc.activeId;
+      opaqueLayer(doc, C, { parentId: folder, side: 'above' });
+      maskWith(doc, folder);
+      expect(doc.layers.at(-1)!.group).toMatchObject({ id: folder, blend: 'pass-through', opacity: 1 });
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(B, C, k / 255, linear))
+      );
+      doc.changeLayer({ type: 'update', id: folder, patch: { opacity: 0.6 } });
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(B, C, (0.6 * k) / 255, linear))
+      );
+      // Disabled, the folder is plain Pass Through again: no folder level at all.
+      doc.changeLayer({ type: 'update', id: folder, patch: { opacity: 1 } });
+      doc.changeLayer({ type: 'update-mask', id: folder, patch: { enabled: false } });
+      expect(doc.layers.at(-1)!.group).toBeUndefined();
+    });
+
+    it(`limits the layers clipped to a masked base to its masked shape, ${setting}`, async () => {
+      const doc = backdrop();
+      const base = opaqueLayer(doc, C);
+      maskWith(doc, base);
+      opaqueLayer(doc, D, undefined, { clipping: true });
+      // The base shows by k over the backdrop, and the clipped layer by k over that.
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(mix(B, C, k / 255, linear), D, k / 255, linear))
+      );
+    });
+
+    it(`limits the layers clipped to a masked folder to its masked coverage, ${setting}`, async () => {
+      const doc = backdrop();
+      doc.changeLayer({ type: 'add-group' });
+      const folder = doc.activeId;
+      opaqueLayer(doc, C, { parentId: folder, side: 'above' });
+      maskWith(doc, folder, { inverted: true });
+      opaqueLayer(doc, D, { parentId: null, side: 'above' }, { clipping: true });
+      expectPixels(
+        await firstPixels(doc, linear),
+        K.map((k) => mix(mix(B, C, 1 - k / 255, linear), D, 1 - k / 255, linear))
+      );
+    });
+  }
+
+  it('needs the masks of a masked stack read, and composites a stack without masks as before', async () => {
+    const doc = backdrop();
+    const top = opaqueLayer(doc, C);
+    const sources = tileSources('0,0', (data) => data as Uint8Array);
+    const before = await composeStack(doc.layers, TILE_BYTES / 4, sources.read, false);
+    maskWith(doc, top, { enabled: false });
+    // A disabled mask is not read at all.
+    expect(await composeStack(doc.layers, TILE_BYTES / 4, sources.read, false)).toEqual(before);
+    doc.changeLayer({ type: 'update-mask', id: top, patch: { enabled: true } });
+    await expect(composeStack(doc.layers, TILE_BYTES / 4, sources.read, false)).rejects.toThrow('Read the masks');
+  });
+
+  it('puts enabled masks into the composition signature, and leaves a drawing without them as it was', () => {
+    const doc = backdrop();
+    const top = opaqueLayer(doc, C);
+    const plain = compositionSignature(doc.layers);
+    maskWith(doc, top, { enabled: false });
+    expect(compositionSignature(doc.layers)).toBe(plain);
+    doc.changeLayer({ type: 'update-mask', id: top, patch: { enabled: true } });
+    const masked = compositionSignature(doc.layers);
+    expect(masked).not.toBe(plain);
+    doc.changeLayer({ type: 'update-mask', id: top, patch: { inverted: true } });
+    expect(compositionSignature(doc.layers)).not.toBe(masked);
+  });
+});
+
+describe('masks in PSD export', () => {
+  /** A tile whose pixel (x, y) is `color` at alpha `alpha(x, y)`, premultiplied. */
+  function ramp(color: number[], alpha: (x: number, y: number) => number) {
+    const pixels = new Uint8Array(TILE_BYTES);
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        const a = alpha(x, y);
+        pixels.set([...color.map((channel) => Math.round((channel * a) / 255)), a], (y * 256 + x) * 4);
+      }
+    }
+
+    return pixels;
+  }
+
+  /** A coverage tile whose pixel (x, y) is `value(x, y)`. */
+  function gradient(value: (x: number, y: number) => number) {
+    const tile = new Uint8Array(MASK_TILE_PIXELS);
+    for (let y = 0; y < 256; y++) {
+      for (let x = 0; x < 256; x++) {
+        tile[y * 256 + x] = value(x, y);
+      }
+    }
+
+    return tile;
+  }
+
+  /** Adds a raster at `place` with tile 0,0 `pixels` and `patch`; returns its id. */
+  function add(doc: Doc, pixels: Uint8Array, place?: { parentId: string | null; side: 'above' }, patch = {}) {
+    doc.changeLayer({ type: 'add', ...(place ? { place } : {}) });
+    const id = doc.activeId;
+    doc.commit([{ layerId: id, key: '0,0', before: undefined, after: pixels }]);
+    if (Object.keys(patch).length) doc.changeLayer({ type: 'update', id, patch });
+    return id;
+  }
+
+  function masked(doc: Doc, id: string, tile: Uint8Array, patch = {}) {
+    doc.changeLayer({ type: 'add-mask', id });
+    paintMask(doc, id, '0,0', tile);
+    if (Object.keys(patch).length) doc.changeLayer({ type: 'update-mask', id, patch });
+  }
+
+  /** An opaque backdrop under a masked raster, a masked clipping base, an isolated and a fading masked folder. */
+  function drawingWithMasks() {
+    const doc = createDocument();
+    doc.commit([{ layerId: doc.activeId, key: '0,0', before: undefined, after: ramp([60, 120, 180], () => 255) }]);
+    const raster = add(
+      doc,
+      ramp([230, 90, 40], (x) => x)
+    );
+    masked(
+      doc,
+      raster,
+      gradient((_x, y) => y)
+    );
+    // A hard-edged mask: Photoshop composites a clipping group over a translucent base unlike Paint does, masks or not.
+    const base = add(
+      doc,
+      ramp([40, 200, 90], () => 255)
+    );
+    masked(
+      doc,
+      base,
+      gradient((x, y) => (((x >> 5) + (y >> 5)) % 2 ? 255 : 0)),
+      { inverted: true }
+    );
+    add(
+      doc,
+      ramp([250, 240, 60], (_x, y) => 255 - y),
+      undefined,
+      { clipping: true, opacity: 0.8 }
+    );
+    doc.changeLayer({ type: 'add-group', place: { parentId: null, side: 'above' } });
+    const isolated = doc.activeId;
+    doc.changeLayer({ type: 'update', id: isolated, patch: { blend: 'normal', opacity: 0.7 } });
+    add(
+      doc,
+      ramp([120, 40, 200], (x, y) => (x + y) >> 1),
+      { parentId: isolated, side: 'above' }
+    );
+    masked(
+      doc,
+      isolated,
+      gradient((x) => 255 - x)
+    );
+    doc.changeLayer({ type: 'add-group', place: { parentId: null, side: 'above' } });
+    const fading = doc.activeId;
+    const inside = add(
+      doc,
+      ramp([250, 250, 250], (x) => (x * 3) & 255),
+      { parentId: fading, side: 'above' }
+    );
+    masked(
+      doc,
+      fading,
+      gradient((x, y) => (x * y) >> 8)
+    );
+    // A disabled mask has no effect, in the file too.
+    masked(
+      doc,
+      inside,
+      gradient(() => 0),
+      { enabled: false }
+    );
+    return doc;
+  }
+
+  it.each([false, true])(
+    'bakes masks so the file composites as the drawing, linear blending %s',
+    async (linear) => {
+      const doc = drawingWithMasks();
+      doc.setLinearBlending(linear);
+      const read = async (data: TileData) => data as Uint8Array;
+      const layers = await psdExportLayers(doc.layers, (id) => doc.node(id)!.name, read, linear);
+      expect(layers.some((layer) => layer.mask)).toBe(false);
+      const file = await writePsdFile(layers, read, { left: 0, top: 0, width: 256, height: 256 }, linear);
+      const opened = await openPsd(await file.arrayBuffer());
+      if (!opened.ok) throw new Error(opened.error.message);
+      try {
+        const rendered = opened.value.render({
+          linearBlending: linear,
+          approximate: false,
+          textGamma: 1.45,
+          vectorPaths: false,
+          typeLayers: false,
+          smartObjects: null
+        });
+        if (!rendered.ok) throw new Error(rendered.error.message);
+        try {
+          const sources = tileSources('0,0', (data) => data as Uint8Array);
+          const expected = await composeStack(
+            doc.layers,
+            TILE_BYTES / 4,
+            sources.read,
+            linear,
+            undefined,
+            sources.readMask
+          );
+          let worst = 0,
+            far = 0;
+          for (let index = 0; index < expected.length; index++) {
+            const error = Math.abs(rendered.value.pixels[index]! - expected[index]! * 255);
+            worst = Math.max(worst, error);
+            far += Number(error > 2);
+          }
+
+          // Baked layers round to 8 bits once more, which linear light magnifies in dark colours.
+          expect(worst).toBeLessThanOrEqual(linear ? 4 : 3);
+          expect(far / expected.length).toBeLessThan(linear ? 0.01 : 0.005);
+        } finally {
+          rendered.value.dispose();
+        }
+      } finally {
+        opened.value.close();
+      }
+    },
+    60_000
+  );
 });
