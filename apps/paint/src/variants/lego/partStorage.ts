@@ -61,6 +61,8 @@ export function createPartStorage<T>(
   onSavingError?: (message: string) => void
 ) {
   let writable = true;
+  /** Whether the key holds data, readable or not: a board or kits the user once saved. */
+  let present = false;
   let envelope: Record<string, unknown> = {};
   const label = field === 'board' ? 'Board' : 'Kit';
   let message = `${label} changes can't be saved on this device.`;
@@ -73,6 +75,8 @@ export function createPartStorage<T>(
       if (raw === null) {
         return fallback;
       }
+
+      present = true;
 
       const data: unknown = JSON.parse(raw);
 
@@ -118,6 +122,8 @@ export function createPartStorage<T>(
 
   return {
     initial,
+    /** Whether the key holds data now: read at start, set by a write, cleared by `clear`. */
+    present: () => present,
     /** Stores edits with opaque records intact; reports failures without discarding in-memory edits. */
     write(value: T) {
       if (!writable) {
@@ -130,8 +136,29 @@ export function createPartStorage<T>(
           key,
           JSON.stringify({ ...envelope, version: currentVersion, [field]: value }, preserveRecord)
         );
+        present = true;
       } catch {
         onSavingError?.(message);
+      }
+    },
+    /**
+     * Removes the stored data, unknown envelope fields included, so the next read gives `fallback`. Refused like a
+     * write where writes are, reporting through `onSavingError`; returns whether the data is gone.
+     */
+    clear() {
+      if (!writable) {
+        onSavingError?.(message);
+        return false;
+      }
+
+      try {
+        localStorage.removeItem(key);
+        envelope = {};
+        present = false;
+        return true;
+      } catch {
+        onSavingError?.(message);
+        return false;
       }
     }
   };

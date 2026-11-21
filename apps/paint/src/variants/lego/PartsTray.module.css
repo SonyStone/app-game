@@ -283,6 +283,11 @@
   }
 }
 
+/* The editor's `button { color: inherit }` outranks `.actionTile` alone and would leave its label white on its tile. */
+.interfaceActions > .actionTile {
+  color: var(--lego-ink);
+}
+
 .actionSecondary {
   background: rgb(255 255 255 / 0.12);
   color: #ffffff;
@@ -290,6 +295,62 @@
   &:hover {
     background: rgb(255 255 255 / 0.18);
   }
+}
+
+/* Workspaces: a card per workspace, its board in miniature over its name, the active one ringed in the accent. */
+.workspaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.workspaceCard {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding: 8px 8px 10px;
+  border: 2px solid transparent;
+  border-radius: var(--lego-r-plate);
+  background: rgb(255 255 255 / 0.06);
+  color: #ffffff;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+
+  &[data-active] {
+    border-color: var(--lego-accent);
+    background: rgb(61 126 255 / 0.16);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--lego-accent);
+    outline-offset: 2px;
+  }
+}
+
+.workspaceThumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-radius: var(--lego-r-tile);
+  background: #faf8f4;
+}
+
+.workspaceName {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.workspaceMeta {
+  color: rgb(255 255 255 / 0.62);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .grid {

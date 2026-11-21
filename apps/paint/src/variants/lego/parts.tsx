@@ -12,13 +12,21 @@ import { gridSizePart } from './parts/options';
 import { presetPart } from './parts/presets';
 import { penPressureKind, pressureCurvePart } from './parts/pressureCurve';
 import { brushValueParts, valueParts } from './parts/values';
+import { workspacePart } from './parts/workspace';
 
 /**
  * The box catalogue. Studio-only schema definitions resolve separately; all bindings remain inert until mounted. The
- * pen's pressure curve follows Pressure calibration, the action that opens the same curve's window.
+ * pen's pressure curve follows Pressure calibration, the action that opens the same curve's window, and the Workspace
+ * switch follows Options, the menu that also lists the workspaces.
  */
 export const partDefinitions: readonly PartDefinition[] = [
-  ...actionParts.flatMap((part) => (part.kind === 'action:pressure' ? [part, pressureCurvePart] : [part])),
+  ...actionParts.flatMap((part): PartDefinition[] =>
+    part.kind === 'action:pressure'
+      ? [part, pressureCurvePart]
+      : part.kind === 'action:options'
+        ? [part, workspacePart]
+        : [part]
+  ),
   ...colorParts,
   ...valueParts,
   ...layerParts,

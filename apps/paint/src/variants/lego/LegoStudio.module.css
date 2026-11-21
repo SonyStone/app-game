@@ -616,6 +616,40 @@
   width: 216px;
 }
 
+/* The Workspace part's list: a row per workspace, its miniature in the row's tile, widened to a landscape view's shape. */
+.workspaceMenu {
+  composes: settingsRows;
+  width: 248px;
+
+  [data-picture] {
+    width: 46px;
+    height: 29px;
+    background: #faf8f4;
+  }
+}
+
+/*
+ * A workspace's board in miniature (`WorkspacePreview`): the board's paper and plates, its tiles a quiet grey, so that
+ * the plates read as blocks at a tenth of their size rather than as outlines round white tiles.
+ */
+.workspacePreview {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.workspacePaper {
+  fill: #faf8f4;
+}
+
+.workspacePlate {
+  fill: var(--lego-plate);
+}
+
+.workspaceTile {
+  fill: #b9bcc4;
+}
+
 /* A short note on how to use a part, such as the fill without a selection. */
 .note {
   max-width: 260px;

@@ -22,21 +22,27 @@ import { boxSections, kindLabel, lookOf, partDefaultSpan, partGroup } from './pa
 import { gridSizeKind } from './parts/options';
 import { opaqueData } from './partStorage';
 import dialogStyles from './PartsTray.module.css';
+import { WorkspacePreview } from './WorkspacePreview';
+import type { WorkspaceControls } from './workspaces';
 
 /** Which group of sections the unified Options & Parts dialog opens on. */
 export type CatalogTarget = 'interface' | 'parts';
 
 /**
  * The unified Options & Parts modal Sidebar dialog: one plate, a `SettingsSplit` whose sidebar holds the title with
- * `Done`, the search field, and under them two groups (`Settings` with `File` and `Interface`, and `Parts` with `Kits`
- * and every part family with counts); on narrow screens, sections and their content become two screens with
- * `SettingsBack`.
+ * `Done`, the search field, and under them two groups (`Settings` with `File`, `Workspaces` and `Interface`, and
+ * `Parts` with `Kits` and every part family with counts); on narrow screens, sections and their content become two
+ * screens with `SettingsBack`.
+ *
+ * `Workspaces`, offered when the editor has `workspaces`, lists them with a miniature of each board, the active one
+ * marked: a tap switches at once and leaves the dialog open. Under the list are `Edit layout` and `Reset workspace`,
+ * which restores the active workspace's original board (for Custom, the board a first visit had).
  *
  * `File` lists the File menu's commands (`FileCommands`), so they are at hand with nothing on the board; a command
  * closes the dialog once it ran or a file was picked, and waits for the engine as in the menu.
  *
  * Opening via `Options` (`initial="interface"`) lands on `Interface` (grid size slider, live `GridSample`, `Edit
- * layout` and `Reset board`); opening via `＋ Parts` (`initial="parts"`) lands on the last selected `Parts` category
+ * layout`, and `Reset board` where there are no workspaces to reset instead); opening via `＋ Parts` (`initial="parts"`) lands on the last selected `Parts` category
  * (default `Tools`). From any section, typing in search filters every part and kit, and dragging a part or kit out
  * slides the dialog away (`data-away`) onto the live 1:1 board—whether in edit mode or live mode. Nothing mounts while
  * `open` is false.
@@ -62,6 +68,8 @@ export function PartsTray(props: {
   onClose: () => void;
   /** The kit to light up and bring into view: one just kept, or the one a kept part or group matched. */
   flashKit: string | undefined;
+  /** The editor's workspaces, listed under `Workspaces`; without them the section is left out. */
+  workspaces?: WorkspaceControls;
 }) {
   const [lastPartCategory, setLastPartCategory] = createSignal('Tools');
   const [categoryId, setCategoryId] = createSignal(() => {
@@ -85,6 +93,9 @@ export function PartsTray(props: {
   const families = () => partFamilies(props.presets);
   const sidebarItems = createMemo<readonly SettingsListItem[]>(() => [
     { id: fileCategoryId, label: 'File', icon: 'paper', group: 'settings' },
+    ...(props.workspaces
+      ? [{ id: workspacesCategoryId, label: 'Workspaces', icon: 'workspace' as const, group: 'settings' }]
+      : []),
     { id: interfaceCategoryId, label: 'Interface', icon: 'options', group: 'settings' },
     {
       id: kitsCategoryId,
@@ -292,7 +303,7 @@ export function PartsTray(props: {
                         setQuery('');
                       }
 
-                      if (id !== interfaceCategoryId && id !== fileCategoryId) {
+                      if (id !== interfaceCategoryId && id !== fileCategoryId && id !== workspacesCategoryId) {
                         setLastPartCategory(id);
                       }
 
@@ -312,37 +323,54 @@ export function PartsTray(props: {
                   when={selectedItem().group !== 'settings'}
                   fallback={
                     <Show
-                      when={selectedItem().id !== fileCategoryId}
+                      when={selectedItem().id !== workspacesCategoryId || !props.workspaces}
                       fallback={
-                        <SettingsRows
-                          class={`${styles.settingsRows} ${dialogStyles.fileRows}`}
-                          role="menu"
-                          label="File commands"
-                        >
-                          <FileCommands commands={props.files} onDone={() => props.onClose()} />
-                        </SettingsRows>
+                        <WorkspacesSection
+                          workspaces={props.workspaces!}
+                          onEditLayout={props.onEditLayout}
+                          onReset={props.onReset}
+                        />
                       }
                     >
-                      <div class={dialogStyles.interface}>
-                        <div class={[styles.studioTile, dialogStyles.setting]}>
-                          <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
-                        </div>
-                        <GridSample />
-                        <div class={dialogStyles.interfaceActions}>
-                          <Show when={props.onEditLayout}>
-                            {(editLayout) => (
-                              <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
-                                <SketchIcon name="edit" size={18} />
-                                <span>Edit layout</span>
+                      <Show
+                        when={selectedItem().id !== fileCategoryId}
+                        fallback={
+                          <SettingsRows
+                            class={`${styles.settingsRows} ${dialogStyles.fileRows}`}
+                            role="menu"
+                            label="File commands"
+                          >
+                            <FileCommands commands={props.files} onDone={() => props.onClose()} />
+                          </SettingsRows>
+                        }
+                      >
+                        <div class={dialogStyles.interface}>
+                          <div class={[styles.studioTile, dialogStyles.setting]}>
+                            <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
+                          </div>
+                          <GridSample />
+                          <div class={dialogStyles.interfaceActions}>
+                            <Show when={props.onEditLayout}>
+                              {(editLayout) => (
+                                <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
+                                  <SketchIcon name="edit" size={18} />
+                                  <span>Edit layout</span>
+                                </button>
+                              )}
+                            </Show>
+                            <Show when={!props.workspaces}>
+                              <button
+                                type="button"
+                                class={dialogStyles.actionSecondary}
+                                onClick={() => props.onReset()}
+                              >
+                                <SketchIcon name="reset" size={18} />
+                                <span>Reset board</span>
                               </button>
-                            )}
-                          </Show>
-                          <button type="button" class={dialogStyles.actionSecondary} onClick={() => props.onReset()}>
-                            <SketchIcon name="reset" size={18} />
-                            <span>Reset board</span>
-                          </button>
+                            </Show>
+                          </div>
                         </div>
-                      </div>
+                      </Show>
                     </Show>
                   }
                 >
@@ -397,6 +425,7 @@ export function PartsTray(props: {
 const narrowFrame = 560;
 
 const fileCategoryId = 'file';
+const workspacesCategoryId = 'workspaces';
 const interfaceCategoryId = 'interface';
 const kitsCategoryId = 'Kits';
 
@@ -404,6 +433,65 @@ const sidebarGroups = [
   { id: 'settings', label: 'Settings' },
   { id: 'parts', label: 'Parts' }
 ] as const;
+
+/**
+ * The Workspaces section: a card per workspace with its board in miniature, its name and whether it is the active one
+ * or holds the user's edits; a tap on a card switches to it. Under them, Edit layout for the active workspace and
+ * Reset workspace, which brings back its original board (`onReset` resets the active board).
+ */
+function WorkspacesSection(props: { workspaces: WorkspaceControls; onEditLayout?: () => void; onReset: () => void }) {
+  const activeName = () =>
+    props.workspaces.list.find((workspace) => workspace.id === props.workspaces.active())?.name ?? '';
+
+  return (
+    <div class={dialogStyles.interface}>
+      <div class={dialogStyles.workspaces} role="listbox" aria-label="Workspaces">
+        <For each={props.workspaces.list}>
+          {(workspace) => {
+            const active = () => props.workspaces.active() === workspace.id;
+            const edited = () => workspace.id !== 'custom' && props.workspaces.edited(workspace.id);
+            return (
+              <button
+                type="button"
+                role="option"
+                class={dialogStyles.workspaceCard}
+                aria-selected={active() ? 'true' : 'false'}
+                data-workspace={workspace.id}
+                data-active={active() ? '' : undefined}
+                onClick={() => props.workspaces.switchTo(workspace.id)}
+              >
+                <span class={dialogStyles.workspaceThumb}>
+                  <WorkspacePreview board={props.workspaces.boardOf(workspace.id)} view={props.workspaces.view()} />
+                </span>
+                <span class={dialogStyles.workspaceName}>{workspace.name}</span>
+                <span class={dialogStyles.workspaceMeta}>{active() ? 'Active' : edited() ? 'Edited' : '\u00a0'}</span>
+              </button>
+            );
+          }}
+        </For>
+      </div>
+      <div class={dialogStyles.interfaceActions}>
+        <Show when={props.onEditLayout}>
+          {(editLayout) => (
+            <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
+              <SketchIcon name="edit" size={18} />
+              <span>Edit layout</span>
+            </button>
+          )}
+        </Show>
+        <button
+          type="button"
+          class={dialogStyles.actionSecondary}
+          title={`Bring back the original ${activeName()} layout`}
+          onClick={() => props.onReset()}
+        >
+          <SketchIcon name="reset" size={18} />
+          <span>Reset workspace</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /** The span the grid-size slider shows at in Interface, matching brush studio rows. */
 const settingSpan: Span = { columns: 6, rows: 1 };
