@@ -276,14 +276,27 @@ export function LayersStripPart(props: {
     let swiped = false;
     let moved = false;
 
+    const beginDrag = () => {
+      if (dragging) {
+        return;
+      }
+
+      dragging = true;
+      setDraggingId(node.id);
+      try {
+        tileElement.setPointerCapture(pointer);
+      } catch {
+        // Unsupported in jsdom or synthetic events.
+      }
+    };
+
     if (isTouch && activeTouches.size === 1) {
       clearTimeout(touchDragTimer);
       touchDragTimer = setTimeout(() => {
         if (!moved && activeTouches.size === 1) {
-          dragging = true;
-          setDraggingId(node.id);
+          beginDrag();
         }
-      }, 260);
+      }, 220);
     }
 
     const onMove = (moveEvent: PointerEvent) => {
@@ -326,10 +339,9 @@ export function LayersStripPart(props: {
         return;
       }
 
-      // Pen/mouse initiates drag immediately after 8 px vertical/diagonal move (MOKO style).
-      if (!isTouch && !dragging && !swiped && dist >= 8 && Math.abs(dy) >= Math.abs(dx) * 0.75) {
-        dragging = true;
-        setDraggingId(node.id);
+      // Pen/mouse initiates drag immediately after 6 px vertical/diagonal move (MOKO style).
+      if (!isTouch && !dragging && !swiped && dist >= 6 && Math.abs(dy) >= Math.abs(dx) * 0.75) {
+        beginDrag();
       }
 
       if (dragging) {
@@ -417,11 +429,11 @@ export function LayersStripPart(props: {
 
   return (
     <div class={styles.stripRoot} data-layers-look={props.wide ? 'wide' : 'strip'}>
-      {/* Header: Add layer / Add group, or multi-selection action bar */}
+      {/* Header: multi-selection bar, mask controls bar (when targeting a mask), or Add layer / Add group */}
       <Show
         when={props.service.selectedIds().length === 0}
         fallback={
-          <div class={styles.multiHeader} role="toolbar" aria-label="Selected layers">
+          <div class={styles.multiHeader} role="toolbar" aria-label="Selected layers" data-no-edit-long-press="">
             <span class={styles.multiCount}>{props.service.selectedIds().length} sel</span>
             <button
               type="button"
@@ -464,34 +476,130 @@ export function LayersStripPart(props: {
           </div>
         }
       >
-        <div class={styles.header}>
-          <button
-            type="button"
-            class={styles.headerBtn}
-            aria-label="New layer"
-            title="New layer"
-            onClick={() => {
-              if (props.interactive) {
-                props.service.addLayer();
+        <Show
+          when={props.service.target() === 'mask'}
+          fallback={
+            <div class={styles.header}>
+              <button
+                type="button"
+                class={styles.headerBtn}
+                aria-label="New layer"
+                title="New layer"
+                onClick={() => {
+                  if (props.interactive) {
+                    props.service.addLayer();
+                  }
+                }}
+              >
+                <SketchIcon name="plus" size={14} />
+              </button>
+              <button
+                type="button"
+                class={styles.headerBtn}
+                aria-label="New group"
+                title="New group"
+                onClick={() => {
+                  if (props.interactive) {
+                    props.service.addGroup();
+                  }
+                }}
+              >
+                <SketchIcon name="folder" size={14} />
+              </button>
+            </div>
+          }
+        >
+          <div class={styles.maskHeader} role="toolbar" aria-label="Mask controls" data-no-edit-long-press="">
+            <Show
+              when={props.wide}
+              fallback={
+                <button
+                  type="button"
+                  class={styles.maskCtrlBtn}
+                  data-mask-brush={props.service.maskBrush()}
+                  aria-label={
+                    props.service.maskBrush() === 'reveal'
+                      ? 'Mask brush: Reveal (White). Tap to switch to Hide'
+                      : 'Mask brush: Hide (Black). Tap to switch to Reveal'
+                  }
+                  title={
+                    props.service.maskBrush() === 'reveal'
+                      ? 'Mask: Reveal (White) — tap for Hide'
+                      : 'Mask: Hide (Black) — tap for Reveal'
+                  }
+                  onClick={() => {
+                    if (props.interactive) {
+                      props.service.setMaskBrush(props.service.maskBrush() === 'reveal' ? 'hide' : 'reveal');
+                    }
+                  }}
+                >
+                  <span class={styles.maskSwatch} data-tone={props.service.maskBrush()} />
+                </button>
               }
-            }}
-          >
-            <SketchIcon name="plus" size={14} />
-          </button>
-          <button
-            type="button"
-            class={styles.headerBtn}
-            aria-label="New group"
-            title="New group"
-            onClick={() => {
-              if (props.interactive) {
-                props.service.addGroup();
-              }
-            }}
-          >
-            <SketchIcon name="folder" size={14} />
-          </button>
-        </div>
+            >
+              <button
+                type="button"
+                class={styles.maskCtrlBtn}
+                aria-pressed={props.service.maskBrush() === 'reveal' ? 'true' : 'false'}
+                title="Reveal (White)"
+                onClick={() => {
+                  if (props.interactive) {
+                    props.service.setMaskBrush('reveal');
+                  }
+                }}
+              >
+                <span class={styles.maskSwatch} data-tone="reveal" />
+                <span>Reveal</span>
+              </button>
+              <button
+                type="button"
+                class={styles.maskCtrlBtn}
+                aria-pressed={props.service.maskBrush() === 'hide' ? 'true' : 'false'}
+                title="Hide (Black)"
+                onClick={() => {
+                  if (props.interactive) {
+                    props.service.setMaskBrush('hide');
+                  }
+                }}
+              >
+                <span class={styles.maskSwatch} data-tone="hide" />
+                <span>Hide</span>
+              </button>
+            </Show>
+            <button
+              type="button"
+              class={styles.maskCtrlBtn}
+              data-ruby=""
+              aria-label="Red mask overlay"
+              aria-pressed={props.service.maskOverlay() ? 'true' : 'false'}
+              title="Toggle red Rubylith overlay"
+              onClick={() => {
+                if (props.interactive) {
+                  props.service.toggleRubylith();
+                }
+              }}
+            >
+              <span class={styles.maskRedDot} />
+              <Show when={props.wide}>
+                <span>Red</span>
+              </Show>
+            </button>
+            <button
+              type="button"
+              class={styles.maskCtrlBtn}
+              data-exit=""
+              aria-label="Exit mask mode"
+              title="Back to layer"
+              onClick={() => {
+                if (props.interactive) {
+                  props.service.setTarget('layer');
+                }
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </Show>
       </Show>
 
       {/* Group breadcrumb back row in narrow strip view */}
@@ -501,6 +609,7 @@ export function LayersStripPart(props: {
             type="button"
             class={styles.backRow}
             data-layers-back=""
+            data-no-edit-long-press=""
             data-drop-hover={backDropHover() ? '' : undefined}
             aria-label={`Back from ${group().name}`}
             onClick={() => {
@@ -516,7 +625,7 @@ export function LayersStripPart(props: {
       </Show>
 
       {/* Scrollable layer tiles (strip or wide indented tree) */}
-      <div class={styles.scroll} role="list" aria-label="Prototype layers">
+      <div class={styles.scroll} role="list" aria-label="Prototype layers" data-no-edit-long-press="">
         <Show
           when={props.wide}
           fallback={
@@ -537,6 +646,7 @@ export function LayersStripPart(props: {
                     role="listitem"
                     class={styles.tile}
                     data-layer-tile={node().id}
+                    data-no-edit-long-press=""
                     data-active={isActive() && !isMaskTarget() ? '' : undefined}
                     data-mask-active={isMaskTarget() ? '' : undefined}
                     data-selected={isSelected() ? '' : undefined}
@@ -546,15 +656,13 @@ export function LayersStripPart(props: {
                     data-dragging={draggingId() === node().id ? '' : undefined}
                     data-drop={dropZone()}
                     aria-label={node().name}
+                    onContextMenu={(event) => event.preventDefault()}
                     onPointerDown={(event) => onTilePointerDown(event, node())}
                   >
                     <Show when={node().clipping}>
                       <span class={styles.clipArrow} aria-hidden="true">
                         ↳
                       </span>
-                    </Show>
-                    <Show when={tagHex()}>
-                      {(hex) => <span class={styles.colorStripe} style={{ background: hex() }} />}
                     </Show>
 
                     <div class={styles.thumbWrap}>
@@ -574,9 +682,16 @@ export function LayersStripPart(props: {
                         />
                       </Show>
 
+                      <Show when={tagHex()}>
+                        {(hex) => (
+                          <span class={styles.colorDot} data-strip-dot="" style={{ background: hex() }} />
+                        )}
+                      </Show>
+
                       <button
                         type="button"
                         class={styles.eyeBtn}
+                        data-no-edit-long-press=""
                         data-solo={isSolo() ? '' : undefined}
                         aria-label={`Toggle visibility for ${node().name}`}
                         onPointerDown={(event) => onEyePointerDown(event, node().id)}
@@ -607,6 +722,7 @@ export function LayersStripPart(props: {
                         <button
                           type="button"
                           class={styles.enterGroupBtn}
+                          data-no-edit-long-press=""
                           aria-label={`Open group ${node().name}`}
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
@@ -625,6 +741,7 @@ export function LayersStripPart(props: {
                           <button
                             type="button"
                             class={styles.maskCorner}
+                            data-no-edit-long-press=""
                             data-active={isMaskTarget() ? '' : undefined}
                             data-disabled={!mask().enabled ? '' : undefined}
                             aria-label={`Toggle mask target for ${node().name}`}
@@ -673,6 +790,7 @@ export function LayersStripPart(props: {
                   role="listitem"
                   class={styles.wideRow}
                   data-layer-tile={node().id}
+                  data-no-edit-long-press=""
                   data-depth={depth()}
                   data-active={isActive() && !isMaskTarget() ? '' : undefined}
                   data-mask-active={isMaskTarget() ? '' : undefined}
@@ -683,16 +801,14 @@ export function LayersStripPart(props: {
                   data-drop={dropZone()}
                   aria-label={node().name}
                   style={{ 'padding-left': `${6 + depth() * 14 + (node().clipping ? 12 : 0)}px` }}
+                  onContextMenu={(event) => event.preventDefault()}
                   onPointerDown={(event) => onTilePointerDown(event, node())}
                 >
                   <Show when={depth() > 0}>
                     <span class={styles.indentGuide} style={{ left: `${depth() * 14}px` }} />
                   </Show>
-                  <Show when={tagHex()}>
-                    {(hex) => <span class={styles.colorStripe} style={{ background: hex() }} />}
-                  </Show>
                   <Show when={node().clipping}>
-                    <span style={{ 'font-size': '11px', opacity: 0.72 }} aria-hidden="true">
+                    <span class={styles.wideClipArrow} aria-hidden="true">
                       ↳
                     </span>
                   </Show>
@@ -701,6 +817,7 @@ export function LayersStripPart(props: {
                     <button
                       type="button"
                       class={styles.expandBtn}
+                      data-no-edit-long-press=""
                       aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${node().name}`}
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
@@ -717,6 +834,7 @@ export function LayersStripPart(props: {
                   <button
                     type="button"
                     class={styles.wideThumbBtn}
+                    data-no-edit-long-press=""
                     data-target={isActive() && !isMaskTarget() ? '' : undefined}
                     aria-label={`Select layer ${node().name}`}
                     onPointerDown={(event) => event.stopPropagation()}
@@ -745,6 +863,7 @@ export function LayersStripPart(props: {
                       <button
                         type="button"
                         class={styles.wideThumbBtn}
+                        data-no-edit-long-press=""
                         data-mask-target={isMaskTarget() ? '' : undefined}
                         data-disabled={!mask().enabled ? '' : undefined}
                         aria-label={`Select mask for ${node().name}`}
@@ -762,7 +881,12 @@ export function LayersStripPart(props: {
                   </Show>
 
                   <div class={styles.wideInfo}>
-                    <span class={styles.wideName}>{node().name}</span>
+                    <div class={styles.wideNameRow}>
+                      <Show when={tagHex()}>
+                        {(hex) => <span class={styles.colorDot} style={{ background: hex() }} />}
+                      </Show>
+                      <span class={styles.wideName}>{node().name}</span>
+                    </div>
                     <span class={styles.wideSub}>
                       <span>
                         {blendModeInfo(node().blend).label} · {node().opacity}%
@@ -779,6 +903,7 @@ export function LayersStripPart(props: {
                   <button
                     type="button"
                     class={styles.wideEyeBtn}
+                    data-no-edit-long-press=""
                     data-solo={isSolo() ? '' : undefined}
                     aria-label={`Toggle visibility for ${node().name}`}
                     onPointerDown={(event) => onEyePointerDown(event, node().id)}

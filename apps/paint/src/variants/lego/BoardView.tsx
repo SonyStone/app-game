@@ -320,7 +320,7 @@ export function BoardView(props: {
           target &&
           layer()?.contains(target) &&
           target.closest('[data-panel]') &&
-          !target.closest('input, select, textarea')
+          !target.closest('input, select, textarea, [data-no-edit-long-press]')
         ) {
           armEditLongPress(event);
         }
@@ -952,6 +952,10 @@ export function BoardView(props: {
 
   /** Arms a still press on any live LEGO panel/part to enter edit mode after `editLongPress`. */
   function armEditLongPress(event: PointerEvent) {
+    if (event.target instanceof Element && event.target.closest('[data-no-edit-long-press]')) {
+      return;
+    }
+
     stopEditPress();
     const pointer = event.pointerId;
     const start = { x: event.clientX, y: event.clientY };

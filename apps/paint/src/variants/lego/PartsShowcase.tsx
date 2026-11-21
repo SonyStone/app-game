@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For } from 'solid-js';
 import { PreviewAttachment } from '../../features/brush-library/previewAttachment';
-import { cellGap, maxSpan, type Span } from './board';
+import { cellGap, type Span } from './board';
 import { attachCataloguePreview, createCatalogueFixture } from './createCatalogueFixture';
 import { createGrid, referenceCell, useGrid } from './grid';
 import { LegoServicesContext } from './LegoServices';
@@ -178,4 +178,5 @@ function BrokenSpecimen(): never {
 }
 
 const modes: readonly PartMode[] = ['live', 'edit', 'preview'];
-const sizes = Array.from({ length: maxSpan }, (_, index) => index + 1);
+const showcaseMaxSpan = 10;
+const sizes = Array.from({ length: showcaseMaxSpan }, (_, index) => index + 1);

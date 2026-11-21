@@ -237,53 +237,6 @@ export function LegoStudio(
             </Show>
           </PaintStage>
           <div class={styles.ui}>
-            <Show when={services.layersPrototype.target() === 'mask' && services.layersPrototype.activeLayer()}>
-              {(layer) => (
-                <div
-                  class={layerProtoStyles.maskBanner}
-                  role="status"
-                  aria-label="Mask editing mode"
-                  data-keeps-panel
-                >
-                  <span class={layerProtoStyles.maskBannerTitle}>Mask: {layer().name}</span>
-                  <div class={layerProtoStyles.maskBannerSeg} role="group" aria-label="Mask paint mode">
-                    <button
-                      type="button"
-                      class={layerProtoStyles.maskBannerBtn}
-                      aria-pressed={services.layersPrototype.maskBrush() === 'reveal' ? 'true' : 'false'}
-                      onClick={() => services.layersPrototype.setMaskBrush('reveal')}
-                    >
-                      Reveal
-                    </button>
-                    <button
-                      type="button"
-                      class={layerProtoStyles.maskBannerBtn}
-                      aria-pressed={services.layersPrototype.maskBrush() === 'hide' ? 'true' : 'false'}
-                      onClick={() => services.layersPrototype.setMaskBrush('hide')}
-                    >
-                      Hide
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    class={layerProtoStyles.maskBannerBtn}
-                    data-ruby=""
-                    aria-pressed={services.layersPrototype.maskOverlay() ? 'true' : 'false'}
-                    onClick={() => services.layersPrototype.toggleRubylith()}
-                  >
-                    Red overlay
-                  </button>
-                  <button
-                    type="button"
-                    class={layerProtoStyles.maskBannerBtn}
-                    data-done=""
-                    onClick={() => services.layersPrototype.setTarget('layer')}
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
-            </Show>
             <BoardView
               board={board}
               kits={kits}

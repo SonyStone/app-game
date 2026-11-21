@@ -2,6 +2,7 @@
 import { render } from '@solidjs/web';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { maxSpan, resizePart } from '../board';
 import { createGrid, defaultCell, GridContext } from '../grid';
 import { partDefinition } from '../parts';
 import { FolderButtonPart, LayerOpenerPart } from './LayerOpenerPart';
@@ -71,9 +72,11 @@ describe('mockLayers', () => {
     const glow = findNode(service.layers(), 'layer-glow')!;
     expect(glow.blend).toBe('screen');
     expect(glow.opacity).toBe(75);
+    expect(glow.colorTag).toBe('none');
     expect(glow.mask).toBeDefined();
     expect(glow.thumb.startsWith('data:image/svg+xml;utf8,')).toBe(true);
     expect(glow.mask!.thumb.startsWith('data:image/svg+xml;utf8,')).toBe(true);
+    expect(service.layers().every((node) => node.colorTag === 'none')).toBe(true);
   });
 
   it('supports layer CRUD, masks, Rubylith, Solo, multi-select, grouping, reorder/clip, Paper, and 30-step Undo/Redo', () => {
@@ -350,6 +353,63 @@ describe('LayersStripPart', () => {
     pointerEvent(window, 'pointerup', { x: 60, y: 20, pointerId: 12, pointerType: 'touch' });
     expect(service.selectedIds()).toEqual(['layer-glow']);
     expect(document.querySelector('[role="toolbar"][aria-label="Selected layers"]')?.textContent).toContain('1 sel');
+  });
+
+  it('shows inline mask controls in strip and wide modes and lifts tiles for touch (220ms) and pen (6px) drags', () => {
+    vi.useFakeTimers();
+    const service = createMockLayers();
+    service.select('layer-glow', 'mask');
+    flush();
+
+    // Narrow strip: compact B&W toggle, Red toggle, and exit button in the strip header.
+    mountStrip(service, false);
+    const stripMaskBar = document.querySelector<HTMLElement>('[role="toolbar"][aria-label="Mask controls"]')!;
+    expect(stripMaskBar).not.toBeNull();
+    stripMaskBar.querySelector<HTMLButtonElement>('[data-mask-brush="reveal"]')!.click();
+    flush();
+    expect(service.maskBrush()).toBe('hide');
+
+    // Touch hold 220ms lifts the tile (`data-dragging`), and pen vertical drag >= 6px lifts immediately.
+    const curvesTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-curves"]')!;
+    pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 20, pointerType: 'touch' });
+    vi.advanceTimersByTime(225);
+    flush();
+    expect(curvesTile.hasAttribute('data-dragging')).toBe(true);
+    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 20, pointerType: 'touch' });
+    expect(curvesTile.hasAttribute('data-dragging')).toBe(false);
+
+    pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 21, pointerType: 'pen' });
+    pointerEvent(window, 'pointermove', { x: 20, y: 28, pointerId: 21, pointerType: 'pen' });
+    expect(curvesTile.hasAttribute('data-dragging')).toBe(true);
+    pointerEvent(window, 'pointerup', { x: 20, y: 28, pointerId: 21, pointerType: 'pen' });
+
+    // Wide mode: labeled Reveal / Hide buttons, Red toggle, and exit button.
+    dispose?.();
+    document.body.replaceChildren();
+    mountStrip(service, true);
+    const wideMaskBar = document.querySelector<HTMLElement>('[role="toolbar"][aria-label="Mask controls"]')!;
+    const revealBtn = [...wideMaskBar.querySelectorAll<HTMLButtonElement>('button')].find(
+      (btn) => btn.textContent?.trim() === 'Reveal'
+    )!;
+    revealBtn.click();
+    flush();
+    expect(service.maskBrush()).toBe('reveal');
+
+    wideMaskBar.querySelector<HTMLButtonElement>('[aria-label="Exit mask mode"]')!.click();
+    flush();
+    expect(service.target()).toBe('layer');
+  });
+
+  it('allows stretching a layers:strip panel well past 10 rows (up to maxSpan = 36)', () => {
+    expect(maxSpan).toBe(36);
+    const parts = [
+      { id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }
+    ];
+    const tall = resizePart(parts, 'strip', { columns: 2, rows: 24 });
+    expect(tall[0]!.span).toEqual({ columns: 2, rows: 24 });
+
+    const clamped = resizePart(parts, 'strip', { columns: 2, rows: 50 });
+    expect(clamped[0]!.span).toEqual({ columns: 2, rows: maxSpan });
   });
 });
 

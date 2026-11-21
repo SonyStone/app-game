@@ -59,7 +59,7 @@ it('keeps malformed records and healthy neighbors independently in boards and ow
 });
 
 it.each([undefined, 1])('migrates legacy board and kit parts at version %s, including owned panels', (version) => {
-  const parts = [part('color'), { ...part('color'), id: 'picker', span: { columns: 7, rows: 30 } }];
+  const parts = [part('color'), { ...part('color'), id: 'picker', span: { columns: 7, rows: maxSpan + 5 } }];
   const board = boardOf(parts);
   const kits = [
     { id: 'saved', name: 'Saved', parts, owned: [{ owner: 'old-owner', parts: [{ ...part('color'), id: 'nested' }] }] }

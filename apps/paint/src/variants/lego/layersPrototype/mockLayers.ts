@@ -1020,7 +1020,7 @@ function initialSnapshot(): PrototypeSnapshot {
         clipping: false,
         reference: false,
         locks: emptyLocks(),
-        colorTag: 'yellow',
+        colorTag: 'none',
         thumb: thumbGlow(),
         mask: { thumb: thumbMaskSoft(false), enabled: true, linked: true, inverted: false },
         blendIf: defaultBlendIf()
@@ -1052,7 +1052,7 @@ function initialSnapshot(): PrototypeSnapshot {
         clipping: false,
         reference: false,
         locks: emptyLocks(),
-        colorTag: 'purple',
+        colorTag: 'none',
         thumb: thumbGroup(),
         blendIf: defaultBlendIf(),
         children: [
@@ -1097,7 +1097,7 @@ function initialSnapshot(): PrototypeSnapshot {
             clipping: false,
             reference: false,
             locks: emptyLocks(),
-            colorTag: 'blue',
+            colorTag: 'none',
             thumb: thumbGroup(),
             blendIf: defaultBlendIf(),
             children: [
@@ -1162,7 +1162,7 @@ function initialSnapshot(): PrototypeSnapshot {
         clipping: false,
         reference: false,
         locks: emptyLocks(),
-        colorTag: 'green',
+        colorTag: 'none',
         thumb: thumbBackground(),
         blendIf: defaultBlendIf()
       }

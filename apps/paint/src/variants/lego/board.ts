@@ -57,7 +57,7 @@ export type Cell = { column: number; row: number };
 export type Span = { columns: number; rows: number };
 
 /** The largest span of a part in either direction. */
-export const maxSpan = 10;
+export const maxSpan = 36;
 /** Height of the grip strip, outside the stud cells. */
 export const floatingGripHeight = 8;
 

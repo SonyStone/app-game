@@ -1696,23 +1696,23 @@ it('opens a board stored before the 28 px cells as it was stored, with no part m
   expect(text.get('brightness')).toMatch(/^B\d+%$/);
 });
 
-it('shows the Rubylith red overlay and floating top Mask banner when targeting a layer mask', () => {
+it('shows the Rubylith overlay and inline strip mask controls without any floating top banner', () => {
+  localStorage.clear();
   mount();
   expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
   expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
 
-  // Switch Glow layer (which has a mask) to mask target and verify Rubylith red overlay + floating banner.
+  // Switch Glow layer (which has a mask) to mask target: Rubylith overlay appears, no top banner over canvas.
   wiring.services!.layersPrototype.select('layer-glow', 'mask');
   flush();
 
-  const banner = document.querySelector<HTMLElement>('[aria-label="Mask editing mode"]')!;
-  expect(banner).not.toBeNull();
-  expect(banner.textContent).toContain('Mask: Glow');
+  expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
   expect(document.querySelector('[data-rubylith-overlay]')).not.toBeNull();
 
-  const redOverlayBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
-    (btn) => btn.textContent?.trim() === 'Red overlay'
-  )!;
+  const toolbar = document.querySelector<HTMLElement>('[role="toolbar"][aria-label="Mask controls"]')!;
+  expect(toolbar).not.toBeNull();
+
+  const redOverlayBtn = toolbar.querySelector<HTMLButtonElement>('[aria-label="Red mask overlay"]')!;
   redOverlayBtn.click();
   flush();
   expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
@@ -1720,21 +1720,49 @@ it('shows the Rubylith red overlay and floating top Mask banner when targeting a
   flush();
   expect(document.querySelector('[data-rubylith-overlay]')).not.toBeNull();
 
-  const hideBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
-    (btn) => btn.textContent?.trim() === 'Hide'
-  )!;
-  hideBtn.click();
+  const brushBtn = toolbar.querySelector<HTMLButtonElement>('[data-mask-brush]')!;
+  brushBtn.click();
   flush();
   expect(wiring.services!.layersPrototype.maskBrush()).toBe('hide');
 
-  const doneBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
-    (btn) => btn.textContent?.trim() === 'Done'
-  )!;
-  doneBtn.click();
+  const exitBtn = toolbar.querySelector<HTMLButtonElement>('[aria-label="Exit mask mode"]')!;
+  exitBtn.click();
   flush();
   expect(wiring.services!.layersPrototype.target()).toBe('layer');
-  expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
   expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
+  expect(document.querySelector('[role="toolbar"][aria-label="Mask controls"]')).toBeNull();
+});
+
+it('does not trigger board Edit Mode when holding still on a layer tile inside layers:strip', () => {
+  vi.useFakeTimers();
+  try {
+    localStorage.clear();
+    mount();
+    const glowTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-glow"]')!;
+    expect(glowTile).not.toBeNull();
+
+    const down = new MouseEvent('pointerdown', { clientX: 20, clientY: 20, button: 0, bubbles: true, cancelable: true });
+    Object.defineProperties(down, { pointerId: { value: 7 }, pointerType: { value: 'touch' } });
+    glowTile.dispatchEvent(down);
+    flush();
+
+    // After 220ms touch hold, layer tile lifts for drag.
+    vi.advanceTimersByTime(240);
+    flush();
+    expect(glowTile.hasAttribute('data-dragging')).toBe(true);
+
+    // Even well past 450ms (board edit long-press threshold), board stays in live mode.
+    vi.advanceTimersByTime(400);
+    flush();
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+
+    const up = new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0, bubbles: true, cancelable: true });
+    Object.defineProperties(up, { pointerId: { value: 7 }, pointerType: { value: 'touch' } });
+    window.dispatchEvent(up);
+    flush();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 /** Each part's text on the board, by its id. */
