@@ -339,7 +339,6 @@ it('keeps brush tile DOM identity when the library list gains a preset', () => {
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
         ref={vi.fn()}
-        benchRef={vi.fn()}
         kitsRef={vi.fn()}
         overKits={false}
         flashKit={undefined}

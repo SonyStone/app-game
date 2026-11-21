@@ -191,7 +191,7 @@ export function migrateFloating<T extends object>(record: T): Omit<T, 'window'> 
 }
 
 /** Legacy input only. Runtime panels expose just `floating`. */
-type LegacyPanel = Panel & { window?: Record<string, unknown> };
+type LegacyPanel = Panel & { window?: Record<string, unknown>; bench?: true };
 
 /** Version 4 frees action-owned panels and orphan windows, removes openers, and closes safe toolbar gaps. */
 function migrateV4Windows(board: Board, version: number): Board {

@@ -86,7 +86,7 @@ export function settledHeight(height: number, stops: readonly number[], directio
 /** CSS pixels of the view left above the full sheet, for the edit button. */
 const fullGap = 64;
 
-/** The least height of the middle stop, enough for the workbench and a row of parts. */
+/** The least height of the middle stop, enough for the search bar and rows of parts. */
 const middleLeast = 300;
 
 /** CSS pixels a sheet may be past a stop and still count as resting on it. */

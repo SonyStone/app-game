@@ -2,12 +2,12 @@ import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createMemo, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
-import type { SketchIconName } from '../../shared/ui/SketchIcon';
+import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { partData, partsBounds, type Part } from './board';
 import { type createSheet } from './createSheet';
 import { joinsAttribute, partJoins } from './fusion';
 import { useGrid } from './grid';
-import type { createKits, Kit } from './kits';
+import { type createKits, type Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
@@ -16,19 +16,21 @@ import { opaqueData } from './partStorage';
 
 /**
  * The box of parts while editing, a sheet pulled up from the bottom edge (see `createSheet`): a wheel turned over the
- * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it. It
- * holds the workbench, where the board puts its bench plate to lay parts out at full size, beside the parts, where a
- * part dropped is put away, and apart from them the kits as live previews, the user's with a delete button and a name
- * to tap and rename, where a part, group or panel dropped is kept as a kit (the workbench above both in a narrow
- * view). The parts are chosen by family in a Settings-style sidebar (`SettingsList`) beside the chosen family's
- * parts, each with its name (`SettingsSplit`); where the parts' box is too narrow for both, the families and a family's
- * parts are two screens with a way back. The box opens on the family and screen chosen last, Tools and the families
- * at first. While it is sunk, the strip it leaves puts away what is dropped on it.
+ * board or the sheet moves its edge, as does a drag on its handle, and a tap on the handle opens or closes it.
+ *
+ * A search bar across the top filters every family's parts, brushes and kits at once beside Reset board. Below it, the
+ * parts are chosen by family in a Settings-style sidebar (`SettingsList`) beside the chosen family's parts
+ * (`SettingsSplit`), with an indicator on parts already on the board; where the parts area is narrow, families and a
+ * family's parts become two screens with a way back. Beside the parts (under them on narrow screens) sits the Kits
+ * shelf: live miniature previews to drag out, rename or delete, and a drop target that saves any dragged part, group
+ * or panel from the board as a kit. Dropping on the parts area or the sunk strip puts a part away.
  */
 export function PartsTray(props: {
   presets: LegoServices['presets']['all'];
   kits: ReturnType<typeof createKits>;
   sheet: ReturnType<typeof createSheet>;
+  /** Part kinds currently on the board, shown with an "On board" mark in the catalog. */
+  onBoard?: ReadonlySet<string>;
   /** Whether a part or kit carried over the sheet would be put away there. */
   over: boolean;
   /** Lifts a new part of `kind`, or a copy of `kit`, from the press `event`. */
@@ -36,9 +38,7 @@ export function PartsTray(props: {
   onLiftKit: (event: PointerEvent, kit: Kit) => void;
   onReset: () => void;
   ref: (element: HTMLElement) => void;
-  /** The workbench's place in the sheet. */
-  benchRef: (element: HTMLElement | undefined) => void;
-  /** The kits, where a part or group from the board or the workbench is dropped to be kept as a kit. */
+  /** The kits shelf, where a part, group or panel from the board is dropped to be kept as a kit. */
   kitsRef: (element: HTMLElement | undefined) => void;
   /** Whether something carried over the kits would be kept as one. */
   overKits: boolean;
@@ -52,14 +52,42 @@ export function PartsTray(props: {
   const [familyId, setFamilyId] = createSignal('Tools');
   /** The screen shown where the families and the parts are two screens. */
   const [view, setView] = createSignal<'list' | 'detail'>('list');
+  const [query, setQuery] = createSignal('');
   const families = () => partFamilies(props.presets);
   const family = () => families().find((candidate) => candidate.id === familyId()) ?? families()[0]!;
-  const split = createSplit();
+  const needle = createMemo(() => query().trim().toLowerCase());
+  const matches = createMemo(() => {
+    const search = needle();
+    if (!search) {
+      return [];
+    }
+
+    const presets = props.presets();
+    return families()
+      .map((entry) => ({
+        id: entry.id,
+        title: entry.title,
+        kinds: entry.kinds.filter((kind) => {
+          const label = kind === 'floating' ? 'Floating panel' : kindLabel(kind, presets);
+          return label.toLowerCase().includes(search) || entry.title.toLowerCase().includes(search);
+        })
+      }))
+      .filter((entry) => entry.kinds.length > 0);
+  });
+  const shownKits = createMemo(() => {
+    const all = props.kits.kits();
+    const search = needle();
+    if (!search) {
+      return all;
+    }
+
+    return all.filter((kit) => kit.name.toLowerCase().includes(search));
+  });
   const closed = () => props.sheet.height() <= 0 && !props.sheet.sunk();
   const shownHeight = () => (props.sheet.sunk() ? sunkHeight : Math.max(grid.pitch(), props.sheet.height()));
 
-  // A wheel over the board or the sheet moves its edge, and settles it once the wheel stops; over the parts it first
-  // scrolls them, and moves the sheet only past their ends.
+  // A wheel over the board or the sheet moves its edge, and settles it once the wheel stops; over a scrollable list it
+  // first scrolls that list, and moves the sheet only past its ends.
   let wheelTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(wheelTimer));
   createEventListener(
@@ -72,8 +100,8 @@ export function PartsTray(props: {
       }
 
       const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-      const families = body()?.querySelector('nav');
-      const list = [families, pane(), shelf()].find((element) => element?.contains(target));
+      const familiesList = body()?.querySelector('nav');
+      const list = [familiesList, pane(), shelf()].find((element) => element?.contains(target));
       if (list) {
         const atTop = list.scrollTop <= 0;
         const atBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 1;
@@ -116,10 +144,9 @@ export function PartsTray(props: {
     </aside>
   );
 
-  /** Owns the sheet's mounted refs, clearing portals and hit targets when closed or sunk. */
+  /** Owns the sheet's mounted refs, clearing hit targets when closed or sunk. */
   function Contents() {
     onSettled(() => () => {
-      props.benchRef(undefined);
       props.kitsRef(undefined);
       setBody(undefined);
       setPane(undefined);
@@ -127,64 +154,116 @@ export function PartsTray(props: {
     });
 
     return (
-      <div
-        class={styles.trayContent}
-        style={{ '--shelf-width': `${split.shelf() * 100}%`, '--kits-height': `${split.kits() * 100}%` }}
-      >
-        <div ref={props.benchRef} class={styles.benchSlot} />
-        <div
-          class={styles.splitter}
-          data-axis="x"
-          aria-hidden="true"
-          onPointerDown={(event) => split.drag(event, 'shelf')}
-        />
-        <div class={styles.trayShelves}>
-          <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
-            <SettingsSplit
-              class={styles.boxSplit}
-              view={view()}
-              list={
-                <SettingsList
-                  class={styles.boxFamilies}
-                  label="Families of parts"
-                  items={families().map((candidate) => ({
-                    id: candidate.id,
-                    label: candidate.title,
-                    icon: familyIcons[candidate.id] ?? 'tools',
-                    trailing: String(candidate.kinds.length)
-                  }))}
-                  selected={family().id}
-                  onSelect={(id) => {
-                    setFamilyId(id);
-                    setView('detail');
-                  }}
-                />
+      <div class={styles.trayContent}>
+        <div class={styles.trayHeader}>
+          <label class={styles.traySearch}>
+            <SketchIcon name="zoom" size={16} />
+            <input
+              type="search"
+              class={styles.traySearchInput}
+              aria-label="Search parts"
+              placeholder="Search parts and kits…"
+              value={query()}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query()) {
+                  event.stopPropagation();
+                  setQuery('');
+                }
+              }}
+            />
+            <Show when={query().length > 0}>
+              <button
+                type="button"
+                class={styles.traySearchClear}
+                aria-label="Clear search"
+                onClick={() => setQuery('')}
+              >
+                <SketchIcon name="close" size={14} />
+              </button>
+            </Show>
+          </label>
+          <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
+            Reset board
+          </button>
+        </div>
+        <div class={styles.trayMain}>
+          <div class={styles.trayShelves}>
+            <div ref={setBody} class={styles.trayBody} data-over={props.over && !props.sheet.sunk() ? '' : undefined}>
+            <Show
+              when={!needle()}
+              fallback={
+                <section ref={setPane} class={styles.boxPane} aria-label="Search results">
+                  <Show
+                    when={matches().length > 0}
+                    fallback={<p class={styles.trayEmpty}>No matching parts for “{query().trim()}”</p>}
+                  >
+                    <For each={matches()} keyed={(group) => group.id}>
+                      {(group) => (
+                        <div class={styles.traySearchGroup}>
+                          <h4>{group().title}</h4>
+                          <div class={styles.trayGrid}>
+                            <For each={group().kinds}>
+                              {(kind) => (
+                                <PartTile
+                                  kind={kind}
+                                  presets={props.presets}
+                                  onBoard={props.onBoard?.has(kind)}
+                                  onLift={(event) => props.onLift(event, kind)}
+                                />
+                              )}
+                            </For>
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </Show>
+                </section>
               }
             >
-              <section ref={setPane} class={styles.boxPane} aria-label={family().title}>
-                <SettingsBack label="Families" title={family().title} onBack={() => setView('list')} />
-                <div class={styles.trayItems}>
-                  <For each={family().kinds}>
-                    {(kind) => (
-                      <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
-                    )}
-                  </For>
-                </div>
-                <button type="button" class={styles.boxButton} onClick={() => props.onReset()}>
-                  Reset board
-                </button>
-              </section>
-            </SettingsSplit>
+              <SettingsSplit
+                class={styles.boxSplit}
+                view={view()}
+                list={
+                  <SettingsList
+                    class={styles.boxFamilies}
+                    label="Families of parts"
+                    items={families().map((candidate) => ({
+                      id: candidate.id,
+                      label: candidate.title,
+                      icon: familyIcons[candidate.id] ?? 'tools',
+                      trailing: String(candidate.kinds.length)
+                    }))}
+                    selected={family().id}
+                    onSelect={(id) => {
+                      setFamilyId(id);
+                      setView('detail');
+                    }}
+                  />
+                }
+              >
+                <section ref={setPane} class={styles.boxPane} aria-label={family().title}>
+                  <SettingsBack label="Families" title={family().title} onBack={() => setView('list')} />
+                  <div class={styles.trayGrid}>
+                    <For each={family().kinds}>
+                      {(kind) => (
+                        <PartTile
+                          kind={kind}
+                          presets={props.presets}
+                          onBoard={props.onBoard?.has(kind)}
+                          onLift={(event) => props.onLift(event, kind)}
+                        />
+                      )}
+                    </For>
+                  </div>
+                </section>
+              </SettingsSplit>
+            </Show>
             <Show when={props.over}>
               <span class={[styles.zoneLabel, styles.dropNote]}>Drop to put it away</span>
             </Show>
+            </div>
           </div>
-          <div
-            class={styles.splitter}
-            data-axis="y"
-            aria-hidden="true"
-            onPointerDown={(event) => split.drag(event, 'kits')}
-          />
           <div
             ref={(element) => {
               setShelf(element);
@@ -196,83 +275,29 @@ export function PartsTray(props: {
             <span class={styles.zoneLabel}>
               {props.overKits ? 'Drop to keep as a kit' : 'Kits · drop here to keep'}
             </span>
-            <div class={styles.trayItems}>
-              <For each={props.kits.kits()} keyed={(kit) => kit.id}>
-                {(kit) => (
-                  <KitTile
-                    kit={kit()}
-                    kits={props.kits}
-                    flash={props.flashKit === kit().id}
-                    onLift={(event) => props.onLiftKit(event, kit())}
-                  />
-                )}
-              </For>
-            </div>
+            <Show
+              when={shownKits().length > 0}
+              fallback={<p class={styles.trayEmpty}>No matching kits</p>}
+            >
+              <div class={styles.trayItems}>
+                <For each={shownKits()} keyed={(kit) => kit.id}>
+                  {(kit) => (
+                    <KitTile
+                      kit={kit()}
+                      kits={props.kits}
+                      flash={props.flashKit === kit().id}
+                      onLift={(event) => props.onLiftKit(event, kit())}
+                    />
+                  )}
+                </For>
+              </div>
+            </Show>
           </div>
         </div>
       </div>
     );
   }
 }
-
-/**
- * How the sheet's room is shared, kept on this device: `shelf` is the share of its width the parts and kits take
- * beside the workbench, `kits` the share of their height the kits take. A divider between them is dragged to change
- * a share, within bounds that leave each box some room.
- */
-function createSplit() {
-  const stored = readSplit();
-  const [shelf, setShelf] = createSignal(stored.shelf);
-  const [kits, setKits] = createSignal(stored.kits);
-
-  return {
-    shelf,
-    kits,
-    /** Follows the press `event` on the divider of `share` until it lifts, then keeps the shares. */
-    drag(event: PointerEvent, share: 'shelf' | 'kits') {
-      const divider = event.currentTarget as HTMLElement;
-      const box = divider.parentElement!.getBoundingClientRect();
-      divider.setPointerCapture(event.pointerId);
-      event.preventDefault();
-
-      const move = (next: PointerEvent) => {
-        if (share === 'shelf') {
-          setShelf(Math.max(0.2, Math.min(0.75, (box.right - next.clientX) / box.width)));
-        } else {
-          setKits(Math.max(0.15, Math.min(0.85, (box.bottom - next.clientY) / box.height)));
-        }
-      };
-      const end = () => {
-        divider.removeEventListener('pointermove', move);
-        divider.removeEventListener('pointerup', end);
-        divider.removeEventListener('pointercancel', end);
-        try {
-          localStorage.setItem(splitKey, JSON.stringify({ shelf: shelf(), kits: kits() }));
-        } catch {
-          // The shares still apply until the page closes.
-        }
-      };
-      divider.addEventListener('pointermove', move);
-      divider.addEventListener('pointerup', end);
-      divider.addEventListener('pointercancel', end);
-    }
-  };
-}
-
-function readSplit() {
-  const fallback = { shelf: 0.4, kits: 0.38 };
-  try {
-    const stored = JSON.parse(localStorage.getItem(splitKey) ?? 'null') as Partial<typeof fallback> | null;
-    return {
-      shelf: typeof stored?.shelf === 'number' ? stored.shelf : fallback.shelf,
-      kits: typeof stored?.kits === 'number' ? stored.kits : fallback.kits
-    };
-  } catch {
-    return fallback;
-  }
-}
-
-const splitKey = 'paint.lego.tray';
 
 /**
  * Moves the sheet's edge with the press `event` on its handle until it lifts, then settles it the way it was flung,
@@ -356,24 +381,24 @@ export function partFamilies(presets: LegoServices['presets']['all']) {
 export function PartTile(props: {
   kind: string;
   presets: LegoServices['presets']['all'];
+  /** Whether a part of this kind is already placed on the board. */
+  onBoard?: boolean;
   onLift: (event: PointerEvent) => void;
 }) {
+  const label = () => (props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets()));
   return (
-    <div class={styles.trayItem}>
-      <div
-        class={styles.trayTile}
-        title={props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets())}
-        onPointerDown={(event) => props.onLift(event)}
-      >
+    <div class={styles.trayItem} data-on-board={props.onBoard ? '' : undefined}>
+      <div class={styles.trayTile} title={label()} onPointerDown={(event) => props.onLift(event)}>
         <div class={styles.content} inert>
           <Show when={props.kind !== 'floating'} fallback={<span class={styles.floatingSample} />}>
             <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
           </Show>
         </div>
       </div>
-      <span class={styles.trayCaption}>
-        {props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets())}
-      </span>
+      <span class={styles.trayCaption}>{label()}</span>
+      <Show when={props.onBoard}>
+        <span class={styles.trayOnBoard}>On board</span>
+      </Show>
     </div>
   );
 }

@@ -48,9 +48,8 @@ import { StudioSettingRow } from './StudioSettingRow';
  *
  * "Edit" shows the studs and the handle of the box of parts in a strip along the bottom, the drawing shrinking to a
  * card above it; the box is a sheet pulled up by a wheel, its handle or two fingers anywhere, the card shrinking
- * further, with the workbench to build a kit on at full size: drag parts out of the box, between
- * panels and back, size them by their corner and move panels by their rim; a long press on a free spot offers the
- * parts right there (see `BoardView`). The board is kept per device.
+ * further: drag parts and kits out of the box, between panels and back, size them by their corner and move panels by
+ * their rim; a long press on a free spot offers the parts right there (see `BoardView`). The board is kept per device.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
  * setting there is its value part itself, and the Pen page the pen pressure curve's part (`StudioSettingRow`); a
@@ -140,9 +139,9 @@ export function LegoStudio(
     setPenMeasuring(false);
     setStudioOpen(false);
   };
-  /** Whether a part of `kind` lies on the board, outside the workbench. */
+  /** Whether a part of `kind` lies on the board. */
   const onBoard = (kind: string) =>
-    board.board().panels.some((panel) => !panel.bench && panel.parts.some((part) => currentKind(part.kind) === kind));
+    board.board().panels.some((panel) => panel.parts.some((part) => currentKind(part.kind) === kind));
   const kits = createKits(reportSavingError);
   /** The box of parts while editing; each edit starts with it closed. */
   const sheet = createSheet(() => session.size().height);

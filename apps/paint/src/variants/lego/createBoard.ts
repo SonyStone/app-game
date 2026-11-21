@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
-import type { Board } from './board';
+import { pruneOwned, type Board } from './board';
 import { layersKit } from './layersKit';
 import { createPartStorage, migrateParts, migrateWindows, storedPart } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
@@ -46,18 +46,20 @@ const boardSchema = z.looseObject({
   )
 });
 
-/** Loads every part independently and appends panels introduced by shared migrations. */
+/** Loads every part independently, drops legacy workbench panels and appends panels from shared migrations. */
 function read(data: unknown, version: number): Board {
   const board = boardSchema.parse(data);
   const added: Board['panels'] = [];
-  const panels = board.panels.map((panel) => {
-    const result = migrateParts(panel.parts, version);
-    added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
-    return { ...panel, ...(panel.id === 'brush-pins' ? { removeWhenEmpty: true as const } : {}), parts: result.parts };
-  });
+  const panels = board.panels
+    .filter((panel) => !panel.bench)
+    .map(({ bench: _bench, ...panel }) => {
+      const result = migrateParts(panel.parts, version);
+      added.push(...result.owned.map((entry) => ({ ...entry, id: `${entry.owner}-panel`, at: { x: 0, y: 0 } })));
+      return { ...panel, ...(panel.id === 'brush-pins' ? { removeWhenEmpty: true as const } : {}), parts: result.parts };
+    });
 
   const missing = added.filter((entry) => !panels.some((panel) => panel.owner === entry.owner));
-  return migrateWindows({ ...board, panels: [...panels, ...missing] }, version);
+  return pruneOwned(migrateWindows({ ...board, panels: [...panels, ...missing] }, version));
 }
 
 /** The default panel swatch `owner` opens, its part ids prefixed with the owner's to keep them unique. */

@@ -32,11 +32,6 @@ export type Panel = {
    * put it over the part. Without it the panel lies beside the part where there is room (see `ownedFrame`).
    */
   offset?: Cell;
-  /**
-   * Whether this is the workbench: the plate in the fully pulled-out box where a kit is built at full size, shown
-   * only there; dragged out by its rim it becomes a panel on the drawing.
-   */
-  bench?: true;
 };
 
 /**
@@ -263,9 +258,9 @@ export function besideRect(
 /**
  * Where a new panel holding one part of `span` can lie in a view of `view` size without touching the board's other
  * panels: the first place, row by row from the top left in steps of half a cell, whose plate keeps `margin` CSS pixels
- * clear of every free panel's plate and of the view's edges. Owned panels and the workbench are left out, as they
- * come and go. Returns the panel's `at`, as fractions of the view; the top left corner when no place is free, where
- * the new plate then lies over others.
+ * clear of every free panel's plate and of the view's edges. Owned panels are left out, as they come and go. Returns
+ * the panel's `at`, as fractions of the view; the top left corner when no place is free, where the new plate then lies
+ * over others.
  */
 export function freeSpot(
   pitch: number,
@@ -277,7 +272,7 @@ export function freeSpot(
   const width = span.columns * pitch - cellGap + panelPadding * 2;
   const height = span.rows * pitch - cellGap + panelPadding * 2;
   const taken = board.panels
-    .filter((panel) => !panel.bench && panel.owner === undefined)
+    .filter((panel) => panel.owner === undefined)
     .map((panel) => panelFrame(pitch, panel, view, false).rect);
   const at = (left: number, top: number) => ({
     x: (left + panelPadding) / view.width,

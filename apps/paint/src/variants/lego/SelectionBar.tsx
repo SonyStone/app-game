@@ -12,7 +12,7 @@ import styles from './LegoStudio.module.css';
 export function SelectionBar(props: {
   /** The selection's outline, in the pixels of the place it lies in. */
   rect: Rect;
-  /** The size of that place, the board's view or the workbench. */
+  /** The size of the board's view. */
   area: { width: number; height: number };
   /** Whether the one selected part has looks to choose from. */
   looks: boolean;

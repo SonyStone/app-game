@@ -135,8 +135,8 @@ it('finds a free spot for a new plate beside the panels, clear of them and of th
   expect(plate.left >= taken.left + taken.width + 16 || plate.top >= taken.top + taken.height + 16).toBe(true);
   expect(plate.left).toBeGreaterThanOrEqual(16);
   expect(plate.top).toBeGreaterThanOrEqual(16);
-  // The workbench and owned panels do not count; an empty board gives the top left.
+  // Owned panels do not count; a board with only an owned panel gives the top left.
   expect(
-    freeSpot(pitch, { panels: [{ id: 'b', at: { x: 0, y: 0 }, bench: true, parts: [part('b1')] }] }, view, span)
+    freeSpot(pitch, { panels: [{ id: 'b', owner: 'missing', at: { x: 0, y: 0 }, parts: [part('b1')] }] }, view, span)
   ).toEqual({ x: (16 + panelPadding) / 800, y: (16 + panelPadding) / 600 });
 });

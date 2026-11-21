@@ -4,6 +4,7 @@ import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
 import { BrushLibrary } from '../procreate/BrushLibrary';
+import { createBoard } from './createBoard';
 import { createSheet } from './createSheet';
 import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';
@@ -62,7 +63,6 @@ it("chooses the box's family in a sidebar, shows only its parts, and keeps the c
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
         ref={vi.fn()}
-        benchRef={vi.fn()}
         kitsRef={vi.fn()}
         overKits={false}
         flashKit={undefined}
@@ -121,7 +121,6 @@ it("makes the box's families and a family's parts two screens, a family opening 
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
         ref={vi.fn()}
-        benchRef={vi.fn()}
         kitsRef={vi.fn()}
         overKits={false}
         flashKit={undefined}
@@ -152,6 +151,91 @@ it("makes the box's families and a family's parts two screens, a family opening 
   flush();
   expect(split().dataset.view).toBe('list');
   expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
+});
+
+it('searches parts and kits across every family, clears with Escape, and marks parts already on the board', () => {
+  const { services } = owned(createTestServices);
+  const sheet = owned(() => createSheet(() => 768));
+  const kits = owned(createKits);
+  sheet.to('middle');
+  flush();
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartsTray
+        presets={services.presets.all}
+        sheet={sheet}
+        kits={kits}
+        onBoard={new Set(['action:undo', 'layers:list'])}
+        over={false}
+        onLift={vi.fn()}
+        onLiftKit={vi.fn()}
+        onReset={vi.fn()}
+        ref={vi.fn()}
+        kitsRef={vi.fn()}
+        overKits={false}
+        flashKit={undefined}
+      />
+    </LegoServicesContext>
+  ));
+
+  const undoTile = document.querySelector<HTMLElement>('[title="Undo"]')!.closest('[data-on-board]');
+  expect(undoTile).not.toBeNull();
+  expect(undoTile!.textContent).toContain('On board');
+
+  const input = document.querySelector<HTMLInputElement>('input[aria-label="Search parts"]')!;
+  input.value = 'layer';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flush();
+
+  const results = document.querySelector<HTMLElement>('section[aria-label="Search results"]')!;
+  expect(results).not.toBeNull();
+  expect(results.querySelector('[title="Layer list"]')).not.toBeNull();
+  expect(results.querySelector('[title="Undo"]')).toBeNull();
+  expect(document.querySelector('[title="Kit: Layers"]')).not.toBeNull();
+  expect(document.querySelector('[title="Kit: OKLCH wheel"]')).toBeNull();
+
+  input.value = 'zzzz-missing-part';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flush();
+  expect(document.querySelector('section[aria-label="Search results"]')!.textContent).toContain('No matching parts');
+
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flush();
+  expect(input.value).toBe('');
+  expect(document.querySelector('nav[aria-label="Families of parts"]')).not.toBeNull();
+});
+
+it('drops legacy workbench panels and their owned folders when loading a stored board', () => {
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version: 5,
+      board: {
+        panels: [
+          {
+            id: 'tools',
+            at: { x: 0.02, y: 0.1 },
+            parts: [{ id: 'u1', kind: 'action:undo', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 1 } }]
+          },
+          {
+            id: 'bench',
+            bench: true,
+            at: { x: 0, y: 0 },
+            parts: [{ id: 's1', kind: 'color:swatch', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 1 } }]
+          },
+          {
+            id: 's1-panel',
+            owner: 's1',
+            at: { x: 0, y: 0 },
+            parts: [{ id: 'p1', kind: 'color:hex', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 1 } }]
+          }
+        ]
+      }
+    })
+  );
+
+  const board = owned(() => createBoard());
+  expect(board.board().panels.map((panel) => panel.id)).toEqual(['tools']);
 });
 
 it('shows the brush sets as a sidebar in LEGO and as pills in Procreate, the chosen set listing its brushes', () => {
