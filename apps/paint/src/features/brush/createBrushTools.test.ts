@@ -4,7 +4,7 @@ import { createStrokeSampler, defaultBrush, type Brush } from '@app-game/paint-c
 import 'fake-indexeddb/auto';
 import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createBrushLibrary, createBrushStorage, type BrushPreset } from '../brush-library';
+import { createBrushLibrary, createBrushStorage, presetErases, type BrushPreset } from '../brush-library';
 import { clearRoundBrush, createBrushTools } from './createBrushTools';
 
 const disposers: (() => void)[] = [];
@@ -182,6 +182,62 @@ it('remembers changes per preset until they are reset or saved', async () => {
   flush();
   expect(library.find(saved.id)).toBeUndefined();
   expect(tools.preset()).toBe('builtin:soft-round');
+});
+
+it('shows a preset as it draws now, edits not yet saved included, and marks it modified until saved', async () => {
+  const { tools, library } = await setup();
+  const pencil = library.add(roundPreset('Pencil', 6));
+  tools.selectPreset(pencil.id, 'brush');
+  flush();
+  expect(tools.asDrawn(pencil)).toBe(pencil);
+  expect(tools.modified(pencil.id)).toBe(false);
+
+  // A size change alone is the tool's: the sample keeps its saved size and the preset reads as unchanged.
+  tools.updateBrush({ size: 40 });
+  flush();
+  expect(tools.asDrawn(pencil)).toBe(pencil);
+  expect(tools.modified(pencil.id)).toBe(false);
+
+  // An edit of its settings, as Brush settings → Done leaves it: the sample draws it, and the preset is marked.
+  tools.updateBrush({ hardness: 0.2, opacity: 0.5 });
+  flush();
+  expect(tools.asDrawn(pencil).settings).toMatchObject({ hardness: 0.2, size: 6 });
+  expect(tools.asDrawn(pencil).id).toBe(pencil.id);
+  expect(tools.modified(pencil.id)).toBe(true);
+  // Other presets are left as they are.
+  const soft = library.find('builtin:soft-round')!;
+  expect(tools.asDrawn(soft)).toBe(soft);
+  expect(tools.modified(soft.id)).toBe(false);
+
+  // A document edit draws with its engine.
+  const engine = { id: 'abr', settings: { blendMode: 'Nrml' } } as const;
+  tools.setDocumentEdit(pencil.id, '{"edited":true}', engine, []);
+  flush();
+  expect(tools.asDrawn(pencil)).toMatchObject({ abrDocument: '{"edited":true}', settings: { engine } });
+  tools.restoreDocumentEdit(pencil.id, undefined);
+  flush();
+  expect(tools.asDrawn(pencil).abrDocument).toBeUndefined();
+
+  tools.savePreset();
+  flush();
+  const saved = library.find(pencil.id)!;
+  expect(tools.modified(pencil.id)).toBe(false);
+  expect(tools.asDrawn(saved)).toBe(saved);
+  expect(saved.settings).toMatchObject({ hardness: 0.2 });
+});
+
+it('erases with the eraser tool when an erasing preset is chosen, and tells whether it erases with the brush', async () => {
+  const { tools } = await setup();
+  expect(tools.erasesWithBrush()).toBe(true);
+  expect(presetErases({ settings: { tool: 'eraser' } })).toBe(true);
+  expect(presetErases({ settings: { tool: 'brush' } })).toBe(false);
+  const abr = (type: string) => ({ settings: { engine: { id: 'abr', settings: { values: { tool: { type } } } } } });
+  expect(presetErases(abr('ErTl'))).toBe(true);
+  expect(presetErases(abr('PbTl'))).toBe(false);
+  tools.selectPreset('builtin:eraser', 'eraser');
+  flush();
+  expect(tools.eraserMode()).toBe('preset');
+  expect(tools.erasesWithBrush()).toBe(false);
 });
 
 it('keeps each tool size across presets while sizes are shared', async () => {

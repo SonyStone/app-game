@@ -23,7 +23,8 @@ export const presetPart = definePart({
 /**
  * Controlled library sample. Its renderer owns only cacheable preview resources and releases them on disposal. From
  * `largePreset` pixels high the sample fills the part over the brush's name; lower, a one-cell sample stands beside
- * it. The name shows where it fits whole; without it, a brush glyph marks the sample's corner.
+ * it. The name shows where it fits whole; without it, a brush glyph marks the sample's corner. The sample draws the
+ * brush as it draws now, edits not yet saved included; a dot in the top right corner marks a brush so changed.
  */
 function PresetPart(props: ReturnType<typeof presetNeeds>) {
   const { length } = useGrid();
@@ -54,7 +55,8 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
       type="button"
       class={[styles.preset, large() && styles.large]}
       data-active={props.active ? '' : undefined}
-      aria-label={props.preset?.name ?? 'Brush'}
+      aria-label={`${props.preset?.name ?? 'Brush'}${props.modified ? ', modified' : ''}`}
+      title={props.modified ? `${props.preset?.name ?? 'Brush'}: changed, not saved` : undefined}
       onClick={props.choose}
     >
       <Show when={props.preset} fallback={<span class={styles.unknown}>?</span>}>
@@ -75,6 +77,9 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
             </span>
             <Show when={named()} fallback={<BrushMark />}>
               <span class={styles.name}>{preset().name}</span>
+            </Show>
+            <Show when={props.modified}>
+              <span class={styles.presetModified} aria-hidden="true" />
             </Show>
           </>
         )}
@@ -105,8 +110,13 @@ const presetNameGap = 4;
 function presetNeeds(services: LegoServices, frame: PartBinding) {
   const id = () => frame.kind.slice('preset:'.length);
   return {
+    /** The preset as it draws now, with its unsaved changes, so its sample follows every edit. */
     get preset() {
-      return services.presets.all().find((preset) => preset.id === id());
+      const saved = services.presets.all().find((preset) => preset.id === id());
+      return saved && services.presets.drawn(saved);
+    },
+    get modified() {
+      return services.presets.modified(id());
     },
     get color() {
       return services.color.value();
@@ -114,8 +124,13 @@ function presetNeeds(services: LegoServices, frame: PartBinding) {
     get span() {
       return frame.span;
     },
+    /** The tool in use paints with this preset: the brush, or the eraser erasing with its own preset. */
     get active() {
-      return services.tools.current() === 'brush' && services.tools.preset() === id();
+      const tool = services.tools.current();
+      return (
+        services.tools.preset() === id() &&
+        (tool === 'brush' || (tool === 'eraser' && !services.tools.erasesWithBrush()))
+      );
     },
     resources: services.presets.resources,
     choose: frame.command(() => services.presets.choose(id()))

@@ -18,7 +18,13 @@ import {
   createMixerBrush,
   type PaintTool
 } from '../brush';
-import { createBrushLibrary, createBrushStorage, createPresetUploads, createRecentPresets } from '../brush-library';
+import {
+  createBrushLibrary,
+  createBrushStorage,
+  createPresetUploads,
+  createRecentPresets,
+  presetErases
+} from '../brush-library';
 import { createPaintCamera, createViewSize } from '../camera';
 import { firstCanvasAction, type CanvasInput } from '../canvas';
 import { createCanvasColorPicker } from '../color';
@@ -806,9 +812,13 @@ export function createPaintSession(options: {
     }
   }
 
-  /** Paints with preset `id`: the eraser keeps erasing with it, other tools switch to the brush. */
+  /**
+   * Paints with preset `id`: the eraser keeps erasing with it, other tools switch to the brush. A preset that erases,
+   * as the built-in Eraser, switches to the eraser instead, rather than turning the brush into an eraser.
+   */
   function usePreset(id: string) {
-    const slot = tool() === 'eraser' ? 'eraser' : 'brush';
+    const preset = library.find(id);
+    const slot = tool() === 'eraser' || (preset && presetErases(preset)) ? 'eraser' : 'brush';
     if (tool() !== slot) {
       chooseTool(slot);
     }

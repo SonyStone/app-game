@@ -54,6 +54,13 @@ export function createBrushTools(options: {
   // Commands build on the last written state, so several commands in one event compose.
   const [state, publish, currentState] = createImmediateSignal<ToolState>(documentSlots(initialState()));
   const brush = createMemo(() => toolBrush(state(), state().slot));
+  /**
+   * Each preset's changes but its size, as `asDrawn` shows them; unchanged while only sizes or colors change, so the
+   * samples of every preset do not follow each stroke of a slider.
+   */
+  const characters = createMemo(() => withoutSizes(state().changes), {
+    equals: (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  });
   const currentBrush = () => toolBrush(currentState(), currentState().slot);
   /** Changes are saved once the stored state has been read, so the initial state never overwrites it. */
   let persisting = false;
@@ -75,10 +82,43 @@ export function createBrushTools(options: {
     preset: () => state().slots[presetSlot(state())].preset,
     /** Settings of `id` changed on the fly, relative to the saved preset; `undefined` when unchanged. */
     changes: (id: string) => state().changes[id] ?? (documentEdit(id) ? {} : undefined),
+    /**
+     * `preset` as the tools draw with it now: its saved settings with the changes made to it on the fly and its accepted
+     * document edit, as `savePreset` would save them, for samples that show the brush as it will draw. The size stays
+     * the saved one: it is the tool's, changed all the time, and a sample shows the brush's character at the size it
+     * was saved with. `preset` itself while it has no other change. Reactive.
+     */
+    asDrawn(preset: BrushPreset): BrushPreset {
+      const changes = characterChanges(preset.id);
+      editsChanged();
+      const edit = documentEdit(preset.id);
+      if (!changes && !edit) {
+        return preset;
+      }
+
+      return {
+        ...preset,
+        settings: { ...preset.settings, ...changes, ...(edit && { engine: edit.engine }) },
+        ...(edit && { abrDocument: edit.abrDocument })
+      };
+    },
+    /**
+     * Whether the preset `id` differs from its saved state: changed on the fly or edited in the studio, its size aside
+     * (see `asDrawn`). Reactive.
+     */
+    modified(id: string) {
+      editsChanged();
+      return characterChanges(id) !== undefined || documentEdit(id) !== undefined;
+    },
     /** Presets do not change the size; each tool keeps its own size instead. */
     sharedSize: () => state().sharedSize,
     /** Whether the eraser erases with the brush (`clear`) or uses its own preset (`preset`). */
     eraserMode: () => state().eraserMode,
+    /**
+     * Whether the eraser's strokes erase with the brush's preset now: its `clear` mode with a brush that can erase. The
+     * studio then edits the brush's preset, which `preset` names.
+     */
+    erasesWithBrush: () => erasesWithBrush(state()),
     /** The current brush can erase; otherwise the eraser uses its own preset even in `clear` mode. */
     canClear: () => clear(toolBrush(state(), 'brush')) !== undefined,
     loaded,
@@ -118,6 +158,7 @@ export function createBrushTools(options: {
     restoreDocumentEdit(id: string, edit: DocumentEdit | undefined) {
       editDocument(id, edit);
     },
+    /** The images of the preset `id`'s accepted document edit, if any. */
     editedResources: (id: string) => documentEdit(id)?.resources,
     /**
      * Makes `slot` use the preset with `id`, restoring its remembered changes, and activates that tool. Choosing a
@@ -296,6 +337,11 @@ export function createBrushTools(options: {
       resourceIds: edit?.resources.map((r) => r.id) ?? source?.resourceIds ?? []
     };
     return { preset, resources: edit?.resources, slot: current.slot, brush: saved };
+  }
+
+  /** The changes of preset `id` but its size, as `asDrawn` shows them; `undefined` without any. Reactive. */
+  function characterChanges(id: string): Partial<Brush> | undefined {
+    return characters()[id];
   }
 
   /** Makes the slot `copy` was saved from use `added`, the preset saved from it, with the brush it was saved with. */
@@ -781,6 +827,18 @@ function restoredBrush(stored: Record<string, unknown>): Brush {
   brush.stroke = normalizeStrokeSettings({ ...brush.stroke, ...(isRecord(stored.stroke) ? stored.stroke : {}) });
   brush.size = Math.max(1, Math.min(5000, brush.size));
   return brush;
+}
+
+/** `changes` without their sizes, leaving out presets with no other change. */
+function withoutSizes(changes: ToolState['changes']) {
+  const rest: Record<string, Partial<Brush>> = {};
+  for (const [id, { size: _size, ...others }] of Object.entries(changes)) {
+    if (Object.keys(others).length > 0) {
+      rest[id] = others;
+    }
+  }
+
+  return rest;
 }
 
 /** `record` without the entry `key`. */

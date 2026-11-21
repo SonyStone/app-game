@@ -66,7 +66,15 @@ export function createTestServices() {
         ...createColorWheelSettings()
       }
     },
-    tools: { current: createMemo(() => 'brush' as const), preset: createMemo(() => ''), toggle: vi.fn(() => true) },
+    tools: {
+      current: createMemo(() => 'brush' as const),
+      preset: createMemo(() => ''),
+      toggle: vi.fn(() => true),
+      eraserMode: () => 'clear' as const,
+      canClear: () => true,
+      erasesWithBrush: () => false,
+      setEraserMode: vi.fn()
+    },
     history: { canUndo: createMemo(() => true), canRedo: createMemo(() => true), undo: vi.fn(), redo: vi.fn() },
     symmetry: {
       mode: createMemo(() => 'off' as const),
@@ -92,6 +100,8 @@ export function createTestServices() {
       all: () => [],
       listed: () => [],
       resources: vi.fn(async () => ok([])),
+      drawn: (preset) => preset,
+      modified: () => false,
       recent: () => [],
       use: vi.fn(),
       own: {
