@@ -1,11 +1,13 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
+import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import { besideRect } from '../board';
 import styles from './LayersPrototype.module.css';
 import {
   blendModeGroups,
   blendModeInfo,
   defaultBlendIf,
+  layerColorHex,
   layerColorTags,
   paperPresets,
   psdBlendModes,
@@ -15,12 +17,13 @@ import {
   type PsdBlendMode
 } from './mockLayers';
 
-type PopoverPage = 'main' | 'blend' | 'blendif';
+type PopoverPage = 'main' | 'blending' | 'mask' | 'locks' | 'color' | 'blendif';
 
 /**
- * Second-tap layer properties popover anchored beside the tapped tile (left or right, kept inside the viewport).
- * Uses in-place nested pages (`main` → `‹ Blend modes` / `‹ Blend If`) instead of native `<select>` or stacked
- * dialogs, and closes on outside tap or Escape.
+ * Native LEGO Paint Layer Properties popover (`popover="manual"`): a dark `.popup` plate carrying light
+ * `--lego-tile` tiles, a native pointer-driven `Opacity` slider, fused toggle segments, icon actions, and
+ * `.settingsRows` navigation to nested subpages (`Blending` with vertical Opacity & Fill sliders, `Mask`, `Locks`,
+ * `Color tag`, and touch `Blend If`). Follows selection across tiles without closing-and-reopening flicker.
  */
 export function LayerPropertiesPopover(props: {
   anchor: Element;
@@ -29,369 +32,353 @@ export function LayerPropertiesPopover(props: {
   onClose: () => void;
 }) {
   const [page, setPage] = createSignal<PopoverPage>('main');
+  const [editingName, setEditingName] = createSignal(false);
   const [element, setElement] = createSignal<HTMLDivElement>();
   const [place, setPlace] = createSignal<{ x: number; y: number }>({ x: 16, y: 16 });
 
-  createEffect(element, (popover) => {
-    if (!popover) {
-      return;
-    }
+  const layer = () => props.layer;
+  const service = () => props.service;
 
-    const anchorRect = props.anchor.getBoundingClientRect();
-    const view = {
-      width: Math.max(320, window.innerWidth || 1024),
-      height: Math.max(320, window.innerHeight || 768)
-    };
-    const rect = {
-      left: anchorRect.left,
-      top: anchorRect.top,
-      width: anchorRect.width || 60,
-      height: anchorRect.height || 60
-    };
-    setPlace(besideRect(rect, { width: 296, height: 420 }, view));
-
-    try {
-      if (!popover.matches(':popover-open')) {
-        popover.showPopover?.();
+  // Reset inline name editing and invalid mask subpage when selection switches to another layer.
+  createEffect(
+    () => props.layer.id,
+    () => {
+      setEditingName(false);
+      if (page() === 'mask' && !props.layer.mask) {
+        setPage('main');
       }
-    } catch {
-      // Popover API unsupported in jsdom: element still renders fixed at `place`.
     }
+  );
 
-    onCleanup(() => {
+  // Re-position beside the active anchor tile whenever the popover mounts or follows selection.
+  createEffect(
+    () => ({ popover: element(), anchor: props.anchor }),
+    ({ popover, anchor }) => {
+      if (!popover) {
+        return;
+      }
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const view = {
+        width: Math.max(320, window.innerWidth || 1024),
+        height: Math.max(320, window.innerHeight || 768)
+      };
+      const rect = {
+        left: anchorRect.left,
+        top: anchorRect.top,
+        width: anchorRect.width || 60,
+        height: anchorRect.height || 60
+      };
+      setPlace(besideRect(rect, { width: 276, height: 420 }, view));
+
       try {
-        if (popover.matches(':popover-open')) {
-          popover.hidePopover?.();
+        if (!popover.matches(':popover-open')) {
+          popover.showPopover?.();
         }
       } catch {
-        // Ignore jsdom popover teardown.
+        // Popover API unsupported in jsdom; fixed positioning still applies.
       }
-    });
+    }
+  );
+
+  onCleanup(() => {
+    const popover = element();
+    try {
+      if (popover?.matches(':popover-open')) {
+        popover.hidePopover?.();
+      }
+    } catch {
+      // Ignore jsdom popover teardown.
+    }
   });
 
-  // Dismiss on outside press (canvas tap) in environments without native popover light-dismiss.
+  // Single capture listener for outside presses; ignores clicks inside `[data-layers-strip]` so tiles can switch/toggle cleanly.
   createEventListener(
     window,
     'pointerdown',
     (event) => {
       const popover = element();
-      if (popover && event.target instanceof Node && !popover.contains(event.target)) {
-        props.onClose();
+      if (!popover || !(event.target instanceof Element)) {
+        return;
       }
+
+      if (popover.contains(event.target) || event.target.closest('[data-layers-strip]')) {
+        return;
+      }
+
+      props.onClose();
     },
     { capture: true }
   );
 
   createEventListener(window, 'keydown', (event) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      if (page() !== 'main') {
-        setPage('main');
-      } else {
-        props.onClose();
-      }
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    event.preventDefault();
+    if (editingName()) {
+      setEditingName(false);
+    } else if (page() !== 'main') {
+      setPage('main');
+    } else {
+      props.onClose();
     }
   });
 
-  const layer = () => props.layer;
-  const service = () => props.service;
-  const isActiveMask = () => service().activeId() === layer().id && service().target() === 'mask';
   const modeLabel = () => blendModeInfo(layer().blend).label;
-
+  const isActiveMask = () => service().activeId() === layer().id && service().target() === 'mask';
   const availableModes = () =>
     psdBlendModes.filter((mode) => (layer().type === 'group' ? true : !mode.groupOnly));
+
+  const locksSummary = () => {
+    const active: string[] = [];
+    if (layer().locks.alpha) {
+      active.push('Alpha');
+    }
+
+    if (layer().locks.pixels) {
+      active.push('Pixels');
+    }
+
+    if (layer().locks.position) {
+      active.push('Move');
+    }
+
+    if (layer().locks.all) {
+      active.push('All');
+    }
+
+    if (layer().reference) {
+      active.push('Ref');
+    }
+
+    return active.length > 0 ? active.join(', ') : 'Off';
+  };
+
+  const blendIfModified = () => {
+    const range = layer().blendIf;
+    const isDefault = (r: BlendIfRange) => r[0] === 0 && r[1] === 0 && r[2] === 255 && r[3] === 255;
+    return !isDefault(range.thisLayer) || !isDefault(range.underlying);
+  };
 
   return (
     <div
       ref={setElement}
       class={styles.popover}
-      popover="auto"
+      popover="manual"
       role="dialog"
       aria-label={`Layer properties: ${layer().name}`}
       data-keeps-panel
+      data-no-edit-long-press=""
       style={{ left: `${place().x}px`, top: `${place().y}px` }}
       onPointerDown={(event) => event.stopPropagation()}
-      onToggle={(event) => {
-        const toggleEvent = event as ToggleEvent;
-        if (toggleEvent.newState === 'closed') {
-          props.onClose();
-        }
-      }}
     >
+      {/* MAIN PAGE */}
       <Show when={page() === 'main'}>
-        <div class={styles.popHeader}>
-          <input
-            type="text"
-            class={styles.nameInput}
-            aria-label="Layer name"
-            value={layer().name}
-            onInput={(event) => service().update(layer().id, { name: event.currentTarget.value })}
-          />
-          <Show when={service().canUndo()}>
-            <button type="button" class={styles.popBack} onClick={() => service().undo()}>
-              Undo
-            </button>
-          </Show>
-        </div>
+        <div class={styles.popGrid}>
+          {/* 1. Light header tile: 1×1 thumb + 5×1 inline editable name */}
+          <div class={styles.nameCard}>
+            <div class={styles.nameThumb}>
+              <Show when={layer().type !== 'group'} fallback={<SketchIcon name="folder" size={16} />}>
+                <img src={layer().thumb} alt="" />
+              </Show>
+            </div>
+            <Show
+              when={editingName()}
+              fallback={
+                <button
+                  type="button"
+                  class={styles.nameBtn}
+                  aria-label="Rename layer"
+                  onClick={() => setEditingName(true)}
+                >
+                  <span class={styles.nameText}>{layer().name}</span>
+                  <SketchIcon name="pencil" size={14} />
+                </button>
+              }
+            >
+              <input
+                type="text"
+                class={styles.nameInput}
+                aria-label="Layer name"
+                value={layer().name}
+                autofocus
+                onInput={(event) => service().update(layer().id, { name: event.currentTarget.value })}
+                onBlur={() => setEditingName(false)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    setEditingName(false);
+                  }
+                }}
+              />
+            </Show>
+          </div>
 
-        <div class={styles.popStack}>
+          {/* 2. Blend mode light tile */}
           <button
             type="button"
-            class={styles.popRowBtn}
+            class={styles.tileRowBtn}
             aria-label="Open blend modes"
-            onClick={() => setPage('blend')}
+            onClick={() => setPage('blending')}
           >
-            <span>Blend mode</span>
-            <span class={styles.popMuted}>{modeLabel()} ›</span>
+            <span class={styles.tileRowLead}>
+              <SketchIcon name="gradient" size={16} />
+              <span>Blend mode</span>
+            </span>
+            <span class={styles.tileRowValue}>
+              {modeLabel()} <span aria-hidden="true">›</span>
+            </span>
           </button>
 
-          <div class={styles.sliderRow}>
-            <div class={styles.sliderHead}>
-              <span>Opacity</span>
-              <span>{layer().opacity}%</span>
-            </div>
-            <input
-              type="range"
-              class={styles.rangeInput}
-              aria-label="Opacity"
-              min={0}
-              max={100}
-              value={layer().opacity}
-              onInput={(event) => service().update(layer().id, { opacity: Number(event.currentTarget.value) })}
-            />
-          </div>
+          {/* 3. Native LEGO Opacity slider tile (no native <input type="range">) */}
+          <LegoSlider
+            label="Opacity"
+            value={layer().opacity}
+            onChange={(opacity) => service().update(layer().id, { opacity })}
+          />
 
-          <div class={styles.sliderRow}>
-            <div class={styles.sliderHead}>
-              <span>Fill</span>
-              <span>{layer().fill}%</span>
-            </div>
-            <input
-              type="range"
-              class={styles.rangeInput}
-              aria-label="Fill"
-              min={0}
-              max={100}
-              value={layer().fill}
-              onInput={(event) => service().update(layer().id, { fill: Number(event.currentTarget.value) })}
-            />
-          </div>
-
-          <div class={styles.toggleRow} role="group" aria-label="Locks and flags">
+          {/* 4. Three fused main toggle tiles: α Lock | ↳ Clip | ◐ Mask › */}
+          <div class={styles.fusedRow} role="group" aria-label="Layer quick toggles">
             <button
               type="button"
-              class={styles.togglePill}
+              class={styles.fusedBtn}
               aria-pressed={layer().locks.alpha ? 'true' : 'false'}
               onClick={() => service().update(layer().id, { locks: { alpha: !layer().locks.alpha } })}
             >
-              Alpha
+              <span aria-hidden="true">α</span>
+              <span>Lock</span>
             </button>
             <button
               type="button"
-              class={styles.togglePill}
-              aria-pressed={layer().locks.pixels ? 'true' : 'false'}
-              onClick={() => service().update(layer().id, { locks: { pixels: !layer().locks.pixels } })}
-            >
-              Pixels
-            </button>
-            <button
-              type="button"
-              class={styles.togglePill}
-              aria-pressed={layer().locks.position ? 'true' : 'false'}
-              onClick={() => service().update(layer().id, { locks: { position: !layer().locks.position } })}
-            >
-              Pos
-            </button>
-            <button
-              type="button"
-              class={styles.togglePill}
-              aria-pressed={layer().locks.all ? 'true' : 'false'}
-              onClick={() => service().update(layer().id, { locks: { all: !layer().locks.all } })}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              class={styles.togglePill}
+              class={styles.fusedBtn}
               aria-pressed={layer().clipping ? 'true' : 'false'}
               onClick={() => service().update(layer().id, { clipping: !layer().clipping })}
             >
-              Clip
+              <span aria-hidden="true">↳</span>
+              <span>Clip</span>
             </button>
             <button
               type="button"
-              class={styles.togglePill}
-              aria-pressed={layer().reference ? 'true' : 'false'}
-              onClick={() => service().update(layer().id, { reference: !layer().reference })}
+              class={styles.fusedBtn}
+              aria-label={layer().mask ? 'Open mask settings' : 'Add mask'}
+              aria-pressed={layer().mask ? 'true' : 'false'}
+              onClick={() => {
+                if (!layer().mask) {
+                  service().addMask(layer().id);
+                } else {
+                  setPage('mask');
+                }
+              }}
             >
-              Ref
+              <span aria-hidden="true">◐</span>
+              <span>{layer().mask ? 'Mask ›' : 'Mask'}</span>
             </button>
           </div>
 
-          <p class={styles.sectionLabel}>Mask</p>
-          <Show
-            when={layer().mask}
-            fallback={
-              <button type="button" class={styles.popRowBtn} onClick={() => service().addMask(layer().id)}>
-                <span>Add mask</span>
-                <span class={styles.popMuted}>+</span>
-              </button>
-            }
-          >
-            {(mask) => (
-              <div class={styles.toggleRow}>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  aria-pressed={!isActiveMask() ? 'true' : 'false'}
-                  onClick={() => service().select(layer().id, 'layer')}
-                >
-                  Layer
-                </button>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  aria-pressed={isActiveMask() ? 'true' : 'false'}
-                  onClick={() => service().select(layer().id, 'mask')}
-                >
-                  Mask
-                </button>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  aria-pressed={service().maskOverlay() ? 'true' : 'false'}
-                  onClick={() => service().toggleRubylith()}
-                >
-                  Red overlay
-                </button>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  onClick={() => service().invertMask(layer().id)}
-                >
-                  Invert
-                </button>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  aria-pressed={!mask().enabled ? 'true' : 'false'}
-                  onClick={() => service().toggleMaskEnabled(layer().id)}
-                >
-                  {mask().enabled ? 'Disable' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  class={styles.togglePill}
-                  data-danger=""
-                  onClick={() => service().deleteMask(layer().id)}
-                >
-                  Delete mask
-                </button>
-              </div>
-            )}
-          </Show>
-
-          <p class={styles.sectionLabel}>Color tag</p>
-          <div class={styles.tagRow} role="group" aria-label="Color tag">
-            <For each={layerColorTags}>
-              {(tag) => (
-                <button
-                  type="button"
-                  class={styles.tagDot}
-                  aria-label={`Tag ${tag.label}`}
-                  aria-pressed={layer().colorTag === tag.id ? 'true' : 'false'}
-                  data-none={tag.hex === undefined ? '' : undefined}
-                  style={tag.hex ? { background: tag.hex } : undefined}
-                  onClick={() => service().update(layer().id, { colorTag: tag.id })}
-                />
-              )}
-            </For>
-          </div>
-
-          <p class={styles.sectionLabel}>Actions</p>
-          <div class={styles.actionsGrid}>
+          {/* 5. Icon actions row: Duplicate, Group, Merge, Clear — gap — Delete */}
+          <div class={styles.actionsRow} role="group" aria-label="Layer actions">
             <button
               type="button"
-              class={styles.togglePill}
+              class={styles.actionTile}
               onClick={() => {
                 service().duplicate(layer().id);
                 props.onClose();
               }}
             >
-              Duplicate
+              <SketchIcon name="copy" size={16} />
+              <span>Dup</span>
             </button>
             <button
               type="button"
-              class={styles.togglePill}
+              class={styles.actionTile}
               onClick={() => {
                 service().groupLayers([layer().id]);
                 props.onClose();
               }}
             >
-              Group
+              <SketchIcon name="folder" size={16} />
+              <span>Group</span>
             </button>
             <button
               type="button"
-              class={styles.togglePill}
+              class={styles.actionTile}
               onClick={() => {
                 service().mergeDown(layer().id);
                 props.onClose();
               }}
             >
-              Merge down
+              <SketchIcon name="mergeDown" size={16} />
+              <span>Merge</span>
             </button>
-            <button type="button" class={styles.togglePill} onClick={() => service().clear(layer().id)}>
-              Clear
+            <button type="button" class={styles.actionTile} onClick={() => service().clear(layer().id)}>
+              <SketchIcon name="erase" size={16} />
+              <span>Clear</span>
             </button>
+            <span class={styles.actionSpacer} aria-hidden="true" />
             <button
               type="button"
-              class={styles.togglePill}
+              class={styles.actionTile}
               data-danger=""
               onClick={() => {
                 service().delete([layer().id]);
                 props.onClose();
               }}
             >
-              Delete
+              <SketchIcon name="trash" size={16} />
+              <span>Delete</span>
             </button>
           </div>
 
-          <button
-            type="button"
-            class={styles.popRowBtn}
-            aria-label="Open Blend If"
-            onClick={() => setPage('blendif')}
-          >
-            <span>Blend If</span>
-            <span class={styles.popMuted}>›</span>
-          </button>
+          {/* 6. SettingsRows-style navigation block on the dark plate */}
+          <div class={styles.navList} role="group" aria-label="More layer settings">
+            <button type="button" class={styles.navRow} aria-label="Open Locks" onClick={() => setPage('locks')}>
+              <span class={styles.navIcon}>
+                <SketchIcon name="lock" size={14} />
+              </span>
+              <span class={styles.navLabel}>Locks</span>
+              <span class={styles.navTrailing}>{locksSummary()}</span>
+              <span class={styles.navChevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+            <button type="button" class={styles.navRow} aria-label="Open Color tag" onClick={() => setPage('color')}>
+              <span class={styles.navIcon}>
+                <SketchIcon name="picker" size={14} />
+              </span>
+              <span class={styles.navLabel}>Color tag</span>
+              <span class={styles.navTrailing}>
+                <Show when={layerColorHex(layer().colorTag)} fallback="None">
+                  {(hex) => <span class={styles.navColorDot} style={{ background: hex() }} />}
+                </Show>
+              </span>
+              <span class={styles.navChevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+            <button type="button" class={styles.navRow} aria-label="Open Blend If" onClick={() => setPage('blendif')}>
+              <span class={styles.navIcon}>
+                <SketchIcon name="sliders" size={14} />
+              </span>
+              <span class={styles.navLabel}>Blend If</span>
+              <span class={styles.navTrailing}>{blendIfModified() ? 'Custom' : 'Default'}</span>
+              <span class={styles.navChevron} aria-hidden="true">
+                ›
+              </span>
+            </button>
+          </div>
         </div>
       </Show>
 
-      <Show when={page() === 'blend'}>
-        <div class={styles.popHeader}>
+      {/* SUBPAGE: BLENDING (27 PSD modes on left + vertical Opacity & Fill sliders on right) */}
+      <Show when={page() === 'blending'}>
+        <div class={styles.subHeader}>
           <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
             ‹ Back
           </button>
-          <h3 class={styles.popTitle}>Blend modes</h3>
+          <h3 class={styles.popTitle}>Blending</h3>
         </div>
-        <div class={styles.blendPage}>
-          <div class={styles.sliderRow}>
-            <div class={styles.sliderHead}>
-              <span>Opacity</span>
-              <span>{layer().opacity}%</span>
-            </div>
-            <input
-              type="range"
-              class={styles.rangeInput}
-              aria-label="Blend page opacity"
-              min={0}
-              max={100}
-              value={layer().opacity}
-              onInput={(event) => service().update(layer().id, { opacity: Number(event.currentTarget.value) })}
-            />
-          </div>
-
+        <div class={styles.blendingSplit}>
           <div class={styles.blendList} role="listbox" aria-label="Blend modes">
             <p class={styles.sectionLabel}>Favorites</p>
             <For each={service().favoriteBlends().filter((id) => availableModes().some((m) => m.id === id))}>
@@ -433,27 +420,195 @@ export function LayerPropertiesPopover(props: {
               }}
             </For>
           </div>
+
+          <div class={styles.verticalSliders}>
+            <LegoSlider
+              label="Opacity"
+              value={layer().opacity}
+              vertical
+              onChange={(opacity) => service().update(layer().id, { opacity })}
+            />
+            <LegoSlider
+              label="Fill"
+              value={layer().fill}
+              vertical
+              onChange={(fill) => service().update(layer().id, { fill })}
+            />
+          </div>
         </div>
       </Show>
 
-      <Show when={page() === 'blendif'}>
-        <div class={styles.popHeader}>
-          <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
-            ‹ Back
-          </button>
-          <h3 class={styles.popTitle}>Blend If</h3>
+      {/* SUBPAGE: MASK */}
+      <Show when={page() === 'mask' && layer().mask}>
+        {(mask) => (
+          <div class={styles.popGrid}>
+            <div class={styles.subHeader}>
+              <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
+                ‹ Back
+              </button>
+              <h3 class={styles.popTitle}>Mask</h3>
+            </div>
+
+            <div class={styles.fusedRowTwo} role="group" aria-label="Paint target">
+              <button
+                type="button"
+                class={styles.fusedBtn}
+                aria-pressed={!isActiveMask() ? 'true' : 'false'}
+                onClick={() => service().select(layer().id, 'layer')}
+              >
+                Layer
+              </button>
+              <button
+                type="button"
+                class={styles.fusedBtn}
+                aria-pressed={isActiveMask() ? 'true' : 'false'}
+                onClick={() => service().select(layer().id, 'mask')}
+              >
+                Mask
+              </button>
+            </div>
+
+            <div class={styles.lightToggleGrid}>
+              <button
+                type="button"
+                class={styles.lightToggleTile}
+                aria-pressed={mask().enabled ? 'true' : 'false'}
+                onClick={() => service().toggleMaskEnabled(layer().id)}
+              >
+                Enabled
+              </button>
+              <button
+                type="button"
+                class={styles.lightToggleTile}
+                aria-pressed={service().maskOverlay() ? 'true' : 'false'}
+                onClick={() => service().toggleRubylith()}
+              >
+                Red overlay
+              </button>
+            </div>
+
+            <div class={styles.lightToggleGrid}>
+              <button
+                type="button"
+                class={styles.lightToggleTile}
+                onClick={() => service().invertMask(layer().id)}
+              >
+                Invert mask
+              </button>
+              <button
+                type="button"
+                class={styles.lightToggleTile}
+                data-danger=""
+                onClick={() => {
+                  service().deleteMask(layer().id);
+                  setPage('main');
+                }}
+              >
+                Delete mask
+              </button>
+            </div>
+          </div>
+        )}
+      </Show>
+
+      {/* SUBPAGE: LOCKS */}
+      <Show when={page() === 'locks'}>
+        <div class={styles.popGrid}>
+          <div class={styles.subHeader}>
+            <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
+              ‹ Back
+            </button>
+            <h3 class={styles.popTitle}>Locks</h3>
+          </div>
+          <div class={styles.lightToggleGrid}>
+            <button
+              type="button"
+              class={styles.lightToggleTile}
+              aria-pressed={layer().locks.alpha ? 'true' : 'false'}
+              onClick={() => service().update(layer().id, { locks: { alpha: !layer().locks.alpha } })}
+            >
+              Alpha Lock
+            </button>
+            <button
+              type="button"
+              class={styles.lightToggleTile}
+              aria-pressed={layer().locks.pixels ? 'true' : 'false'}
+              onClick={() => service().update(layer().id, { locks: { pixels: !layer().locks.pixels } })}
+            >
+              Lock Pixels
+            </button>
+            <button
+              type="button"
+              class={styles.lightToggleTile}
+              aria-pressed={layer().locks.position ? 'true' : 'false'}
+              onClick={() => service().update(layer().id, { locks: { position: !layer().locks.position } })}
+            >
+              Lock Position
+            </button>
+            <button
+              type="button"
+              class={styles.lightToggleTile}
+              aria-pressed={layer().locks.all ? 'true' : 'false'}
+              onClick={() => service().update(layer().id, { locks: { all: !layer().locks.all } })}
+            >
+              Lock All
+            </button>
+          </div>
           <button
             type="button"
-            class={styles.popBack}
-            onClick={() => service().update(layer().id, { blendIf: defaultBlendIf() })}
+            class={styles.lightToggleTile}
+            aria-pressed={layer().reference ? 'true' : 'false'}
+            onClick={() => service().update(layer().id, { reference: !layer().reference })}
           >
-            Reset
+            Reference layer
           </button>
         </div>
-        <div class={styles.popStack}>
-          <p class={styles.popMuted} style={{ margin: 0, 'font-size': '11px' }}>
-            Tap a handle to split its feathering halves; drag any handle to adjust 0–255.
-          </p>
+      </Show>
+
+      {/* SUBPAGE: COLOR TAG */}
+      <Show when={page() === 'color'}>
+        <div class={styles.popGrid}>
+          <div class={styles.subHeader}>
+            <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
+              ‹ Back
+            </button>
+            <h3 class={styles.popTitle}>Color tag</h3>
+          </div>
+          <div class={styles.tagTile} role="group" aria-label="Color tag">
+            <For each={layerColorTags}>
+              {(tag) => (
+                <button
+                  type="button"
+                  class={styles.tagDot}
+                  aria-label={`Tag ${tag.label}`}
+                  aria-pressed={layer().colorTag === tag.id ? 'true' : 'false'}
+                  data-none={tag.hex === undefined ? '' : undefined}
+                  style={tag.hex ? { background: tag.hex } : undefined}
+                  onClick={() => service().update(layer().id, { colorTag: tag.id })}
+                />
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
+
+      {/* SUBPAGE: BLEND IF */}
+      <Show when={page() === 'blendif'}>
+        <div class={styles.popGrid}>
+          <div class={styles.subHeader}>
+            <button type="button" class={styles.popBack} onClick={() => setPage('main')}>
+              ‹ Back
+            </button>
+            <h3 class={styles.popTitle}>Blend If</h3>
+            <button
+              type="button"
+              class={styles.popBack}
+              onClick={() => service().update(layer().id, { blendIf: defaultBlendIf() })}
+            >
+              Reset
+            </button>
+          </div>
+          <p class={styles.popHint}>Tap a handle to split feathering halves; drag any handle across 0–255.</p>
           <BlendIfScale
             title="This Layer"
             range={layer().blendIf.thisLayer}
@@ -474,7 +629,106 @@ export function LayerPropertiesPopover(props: {
   );
 }
 
-/** Compact popover for choosing the pinned Paper tone and visibility. */
+/**
+ * Native LEGO Paint pointer slider tile (`--lego-track`, `--lego-accent` fill, white thumb, readable value chip).
+ * Supports both horizontal (main page `Opacity`) and vertical (`Blending` page `Opacity` & `Fill`) orientations.
+ */
+function LegoSlider(props: {
+  label: string;
+  value: number;
+  vertical?: boolean;
+  onChange: (next: number) => void;
+}) {
+  let trackRef!: HTMLDivElement;
+
+  const updateFromPointer = (clientX: number, clientY: number) => {
+    const rect = trackRef.getBoundingClientRect();
+    let fraction: number;
+    if (props.vertical) {
+      const height = rect.height || 100;
+      fraction = 1 - (clientY - rect.top) / height;
+    } else {
+      const width = rect.width || 100;
+      fraction = (clientX - rect.left) / width;
+    }
+
+    const clamped = Math.max(0, Math.min(100, Math.round(fraction * 100)));
+    props.onChange(clamped);
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.stopPropagation();
+    event.preventDefault();
+    const pointer = event.pointerId;
+    try {
+      trackRef.setPointerCapture(pointer);
+    } catch {
+      // Unsupported in jsdom.
+    }
+
+    updateFromPointer(event.clientX, event.clientY);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointer) {
+        return;
+      }
+
+      updateFromPointer(moveEvent.clientX, moveEvent.clientY);
+    };
+
+    const onEnd = (endEvent: PointerEvent) => {
+      if (endEvent.pointerId !== pointer) {
+        return;
+      }
+
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onEnd, true);
+      window.removeEventListener('pointercancel', onEnd, true);
+    };
+
+    window.addEventListener('pointermove', onMove, true);
+    window.addEventListener('pointerup', onEnd, true);
+    window.addEventListener('pointercancel', onEnd, true);
+  };
+
+  return (
+    <div
+      ref={trackRef}
+      class={[styles.legoSlider, props.vertical && styles.legoSliderVertical]}
+      role="slider"
+      tabindex={0}
+      aria-label={props.label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={props.value}
+      aria-orientation={props.vertical ? 'vertical' : 'horizontal'}
+      style={{ '--fraction': `${props.value}%` }}
+      onPointerDown={onPointerDown}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+          event.preventDefault();
+          props.onChange(Math.min(100, props.value + 5));
+        } else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+          event.preventDefault();
+          props.onChange(Math.max(0, props.value - 5));
+        }
+      }}
+    >
+      <div class={styles.legoSliderFill} />
+      <div class={styles.legoSliderThumb} />
+      <div class={styles.legoSliderLabel}>
+        <span>{props.label}</span>
+        <span class={styles.legoSliderChip}>{props.value}%</span>
+      </div>
+    </div>
+  );
+}
+
+/** Compact popover for choosing the pinned Paper tone and visibility in native LEGO popup style. */
 export function PaperPopover(props: {
   anchor: Element;
   service: MockLayersService;
@@ -513,6 +767,16 @@ export function PaperPopover(props: {
     } catch {
       // Popover unsupported in jsdom.
     }
+
+    onCleanup(() => {
+      try {
+        if (popover.matches(':popover-open')) {
+          popover.hidePopover?.();
+        }
+      } catch {
+        // Ignore jsdom popover teardown.
+      }
+    });
   });
 
   createEventListener(
@@ -520,7 +784,7 @@ export function PaperPopover(props: {
     'pointerdown',
     (event) => {
       const popover = element();
-      if (popover && event.target instanceof Node && !popover.contains(event.target)) {
+      if (popover && event.target instanceof Element && !popover.contains(event.target)) {
         props.onClose();
       }
     },
@@ -533,36 +797,32 @@ export function PaperPopover(props: {
     <div
       ref={setElement}
       class={styles.popover}
-      popover="auto"
+      popover="manual"
       role="dialog"
       aria-label="Paper settings"
       data-keeps-panel
+      data-no-edit-long-press=""
       style={{ left: `${place().x}px`, top: `${place().y}px`, width: '220px' }}
       onPointerDown={(event) => event.stopPropagation()}
-      onToggle={(event) => {
-        if ((event as ToggleEvent).newState === 'closed') {
-          props.onClose();
-        }
-      }}
     >
-      <div class={styles.popStack}>
-        <div class={styles.popHeader} style={{ 'margin-bottom': 0 }}>
+      <div class={styles.popGrid}>
+        <div class={styles.subHeader}>
           <h3 class={styles.popTitle}>Paper</h3>
           <button
             type="button"
-            class={styles.togglePill}
+            class={styles.popBack}
             aria-pressed={paper().visible ? 'true' : 'false'}
             onClick={() => props.service.setPaper({ visible: !paper().visible })}
           >
             {paper().visible ? 'Visible' : 'Hidden'}
           </button>
         </div>
-        <div class={styles.toggleRow} style={{ 'grid-template-columns': 'repeat(2, minmax(0, 1fr))' }}>
+        <div class={styles.lightToggleGrid}>
           <For each={paperPresets}>
             {(preset) => (
               <button
                 type="button"
-                class={styles.togglePill}
+                class={styles.lightToggleTile}
                 aria-pressed={paper().color === preset.color ? 'true' : 'false'}
                 onClick={() => props.service.setPaper({ color: preset.color, label: preset.label, visible: true })}
               >
@@ -610,7 +870,7 @@ function BlendRow(props: {
 }
 
 /**
- * Touch-friendly Blend If scale with paired black/white handles that split into feathering halves on tap
+ * Touch-friendly Blend If scale on a light LEGO tile: paired black/white handles split into feathering halves on tap
  * (replacing Photoshop's Alt-drag) and slide smoothly across `0..255`.
  */
 function BlendIfScale(props: {
@@ -656,35 +916,37 @@ function BlendIfScale(props: {
 
       const value = toValue(nextEvent.clientX);
       const [b0, b1, w0, w1] = props.range;
-      if (index === 'pair' && kind === 'black') {
-        const clamped = Math.min(value, w0);
-        props.onChange([clamped, clamped, w0, w1]);
-      } else if (index === 'pair' && kind === 'white') {
-        const clamped = Math.max(value, b1);
-        props.onChange([b0, b1, clamped, clamped]);
-      } else if (index === 0) {
-        props.onChange([Math.min(value, b1), b1, w0, w1]);
-      } else if (index === 1) {
-        props.onChange([b0, Math.max(b0, Math.min(value, w0)), w0, w1]);
-      } else if (index === 2) {
-        props.onChange([b0, b1, Math.max(b1, Math.min(value, w1)), w1]);
-      } else if (index === 3) {
-        props.onChange([b0, b1, w0, Math.max(w0, value)]);
-      }
-    };
+      if (index === 'pair') {
+        if (kind === 'black') {
+          const clamped = Math.min(w0, value);
+          props.onChange([clamped, clamped, w0, w1]);
+        } else {
+          const clamped = Math.max(b1, value);
+          props.onChange([b0, b1, clamped, clamped]);
+        }
 
-    const end = (nextEvent: PointerEvent) => {
-      if (nextEvent.pointerId !== pointer) {
         return;
       }
 
-      cleanup();
-      if (!moved && index === 'pair') {
-        splitHandle(kind);
+      const next: BlendIfRange = [b0, b1, w0, w1];
+      if (index === 0) {
+        next[0] = Math.min(b1, value);
+      } else if (index === 1) {
+        next[1] = Math.max(b0, Math.min(w0, value));
+      } else if (index === 2) {
+        next[2] = Math.max(b1, Math.min(w1, value));
+      } else {
+        next[3] = Math.max(w0, value);
       }
+
+      props.onChange(next);
     };
 
-    const cleanup = () => {
+    const end = (endEvent: PointerEvent) => {
+      if (endEvent.pointerId !== pointer) {
+        return;
+      }
+
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', end, true);
       window.removeEventListener('pointercancel', end, true);
@@ -695,7 +957,6 @@ function BlendIfScale(props: {
     window.addEventListener('pointercancel', end, true);
   };
 
-  /** Splits a paired black or white handle into two feathering halves. */
   const splitHandle = (kind: 'black' | 'white') => {
     const [b0, b1, w0, w1] = props.range;
     if (kind === 'black') {
@@ -711,8 +972,8 @@ function BlendIfScale(props: {
   };
 
   return (
-    <div class={styles.blendIfTrackWrap}>
-      <p class={styles.sectionLabel}>{props.title}</p>
+    <div class={styles.blendIfCard}>
+      <p class={styles.blendIfTitle}>{props.title}</p>
       <div ref={trackRef} class={styles.blendIfTrack}>
         <Show
           when={blackSplit()}
@@ -792,10 +1053,10 @@ function BlendIfScale(props: {
         </Show>
       </div>
       <div class={styles.blendIfReadout} data-blendif-readout={props.title}>
-        <span>
+        <span class={styles.blendIfChip}>
           {props.range[0]} / {props.range[1]}
         </span>
-        <span>
+        <span class={styles.blendIfChip}>
           {props.range[2]} / {props.range[3]}
         </span>
       </div>

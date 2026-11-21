@@ -35,6 +35,7 @@ export function LayersStripPart(props: {
   const [popover, setPopover] = createSignal<{ id: string; anchor: Element }>();
   const [paperAnchor, setPaperAnchor] = createSignal<Element>();
   const [toast, setToast] = createSignal<string>();
+  const [armedId, setArmedId] = createSignal<string>();
   const [draggingId, setDraggingId] = createSignal<string>();
   const [dropTarget, setDropTarget] = createSignal<{ id: string; zone: ReorderZone }>();
   const [backDropHover, setBackDropHover] = createSignal(false);
@@ -46,7 +47,8 @@ export function LayersStripPart(props: {
   let hoverGroupTimer: ReturnType<typeof setTimeout> | undefined;
   let hoverGroupId: string | undefined;
   let hoverBackTimer: ReturnType<typeof setTimeout> | undefined;
-  let touchDragTimer: ReturnType<typeof setTimeout> | undefined;
+  let touchArmTimer: ReturnType<typeof setTimeout> | undefined;
+  let longPressPropsTimer: ReturnType<typeof setTimeout> | undefined;
 
   /** Active touch pointers on tiles, tracked for two-finger pinch-to-group. */
   const activeTouches = new Map<number, { layerId: string; x: number; y: number }>();
@@ -58,7 +60,8 @@ export function LayersStripPart(props: {
     clearTimeout(eyeLongTimer);
     clearTimeout(hoverGroupTimer);
     clearTimeout(hoverBackTimer);
-    clearTimeout(touchDragTimer);
+    clearTimeout(touchArmTimer);
+    clearTimeout(longPressPropsTimer);
   });
 
   const showToast = (message: string) => {
@@ -163,7 +166,9 @@ export function LayersStripPart(props: {
     setPinchRange(new Set(range));
     if (pinchStartDistance - dist >= 24 && !pinchConsumed && range.length >= 2) {
       pinchConsumed = true;
-      clearTimeout(touchDragTimer);
+      clearTimeout(touchArmTimer);
+      clearTimeout(longPressPropsTimer);
+      setArmedId(undefined);
       setDraggingId(undefined);
       setDropTarget(undefined);
       props.service.groupLayers(range);
@@ -252,13 +257,31 @@ export function LayersStripPart(props: {
     }
   };
 
-  /** Unified gesture handler per tile: tap / second-tap popover, swipe right/left, pinch, and drag-and-drop. */
+  /** Selects `node` (preserving mask target when already on its mask) and opens its properties popover. */
+  const openPropertiesFor = (node: MockLayerNode, anchor: Element) => {
+    const keepMask = props.service.activeId() === node.id && props.service.target() === 'mask' && !!node.mask;
+    props.service.select(node.id, keepMask ? 'mask' : 'layer');
+    setPopover({ id: node.id, anchor });
+  };
+
+  /** Unified gesture handler per tile: tap / follow-selection / second-tap popover, 480ms hold properties, right-click, swipe, pinch, and drag-and-drop. */
   const onTilePointerDown = (event: PointerEvent, node: MockLayerNode) => {
-    if (!props.interactive || event.button !== 0) {
+    if (!props.interactive) {
       return;
     }
 
     const tileElement = event.currentTarget as HTMLElement;
+    // Secondary button / pen side button opens properties immediately.
+    if (event.button === 2) {
+      event.preventDefault();
+      openPropertiesFor(node, tileElement);
+      return;
+    }
+
+    if (event.button !== 0) {
+      return;
+    }
+
     const pointer = event.pointerId;
     const isTouch = event.pointerType === 'touch';
     const start = { x: event.clientX, y: event.clientY };
@@ -266,15 +289,19 @@ export function LayersStripPart(props: {
     if (isTouch) {
       activeTouches.set(pointer, { layerId: node.id, x: start.x, y: start.y });
       if (activeTouches.size === 2) {
-        clearTimeout(touchDragTimer);
+        clearTimeout(touchArmTimer);
+        clearTimeout(longPressPropsTimer);
+        setArmedId(undefined);
         pinchConsumed = false;
         checkPinch();
       }
     }
 
+    let armed = false;
     let dragging = false;
     let swiped = false;
     let moved = false;
+    let openedByHold = false;
 
     const beginDrag = () => {
       if (dragging) {
@@ -282,6 +309,8 @@ export function LayersStripPart(props: {
       }
 
       dragging = true;
+      clearTimeout(longPressPropsTimer);
+      setArmedId(undefined);
       setDraggingId(node.id);
       try {
         tileElement.setPointerCapture(pointer);
@@ -290,13 +319,26 @@ export function LayersStripPart(props: {
       }
     };
 
-    if (isTouch && activeTouches.size === 1) {
-      clearTimeout(touchDragTimer);
-      touchDragTimer = setTimeout(() => {
-        if (!moved && activeTouches.size === 1) {
-          beginDrag();
+    if (!isTouch || activeTouches.size === 1) {
+      clearTimeout(longPressPropsTimer);
+      longPressPropsTimer = setTimeout(() => {
+        if (!moved && !dragging && !swiped && !pinchConsumed && (!isTouch || activeTouches.size === 1)) {
+          openedByHold = true;
+          setArmedId(undefined);
+          openPropertiesFor(node, tileElement);
         }
-      }, 220);
+      }, longPressPropertiesDelay);
+    }
+
+    if (isTouch && activeTouches.size === 1) {
+      clearTimeout(touchArmTimer);
+      touchArmTimer = setTimeout(() => {
+        if (!moved && !openedByHold && activeTouches.size === 1) {
+          // Arm visually at 220ms without consuming a clean tap; real drag starts only once moved > 10px.
+          armed = true;
+          setArmedId(node.id);
+        }
+      }, touchArmDelay);
     }
 
     const onMove = (moveEvent: PointerEvent) => {
@@ -312,22 +354,24 @@ export function LayersStripPart(props: {
         }
       }
 
-      if (pinchConsumed) {
+      if (pinchConsumed || openedByHold) {
         return;
       }
 
       const dx = moveEvent.clientX - start.x;
       const dy = moveEvent.clientY - start.y;
       const dist = Math.hypot(dx, dy);
-      if (dist >= 8) {
+      if (dist >= gestureThreshold) {
         moved = true;
-        if (!dragging) {
-          clearTimeout(touchDragTimer);
+        clearTimeout(longPressPropsTimer);
+        if (!armed && !dragging) {
+          clearTimeout(touchArmTimer);
         }
       }
 
       if (!dragging && !swiped && Math.abs(dx) > 32 && Math.abs(dx) > Math.abs(dy) * 1.3) {
         swiped = true;
+        setArmedId(undefined);
         if (dx > 0) {
           props.service.toggleSelect(node.id);
         } else if (node.mask) {
@@ -339,8 +383,10 @@ export function LayersStripPart(props: {
         return;
       }
 
-      // Pen/mouse initiates drag immediately after 6 px vertical/diagonal move (MOKO style).
-      if (!isTouch && !dragging && !swiped && dist >= 6 && Math.abs(dy) >= Math.abs(dx) * 0.75) {
+      // Touch drag begins only after 220ms arm AND > 10px move; pen/mouse drags after 10px vertical/diagonal move.
+      if (isTouch && armed && !dragging && !swiped && dist >= gestureThreshold) {
+        beginDrag();
+      } else if (!isTouch && !dragging && !swiped && dist >= gestureThreshold && Math.abs(dy) >= Math.abs(dx) * 0.75) {
         beginDrag();
       }
 
@@ -355,6 +401,7 @@ export function LayersStripPart(props: {
       }
 
       cleanup();
+      setArmedId(undefined);
       if (isTouch) {
         activeTouches.delete(pointer);
         if (activeTouches.size === 0) {
@@ -382,21 +429,35 @@ export function LayersStripPart(props: {
         return;
       }
 
-      if (swiped || moved) {
+      if (openedByHold || swiped || moved) {
         return;
       }
 
-      // Tap: first tap selects; second tap on the already-active tile opens properties popover beside it.
+      // Clean tap (including 220–479ms touch taps):
+      // - While popover is open: tapping another tile follows selection; tapping the anchored tile closes it cleanly.
+      // - While popover is closed: first tap selects; second tap on the active tile opens properties.
+      const open = popover();
+      if (open) {
+        if (open.id === node.id) {
+          setPopover(undefined);
+        } else {
+          props.service.select(node.id, 'layer');
+          setPopover({ id: node.id, anchor: tileElement });
+        }
+
+        return;
+      }
+
       if (props.service.activeId() === node.id) {
-        setPopover((current) => (current?.id === node.id ? undefined : { id: node.id, anchor: tileElement }));
+        setPopover({ id: node.id, anchor: tileElement });
       } else {
-        setPopover(undefined);
         props.service.select(node.id, 'layer');
       }
     };
 
     const cleanup = () => {
-      clearTimeout(touchDragTimer);
+      clearTimeout(touchArmTimer);
+      clearTimeout(longPressPropsTimer);
       window.removeEventListener('pointermove', onMove, true);
       window.removeEventListener('pointerup', onEnd, true);
       window.removeEventListener('pointercancel', onEnd, true);
@@ -428,7 +489,7 @@ export function LayersStripPart(props: {
     node.locks.alpha || node.locks.pixels || node.locks.position || node.locks.all;
 
   return (
-    <div class={styles.stripRoot} data-layers-look={props.wide ? 'wide' : 'strip'}>
+    <div class={styles.stripRoot} data-layers-strip="" data-layers-look={props.wide ? 'wide' : 'strip'}>
       {/* Header: multi-selection bar, mask controls bar (when targeting a mask), or Add layer / Add group */}
       <Show
         when={props.service.selectedIds().length === 0}
@@ -649,6 +710,8 @@ export function LayersStripPart(props: {
                     data-no-edit-long-press=""
                     data-active={isActive() && !isMaskTarget() ? '' : undefined}
                     data-mask-active={isMaskTarget() ? '' : undefined}
+                    data-open={popover()?.id === node().id ? '' : undefined}
+                    data-armed={armedId() === node().id ? '' : undefined}
                     data-selected={isSelected() ? '' : undefined}
                     data-pinch={pinchRange().has(node().id) ? '' : undefined}
                     data-hidden={!visible() ? '' : undefined}
@@ -656,7 +719,12 @@ export function LayersStripPart(props: {
                     data-dragging={draggingId() === node().id ? '' : undefined}
                     data-drop={dropZone()}
                     aria-label={node().name}
-                    onContextMenu={(event) => event.preventDefault()}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      if (props.interactive && !draggingId()) {
+                        openPropertiesFor(node(), event.currentTarget);
+                      }
+                    }}
                     onPointerDown={(event) => onTilePointerDown(event, node())}
                   >
                     <Show when={node().clipping}>
@@ -684,8 +752,36 @@ export function LayersStripPart(props: {
 
                       <Show when={tagHex()}>
                         {(hex) => (
-                          <span class={styles.colorDot} data-strip-dot="" style={{ background: hex() }} />
+                          <span
+                            class={styles.colorDot}
+                            data-strip-dot=""
+                            data-shifted={isActive() ? '' : undefined}
+                            style={{ background: hex() }}
+                          />
                         )}
+                      </Show>
+
+                      <Show when={isActive()}>
+                        <button
+                          type="button"
+                          class={styles.propsBtn}
+                          data-no-edit-long-press=""
+                          data-open={popover()?.id === node().id ? '' : undefined}
+                          aria-label={`Layer properties for ${node().name}`}
+                          title="Layer properties"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!props.interactive) {
+                              return;
+                            }
+
+                            const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
+                            setPopover((current) => (current?.id === node().id ? undefined : { id: node().id, anchor: tile }));
+                          }}
+                        >
+                          <SketchIcon name="more" size={12} />
+                        </button>
                       </Show>
 
                       <button
@@ -794,6 +890,8 @@ export function LayersStripPart(props: {
                   data-depth={depth()}
                   data-active={isActive() && !isMaskTarget() ? '' : undefined}
                   data-mask-active={isMaskTarget() ? '' : undefined}
+                  data-open={popover()?.id === node().id ? '' : undefined}
+                  data-armed={armedId() === node().id ? '' : undefined}
                   data-selected={isSelected() ? '' : undefined}
                   data-pinch={pinchRange().has(node().id) ? '' : undefined}
                   data-hidden={!visible() ? '' : undefined}
@@ -801,7 +899,12 @@ export function LayersStripPart(props: {
                   data-drop={dropZone()}
                   aria-label={node().name}
                   style={{ 'padding-left': `${6 + depth() * 14 + (node().clipping ? 12 : 0)}px` }}
-                  onContextMenu={(event) => event.preventDefault()}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (props.interactive && !draggingId()) {
+                      openPropertiesFor(node(), event.currentTarget);
+                    }
+                  }}
                   onPointerDown={(event) => onTilePointerDown(event, node())}
                 >
                   <Show when={depth() > 0}>
@@ -844,10 +947,21 @@ export function LayersStripPart(props: {
                         return;
                       }
 
+                      const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
+                      const open = popover();
+                      if (open) {
+                        if (open.id === node().id) {
+                          setPopover(undefined);
+                        } else {
+                          props.service.select(node().id, 'layer');
+                          setPopover({ id: node().id, anchor: tile });
+                        }
+
+                        return;
+                      }
+
                       if (props.service.activeId() === node().id && props.service.target() === 'layer') {
-                        setPopover((current) =>
-                          current?.id === node().id ? undefined : { id: node().id, anchor: event.currentTarget }
-                        );
+                        setPopover({ id: node().id, anchor: tile });
                       } else {
                         props.service.select(node().id, 'layer');
                       }
@@ -899,6 +1013,29 @@ export function LayersStripPart(props: {
                       </Show>
                     </span>
                   </div>
+
+                  <Show when={isActive()}>
+                    <button
+                      type="button"
+                      class={styles.widePropsBtn}
+                      data-no-edit-long-press=""
+                      data-open={popover()?.id === node().id ? '' : undefined}
+                      aria-label={`Layer properties for ${node().name}`}
+                      title="Layer properties"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (!props.interactive) {
+                          return;
+                        }
+
+                        const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
+                        setPopover((current) => (current?.id === node().id ? undefined : { id: node().id, anchor: tile }));
+                      }}
+                    >
+                      <SketchIcon name="more" size={14} />
+                    </button>
+                  </Show>
 
                   <button
                     type="button"
@@ -982,3 +1119,12 @@ export function LayersStripPart(props: {
     </div>
   );
 }
+
+/** Distance in CSS pixels separating a clean tap from drag/swipe on glass tablet displays. */
+const gestureThreshold = 10;
+
+/** Touch hold milliseconds before a tile visually arms for drag without cancelling a tap. */
+const touchArmDelay = 220;
+
+/** Still hold milliseconds on a tile before opening Layer Properties directly. */
+const longPressPropertiesDelay = 480;

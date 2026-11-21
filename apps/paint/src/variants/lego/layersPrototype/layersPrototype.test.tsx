@@ -266,54 +266,124 @@ describe('LayersStripPart', () => {
     expect(service.soloId()).toBe('layer-glow');
   });
 
-  it('opens second-tap LayerPropertiesPopover with Blend modes (27 modes + Favorites) and tap-to-split Blend If', () => {
+  it('opens native LEGO LayerPropertiesPopover via second tap, 480ms hold, active tab button, or right-click, follows selection without flicker, and uses native sliders across all subpages', () => {
+    vi.useFakeTimers();
     const service = createMockLayers();
     service.select('layer-glow', 'layer');
+    flush();
     mountStrip(service, false);
 
-    // Second tap on active tile opens properties popover.
+    // 1) A 300ms touch tap (past 220ms arm, before 480ms hold) is NOT eaten by drag — it acts as a clean tap.
     const glowTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-glow"]')!;
-    pointerEvent(glowTile, 'pointerdown', { x: 20, y: 20, pointerId: 4, pointerType: 'pen' });
-    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 4, pointerType: 'pen' });
-
-    const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Glow"]');
-    expect(popover).not.toBeNull();
-
-    // Open ‹ Blend modes page.
-    popover!.querySelector<HTMLButtonElement>('[aria-label="Open blend modes"]')!.click();
+    pointerEvent(glowTile, 'pointerdown', { x: 20, y: 20, pointerId: 4, pointerType: 'touch' });
+    vi.advanceTimersByTime(300);
     flush();
-    expect(popover!.querySelector('[aria-label="Blend page opacity"]')).not.toBeNull();
-    const options = [...popover!.querySelectorAll<HTMLButtonElement>('[role="option"]')];
-    // Includes favorites + all 27 non-group PSD modes.
-    expect(options.length).toBeGreaterThanOrEqual(27);
+    expect(glowTile.hasAttribute('data-armed')).toBe(true);
+    expect(glowTile.hasAttribute('data-dragging')).toBe(false);
+    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 4, pointerType: 'touch' });
 
-    const overlayOption = options.find((btn) => btn.textContent?.includes('Overlay'))!;
-    overlayOption.click();
+    const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Glow"]')!;
+    expect(popover).not.toBeNull();
+    expect(glowTile.hasAttribute('data-open')).toBe(true);
+
+    // Zero native <input type="range"> elements: uses native LEGO pointer slider instead.
+    expect(popover.querySelector('input[type="range"]')).toBeNull();
+    const opacitySlider = popover.querySelector<HTMLElement>('[role="slider"][aria-label="Opacity"]')!;
+    expect(opacitySlider).not.toBeNull();
+    opacitySlider.getBoundingClientRect = () => new DOMRect(0, 0, 200, 34);
+    pointerEvent(opacitySlider, 'pointerdown', { x: 80, y: 17, pointerId: 5, pointerType: 'pen' });
+    pointerEvent(window, 'pointerup', { x: 80, y: 17, pointerId: 5, pointerType: 'pen' });
+    expect(findNode(service.layers(), 'layer-glow')?.opacity).toBe(40);
+
+    // 2) Subpage: Blending (27 modes + vertical Opacity and Fill sliders).
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open blend modes"]')!.click();
+    flush();
+    const fillSlider = popover.querySelector<HTMLElement>('[role="slider"][aria-label="Fill"]')!;
+    expect(fillSlider).not.toBeNull();
+    fillSlider.getBoundingClientRect = () => new DOMRect(0, 0, 34, 200);
+    pointerEvent(fillSlider, 'pointerdown', { x: 17, y: 50, pointerId: 6, pointerType: 'pen' });
+    pointerEvent(window, 'pointerup', { x: 17, y: 50, pointerId: 6, pointerType: 'pen' });
+    expect(findNode(service.layers(), 'layer-glow')?.fill).toBe(75);
+
+    const options = [...popover.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options.length).toBeGreaterThanOrEqual(27);
+    options.find((btn) => btn.textContent?.includes('Overlay'))!.click();
     flush();
     expect(findNode(service.layers(), 'layer-glow')?.blend).toBe('overlay');
 
-    // Return to main, then open ‹ Blend If page and tap black handle to split it.
-    popover!.querySelector<HTMLButtonElement>('button')!.click();
+    // Back to main -> open Mask subpage.
+    popover.querySelector<HTMLButtonElement>('button')!.click();
     flush();
-    popover!.querySelector<HTMLButtonElement>('[aria-label="Open Blend If"]')!.click();
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open mask settings"]')!.click();
+    flush();
+    expect(popover.textContent).toContain('Invert mask');
+    popover.querySelector<HTMLButtonElement>('button')!.click();
     flush();
 
-    const blackHandle = popover!.querySelector<HTMLButtonElement>('[aria-label="This Layer black handle"]')!;
-    blackHandle.click();
+    // Open Locks subpage.
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open Locks"]')!.click();
+    flush();
+    const lockPixelsBtn = [...popover.querySelectorAll<HTMLButtonElement>('button')].find(
+      (btn) => btn.textContent?.trim() === 'Lock Pixels'
+    )!;
+    lockPixelsBtn.click();
+    flush();
+    expect(findNode(service.layers(), 'layer-glow')?.locks.pixels).toBe(true);
+    popover.querySelector<HTMLButtonElement>('button')!.click();
     flush();
 
+    // Open Color tag subpage.
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open Color tag"]')!.click();
+    flush();
+    popover.querySelector<HTMLButtonElement>('[aria-label="Tag Red"]')!.click();
+    flush();
+    expect(findNode(service.layers(), 'layer-glow')?.colorTag).toBe('red');
+    popover.querySelector<HTMLButtonElement>('button')!.click();
+    flush();
+
+    // Open Blend If subpage -> tap black handle to split, then Reset.
+    popover.querySelector<HTMLButtonElement>('[aria-label="Open Blend If"]')!.click();
+    flush();
+    popover.querySelector<HTMLButtonElement>('[aria-label="This Layer black handle"]')!.click();
+    flush();
     const range = findNode(service.layers(), 'layer-glow')!.blendIf.thisLayer;
     expect(range[0]).not.toBe(range[1]);
-    expect(popover!.querySelector('[aria-label="This Layer black low"]')).not.toBeNull();
-    expect(popover!.querySelector('[aria-label="This Layer black high"]')).not.toBeNull();
-
-    // Reset restores [0, 0, 255, 255].
-    const resetBtn = [...popover!.querySelectorAll<HTMLButtonElement>('button')].find(
-      (btn) => btn.textContent?.trim() === 'Reset'
-    )!;
-    resetBtn.click();
+    expect(popover.querySelector('[aria-label="This Layer black low"]')).not.toBeNull();
+    expect(popover.querySelector('[aria-label="This Layer black high"]')).not.toBeNull();
+    [...popover.querySelectorAll<HTMLButtonElement>('button')]
+      .find((btn) => btn.textContent?.trim() === 'Reset')!
+      .click();
     flush();
     expect(findNode(service.layers(), 'layer-glow')!.blendIf.thisLayer).toEqual([0, 0, 255, 255]);
+
+    // 3) Popover follows selection when tapping another tile without closing.
+    const curvesTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-curves"]')!;
+    pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 7, pointerType: 'pen' });
+    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 7, pointerType: 'pen' });
+    expect(service.activeId()).toBe('layer-curves');
+    expect(document.querySelector('[role="dialog"][aria-label="Layer properties: Curves"]')).not.toBeNull();
+
+    // Tapping the anchored tile again closes the popover cleanly without flicker.
+    pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 8, pointerType: 'pen' });
+    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 8, pointerType: 'pen' });
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    // 4) Visible `⋯` button on the active tile opens properties, and 500ms hold opens properties directly.
+    const propsBtn = document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Curves"]')!;
+    expect(propsBtn).not.toBeNull();
+    propsBtn.click();
+    flush();
+    expect(document.querySelector('[role="dialog"][aria-label="Layer properties: Curves"]')).not.toBeNull();
+    propsBtn.click();
+    flush();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+
+    pointerEvent(glowTile, 'pointerdown', { x: 20, y: 20, pointerId: 9, pointerType: 'touch' });
+    vi.advanceTimersByTime(500);
+    flush();
+    expect(document.querySelector('[role="dialog"][aria-label="Layer properties: Glow"]')).not.toBeNull();
+    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 9, pointerType: 'touch' });
+    expect(document.querySelector('[role="dialog"][aria-label="Layer properties: Glow"]')).not.toBeNull();
   });
 
   it('groups layers on two-finger touch pinch with an Undo toast and supports right-swipe multi-select', () => {
@@ -369,19 +439,22 @@ describe('LayersStripPart', () => {
     flush();
     expect(service.maskBrush()).toBe('hide');
 
-    // Touch hold 220ms lifts the tile (`data-dragging`), and pen vertical drag >= 6px lifts immediately.
+    // Touch hold 220ms arms (`data-armed`), moving >= 10px begins drag (`data-dragging`); pen vertical drag >= 10px drags immediately.
     const curvesTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-curves"]')!;
     pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 20, pointerType: 'touch' });
     vi.advanceTimersByTime(225);
     flush();
+    expect(curvesTile.hasAttribute('data-armed')).toBe(true);
+    expect(curvesTile.hasAttribute('data-dragging')).toBe(false);
+    pointerEvent(window, 'pointermove', { x: 20, y: 34, pointerId: 20, pointerType: 'touch' });
     expect(curvesTile.hasAttribute('data-dragging')).toBe(true);
-    pointerEvent(window, 'pointerup', { x: 20, y: 20, pointerId: 20, pointerType: 'touch' });
+    pointerEvent(window, 'pointerup', { x: 20, y: 34, pointerId: 20, pointerType: 'touch' });
     expect(curvesTile.hasAttribute('data-dragging')).toBe(false);
 
     pointerEvent(curvesTile, 'pointerdown', { x: 20, y: 20, pointerId: 21, pointerType: 'pen' });
-    pointerEvent(window, 'pointermove', { x: 20, y: 28, pointerId: 21, pointerType: 'pen' });
+    pointerEvent(window, 'pointermove', { x: 20, y: 34, pointerId: 21, pointerType: 'pen' });
     expect(curvesTile.hasAttribute('data-dragging')).toBe(true);
-    pointerEvent(window, 'pointerup', { x: 20, y: 28, pointerId: 21, pointerType: 'pen' });
+    pointerEvent(window, 'pointerup', { x: 20, y: 34, pointerId: 21, pointerType: 'pen' });
 
     // Wide mode: labeled Reveal / Hide buttons, Red toggle, and exit button.
     dispose?.();

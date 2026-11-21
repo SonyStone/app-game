@@ -1746,15 +1746,17 @@ it('does not trigger board Edit Mode when holding still on a layer tile inside l
     glowTile.dispatchEvent(down);
     flush();
 
-    // After 220ms touch hold, layer tile lifts for drag.
+    // After 220ms touch hold without movement, tile arms visually (`data-armed`) without entering board Edit Mode.
     vi.advanceTimersByTime(240);
     flush();
-    expect(glowTile.hasAttribute('data-dragging')).toBe(true);
+    expect(glowTile.hasAttribute('data-armed')).toBe(true);
+    expect(glowTile.hasAttribute('data-dragging')).toBe(false);
 
-    // Even well past 450ms (board edit long-press threshold), board stays in live mode.
-    vi.advanceTimersByTime(400);
+    // Holding past 480ms opens Layer Properties directly instead of triggering board Edit Mode.
+    vi.advanceTimersByTime(300);
     flush();
     expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+    expect(document.querySelector('[role="dialog"][aria-label="Layer properties: Glow"]')).not.toBeNull();
 
     const up = new MouseEvent('pointerup', { clientX: 20, clientY: 20, button: 0, bubbles: true, cancelable: true });
     Object.defineProperties(up, { pointerId: { value: 7 }, pointerType: { value: 'touch' } });
