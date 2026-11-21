@@ -33,7 +33,6 @@
     "@app-game/solid-virtual": "workspace:*",
     "@app-game/solidjs-patterns": "workspace:*",
     "@app-game/spector": "workspace:*",
-    "@app-game/tanki": "workspace:*",
     "@app-game/three-examples": "workspace:*",
     "@app-game/twgl-examples": "workspace:*",
     "@app-game/typegpu-examples": "workspace:*",
