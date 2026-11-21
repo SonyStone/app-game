@@ -5,7 +5,7 @@ import { PressureCalibration } from '@app-game/pressure-calibration';
 import type { JSX } from '@solidjs/web';
 import { createEffect, createMemo, createSignal, Show, untrack } from 'solid-js';
 import { BrushStudio } from '../brush-editor';
-import { BrushStrokePreview } from '../brush-editor/BrushStrokePreview';
+import { BrushStrokePreview, previewPaper } from '../brush-editor/BrushStrokePreview';
 import { DrawingPad } from '../brush-editor/DrawingPad';
 import { newPresetName } from '../brush-library/newPresetName';
 import { PenPressurePane, penPressureStatus } from '../pressure-calibration';
@@ -48,6 +48,8 @@ export function BrushStudioDialog(props: {
   editor: BrushSettingsEditor;
   /** The host's rows for number settings; see `BrushStudio`. */
   hostRow?: Parameters<typeof BrushStudio>[0]['hostRow'];
+  /** A line of the host's under each category's title; see `BrushStudio`. */
+  paneHint?: JSX.Element;
   /** The host's page for the pen's pressure curve, in place of `PenPressurePane`. */
   penPane?: JSX.Element;
   /** Whether the dialog opens on the pen's page; read once, when mounted. */
@@ -78,6 +80,14 @@ export function BrushStudioDialog(props: {
   const [padSurface, setPadSurface] = createSignal<HTMLElement>();
   penPressure.watch(padSurface);
   const preset = createMemo(() => tools.preset());
+  /**
+   * What the studio edits, as its title: the preset's name, or while the eraser erases with the brush, the eraser
+   * and the brush preset it uses, whose settings the edits change.
+   */
+  const title = createMemo(() => {
+    const name = library.find(preset())?.name;
+    return tools.slot() === 'eraser' && tools.erasesWithBrush() ? `Eraser · uses ${name ?? 'the brush'}` : name;
+  });
   // The new brush's suggested name must not repeat the name of a user brush not yet listed.
   void library.loadAll();
   const newName = createMemo(() =>
@@ -153,8 +163,9 @@ export function BrushStudioDialog(props: {
         {(view) => (
           <BrushStudio
             brush={view()}
-            name={library.find(preset())?.name}
+            name={title()}
             hostRow={props.hostRow}
+            paneHint={props.paneHint}
             onChange={(text) => void editor.update(text)}
             onDone={() => props.onClose()}
             onCancel={() => {
@@ -232,7 +243,9 @@ export function BrushStudioDialog(props: {
 
 /**
  * The stroke preview of a brush editor for the session's current brush, `height` CSS pixels high, on white paper as
- * a new drawing's: Paint's stroke with the chosen preset's saved images and the images of `editor`'s latest ABR edit.
+ * a new drawing's, or dark paper for a color too light to show on white (`previewPaper`): Paint's stroke with the
+ * chosen preset's saved images and the images of `editor`'s latest ABR edit, its pressures through the pen's
+ * pressure curve, so editing the curve changes the sample too.
  */
 export function SessionStrokePreview(props: { session: PaintSession; editor: BrushSettingsEditor; height: number }) {
   const { session, editor } = props;
@@ -240,7 +253,8 @@ export function SessionStrokePreview(props: { session: PaintSession; editor: Bru
   return (
     <BrushStrokePreview
       brush={session.brush()}
-      background={previewPaper}
+      background={previewPaper(session.brush().color)}
+      pressureCurve={session.pressureCalibration.calibration()?.curve}
       height={props.height}
       resources={async () => {
         const preset = session.library.find(session.tools.preset());
@@ -258,9 +272,6 @@ export function SessionStrokePreview(props: { session: PaintSession; editor: Bru
     />
   );
 }
-
-/** The preview's paper: white, as a new drawing's, whatever the UI's colors. */
-const previewPaper = '#ffffff';
 
 /**
  * The saved images of the chosen preset (`preset`), loaded under the caller's owner and again whenever another preset

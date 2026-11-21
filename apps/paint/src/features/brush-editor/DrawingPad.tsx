@@ -7,6 +7,7 @@ import { createEffect, createSignal, createUniqueId, Show, untrack } from 'solid
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { studioBrushRecipe } from '../engine/studioBrushes';
 import styles from './BrushEditor.module.css';
+import { brushErases } from './brushErases';
 
 /**
  * A sheet of paper to try a brush on, for the brush studio's `pad` slot. It draws with the canvas's own stroke
@@ -14,9 +15,13 @@ import styles from './BrushEditor.module.css';
  * and the brush engines are those of a stroke on the drawing. It keeps a small scratch document of its own, in
  * memory, exactly as large as the pad is shown, so it never touches the user's document, its layers or its history.
  *
- * Each stroke keeps the brush it was drawn with: a change of a setting affects the strokes drawn after it, so two
- * strokes side by side compare two settings. Clear, beside the "Drawing pad" button, wipes the pad in one press; the
- * "Drawing pad" button opens the pad's other options, such as undoing the last stroke. A new size, as when the tablet turns, starts a new empty pad once the size has settled.
+ * The strokes on the pad follow the brush: a change of a setting draws them all again with it, so a slider's effect
+ * shows on what is already drawn. The options menu's "Keep strokes as drawn" turns that off, each stroke then keeping
+ * the brush it was drawn with, so two strokes side by side compare two settings. While the pad is empty, a quiet hint
+ * in its middle invites a stroke. While the brush erases (`brushErases`), the pad is washed in a mid-tone under the
+ * strokes, so that erasing leaves a visible mark. Undo and Clear at the top left act on the strokes in one press; the
+ * options button beside them opens the pad's options. A new size, as when the tablet turns, starts a new empty pad
+ * once the size has settled.
  */
 export function DrawingPad(props: {
   /** The brush strokes on the pad use, as a stroke on the drawing would receive it. */
@@ -36,6 +41,9 @@ export function DrawingPad(props: {
   let actions: BrushPreviewActions | undefined;
   // The canvas reports its status from its own effects and engine events.
   const [status, setStatus] = createSignal('', { ownedWrite: true });
+  const [strokes, setStrokes] = createSignal(0, { ownedWrite: true });
+  /** Whether strokes keep the brush they were drawn with rather than follow the brush's changes. */
+  const [keep, setKeep] = createSignal(false);
 
   return (
     <div class={styles.pad}>
@@ -51,15 +59,22 @@ export function DrawingPad(props: {
               width={current.width}
               height={current.height}
               redraw
-              restyle={false}
+              restyle={!keep()}
+              backdrop={brushErases(props.brush) ? erasingWash : undefined}
               controls={false}
               actions={(given) => (actions = given)}
               onStatus={(message) => setStatus(message === 'Ready' ? '' : message)}
+              onStrokes={setStrokes}
             />
           )}
         </Show>
+        <Show when={strokes() === 0}>
+          <p class={styles.padHint} aria-hidden="true">
+            Draw here to try the brush
+          </p>
+        </Show>
       </div>
-      <PadOptions onUndo={() => actions?.undo()} onClear={() => actions?.clear()} />
+      <PadOptions keep={keep()} onKeep={setKeep} onUndo={() => actions?.undo()} onClear={() => actions?.clear()} />
       <Show when={status()}>
         {(message) => (
           <p class={styles.padStatus} role="status">
@@ -102,12 +117,20 @@ function createSettledSize(measure: () => { width: number; height: number }) {
 /** Milliseconds a new pad size must hold before the pad is made again at it. */
 const settleDelay = 300;
 
+/** The mid-tone the pad is washed in while the brush erases, dark enough for the erased paper to stand out. */
+const erasingWash = '#8e9aa6';
+
 /**
- * The "Drawing pad" button at the pad's top left, the Clear button beside it for the pad's most frequent action, and
- * the list of the other options the first opens under it. A press on an option runs it and closes the list; a press outside it
- * or Escape closes it.
+ * The pad's buttons at its top left: Undo and Clear, its most frequent actions, then the options button, whose list
+ * opens under it: "Keep strokes as drawn" (`keep`), a check that `onKeep` changes. A press on an option runs it and
+ * closes the list; a press outside it or Escape closes it.
  */
-function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
+function PadOptions(props: {
+  keep: boolean;
+  onKeep: (keep: boolean) => void;
+  onUndo: () => void;
+  onClear: () => void;
+}) {
   const [open, setOpen] = createSignal(false);
   const [list, setList] = createSignal<HTMLElement>();
   const [button, setButton] = createSignal<HTMLElement>();
@@ -130,21 +153,26 @@ function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
 
   return (
     <div class={styles.padOptions}>
+      <button type="button" class={styles.padButton} onClick={() => props.onUndo()}>
+        <SketchIcon name="undo" size={18} />
+        Undo
+      </button>
+      <button type="button" class={styles.padButton} onClick={() => props.onClear()}>
+        <SketchIcon name="trash" size={18} />
+        Clear
+      </button>
       <button
         ref={setButton}
         type="button"
         class={styles.padButton}
+        aria-label="Pad options"
+        title="Pad options"
         aria-haspopup="menu"
         aria-expanded={open() ? 'true' : 'false'}
         aria-controls={listId}
         onClick={() => setOpen(!open())}
       >
-        <SketchIcon name="pencil" size={18} />
-        Drawing pad
-      </button>
-      <button type="button" class={styles.padButton} onClick={() => props.onClear()}>
-        <SketchIcon name="trash" size={18} />
-        Clear
+        <SketchIcon name="more" size={18} />
       </button>
       <Show when={open()}>
         <div
@@ -152,7 +180,7 @@ function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
           id={listId}
           class={styles.padMenu}
           role="menu"
-          aria-label="Drawing pad"
+          aria-label="Pad options"
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
               event.preventDefault();
@@ -161,9 +189,16 @@ function PadOptions(props: { onUndo: () => void; onClear: () => void }) {
             }
           }}
         >
-          <button type="button" role="menuitem" onClick={() => run(props.onUndo)}>
-            <SketchIcon name="undo" size={18} />
-            Undo last stroke
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={props.keep ? 'true' : 'false'}
+            onClick={() => run(() => props.onKeep(!props.keep))}
+          >
+            <Show when={props.keep} fallback={<span class={styles.padCheckSpace} />}>
+              <SketchIcon name="check" size={18} />
+            </Show>
+            Keep strokes as drawn
           </button>
         </div>
       </Show>
