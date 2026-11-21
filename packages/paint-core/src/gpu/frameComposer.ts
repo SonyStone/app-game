@@ -173,6 +173,8 @@ export function createFrameComposer(
           pass.end();
         }
 
+        // `layers` are the raster layers as they show (`shownLayers`): folders are Pass Through at full strength, so
+        // compositing them flat, with clipping resolved among siblings already, is compositing the tree.
         const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
         pages?.begin(layers);
         let read = view.a,
@@ -467,8 +469,13 @@ function viewSignature(camera: Camera, size: ViewSize, width: number, height: nu
   return `${camera.x},${camera.y},${camera.zoom},${camera.angle},${camera.mirrored},${size.width},${size.height},${width},${height}`;
 }
 
-/** Layer order and composite settings, clipping included; length-prefixed ids cannot collide with separators. */
-function compositionSignature(layers: readonly Layer[]) {
+/**
+ * Layer order and composite settings, clipping included; length-prefixed ids cannot collide with separators. Reads
+ * the layers as they show (`createDocument`'s `layers`), so a change of folders damages the view exactly when it
+ * changes what the canvas shows: wrapping layers in a visible folder changes nothing, hiding it changes the layers'
+ * visibility.
+ */
+export function compositionSignature(layers: readonly Layer[]) {
   let signature = '';
   for (const { id, visible, opacity, blend, clipping } of layers) {
     signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping};`;

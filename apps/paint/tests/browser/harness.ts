@@ -9,6 +9,7 @@ import { verifyBrushBatches } from '../gpu/brushBatchVerification';
 import { verifyFlowAccumulation } from '../gpu/flowAccumulationVerification';
 import { verifyLargeBrush } from '../gpu/largeBrushVerification';
 import { verifyLayerComposite } from '../gpu/layerCompositeVerification';
+import { verifyLayerFolders } from '../gpu/layerFolderVerification';
 import { verifyLayerMerge } from '../gpu/layerMergeVerification';
 import { verifyLiveTail } from '../gpu/liveTailVerification';
 import { verifyColdNavigation } from '../gpu/navigationStreamingVerification';
@@ -71,6 +72,7 @@ export const verifications = {
   'flow-accumulation': verifyFlowAccumulation,
   'layer-composite': verifyLayerComposite,
   'layer-merge': verifyLayerMerge,
+  'layer-folders': verifyLayerFolders,
   pressure: verifyPressureSpacing,
   'stroke-filtering': verifyStrokeFiltering,
   'live-tail': verifyLiveTail,
