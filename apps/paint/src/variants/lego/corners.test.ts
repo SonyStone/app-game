@@ -88,7 +88,7 @@ it('scales every corner alike for squircles, after the distances are taken off a
 });
 
 /** The LEGO stylesheets. */
-const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase', 'OptionsSheet', 'PartsTray'];
+const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase', 'PartsTray'];
 
 it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills', () => {
   const fixed = sheets

@@ -17,7 +17,7 @@ import type { PaintSession } from '../../features/session';
 import type { LegoServices } from './LegoServices';
 import { LegoStudio } from './LegoStudio';
 import { createGrid, defaultCell } from './grid';
-import { boxSections, partDefinition } from './parts';
+import { boxSections, partDefaultSpan, partDefinition } from './parts';
 
 const wiring = vi.hoisted(() => ({
   session: undefined as PaintSession | undefined,
@@ -228,8 +228,8 @@ it.each([
   const title = kind === 'canvas' ? 'Canvas paused' : 'Drawing engine stopped';
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(title);
   expect(button(action)).toBeDefined();
-  enterEdit();
-  openParts();
+  wiring.services!.options.open();
+  flush();
   click('Reset board');
   expect(wiring.session!.error()).toBe(failure);
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(title);
@@ -242,13 +242,15 @@ it.each([
 it('mounts no catalog content while closed, including after opening and closing it', () => {
   mount();
   enterEdit();
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
   expect(document.querySelector('[class*="kitPreview"]')).toBeNull();
-  openParts();
-  expect(document.querySelector('dialog[aria-label="Parts"]')).not.toBeNull();
+  const dialog = openParts();
+  expect(dialog.querySelector('nav[aria-label="Parts and options"]')).not.toBeNull();
+  dialog.querySelector<HTMLButtonElement>('[data-item="interface"]')!.click();
+  flush();
   expect(button('Reset board')).toBeDefined();
   click('Done');
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
   expect(button('Reset board')).toBeUndefined();
 });
 
@@ -1072,7 +1074,8 @@ it('opens Options from its part and from the File menu, and closes it with Done,
   expect(optionsSheet()).toBeNull();
 
   const fromPart = openOptions();
-  expect(fromPart.querySelector('nav[aria-label="Option sections"]')).not.toBeNull();
+  expect(fromPart.querySelector('nav[aria-label="Parts and options"]')).not.toBeNull();
+  expect(fromPart.querySelector('section[data-section="interface"]')).not.toBeNull();
   click('Done');
   expect(optionsSheet()).toBeNull();
 
@@ -1186,21 +1189,21 @@ it("lets the user's stored grid size win over the host's cell", () => {
   expect(editorStyle('--lego-cell')).toBe('44px');
 });
 
-it("makes Options' sections and a section two screens, a section opening under a way back", () => {
+it("makes the unified dialog's sections two screens on narrow views, opening under a way back", () => {
   storeParts(['action:options']);
   mount();
   const sheet = openOptions();
-  const list = sheet.querySelector<HTMLElement>('nav[aria-label="Option sections"]')!;
+  const list = sheet.querySelector<HTMLElement>('nav[aria-label="Parts and options"]')!;
   const split = list.parentElement!.parentElement!;
   expect(split.dataset.view).toBe('list');
-  expect([...list.querySelectorAll('[data-item]')].map((row) => row.textContent)).toEqual(['Interface']);
+  expect([...list.querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['Settings', 'Parts']);
   expect(list.querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('interface');
 
   list.querySelector<HTMLButtonElement>('[data-item="interface"]')!.click();
   flush();
   expect(split.dataset.view).toBe('detail');
-  const back = [...sheet.querySelectorAll('button')].find((element) => element.textContent === 'Options')!;
-  expect(back.parentElement!.textContent).toBe('OptionsInterface');
+  const back = [...sheet.querySelectorAll('button')].find((element) => element.textContent === 'Sections')!;
+  expect(back.parentElement!.textContent).toBe('SectionsInterface');
   back.click();
   flush();
   expect(split.dataset.view).toBe('list');
@@ -1220,9 +1223,9 @@ it('leaves nothing of the tile look trial but the one-time carry-over of its cel
   expect(readFileSync(path.join(source, mentions[0]!), 'utf8').match(/tile-look/g)).toHaveLength(1);
 });
 
-/** The Options sheet, if open. */
+/** The unified Parts & Options dialog, if open. */
 function optionsSheet() {
-  return document.querySelector<HTMLDialogElement>('dialog[aria-label="Options"]');
+  return document.querySelector<HTMLDialogElement>('dialog[aria-label="Parts and Options"]');
 }
 
 /** Opens Options through its part on the board and returns its dialog. */
@@ -1362,7 +1365,7 @@ function enterEdit() {
   flush();
 }
 
-/** Opens the modal Parts catalog through the floating Edit bar's Parts button. */
+/** Opens the unified Parts & Options dialog through the floating Edit bar's Parts button. */
 function openParts() {
   const parts = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="Edit layout"] button')].find((el) =>
     el.textContent?.includes('Parts')
@@ -1370,7 +1373,7 @@ function openParts() {
   expect(parts).toBeDefined();
   parts!.click();
   flush();
-  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Parts"]');
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Parts and Options"]');
   expect(dialog).not.toBeNull();
   return dialog!;
 }
@@ -1507,7 +1510,7 @@ it('opens the Sidebar Parts catalog, moves away on drag, places onto the 1:1 boa
   expect(document.body.textContent).toContain('Drop to cancel');
   pointer(window, 'pointerup', 500, 420);
 
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
   expect(document.querySelector('[data-panel] [data-part-kind="action:redo"]')).not.toBeNull();
   expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
 
@@ -1518,14 +1521,14 @@ it('opens the Sidebar Parts catalog, moves away on drag, places onto the 1:1 boa
   pointer(window, 'pointermove', 480, 28);
   expect(reopened.hasAttribute('data-away')).toBe(true);
   pointer(window, 'pointerup', 480, 28);
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBe(reopened);
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBe(reopened);
   expect(reopened.hasAttribute('data-away')).toBe(false);
   expect(document.querySelector('[data-panel] [data-part-kind="action:eraser"]')).toBeNull();
 
   // Escape closes the catalog first, then exits Edit mode on the next Escape.
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   flush();
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
   expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
 
   // Dragging an existing board part onto the top red "Drop to put away" capsule removes it from the board.
@@ -1539,6 +1542,68 @@ it('opens the Sidebar Parts catalog, moves away on drag, places onto the 1:1 boa
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   flush();
   expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+});
+
+it('drags parts out of the unified Options dialog in Live mode at their defaultSpan with matching looks', () => {
+  storeParts(['action:options']);
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.getAttribute('role') === 'status' && this.textContent?.includes('Drop to')) {
+      return new DOMRect(400, 14, 220, 44);
+    }
+
+    return new DOMRect(0, 0, 1024, 768);
+  });
+  mount(28);
+
+  // Verify defaultSpan registry coverage across families.
+  expect(partDefaultSpan('value:size')).toEqual({ columns: 4, rows: 1 });
+  expect(partDefaultSpan('preset:builtin:soft-round')).toEqual({ columns: 3, rows: 2 });
+  expect(partDefaultSpan('color:wheel')).toEqual({ columns: 5, rows: 5 });
+  expect(partDefaultSpan('color:swatch')).toEqual({ columns: 2, rows: 2 });
+  expect(partDefaultSpan('color:pair')).toEqual({ columns: 2, rows: 1 });
+  expect(partDefaultSpan('color:hex')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('color:history')).toEqual({ columns: 4, rows: 1 });
+  expect(partDefaultSpan('color:palette')).toEqual({ columns: 4, rows: 2 });
+  expect(partDefaultSpan('color:harmony')).toEqual({ columns: 4, rows: 1 });
+  expect(partDefaultSpan('color:mask')).toEqual({ columns: 4, rows: 1 });
+  expect(partDefaultSpan('layers:list')).toEqual({ columns: 4, rows: 5 });
+  expect(partDefaultSpan('layers:name')).toEqual({ columns: 4, rows: 1 });
+  expect(partDefaultSpan('layers:blend')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('layers:smooth-color')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('layer:add')).toEqual({ columns: 1, rows: 1 });
+  expect(partDefaultSpan('action:brush-editor')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('action:brushes')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('action:eraser')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('action:local-undo')).toEqual({ columns: 3, rows: 1 });
+  expect(partDefaultSpan('action:file')).toEqual({ columns: 2, rows: 1 });
+  expect(partDefaultSpan('value:pen-pressure-curve')).toEqual({ columns: 5, rows: 4 });
+  expect(partDefaultSpan('action:undo')).toEqual({ columns: 1, rows: 1 });
+
+  // Open Options in Live mode (not Edit mode), switch to Values, and drag Size out onto the 1:1 board.
+  const dialog = openOptions();
+  expect(dialog.querySelector('section[data-section="interface"]')).not.toBeNull();
+  dialog.querySelector<HTMLButtonElement>('nav[aria-label="Parts and options"] [data-item="Values"]')!.click();
+  flush();
+
+  const sizeTile = dialog.querySelector<HTMLElement>('[title="Size"]')!;
+  expect(sizeTile.dataset.span).toBe('4x1');
+  // Preview renders Size as a slider (with aria-orientation="horizontal"), not a 1×1 knob.
+  expect(sizeTile.querySelector('[role="slider"]')?.getAttribute('aria-orientation')).toBe('horizontal');
+
+  pointer(sizeTile, 'pointerdown', 120, 220);
+  expect(dialog.hasAttribute('data-away')).toBe(false);
+  pointer(window, 'pointermove', 520, 420);
+  expect(dialog.hasAttribute('data-away')).toBe(true);
+  pointer(window, 'pointerup', 520, 420);
+
+  // Dialog closes, stays in Live mode, and Size lands on the 1:1 board at 4×1 (124px × 28px at 28px cell).
+  expect(optionsSheet()).toBeNull();
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+  const landed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:size"]')!;
+  expect(landed).not.toBeNull();
+  const partEl = landed.closest<HTMLElement>('[data-part]')!;
+  expect(partEl.style.width).toBe('124px');
+  expect(partEl.style.height).toBe('28px');
 });
 
 it('relays a host cell change to mounted parts, captions and corners while keeping the stored board', () => {

@@ -35,6 +35,7 @@ export const pressureCurvePart = definePart({
   section: 'Tools',
   label: curveLabel,
   icon: 'pressure',
+  defaultSpan: { columns: 5, rows: 4 },
   looks: {
     looks: curveLooks(),
     auto: (room) => (lookFits(curveLooks()[1]!, room) ? 'curve' : 'icon')

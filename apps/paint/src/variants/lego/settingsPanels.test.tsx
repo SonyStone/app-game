@@ -45,31 +45,36 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("chooses the catalog's category in a sidebar, shows only its items, and keeps the choice across close", () => {
+it('combines Settings and Parts in one sidebar dialog, opens on Interface or last Parts category, and previews default spans', () => {
   const { services } = owned(createTestServices);
   const [open, setOpen] = createSignal(true);
+  const [initial, setInitial] = createSignal<'interface' | 'parts'>('parts');
   const kits = owned(createKits);
   mount(() => (
     <LegoServicesContext value={services}>
       <PartsTray
         open={open()}
+        initial={initial()}
         presets={services.presets.all}
         kits={kits}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
+        onEditLayout={vi.fn()}
         onClose={() => setOpen(false)}
         flashKit={undefined}
       />
     </LegoServicesContext>
   ));
   const families = partFamilies(services.presets.all);
-  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Families of parts"]')!;
+  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Parts and options"]')!;
   const rows = () => [...sidebar().querySelectorAll<HTMLButtonElement>('[data-item]')];
-  const pane = () => document.querySelector<HTMLElement>('dialog[aria-label="Parts"] section')!;
+  const pane = () => document.querySelector<HTMLElement>('dialog[aria-label="Parts and Options"] section')!;
   const shownParts = () => pane().querySelectorAll('[title]').length;
 
+  expect([...sidebar().querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['Settings', 'Parts']);
   expect(rows().map((row) => [row.dataset.item, row.textContent])).toEqual([
+    ['interface', 'Interface'],
     ['Kits', `Kits${kits.kits().length}`],
     ...families.map((family) => [family.id, `${family.title}${family.kinds.length}`])
   ]);
@@ -83,6 +88,15 @@ it("chooses the catalog's category in a sidebar, shows only its items, and keeps
   ).toEqual(['Tools']);
   expect(pane().getAttribute('aria-label')).toBe('Tools');
   expect(shownParts()).toBe(families.find((family) => family.id === 'Tools')!.kinds.length);
+  // Multi-cell default spans show their span badge; 1×1 icons omit it.
+  expect(pane().querySelector<HTMLElement>('[title="File"]')!.dataset.span).toBe('2x1');
+  expect(pane().querySelector<HTMLElement>('[title="Undo"]')!.dataset.span).toBe('1x1');
+
+  rows()
+    .find((row) => row.dataset.item === 'Values')!
+    .click();
+  flush();
+  expect(pane().querySelector<HTMLElement>('[title="Size"]')!.dataset.span).toBe('4x1');
 
   rows()
     .find((row) => row.dataset.item === 'Kits')!
@@ -97,16 +111,27 @@ it("chooses the catalog's category in a sidebar, shows only its items, and keeps
   flush();
   expect(pane().getAttribute('aria-label')).toBe('Color');
   expect(shownParts()).toBe(families.find((family) => family.id === 'Color')!.kinds.length);
+  expect(pane().querySelector<HTMLElement>('[title="Picker"]')!.dataset.span).toBe('5x5');
+
+  // Opening as Options lands on Interface; reopening as Parts restores the last Parts category (Color).
+  setOpen(false);
+  flush();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
+  setInitial('interface');
+  setOpen(true);
+  flush();
+  expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('interface');
+  expect(pane().querySelector('[data-grid-sample]')).not.toBeNull();
 
   setOpen(false);
   flush();
-  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  setInitial('parts');
   setOpen(true);
   flush();
   expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
 });
 
-it("makes the catalog's categories and a category's parts two screens, opening under a way back", () => {
+it("makes the dialog's sections and content two screens, opening under a way back", () => {
   const { services } = owned(createTestServices);
   const [open, setOpen] = createSignal(true);
   const kits = owned(createKits);
@@ -124,8 +149,8 @@ it("makes the catalog's categories and a category's parts two screens, opening u
       />
     </LegoServicesContext>
   ));
-  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Families of parts"]')!;
-  // The split holds the side column, then the category's pane; which one a narrow dialog shows is its `data-view`.
+  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Parts and options"]')!;
+  // The split holds the side column, then the section's pane; which one a narrow dialog shows is its `data-view`.
   const split = () => sidebar().parentElement!.parentElement!;
   const pane = () => split().children[1] as HTMLElement;
   expect(split().dataset.view).toBe('list');
@@ -135,8 +160,8 @@ it("makes the catalog's categories and a category's parts two screens, opening u
   flush();
   expect(split().dataset.view).toBe('detail');
   expect(pane().getAttribute('aria-label')).toBe('Color');
-  const back = [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Parts')!;
-  expect(back.parentElement!.textContent).toBe('PartsColor');
+  const back = [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Sections')!;
+  expect(back.parentElement!.textContent).toBe('SectionsColor');
 
   // The screen chosen stays across closing and reopening.
   setOpen(false);
@@ -144,13 +169,13 @@ it("makes the catalog's categories and a category's parts two screens, opening u
   setOpen(true);
   flush();
   expect(split().dataset.view).toBe('detail');
-  [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Parts')!.click();
+  [...pane().querySelectorAll('button')].find((button) => button.textContent === 'Sections')!.click();
   flush();
   expect(split().dataset.view).toBe('list');
   expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
 });
 
-it('searches parts and kits across every category, clears with Escape, and marks parts already on the board', () => {
+it('searches parts and kits from any section including Interface, clears with Escape, and marks parts on the board', () => {
   const { services } = owned(createTestServices);
   const kits = owned(createKits);
   const close = vi.fn();
@@ -158,6 +183,7 @@ it('searches parts and kits across every category, clears with Escape, and marks
     <LegoServicesContext value={services}>
       <PartsTray
         open={true}
+        initial="interface"
         presets={services.presets.all}
         kits={kits}
         onBoard={new Set(['action:undo', 'layers:list'])}
@@ -170,9 +196,7 @@ it('searches parts and kits across every category, clears with Escape, and marks
     </LegoServicesContext>
   ));
 
-  const undoTile = document.querySelector<HTMLElement>('[title="Undo"]')!.closest('[data-on-board]');
-  expect(undoTile).not.toBeNull();
-  expect(undoTile!.textContent).toContain('On board');
+  expect(document.querySelector('section[aria-label="Interface"]')).not.toBeNull();
 
   const input = document.querySelector<HTMLInputElement>('input[aria-label="Search parts"]')!;
   input.value = 'layer';
@@ -181,7 +205,10 @@ it('searches parts and kits across every category, clears with Escape, and marks
 
   const results = document.querySelector<HTMLElement>('section[aria-label="Search results"]')!;
   expect(results).not.toBeNull();
-  expect(results.querySelector('[title="Layer list"]')).not.toBeNull();
+  const listTile = results.querySelector<HTMLElement>('[title="Layer list"]')!;
+  expect(listTile).not.toBeNull();
+  expect(listTile.dataset.span).toBe('4x5');
+  expect(listTile.closest('[data-on-board]')!.textContent).toContain('On board');
   expect(results.querySelector('[title="Undo"]')).toBeNull();
   expect(results.querySelector('[title="Kit: Layers"]')).not.toBeNull();
   expect(results.querySelector('[title="Kit: OKLCH wheel"]')).toBeNull();
@@ -193,12 +220,12 @@ it('searches parts and kits across every category, clears with Escape, and marks
     'No matching parts or kits'
   );
 
-  // Escape clears the active search first without closing the dialog.
+  // Escape clears the active search first without closing the dialog and returns to Interface.
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   flush();
   expect(input.value).toBe('');
   expect(close).not.toHaveBeenCalled();
-  expect(document.querySelector('section[aria-label="Tools"]')).not.toBeNull();
+  expect(document.querySelector('section[aria-label="Interface"]')).not.toBeNull();
 });
 
 it('drops legacy workbench panels and their owned folders when loading a stored board', () => {

@@ -23,6 +23,7 @@ export const colorParts = [
     group: 'colors',
     section: 'Color',
     label: 'Swatch',
+    defaultSpan: { columns: 2, rows: 2 },
     owned: { parts: swatchPanelParts },
     needs: (s, f) => ({
       get color() {
@@ -41,6 +42,7 @@ export const colorParts = [
     group: 'color-pickers',
     section: 'Color',
     label: 'Picker',
+    defaultSpan: { columns: 5, rows: 5 },
     looks: { looks: wheelLooks, auto: autoWheelLook },
     needs: (s, f) =>
       merge(colorInput(s, f), {
@@ -67,6 +69,7 @@ export const colorParts = [
     group: 'colors',
     section: 'Color',
     label: 'Fore/back',
+    defaultSpan: { columns: 2, rows: 1 },
     needs: (s, f) => {
       const colors = createMemo(() => ({ foreground: s.color.value(), background: s.color.background() }));
       return {
@@ -81,13 +84,23 @@ export const colorParts = [
     },
     View: PairPart
   }),
-  definePart({ kind: 'color:hex', family: 'color', group: 'colors', section: 'Color', label: 'Hex', needs: colorInput, View: HexPart }),
+  definePart({
+    kind: 'color:hex',
+    family: 'color',
+    group: 'colors',
+    section: 'Color',
+    label: 'Hex',
+    defaultSpan: { columns: 3, rows: 1 },
+    needs: colorInput,
+    View: HexPart
+  }),
   definePart({
     kind: 'color:history',
     family: 'color',
     group: 'colors',
     section: 'Color',
     label: 'History',
+    defaultSpan: { columns: 4, rows: 1 },
     needs: (s, f) =>
       merge(colorInput(s, f), {
         get span() {
@@ -105,6 +118,7 @@ export const colorParts = [
     group: 'colors',
     section: 'Color',
     label: 'Palette',
+    defaultSpan: { columns: 4, rows: 2 },
     needs: (s, f) =>
       merge(colorInput(s, f), {
         get span() {
@@ -119,6 +133,7 @@ export const colorParts = [
     group: 'color-pickers',
     section: 'Color',
     label: 'Harmony',
+    defaultSpan: { columns: 4, rows: 1 },
     needs: guides,
     View: HarmonyPart
   }),
@@ -128,6 +143,7 @@ export const colorParts = [
     group: 'color-pickers',
     section: 'Color',
     label: 'Gamut mask',
+    defaultSpan: { columns: 4, rows: 1 },
     needs: guides,
     View: MaskPart
   })

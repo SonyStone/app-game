@@ -21,48 +21,72 @@ const symmetryLooks: readonly LookSpec[] = [
 
 /** Single-command definitions. Each binding reads only the capability needed by its button. */
 export const actionParts = [
-  action('brush-editor', 'brush', 'Brush settings', 'sliders', (s, f) => ({ onPress: f.command(s.brushEditor.open) })),
-  action('file', 'file', 'File', 'paper', () => ({}), {
-    needs: (s, f) => ({
-      get ready() {
-        return s.files.ready();
-      },
-      import: f.command(s.files.import),
-      download: f.command(s.files.download),
-      png: f.command(s.files.png),
-      psd: f.command(s.files.psd),
-      place: f.command(s.files.place),
-      editLayout: f.command(s.options.editLayout),
-      options: f.command(s.options.open),
-      onDone: f.onDone
-    }),
-    View: FileMenu
-  }),
-  action('brushes', 'brush', 'Brushes', 'brush', () => ({}), {
-    needs: (s, f) => ({
-      get presets() {
-        return s.presets.all();
-      },
-      get recent() {
-        return s.presets.recent();
-      },
-      get preset() {
-        return s.tools.preset();
-      },
-      get disabled() {
-        return !s.layers.ready();
-      },
-      onImport: s.presets.openAbr && f.command(s.presets.openAbr),
-      onImportFile: f.command(s.presets.importFile),
-      onExportFile: f.command(s.presets.exportFile),
-      onChoose: f.command(s.presets.use)
-    }),
-    View: (props) => (
-      <section class={styles.brushesCard}>
-        <BrushLibrary title="Brushes" sidebar {...props} />
-      </section>
-    )
-  }),
+  action(
+    'brush-editor',
+    'brush',
+    'Brush settings',
+    'sliders',
+    (s, f) => ({ onPress: f.command(s.brushEditor.open) }),
+    undefined,
+    { columns: 3, rows: 1 }
+  ),
+  action(
+    'file',
+    'file',
+    'File',
+    'paper',
+    () => ({}),
+    {
+      needs: (s, f) => ({
+        get ready() {
+          return s.files.ready();
+        },
+        import: f.command(s.files.import),
+        download: f.command(s.files.download),
+        png: f.command(s.files.png),
+        psd: f.command(s.files.psd),
+        place: f.command(s.files.place),
+        editLayout: f.command(s.options.editLayout),
+        options: f.command(s.options.open),
+        onDone: f.onDone
+      }),
+      View: FileMenu
+    },
+    { columns: 2, rows: 1 }
+  ),
+  action(
+    'brushes',
+    'brush',
+    'Brushes',
+    'brush',
+    () => ({}),
+    {
+      needs: (s, f) => ({
+        get presets() {
+          return s.presets.all();
+        },
+        get recent() {
+          return s.presets.recent();
+        },
+        get preset() {
+          return s.tools.preset();
+        },
+        get disabled() {
+          return !s.layers.ready();
+        },
+        onImport: s.presets.openAbr && f.command(s.presets.openAbr),
+        onImportFile: f.command(s.presets.importFile),
+        onExportFile: f.command(s.presets.exportFile),
+        onChoose: f.command(s.presets.use)
+      }),
+      View: (props) => (
+        <section class={styles.brushesCard}>
+          <BrushLibrary title="Brushes" sidebar {...props} />
+        </section>
+      )
+    },
+    { columns: 3, rows: 1 }
+  ),
   definePart({
     kind: 'action:symmetry',
     family: 'action',
@@ -99,7 +123,7 @@ export const actionParts = [
   })),
   // Opens the brush studio on its Pen page, the one place where pen pressure is measured and edited.
   action('pressure', 'pen', 'Pressure calibration', 'pressure', (s, f) => ({ onPress: f.command(s.pen.open) })),
-  tool('eraser', 'Eraser', 'erase'),
+  tool('eraser', 'Eraser', 'erase', { columns: 3, rows: 1 }),
   tool('lasso', 'Lasso', 'lasso'),
   tool('fill', 'Fill', 'fill'),
   action('transform', 'tools', 'Transform', 'move', (s, f) => ({
@@ -120,7 +144,7 @@ export const actionParts = [
     },
     onPress: f.command(s.history.redo)
   })),
-  tool('local-undo', 'Local undo', 'localUndo'),
+  tool('local-undo', 'Local undo', 'localUndo', { columns: 3, rows: 1 }),
   action('mixing', 'colors', 'Mixing', 'picker', (s, f) => ({
     get active() {
       return s.windows.isOpen('palette');
@@ -196,7 +220,8 @@ function action<N extends object, P extends object = N>(
   popup?: {
     needs: (services: LegoServices, frame: PartBinding) => P;
     View: (props: P) => ReturnType<typeof ActionPart>;
-  }
+  },
+  defaultSpan?: Span
 ) {
   return definePart({
     kind: `action:${id}`,
@@ -205,6 +230,7 @@ function action<N extends object, P extends object = N>(
     section: 'Tools',
     label,
     icon,
+    defaultSpan,
     popup,
     needs: (services, frame) =>
       merge(
@@ -223,17 +249,30 @@ function action<N extends object, P extends object = N>(
   });
 }
 
-function tool(id: Parameters<LegoServices['tools']['toggle']>[0], label: string, icon: SketchIconName) {
-  return action(id, 'tools', label, icon, (services, frame) => ({
-    get active() {
-      return services.tools.current() === id;
-    },
-    onPress: frame.command((anchor: Element) => {
-      if (!services.tools.toggle(id)) {
-        frame.onPopup(anchor, { kind: 'note', text: fillNote });
-      }
-    })
-  }));
+function tool(
+  id: Parameters<LegoServices['tools']['toggle']>[0],
+  label: string,
+  icon: SketchIconName,
+  defaultSpan?: Span
+) {
+  return action(
+    id,
+    'tools',
+    label,
+    icon,
+    (services, frame) => ({
+      get active() {
+        return services.tools.current() === id;
+      },
+      onPress: frame.command((anchor: Element) => {
+        if (!services.tools.toggle(id)) {
+          frame.onPopup(anchor, { kind: 'note', text: fillNote });
+        }
+      })
+    }),
+    undefined,
+    defaultSpan
+  );
 }
 
 const fillNote = 'Fill paints inside a selection: circle an area with the lasso, then tap Fill and tap inside it.';

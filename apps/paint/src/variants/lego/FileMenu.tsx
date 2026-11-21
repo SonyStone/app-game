@@ -14,8 +14,8 @@ export const FileApplicationControls = createContext<(() => JSX.Element) | null>
  * an image as a new layer, save the drawing, and export the visible canvas as PNG or every layer as PSD. Saved and
  * exported files are browser downloads, or land in Downloads/Paint in the Android app. Each command waits for the
  * engine; `onDone` closes the menu once one ran or a file was picked. After them, Edit layout enters board edit mode
- * and Options opens the editor's own settings (`OptionsSheet`), neither needing the engine. The commands are Settings
- * rows (`SettingsRows`), as every list of LEGO's panels.
+ * and Options opens the unified Parts & Options dialog on Interface (`PartsTray`), neither needing the engine. The
+ * commands are Settings rows (`SettingsRows`), as every list of LEGO's panels.
  */
 export function FileMenu(props: {
   ready: boolean;

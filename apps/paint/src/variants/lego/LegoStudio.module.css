@@ -1389,9 +1389,9 @@
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 5px;
+  gap: 6px;
   min-width: 60px;
-  padding: 8px 6px;
+  padding: 10px 8px 8px;
   border-radius: var(--lego-r-plate);
   background: rgb(255 255 255 / 0.04);
   border: 1px solid rgb(255 255 255 / 0.06);
@@ -1407,18 +1407,56 @@
   &[data-on-board] {
     border-color: rgb(61 126 255 / 0.38);
   }
+
+  &[data-compact] {
+    padding: 6px;
+  }
+}
+
+.trayPreviewSlot {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 80px;
+
+  &[data-compact] {
+    min-height: 52px;
+  }
 }
 
 .trayTile {
   position: relative;
-  width: var(--lego-cell);
-  height: var(--lego-cell);
-  border-radius: var(--lego-r-tile);
+  border-radius: calc(var(--lego-r-tile) * var(--tile-scale, 1));
   overflow: hidden;
   background: var(--lego-tile);
   color: var(--lego-ink);
   cursor: grab;
   touch-action: none;
+}
+
+.trayScaled {
+  position: relative;
+  transform-origin: 0 0;
+}
+
+.trayMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.traySpan {
+  padding: 1px 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(255 255 255 / 0.1);
+  color: rgb(255 255 255 / 0.68);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .trayCaption {

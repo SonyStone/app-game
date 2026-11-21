@@ -26,6 +26,7 @@ export const layerParts = [
     section: 'Layers',
     label: 'Layer list',
     icon: 'book',
+    defaultSpan: { columns: 4, rows: 5 },
     looks: { looks: listLooks, auto: (room) => (lookFits(listLooks[1]!, room) ? 'wide' : 'narrow') },
     needs: (s, f) =>
       merge(layerNeeds(s, f), {
@@ -61,6 +62,7 @@ export const layerParts = [
     section: 'Layers',
     label: 'Layer name',
     icon: 'paper',
+    defaultSpan: { columns: 4, rows: 1 },
     needs: layerNeeds,
     View: (props) => (
       <LayerName
@@ -77,6 +79,7 @@ export const layerParts = [
     section: 'Layers',
     label: 'Blend mode',
     icon: 'gradient',
+    defaultSpan: { columns: 3, rows: 1 },
     needs: (s, f) => {
       const mode = createMemo(
         () => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId)!.blend
@@ -111,6 +114,7 @@ export const layerParts = [
     section: 'Layers',
     label: 'Smooth color',
     icon: 'gradient',
+    defaultSpan: { columns: 3, rows: 1 },
     needs: (s, f) => ({
       get active() {
         return s.layers.state().linearBlending;

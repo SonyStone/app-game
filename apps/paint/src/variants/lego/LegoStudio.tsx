@@ -26,7 +26,6 @@ import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
 import { chooseLook } from './looks';
 import { createLegoOptions, deviceCell } from './options';
-import { OptionsSheet } from './OptionsSheet';
 import { PartFrame } from './PartFrame';
 import { currentKind, partDefinition } from './parts';
 import { brushSettingKind } from './parts/brushChannels';
@@ -34,6 +33,7 @@ import type { Popup } from './parts/definition';
 import { penPressureKind, pressureCurveSpan } from './parts/pressureCurve';
 import { ValueFaceSwitch } from './parts/valueFaces';
 import { namedSliderSpan } from './parts/values';
+import type { CatalogTarget } from './PartsTray';
 import { StudioSettingRow } from './StudioSettingRow';
 
 /**
@@ -72,8 +72,8 @@ export function LegoStudio(
   }
 ) {
   const [editing, setEditing] = createSignal(false);
-  /** Whether the modal Parts catalog is open inside edit mode. */
-  const [partsOpen, setPartsOpen] = createSignal(false);
+  /** Which section the unified Options & Parts dialog is open on, or `undefined` while closed. */
+  const [catalog, setCatalog] = createSignal<CatalogTarget>();
   /** The swatch whose panel is open; see `BoardView`. */
   const [openPanel, setOpenPanel] = createSignal<string>();
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
@@ -99,8 +99,6 @@ export function LegoStudio(
   const options = createLegoOptions();
   /** The cell: the user's choice, else the host's, else the device's default. */
   const grid = createGrid(() => options.cell() ?? validCell(props.cellSize) ?? deviceCell());
-  /** Whether the Options sheet covers the screen. */
-  const [optionsOpen, setOptionsOpen] = createSignal(false);
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
@@ -108,14 +106,13 @@ export function LegoStudio(
   const enterEdit = () => {
     setPopup(undefined);
     setOpenPanel(undefined);
-    setOptionsOpen(false);
-    setPartsOpen(false);
+    setCatalog(undefined);
     setEditing(true);
   };
   const exitEdit = () => {
     setPopup(undefined);
     setOpenPanel(undefined);
-    setPartsOpen(false);
+    setCatalog(undefined);
     setEditing(false);
   };
 
@@ -144,7 +141,7 @@ export function LegoStudio(
       setCell: options.setCell,
       open: () => {
         setPopup(undefined);
-        setOptionsOpen(true);
+        setCatalog('interface');
       },
       editLayout: enterEdit
     }
@@ -163,8 +160,8 @@ export function LegoStudio(
   session.createShortcuts({
     closePanel() {
       // Escape and the Android back gesture close a dialog first, keeping its changes, as Done does.
-      if (optionsOpen()) {
-        setOptionsOpen(false);
+      if (catalog() !== undefined) {
+        setCatalog(undefined);
         return true;
       }
 
@@ -180,11 +177,6 @@ export function LegoStudio(
 
       if (openPanel()) {
         setOpenPanel(undefined);
-        return true;
-      }
-
-      if (editing() && partsOpen()) {
-        setPartsOpen(false);
         return true;
       }
 
@@ -246,8 +238,9 @@ export function LegoStudio(
               kits={kits}
               session={session}
               editing={editing()}
-              partsOpen={partsOpen()}
-              onPartsOpen={setPartsOpen}
+              catalog={catalog()}
+              onOpenCatalog={setCatalog}
+              onCloseCatalog={() => setCatalog(undefined)}
               onEnterEdit={enterEdit}
               onExitEdit={exitEdit}
               openPanel={openPanel()}
@@ -376,9 +369,6 @@ export function LegoStudio(
                 onMeasuring={setPenMeasuring}
                 onClose={closeStudio}
               />
-            </Show>
-            <Show when={optionsOpen()}>
-              <OptionsSheet onClose={() => setOptionsOpen(false)} onEditLayout={enterEdit} />
             </Show>
             <SessionNotices session={session} />
           </div>

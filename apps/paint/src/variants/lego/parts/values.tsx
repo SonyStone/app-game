@@ -209,6 +209,7 @@ export function defineValuePart(channel: ValueChannel) {
     section: channel.section ?? 'Values',
     studioOnly: channel.studioOnly,
     label: channel.label,
+    defaultSpan: { columns: 4, rows: 1 },
     looks: { looks, auto: (room) => (lookFitsSlider(room) ? 'slider' : 'knob') },
     needs: (services, frame) => valueNeeds(services, frame, channel),
     View: ValuePart,

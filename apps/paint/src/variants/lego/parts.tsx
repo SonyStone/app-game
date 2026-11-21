@@ -1,5 +1,5 @@
 import { replacedSettings } from '../../features/brush-editor/schema';
-import type { Part } from './board';
+import type { Part, Span } from './board';
 import type { Room } from './grid';
 import type { LegoServices } from './LegoServices';
 import { resolveLook } from './looks';
@@ -90,6 +90,18 @@ export function partGroup(kind: string) {
 export function partLooks(kind: string) {
   return partDefinition(kind)?.looks;
 }
+
+/** The default cell span a new part of `kind` shows at in the catalog and lands with on the board. */
+export function partDefaultSpan(kind: string): Span {
+  if (kind === 'floating') {
+    return floatingPlateSpan;
+  }
+
+  return partDefinition(kind)?.defaultSpan ?? singleCellSpan;
+}
+
+const singleCellSpan: Span = { columns: 1, rows: 1 };
+const floatingPlateSpan: Span = { columns: 3, rows: 1 };
 
 /** Names a kind from its definition or the library's preset name. Unknown identifiers remain readable. */
 export function kindLabel(kind: string, presets: ReturnType<LegoServices['presets']['all']>) {

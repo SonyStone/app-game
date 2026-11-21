@@ -42,9 +42,9 @@ import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { currentKind, kindLabel, lookOf, partDefinition, partGroup, partLooks } from './parts';
+import { currentKind, kindLabel, lookOf, partDefaultSpan, partDefinition, partGroup, partLooks } from './parts';
 import type { Popup } from './parts/definition';
-import { BlockView, PartsTray } from './PartsTray';
+import { BlockView, PartsTray, type CatalogTarget } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
 import { SpawnMenu } from './SpawnMenu';
 import { canDropParts, openChain, visiblePanels } from './windows';
@@ -72,10 +72,11 @@ export function BoardView(props: {
   kits: ReturnType<typeof createKits>;
   session: Pick<PaintSession, 'size' | 'library' | 'brush'>;
   editing: boolean;
-  /** Whether the modal Parts catalog is open. */
-  partsOpen: boolean;
-  onPartsOpen: (open: boolean) => void;
-  /** Enters layout edit mode (e.g. from a long press on any live panel or part). */
+  /** Which section the unified Options & Parts dialog is open on, or `undefined` while closed. */
+  catalog: CatalogTarget | undefined;
+  onOpenCatalog: (target: CatalogTarget) => void;
+  onCloseCatalog: () => void;
+  /** Enters layout edit mode (e.g. from a long press on any live panel or part, or from Interface). */
   onEnterEdit: () => void;
   /** Exits layout edit mode (from the floating Edit bar's Done button). */
   onExitEdit: () => void;
@@ -497,7 +498,7 @@ export function BoardView(props: {
     }
 
     if (current.fromBox && !current.spawnAt && drop.where === 'board') {
-      props.onPartsOpen(false);
+      props.onCloseCatalog();
     }
 
     let next = drop.board;
@@ -746,7 +747,7 @@ export function BoardView(props: {
           {(entry) => <PanelView entry={entry()} />}
         </For>
         <Show when={props.editing}>
-          <Show when={!hinted() && !drag() && !props.partsOpen}>
+          <Show when={!hinted() && !drag() && props.catalog === undefined}>
             <p class={styles.editHint} role="status">
               Tap a part to select it · drag to move · long press for quick menu
             </p>
@@ -767,7 +768,7 @@ export function BoardView(props: {
         </Show>
       </div>
 
-      <Show when={props.editing && !props.partsOpen && !drag() && editBarPos()}>
+      <Show when={props.editing && props.catalog === undefined && !drag() && editBarPos()}>
         {(pos) => (
           <div
             ref={setEditBar}
@@ -786,7 +787,7 @@ export function BoardView(props: {
             >
               <SketchIcon name="grip" size={16} />
             </button>
-            <button type="button" class={styles.editBarParts} onClick={() => props.onPartsOpen(true)}>
+            <button type="button" class={styles.editBarParts} onClick={() => props.onOpenCatalog('parts')}>
               <SketchIcon name="plus" size={16} />
               Parts
             </button>
@@ -797,7 +798,7 @@ export function BoardView(props: {
         )}
       </Show>
 
-      <Show when={props.editing && lifted()?.carried && lifted()}>
+      <Show when={(props.editing || props.catalog !== undefined) && lifted()?.carried && lifted()}>
         {(current) => (
           <div
             ref={setDiscardZone}
@@ -851,7 +852,8 @@ export function BoardView(props: {
       </Show>
 
       <PartsTray
-        open={props.editing && props.partsOpen}
+        open={props.catalog !== undefined}
+        initial={props.catalog}
         away={lifted()?.carried === true}
         presets={props.session.library.presets}
         kits={props.kits}
@@ -860,7 +862,8 @@ export function BoardView(props: {
         onLift={(event, kind) => startNewPart(event, kind)}
         onLiftKit={(event, kit) => startKitDrag(event, kit)}
         onReset={() => props.board.reset()}
-        onClose={() => props.onPartsOpen(false)}
+        onEditLayout={() => props.onEnterEdit()}
+        onClose={() => props.onCloseCatalog()}
       />
 
       <Show when={props.editing && spawn()}>
@@ -1012,18 +1015,19 @@ export function BoardView(props: {
     setSpawn({ at: { x: event.clientX, y: event.clientY }, held });
   }
 
-  /** Lifts a new part of `kind` from the catalog, or from the spawn menu opened at `spawnAt`. */
+  /** Lifts a new part of `kind` at its default span from the catalog, or from the spawn menu opened at `spawnAt`. */
   function startNewPart(event: PointerEvent, kind: string, spawnAt?: Point) {
+    const span = partDefaultSpan(kind);
     if (kind === 'floating') {
       startPartDrag(
         event,
-        { id: newId('panel'), kind: 'kit', span: { columns: 3, rows: 1 } },
+        { id: newId('panel'), kind: 'kit', span },
         { fromBox: true, spawnAt, block: { parts: [], panels: [], floating: true } }
       );
       return;
     }
 
-    startPartDrag(event, { id: newId('part'), kind, span: { columns: 1, rows: 1 } }, { fromBox: true, spawnAt });
+    startPartDrag(event, { id: newId('part'), kind, span }, { fromBox: true, spawnAt });
   }
 
   /** Toggles the swatch folder chain with its ancestor folders. */
@@ -1058,12 +1062,19 @@ export function BoardView(props: {
     const board = props.board.latest();
     const point = { x: event.clientX, y: event.clientY };
     const offset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-    // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
+    const full = { width: grid.length(part.span.columns), height: grid.length(part.span.rows) };
+    // A scaled catalog tile maps the press proportionally onto the 1:1 ghost; blocks/spawn menu hold near the first cell.
+    const scaledOffset =
+      from.fromBox && rect.width > 0 && rect.height > 0 && rect.width < full.width
+        ? { x: (offset.x / rect.width) * full.width, y: (offset.y / rect.height) * full.height }
+        : { x: Math.max(0, Math.min(offset.x, full.width)), y: Math.max(0, Math.min(offset.y, full.height)) };
     const grab =
       from.grab ??
       (from.block || from.spawnAt
         ? { x: Math.min(offset.x, grid.cell() / 2), y: Math.min(offset.y, grid.cell() / 2) }
-        : offset);
+        : from.fromBox
+          ? scaledOffset
+          : offset);
     setDrag({
       type: 'part',
       pointer: event.pointerId,
@@ -1435,9 +1446,9 @@ export function BoardView(props: {
     };
   }
 
-  /** Whether `point` on the page is over the top discard capsule while editing. */
+  /** Whether `point` on the page is over the top discard capsule while editing or dragging from the catalog. */
   function overDiscard(point: Point) {
-    if (!props.editing) {
+    if (!props.editing && props.catalog === undefined) {
       return false;
     }
 

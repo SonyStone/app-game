@@ -151,7 +151,7 @@ it.each([undefined, true] as const)(
     ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 7, row: Math.floor(index / 12) * 7 } }));
     board.set({ panels: [{ id: 'catalogue', at: { x: 0, y: 0 }, floating, parts }] });
     const [editing, setEditing] = createSignal(false);
-    const [partsOpen, setPartsOpen] = createSignal(false);
+    const [catalog, setCatalog] = createSignal<'interface' | 'parts' | undefined>(undefined);
     disposers.push(
       render(
         () => (
@@ -177,11 +177,15 @@ it.each([undefined, true] as const)(
                   brush: fixture.tools.brush
                 }}
                 editing={editing()}
-                partsOpen={partsOpen()}
-                onPartsOpen={setPartsOpen}
-                onEnterEdit={() => setEditing(true)}
+                catalog={catalog()}
+                onOpenCatalog={setCatalog}
+                onCloseCatalog={() => setCatalog(undefined)}
+                onEnterEdit={() => {
+                  setCatalog(undefined);
+                  setEditing(true);
+                }}
                 onExitEdit={() => {
-                  setPartsOpen(false);
+                  setCatalog(undefined);
                   setEditing(false);
                 }}
                 openPanel={undefined}
@@ -315,16 +319,16 @@ it.each([undefined, true] as const)(
 
     setEditing(true);
     await drain();
-    expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
-    setPartsOpen(true);
+    expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
+    setCatalog('parts');
     await drain();
     intersectAll();
     await drain();
-    const catalog = document.querySelector('dialog[aria-label="Parts"]')!;
-    expect(catalog.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
-    setPartsOpen(false);
+    const dialog = document.querySelector('dialog[aria-label="Parts and Options"]')!;
+    expect(dialog.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
+    setCatalog(undefined);
     await drain();
-    expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+    expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
     expect(fixture.error()).toBeUndefined();
   }
 );

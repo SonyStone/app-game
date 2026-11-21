@@ -1,31 +1,39 @@
 import { editable } from '@app-game/paint-core/input';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
-import { SettingsBack, SettingsList, SettingsSplit } from '../../shared/ui/SettingsList';
+import { SettingsBack, SettingsList, SettingsSplit, type SettingsListItem } from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
-import { partData, partsBounds, type Part } from './board';
+import { partData, partsBounds, type Part, type Span } from './board';
 import { joinsAttribute, partJoins } from './fusion';
 import { useGrid } from './grid';
 import { type createKits, type Kit } from './kits';
 import type { LegoServices } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { boxSections, kindLabel, lookOf, partGroup } from './parts';
+import { boxSections, kindLabel, lookOf, partDefaultSpan, partGroup } from './parts';
+import { gridSizeKind } from './parts/options';
 import { opaqueData } from './partStorage';
 import dialogStyles from './PartsTray.module.css';
 
+/** Which group of sections the unified Options & Parts dialog opens on. */
+export type CatalogTarget = 'interface' | 'parts';
+
 /**
- * The catalog of parts and kits while editing, shown as a modal Sidebar dialog matching `OptionsSheet` and
- * `BrushStudioDialog`: a search bar across the top with `Reset board` and `Done`, above a `SettingsSplit` whose
- * sidebar lists `Kits` and every part family with counts (`SettingsList`); on narrow screens, categories and a
- * category's items become two screens with `SettingsBack`.
+ * The unified Options & Parts modal Sidebar dialog, matching `BrushStudioDialog`: a search bar and `Done` across the
+ * top, above a `SettingsSplit` whose sidebar lists two groups (`Settings` with `Interface`, and `Parts` with `Kits`
+ * and every part family with counts); on narrow screens, sections and their content become two screens with
+ * `SettingsBack`.
  *
- * Nothing mounts while `open` is false; category and screen choices are kept across openings while search clears.
- * While `away` is true (a part or kit is being dragged onto the 1:1 board), the dialog fades and slides out on the GPU
- * without blocking pointer events.
+ * Opening via `Options` (`initial="interface"`) lands on `Interface` (grid size slider, live `GridSample`, `Edit
+ * layout` and `Reset board`); opening via `＋ Parts` (`initial="parts"`) lands on the last selected `Parts` category
+ * (default `Tools`). From any section, typing in search filters every part and kit, and dragging a part or kit out
+ * slides the dialog away (`data-away`) onto the live 1:1 board—whether in edit mode or live mode. Nothing mounts while
+ * `open` is false.
  */
 export function PartsTray(props: {
   open: boolean;
+  /** Which section opens when `open` turns true: `interface` (from Options) or last `parts` category (from ＋ Parts). */
+  initial?: CatalogTarget;
   /** Whether the dialog moves out of the way while a lifted part or kit is carried over the 1:1 board. */
   away?: boolean;
   presets: LegoServices['presets']['all'];
@@ -36,12 +44,21 @@ export function PartsTray(props: {
   onLift: (event: PointerEvent, kind: string) => void;
   onLiftKit: (event: PointerEvent, kit: Kit) => void;
   onReset: () => void;
+  /** Closes the dialog and enters layout edit mode when supplied. */
+  onEditLayout?: () => void;
   onClose: () => void;
   /** The kit to light up and bring into view: one just kept, or the one a kept part or group matched. */
   flashKit: string | undefined;
 }) {
-  const [categoryId, setCategoryId] = createSignal('Tools');
-  /** The screen shown where the categories and a category's parts are two screens. */
+  const [lastPartCategory, setLastPartCategory] = createSignal('Tools');
+  const [categoryId, setCategoryId] = createSignal(() => {
+    if (!props.open) {
+      return untrack(lastPartCategory);
+    }
+
+    return props.initial === 'interface' ? interfaceCategoryId : untrack(lastPartCategory);
+  });
+  /** The screen shown where the sidebar and a section's content are two screens. */
   const [view, setView] = createSignal<'list' | 'detail'>('list');
   const [query, setQuery] = createSignal(() => {
     void props.open;
@@ -49,12 +66,25 @@ export function PartsTray(props: {
   });
 
   const families = () => partFamilies(props.presets);
-  const categories = createMemo(() => [
-    { id: kitsCategoryId, title: kitsCategoryId, count: props.kits.kits().length },
-    ...families().map((entry) => ({ id: entry.id, title: entry.title, count: entry.kinds.length }))
+  const sidebarItems = createMemo<readonly SettingsListItem[]>(() => [
+    { id: interfaceCategoryId, label: 'Interface', icon: 'options', group: 'settings' },
+    {
+      id: kitsCategoryId,
+      label: kitsCategoryId,
+      icon: familyIcons[kitsCategoryId],
+      trailing: String(props.kits.kits().length),
+      group: 'parts'
+    },
+    ...families().map((entry) => ({
+      id: entry.id,
+      label: entry.title,
+      icon: familyIcons[entry.id] ?? 'tools',
+      trailing: String(entry.kinds.length),
+      group: 'parts'
+    }))
   ]);
-  const selectedCategory = () =>
-    categories().find((candidate) => candidate.id === categoryId()) ?? categories()[0]!;
+  const selectedItem = () =>
+    sidebarItems().find((candidate) => candidate.id === categoryId()) ?? sidebarItems()[0]!;
   const selectedFamily = () => families().find((candidate) => candidate.id === categoryId());
 
   const needle = createMemo(() => query().trim().toLowerCase());
@@ -111,7 +141,7 @@ export function PartsTray(props: {
         ref={setDialog}
         class={dialogStyles.dialog}
         data-away={props.away ? '' : undefined}
-        aria-label="Parts"
+        aria-label="Parts and Options"
         onCancel={(event) => {
           event.preventDefault();
           if (query()) {
@@ -176,9 +206,6 @@ export function PartsTray(props: {
               </label>
             </div>
             <div class={dialogStyles.actions}>
-              <button type="button" class={dialogStyles.reset} onClick={() => props.onReset()}>
-                Reset board
-              </button>
               <button type="button" class={dialogStyles.done} onClick={() => props.onClose()}>
                 Done
               </button>
@@ -190,20 +217,20 @@ export function PartsTray(props: {
             view={needle() ? 'detail' : view()}
             list={
               <div class={dialogStyles.side}>
-                <h1 class={dialogStyles.name}>Parts</h1>
+                <h1 class={dialogStyles.name}>Parts &amp; Options</h1>
                 <SettingsList
                   class={dialogStyles.list}
-                  label="Families of parts"
-                  items={categories().map((candidate) => ({
-                    id: candidate.id,
-                    label: candidate.title,
-                    icon: familyIcons[candidate.id] ?? 'tools',
-                    trailing: String(candidate.count)
-                  }))}
-                  selected={selectedCategory().id}
+                  label="Parts and options"
+                  groups={sidebarGroups}
+                  items={sidebarItems()}
+                  selected={selectedItem().id}
                   onSelect={(id) => {
                     if (query()) {
                       setQuery('');
+                    }
+
+                    if (id !== interfaceCategoryId) {
+                      setLastPartCategory(id);
                     }
 
                     setCategoryId(id);
@@ -261,47 +288,73 @@ export function PartsTray(props: {
                 </section>
               }
             >
-              <section class={dialogStyles.pane} aria-label={selectedCategory().title}>
-                <SettingsBack label="Parts" title={selectedCategory().title} onBack={() => setView('list')} />
-                <h2 class={dialogStyles.title}>{selectedCategory().title}</h2>
+              <section class={dialogStyles.pane} aria-label={selectedItem().label} data-section={selectedItem().id}>
+                <SettingsBack label="Sections" title={selectedItem().label} onBack={() => setView('list')} />
+                <h2 class={dialogStyles.title}>{selectedItem().label}</h2>
                 <Show
-                  when={selectedCategory().id !== kitsCategoryId}
+                  when={selectedItem().id !== interfaceCategoryId}
                   fallback={
-                    <Show
-                      when={props.kits.kits().length > 0}
-                      fallback={
-                        <p class={dialogStyles.empty}>
-                          No kits yet — select parts on the board and tap Keep as kit
-                        </p>
-                      }
-                    >
-                      <div class={dialogStyles.kitsGrid}>
-                        <For each={props.kits.kits()} keyed={(kit) => kit.id}>
-                          {(kit) => (
-                            <KitTile
-                              kit={kit()}
-                              kits={props.kits}
-                              flash={props.flashKit === kit().id}
-                              onLift={(event) => props.onLiftKit(event, kit())}
-                            />
-                          )}
-                        </For>
+                    <div class={dialogStyles.interface}>
+                      <div class={[styles.studioTile, dialogStyles.setting]}>
+                        <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
                       </div>
-                    </Show>
+                      <GridSample />
+                      <div class={dialogStyles.interfaceActions}>
+                        <Show when={props.onEditLayout}>
+                          {(editLayout) => (
+                            <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
+                              <SketchIcon name="edit" size={18} />
+                              <span>Edit layout</span>
+                            </button>
+                          )}
+                        </Show>
+                        <button type="button" class={dialogStyles.actionSecondary} onClick={() => props.onReset()}>
+                          <SketchIcon name="reset" size={18} />
+                          <span>Reset board</span>
+                        </button>
+                      </div>
+                    </div>
                   }
                 >
-                  <div class={dialogStyles.grid}>
-                    <For each={selectedFamily()?.kinds ?? []}>
-                      {(kind) => (
-                        <PartTile
-                          kind={kind}
-                          presets={props.presets}
-                          onBoard={props.onBoard?.has(kind)}
-                          onLift={(event) => props.onLift(event, kind)}
-                        />
-                      )}
-                    </For>
-                  </div>
+                  <Show
+                    when={selectedItem().id !== kitsCategoryId}
+                    fallback={
+                      <Show
+                        when={props.kits.kits().length > 0}
+                        fallback={
+                          <p class={dialogStyles.empty}>
+                            No kits yet — select parts on the board and tap Keep as kit
+                          </p>
+                        }
+                      >
+                        <div class={dialogStyles.kitsGrid}>
+                          <For each={props.kits.kits()} keyed={(kit) => kit.id}>
+                            {(kit) => (
+                              <KitTile
+                                kit={kit()}
+                                kits={props.kits}
+                                flash={props.flashKit === kit().id}
+                                onLift={(event) => props.onLiftKit(event, kit())}
+                              />
+                            )}
+                          </For>
+                        </div>
+                      </Show>
+                    }
+                  >
+                    <div class={dialogStyles.grid}>
+                      <For each={selectedFamily()?.kinds ?? []}>
+                        {(kind) => (
+                          <PartTile
+                            kind={kind}
+                            presets={props.presets}
+                            onBoard={props.onBoard?.has(kind)}
+                            onLift={(event) => props.onLift(event, kind)}
+                          />
+                        )}
+                      </For>
+                    </div>
+                  </Show>
                 </Show>
               </section>
             </Show>
@@ -312,7 +365,16 @@ export function PartsTray(props: {
   }
 }
 
+const interfaceCategoryId = 'interface';
 const kitsCategoryId = 'Kits';
+
+const sidebarGroups = [
+  { id: 'settings', label: 'Settings' },
+  { id: 'parts', label: 'Parts' }
+] as const;
+
+/** The span the grid-size slider shows at in Interface, matching brush studio rows. */
+const settingSpan: Span = { columns: 6, rows: 1 };
 
 /** The icons of the categories in the catalog sidebar, by id. */
 const familyIcons: Record<string, SketchIconName> = {
@@ -335,42 +397,85 @@ export function partFamilies(presets: LegoServices['presets']['all']) {
   ];
 }
 
-/** A part of `kind` as the catalog shows it: a one-cell sample with its name below; a press lifts a new one. */
+/**
+ * A part of `kind` as the catalog or spawn menu shows it: rendered at its `partDefaultSpan(kind)` with its matching
+ * automatic look, scaled through `PickerScale` to fit neatly inside the card's preview slot. A press lifts a new one.
+ */
 export function PartTile(props: {
   kind: string;
   presets: LegoServices['presets']['all'];
   /** Whether a part of this kind is already placed on the board. */
   onBoard?: boolean;
+  /** Compact preview slot for the radial spawn menu. */
+  compact?: boolean;
   onLift: (event: PointerEvent) => void;
 }) {
+  const grid = useGrid();
   const label = () => (props.kind === 'floating' ? 'Floating panel' : kindLabel(props.kind, props.presets()));
-  return (
-    <div class={styles.trayItem} data-on-board={props.onBoard ? '' : undefined}>
-      <div
-        class={styles.trayTile}
-        title={label()}
-        onPointerDown={(event) => {
-          if (event.button !== 0) {
-            return;
-          }
+  const span = () => partDefaultSpan(props.kind);
+  const size = () => ({ width: grid.length(span().columns), height: grid.length(span().rows) });
+  const slot = () => (props.compact ? compactPreviewBox : catalogPreviewBox);
+  const scale = () => Math.min(1, slot().width / size().width, slot().height / size().height);
+  const look = () =>
+    props.kind === 'floating' ? undefined : lookOf({ kind: props.kind, span: span() }, grid.room(span()));
+  const multiCell = () => span().columns > 1 || span().rows > 1;
 
-          capture(event);
-          props.onLift(event);
-        }}
-      >
-        <div class={styles.content} inert>
-          <Show when={props.kind !== 'floating'} fallback={<span class={styles.floatingSample} />}>
-            <PartFrame mode="preview" kind={props.kind} span={{ columns: 1, rows: 1 }} onPopup={() => {}} />
-          </Show>
+  return (
+    <div class={styles.trayItem} data-on-board={props.onBoard ? '' : undefined} data-compact={props.compact ? '' : undefined}>
+      <div class={styles.trayPreviewSlot} data-compact={props.compact ? '' : undefined}>
+        <div
+          class={styles.trayTile}
+          title={label()}
+          data-span={`${span().columns}x${span().rows}`}
+          style={{
+            width: `${size().width * scale()}px`,
+            height: `${size().height * scale()}px`,
+            '--tile-scale': `${scale()}`
+          }}
+          onPointerDown={(event) => {
+            if (event.button !== 0) {
+              return;
+            }
+
+            capture(event);
+            props.onLift(event);
+          }}
+        >
+          <div
+            class={styles.trayScaled}
+            style={{ width: `${size().width}px`, height: `${size().height}px`, scale: `${scale()}` }}
+            inert
+          >
+            <PickerScale value={scale}>
+              <div class={styles.content}>
+                <Show when={props.kind !== 'floating'} fallback={<span class={styles.floatingSample} />}>
+                  <PartFrame mode="preview" kind={props.kind} span={span()} look={look()} onPopup={() => {}} />
+                </Show>
+              </div>
+            </PickerScale>
+          </div>
         </div>
       </div>
       <span class={styles.trayCaption}>{label()}</span>
-      <Show when={props.onBoard}>
-        <span class={styles.trayOnBoard}>On board</span>
+      <Show when={(!props.compact && multiCell()) || props.onBoard}>
+        <div class={styles.trayMeta}>
+          <Show when={!props.compact && multiCell()}>
+            <span class={styles.traySpan}>
+              {span().columns}×{span().rows}
+            </span>
+          </Show>
+          <Show when={props.onBoard}>
+            <span class={styles.trayOnBoard}>On board</span>
+          </Show>
+        </div>
       </Show>
     </div>
   );
 }
+
+/** Maximum CSS-pixel preview slot inside a catalog card vs a compact spawn-menu card. */
+const catalogPreviewBox = { width: 136, height: 80 };
+const compactPreviewBox = { width: 84, height: 52 };
 
 /**
  * A kit as the catalog shows it: its parts in miniature, at most `cells` cells across (three by default), with its
@@ -548,6 +653,46 @@ function KitPreview(props: { parts: readonly Part[]; cells: number }) {
     </div>
   );
 }
+
+/**
+ * A small plate of real parts lying on paper as on the board, drawn at the cell in use, so the grid size shows what it
+ * does while the dialog covers the board: a slider fused with a knob, then undo and redo, and the eraser fused with
+ * the lasso and the fill. The parts are previews: they show the session's values and take no presses.
+ */
+function GridSample() {
+  const grid = useGrid();
+  const bounds = partsBounds(sampleParts);
+
+  return (
+    <div class={dialogStyles.sampleGround} data-grid-sample>
+      <div class={dialogStyles.samplePlate}>
+        <div
+          class={dialogStyles.sampleParts}
+          style={{ width: `${grid.length(bounds.columns)}px`, height: `${grid.length(bounds.rows)}px` }}
+        >
+          <BlockView parts={sampleParts} immediate />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The sample's parts; the knob keeps its look at every cell, as a part whose look was chosen does. */
+const sampleParts: readonly Part[] = [
+  { id: 'size', kind: 'value:size', cell: { column: 0, row: 0 }, span: { columns: 4, rows: 1 } },
+  {
+    id: 'opacity',
+    kind: 'value:opacity',
+    cell: { column: 4, row: 0 },
+    span: { columns: 1, rows: 1 },
+    looks: { '1x1': 'knob' }
+  },
+  { id: 'undo', kind: 'action:undo', cell: { column: 0, row: 1 }, span: { columns: 1, rows: 1 } },
+  { id: 'redo', kind: 'action:redo', cell: { column: 1, row: 1 }, span: { columns: 1, rows: 1 } },
+  { id: 'eraser', kind: 'action:eraser', cell: { column: 2, row: 1 }, span: { columns: 1, rows: 1 } },
+  { id: 'lasso', kind: 'action:lasso', cell: { column: 3, row: 1 }, span: { columns: 1, rows: 1 } },
+  { id: 'fill', kind: 'action:fill', cell: { column: 4, row: 1 }, span: { columns: 1, rows: 1 } }
+];
 
 /** Captures the press's pointer for its target so moves continue while the dialog slides away. */
 function capture(event: PointerEvent) {

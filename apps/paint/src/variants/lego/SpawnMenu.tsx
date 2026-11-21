@@ -159,7 +159,12 @@ export function SpawnMenu(props: {
               >
                 <For each={shown().kinds}>
                   {(kind) => (
-                    <PartTile kind={kind} presets={props.presets} onLift={(event) => props.onLift(event, kind)} />
+                    <PartTile
+                      kind={kind}
+                      presets={props.presets}
+                      compact
+                      onLift={(event) => props.onLift(event, kind)}
+                    />
                   )}
                 </For>
               </Show>

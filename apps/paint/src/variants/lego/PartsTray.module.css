@@ -1,8 +1,8 @@
 /*
- * The Parts catalog over the whole viewport, matching OptionsSheet and BrushStudioDialog: a search bar and actions
- * plate across the top, and under it one plate holding the categories sidebar beside the chosen category's grid
- * (`SettingsSplit`), lying on paper. While a part or kit is carried off onto the 1:1 board (`data-away`), the dialog
- * fades and slides out on the GPU without blocking pointer events.
+ * The unified Options & Parts modal dialog over the whole viewport, matching BrushStudioDialog: a search bar and
+ * Done plate across the top, and under it one plate holding the two-group sidebar (Settings and Parts) beside the
+ * chosen section (`SettingsSplit`), lying on paper. While a part or kit is carried off onto the 1:1 board
+ * (`data-away`), the dialog fades and slides out on the GPU without blocking pointer events.
  */
 .dialog {
   position: fixed;
@@ -121,7 +121,7 @@
   }
 }
 
-/* Reset board and Done on a plate, matching OptionsSheet's actions plate. */
+/* Done on a plate, matching BrushStudioDialog's top-right actions plate. */
 .actions {
   display: flex;
   flex: none;
@@ -131,33 +131,20 @@
   background: var(--lego-plate);
 }
 
-.reset,
 .done {
+  min-width: 72px;
   min-height: var(--lego-hit-size);
+  padding: 0 16px;
   border: 0;
   border-radius: var(--lego-r-tile);
+  background: var(--lego-accent);
   color: #ffffff;
   font-weight: 600;
   cursor: pointer;
   touch-action: manipulation;
 }
 
-.reset {
-  padding: 0 14px;
-  background: rgb(255 255 255 / 0.12);
-
-  &:hover {
-    background: rgb(255 255 255 / 0.18);
-  }
-}
-
-.done {
-  min-width: 72px;
-  padding: 0 16px;
-  background: var(--lego-accent);
-}
-
-/* The one plate under the categories sidebar and the chosen category's parts. */
+/* The one plate under the sidebar and the chosen section. */
 .sheet {
   --settings-split-list: minmax(200px, 30%);
   --settings-split-line: var(--lego-divider);
@@ -252,17 +239,93 @@
   }
 }
 
+/* Interface settings: grid size slider, live sample, Edit layout and Reset board. */
+.interface {
+  display: grid;
+  grid-template-columns: minmax(0, 600px);
+  gap: 12px;
+}
+
+.setting {
+  height: var(--lego-cell);
+}
+
+.sampleGround {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: 24px 12px;
+  overflow: hidden;
+  border-radius: var(--lego-r-tile);
+  background: #faf8f4;
+}
+
+.samplePlate {
+  padding: 6px;
+  border-radius: var(--lego-r-plate);
+  background: var(--lego-plate);
+  box-shadow: var(--lego-shadow);
+}
+
+.sampleParts {
+  position: relative;
+  color: var(--lego-ink);
+}
+
+.interfaceActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actionTile,
+.actionSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: var(--lego-hit-size);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--lego-r-tile);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.actionTile {
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+
+  &:hover {
+    filter: brightness(0.96);
+  }
+
+  &:active {
+    filter: brightness(0.92);
+  }
+}
+
+.actionSecondary {
+  background: rgb(255 255 255 / 0.12);
+  color: #ffffff;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.18);
+  }
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  align-items: stretch;
   gap: 10px;
 }
 
 .kitsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: 12px;
 }
 

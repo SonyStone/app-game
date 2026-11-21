@@ -13,7 +13,7 @@ import { runPartCommand } from './partCommand';
  * this boundary. Bindings select props from this facade; looks and controlled components never receive it.
  * `openBrushStudio` is what the "Brush settings" part runs. `openPen` opens the
  * brush studio on its Pen page, where the pen's pressure lives, with the calibration steps started when `measure`.
- * `options` are the editor's own options, which the "Options" part opens (see `OptionsSheet`): the grid's cell in
+ * `options` are the editor's own options, which the "Options" part opens (see `PartsTray`): the grid's cell in
  * use, choosing one, and opening the sheet.
  */
 export function createLegoServices(

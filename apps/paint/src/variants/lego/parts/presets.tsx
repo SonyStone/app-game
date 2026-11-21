@@ -14,6 +14,7 @@ export const presetPart = definePart({
   section: 'Brushes',
   label: 'Brush',
   icon: 'brush',
+  defaultSpan: { columns: 3, rows: 2 },
   needs: presetNeeds,
   View: PresetPart
 });

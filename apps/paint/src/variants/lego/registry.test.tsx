@@ -338,7 +338,7 @@ it('keeps brush tile DOM identity when the library list gains a preset', () => {
       />
     </LegoServicesContext>
   ));
-  document.querySelector<HTMLButtonElement>('nav[aria-label="Families of parts"] [data-item="Brushes"]')!.click();
+  document.querySelector<HTMLButtonElement>('nav[aria-label="Parts and options"] [data-item="Brushes"]')!.click();
   flush();
   const tile = document.querySelector(`[title="${initial.name}"]`);
   expect(tile).not.toBeNull();
