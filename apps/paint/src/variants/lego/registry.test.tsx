@@ -13,7 +13,7 @@ import { partDefinitions } from './parts';
 import type { PartBinding, PartMode } from './parts/definition';
 import { defineValuePart, type ValueChannel } from './parts/values';
 import { BlockView, PartsTray } from './PartsTray';
-import { createTestServices } from './testServices';
+import { createTestFileCommands, createTestServices } from './testServices';
 
 // The renderer is tested in paint-core; this suite exercises every real binding and controlled view.
 const rendering = vi.hoisted(() => ({ updates: vi.fn(), dispose: vi.fn() }));
@@ -331,6 +331,7 @@ it('keeps brush tile DOM identity when the library list gains a preset', () => {
         open={true}
         presets={presets}
         kits={kits}
+        files={createTestFileCommands()}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}
         onReset={vi.fn()}

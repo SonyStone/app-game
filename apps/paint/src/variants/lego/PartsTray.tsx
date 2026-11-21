@@ -2,9 +2,16 @@ import { editable } from '@app-game/paint-core/input';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createEffect, createMemo, createSignal, For, Show, untrack } from 'solid-js';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
-import { SettingsBack, SettingsList, SettingsSplit, type SettingsListItem } from '../../shared/ui/SettingsList';
+import {
+  SettingsBack,
+  SettingsList,
+  SettingsRows,
+  SettingsSplit,
+  type SettingsListItem
+} from '../../shared/ui/SettingsList';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import { partData, partsBounds, type Part, type Span } from './board';
+import { FileCommands, type FileCommandSet } from './FileMenu';
 import { joinsAttribute, partJoins } from './fusion';
 import { useGrid } from './grid';
 import { type createKits, type Kit } from './kits';
@@ -21,9 +28,12 @@ export type CatalogTarget = 'interface' | 'parts';
 
 /**
  * The unified Options & Parts modal Sidebar dialog: one plate, a `SettingsSplit` whose sidebar holds the title with
- * `Done`, the search field, and under them two groups (`Settings` with `Interface`, and `Parts` with `Kits`
+ * `Done`, the search field, and under them two groups (`Settings` with `File` and `Interface`, and `Parts` with `Kits`
  * and every part family with counts); on narrow screens, sections and their content become two screens with
  * `SettingsBack`.
+ *
+ * `File` lists the File menu's commands (`FileCommands`), so they are at hand with nothing on the board; a command
+ * closes the dialog once it ran or a file was picked, and waits for the engine as in the menu.
  *
  * Opening via `Options` (`initial="interface"`) lands on `Interface` (grid size slider, live `GridSample`, `Edit
  * layout` and `Reset board`); opening via `＋ Parts` (`initial="parts"`) lands on the last selected `Parts` category
@@ -39,6 +49,8 @@ export function PartsTray(props: {
   away?: boolean;
   presets: LegoServices['presets']['all'];
   kits: ReturnType<typeof createKits>;
+  /** The drawing's file commands for `File`, each guarded by the host so failures are reported. */
+  files: FileCommandSet;
   /** Part kinds currently on the board, shown with an "On board" mark in the catalog. */
   onBoard?: ReadonlySet<string>;
   /** Lifts a new part of `kind`, or a copy of `kit`, from the press `event`. */
@@ -72,6 +84,7 @@ export function PartsTray(props: {
 
   const families = () => partFamilies(props.presets);
   const sidebarItems = createMemo<readonly SettingsListItem[]>(() => [
+    { id: fileCategoryId, label: 'File', icon: 'paper', group: 'settings' },
     { id: interfaceCategoryId, label: 'Interface', icon: 'options', group: 'settings' },
     {
       id: kitsCategoryId,
@@ -279,7 +292,7 @@ export function PartsTray(props: {
                         setQuery('');
                       }
 
-                      if (id !== interfaceCategoryId) {
+                      if (id !== interfaceCategoryId && id !== fileCategoryId) {
                         setLastPartCategory(id);
                       }
 
@@ -296,28 +309,41 @@ export function PartsTray(props: {
                 <SettingsBack label="Sections" title={selectedItem().label} onBack={() => setView('list')} />
                 <h2 class={dialogStyles.title}>{selectedItem().label}</h2>
                 <Show
-                  when={selectedItem().id !== interfaceCategoryId}
+                  when={selectedItem().group !== 'settings'}
                   fallback={
-                    <div class={dialogStyles.interface}>
-                      <div class={[styles.studioTile, dialogStyles.setting]}>
-                        <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
+                    <Show
+                      when={selectedItem().id !== fileCategoryId}
+                      fallback={
+                        <SettingsRows
+                          class={`${styles.settingsRows} ${dialogStyles.fileRows}`}
+                          role="menu"
+                          label="File commands"
+                        >
+                          <FileCommands commands={props.files} onDone={() => props.onClose()} />
+                        </SettingsRows>
+                      }
+                    >
+                      <div class={dialogStyles.interface}>
+                        <div class={[styles.studioTile, dialogStyles.setting]}>
+                          <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
+                        </div>
+                        <GridSample />
+                        <div class={dialogStyles.interfaceActions}>
+                          <Show when={props.onEditLayout}>
+                            {(editLayout) => (
+                              <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
+                                <SketchIcon name="edit" size={18} />
+                                <span>Edit layout</span>
+                              </button>
+                            )}
+                          </Show>
+                          <button type="button" class={dialogStyles.actionSecondary} onClick={() => props.onReset()}>
+                            <SketchIcon name="reset" size={18} />
+                            <span>Reset board</span>
+                          </button>
+                        </div>
                       </div>
-                      <GridSample />
-                      <div class={dialogStyles.interfaceActions}>
-                        <Show when={props.onEditLayout}>
-                          {(editLayout) => (
-                            <button type="button" class={dialogStyles.actionTile} onClick={() => editLayout()()}>
-                              <SketchIcon name="edit" size={18} />
-                              <span>Edit layout</span>
-                            </button>
-                          )}
-                        </Show>
-                        <button type="button" class={dialogStyles.actionSecondary} onClick={() => props.onReset()}>
-                          <SketchIcon name="reset" size={18} />
-                          <span>Reset board</span>
-                        </button>
-                      </div>
-                    </div>
+                    </Show>
                   }
                 >
                   <Show
@@ -370,6 +396,7 @@ export function PartsTray(props: {
 /** The frame width in CSS pixels under which the dialog shows one screen at a time; `PartsTray.module.css` agrees. */
 const narrowFrame = 560;
 
+const fileCategoryId = 'file';
 const interfaceCategoryId = 'interface';
 const kitsCategoryId = 'Kits';
 

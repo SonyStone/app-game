@@ -41,6 +41,7 @@ import {
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
+import type { FileCommandSet } from './FileMenu';
 import { FloatingGrip } from './FloatingGrip';
 import { joinsAttribute, panelEdges, partEdges, partJoins, sameCells } from './fusion';
 import { useGrid } from './grid';
@@ -68,9 +69,9 @@ import { canDropParts, openChain, visiblePanels } from './windows';
  * The board over the drawing, always at 1:1 scale: its panels, and in edit mode the studs, the floating draggable
  * Edit bar, the modal Parts catalog, and the drags that arrange them. While editing, the drawing takes no strokes.
  *
- * Outside edit mode, holding still on any LEGO panel or part for `editLongPress` enters edit mode without interfering
- * with drags on sliders, pickers, or floating panel grips. While editing, a compact `[ ⠿  ＋ Parts  Done ]` bar is
- * placed via `freeSpot` so it covers no existing panel and can be dragged freely by its grip.
+ * Edit mode is entered from outside (File → Edit layout, or Parts & Options → Interface → Edit layout); a press on a
+ * live panel or part never enters it. While editing, a compact `[ ⠿  ＋ Parts  Done ]` bar is placed via `freeSpot` so
+ * it covers no existing panel and can be dragged freely by its grip.
  *
  * Opening `Parts` shows the Sidebar catalog (`PartsTray`): dragging a part or kit out slides the catalog away via
  * `data-away` to reveal the live 1:1 board with studs, and dropping it onto the board closes the catalog (cancelling
@@ -89,9 +90,11 @@ export function BoardView(props: {
   editing: boolean;
   /** Which section the unified Options & Parts dialog is open on, or `undefined` while closed. */
   catalog: CatalogTarget | undefined;
+  /** The drawing's file commands for the dialog's File section, guarded by the host. */
+  files: FileCommandSet;
   onOpenCatalog: (target: CatalogTarget) => void;
   onCloseCatalog: () => void;
-  /** Enters layout edit mode (e.g. from a long press on any live panel or part, or from Interface). */
+  /** Enters layout edit mode (from Parts & Options → Interface → Edit layout). */
   onEnterEdit: () => void;
   /** Exits layout edit mode (from the floating Edit bar's Done button). */
   onExitEdit: () => void;
@@ -291,33 +294,6 @@ export function BoardView(props: {
   };
   onCleanup(stopPress);
 
-  /** A still press on a live panel/part waiting to enter edit mode; any drag movement cancels it. */
-  let editPress: { pointer: number; start: Point; timer: ReturnType<typeof setTimeout> } | undefined;
-  const stopEditPress = () => {
-    clearTimeout(editPress?.timer);
-    editPress = undefined;
-  };
-  onCleanup(stopEditPress);
-
-  /** Suppresses the synthetic click/contextmenu fired after a long press enters edit mode. */
-  let suppressClick = false;
-  let suppressTimer: ReturnType<typeof setTimeout> | undefined;
-  const clearSuppress = () => {
-    suppressClick = false;
-    clearTimeout(suppressTimer);
-    suppressTimer = undefined;
-  };
-  onCleanup(clearSuppress);
-
-  createEffect(
-    () => props.editing,
-    (isEditing) => {
-      if (isEditing) {
-        stopEditPress();
-      }
-    }
-  );
-
   const lifted = () => {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
@@ -344,7 +320,7 @@ export function BoardView(props: {
     return current?.carried ? [current.id, ...(current.block?.parts.map((part) => part.id) ?? [])].join('\n') : '';
   });
 
-  // Closes open swatch panels on outside press, and arms live-mode long-press on any LEGO panel/part to enter Edit.
+  // Closes open swatch panels on outside press.
   createEventListener(
     window,
     'pointerdown',
@@ -356,60 +332,12 @@ export function BoardView(props: {
           props.onOpenPanel(undefined);
         }
       }
-
-      if (!props.editing) {
-        if (editPress) {
-          // A second pointer (e.g. pinch/zoom) cancels the pending long press.
-          stopEditPress();
-          return;
-        }
-
-        if (
-          event.button === 0 &&
-          target &&
-          layer()?.contains(target) &&
-          target.closest('[data-panel]') &&
-          !target.closest('input, select, textarea, [data-no-edit-long-press]')
-        ) {
-          armEditLongPress(event);
-        }
-      }
-    },
-    { capture: true }
-  );
-
-  createEventListener(
-    window,
-    'click',
-    (event) => {
-      if (suppressClick) {
-        clearSuppress();
-        event.preventDefault();
-        event.stopPropagation();
-      }
-    },
-    { capture: true }
-  );
-
-  createEventListener(
-    window,
-    'contextmenu',
-    (event) => {
-      if (suppressClick) {
-        event.preventDefault();
-      }
     },
     { capture: true }
   );
 
   createEventListener(window, 'pointermove', followPointer, { capture: true });
   function followPointer(event: PointerEvent) {
-    if (editPress && event.pointerId === editPress.pointer) {
-      if (Math.hypot(event.clientX - editPress.start.x, event.clientY - editPress.start.y) >= tapDistance) {
-        stopEditPress();
-      }
-    }
-
     if (press && event.pointerId === press.pointer) {
       if (Math.hypot(event.clientX - press.start.x, event.clientY - press.start.y) >= tapDistance) {
         stopPress();
@@ -618,15 +546,6 @@ export function BoardView(props: {
 
   // A lift drops where the part is, without waiting; a press that did not move is a tap.
   const finish = (event: PointerEvent) => {
-    if (editPress && event.pointerId === editPress.pointer) {
-      stopEditPress();
-    }
-
-    if (suppressClick) {
-      clearTimeout(suppressTimer);
-      suppressTimer = setTimeout(clearSuppress, 120);
-    }
-
     if (press && event.pointerId === press.pointer) {
       stopPress();
     }
@@ -761,10 +680,6 @@ export function BoardView(props: {
     window,
     'pointercancel',
     (event) => {
-      if (event.pointerId === editPress?.pointer) {
-        stopEditPress();
-      }
-
       if (event.pointerId === press?.pointer) {
         stopPress();
       }
@@ -1218,6 +1133,7 @@ export function BoardView(props: {
         away={lifted()?.carried === true}
         presets={props.session.library.presets}
         kits={props.kits}
+        files={props.files}
         onBoard={onBoardKinds()}
         flashKit={flashKit()}
         onLift={(event, kind) => startNewPart(event, kind)}
@@ -1320,31 +1236,6 @@ export function BoardView(props: {
     window.addEventListener('pointermove', move, true);
     window.addEventListener('pointerup', end, true);
     window.addEventListener('pointercancel', end, true);
-  }
-
-  /** Arms a still press on any live LEGO panel/part to enter edit mode after `editLongPress`. */
-  function armEditLongPress(event: PointerEvent) {
-    if (event.target instanceof Element && event.target.closest('[data-no-edit-long-press]')) {
-      return;
-    }
-
-    stopEditPress();
-    const pointer = event.pointerId;
-    const start = { x: event.clientX, y: event.clientY };
-    editPress = {
-      pointer,
-      start,
-      timer: setTimeout(() => {
-        editPress = undefined;
-        if (drag()?.pointer === pointer) {
-          stopWaiting();
-          setDrag(undefined);
-        }
-
-        suppressClick = true;
-        props.onEnterEdit();
-      }, editLongPress)
-    };
   }
 
   /**
@@ -2219,9 +2110,6 @@ const selectionPadding = 4;
 /** Fallback footprint in CSS pixels for placing the Edit bar before ResizeObserver measures it. */
 const defaultEditBarWidth = 210;
 const defaultEditBarHeight = 56;
-
-/** Milliseconds a still press on any live LEGO panel/part takes to enter layout edit mode. */
-const editLongPress = 450;
 
 /** Milliseconds a still press on the bare drawing or a panel's free cells takes to open the spawn menu. */
 const longPress = 420;

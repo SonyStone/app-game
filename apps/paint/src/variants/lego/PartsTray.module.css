@@ -324,3 +324,8 @@
   color: rgb(255 255 255 / 0.58);
   font-size: 13px;
 }
+
+/* File: the File menu's commands as rows, as wide as a comfortable menu rather than the whole pane. */
+.fileRows {
+  max-width: 420px;
+}

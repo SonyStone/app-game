@@ -16,6 +16,7 @@ import { createLegoServices, LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { partDefinitions } from './parts';
 import { catalogueSpecimens } from './PartsShowcase';
+import { createTestFileCommands } from './testServices';
 
 const frames = new Map<number, FrameRequestCallback>();
 const intersections = new Map<Element, IntersectionObserverCallback>();
@@ -178,6 +179,7 @@ it.each([undefined, true] as const)(
                 }}
                 editing={editing()}
                 catalog={catalog()}
+                files={createTestFileCommands()}
                 onOpenCatalog={setCatalog}
                 onCloseCatalog={() => setCatalog(undefined)}
                 onEnterEdit={() => {

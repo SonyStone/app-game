@@ -9,7 +9,7 @@ import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
 import { partFamilies, PartsTray } from './PartsTray';
-import { createTestServices } from './testServices';
+import { createTestFileCommands, createTestServices } from './testServices';
 
 vi.mock('@app-game/paint-core/preview/client', () => ({
   attachStrokePreview: () => ({ update: vi.fn(), pause: vi.fn(), dispose: vi.fn() })
@@ -57,6 +57,7 @@ it('combines Settings and Parts in one sidebar dialog, opens on Interface or las
         initial={initial()}
         presets={services.presets.all}
         kits={kits}
+        files={createTestFileCommands()}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
@@ -74,6 +75,7 @@ it('combines Settings and Parts in one sidebar dialog, opens on Interface or las
 
   expect([...sidebar().querySelectorAll('h3')].map((heading) => heading.textContent)).toEqual(['Settings', 'Parts']);
   expect(rows().map((row) => [row.dataset.item, row.textContent])).toEqual([
+    ['file', 'File'],
     ['interface', 'Interface'],
     ['Kits', `Kits${kits.kits().length}`],
     ...families.map((family) => [family.id, `${family.title}${family.kinds.length}`])
@@ -141,6 +143,7 @@ it("makes the dialog's sections and content two screens, opening under a way bac
         open={open()}
         presets={services.presets.all}
         kits={kits}
+        files={createTestFileCommands()}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
@@ -175,6 +178,80 @@ it("makes the dialog's sections and content two screens, opening under a way bac
   expect(sidebar().querySelector('[aria-current="page"]')!.getAttribute('data-item')).toBe('Color');
 });
 
+it("lists the File menu's commands under Settings → File, each running its command and closing the dialog", () => {
+  const { services } = owned(createTestServices);
+  const [open, setOpen] = createSignal(true);
+  const [ready, setReady] = createSignal(false);
+  const files = createTestFileCommands(ready);
+  const kits = owned(createKits);
+  mount(() => (
+    <LegoServicesContext value={services}>
+      <PartsTray
+        open={open()}
+        initial="interface"
+        presets={services.presets.all}
+        kits={kits}
+        files={files}
+        onLift={vi.fn()}
+        onLiftKit={vi.fn()}
+        onReset={vi.fn()}
+        onEditLayout={vi.fn()}
+        onClose={() => setOpen(false)}
+        flashKit={undefined}
+      />
+    </LegoServicesContext>
+  ));
+  const sidebar = () => document.querySelector<HTMLElement>('nav[aria-label="Parts and options"]')!;
+  const pane = () => document.querySelector<HTMLElement>('dialog[aria-label="Parts and Options"] section')!;
+  const commands = () => [...pane().querySelectorAll<HTMLButtonElement>('[role="menu"] [role="menuitem"]')];
+  const command = (label: string) => commands().find((item) => item.textContent?.startsWith(label))!;
+
+  // File is the first item of the Settings group, above Interface.
+  const partsHeading = [...sidebar().querySelectorAll('h3')].find((heading) => heading.textContent === 'Parts')!;
+  const settingsRows = [...sidebar().querySelectorAll<HTMLElement>('[data-item]')].filter(
+    (row) => row.compareDocumentPosition(partsHeading) & Node.DOCUMENT_POSITION_FOLLOWING
+  );
+  expect(settingsRows.map((row) => row.dataset.item)).toEqual(['file', 'interface']);
+
+  sidebar().querySelector<HTMLButtonElement>('[data-item="file"]')!.click();
+  flush();
+  expect(pane().getAttribute('aria-label')).toBe('File');
+  // The way back where the dialog is two screens, as every section has.
+  expect([...pane().querySelectorAll('button')].some((button) => button.textContent === 'Sections')).toBe(true);
+  // The menu's five file commands, without its Edit layout and Options: the dialog is Options and has Edit layout.
+  expect(commands().map((item) => item.textContent)).toEqual([
+    'Open drawing.paint, .psd',
+    'Place imageNew layer',
+    'Save drawing.paint',
+    'Export picturePNG',
+    'Export layersPSD'
+  ]);
+
+  // Commands wait for the engine.
+  expect(commands().every((item) => item.disabled)).toBe(true);
+  setReady(true);
+  flush();
+  expect(commands().some((item) => item.disabled)).toBe(false);
+
+  command('Save drawing').click();
+  flush();
+  expect(files.download).toHaveBeenCalledOnce();
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
+
+  // A picked file runs its command and closes the dialog too.
+  setOpen(true);
+  flush();
+  sidebar().querySelector<HTMLButtonElement>('[data-item="file"]')!.click();
+  flush();
+  const picker = pane().querySelector<HTMLInputElement>('input[type="file"][accept="image/*"]')!;
+  const picture = new File(['x'], 'picture.png', { type: 'image/png' });
+  Object.defineProperty(picker, 'files', { configurable: true, value: [picture] });
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  flush();
+  expect(files.place).toHaveBeenCalledWith(picture);
+  expect(document.querySelector('dialog[aria-label="Parts and Options"]')).toBeNull();
+});
+
 it('searches parts and kits from any section including Interface, clears with Escape, and marks parts on the board', () => {
   const { services } = owned(createTestServices);
   const kits = owned(createKits);
@@ -186,6 +263,7 @@ it('searches parts and kits from any section including Interface, clears with Es
         initial="interface"
         presets={services.presets.all}
         kits={kits}
+        files={createTestFileCommands()}
         onBoard={new Set(['action:undo', 'layers:list'])}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}

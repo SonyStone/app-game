@@ -10,39 +10,47 @@ import styles from './LegoStudio.module.css';
 export const FileApplicationControls = createContext<(() => JSX.Element) | null>(null);
 
 /**
- * The drawing's file commands, which the File part opens beside itself: open a drawing (`.paint` or Photoshop), place
- * an image as a new layer, save the drawing, and export the visible canvas as PNG or every layer as PSD. Saved and
- * exported files are browser downloads, or land in Downloads/Paint in the Android app. Each command waits for the
- * engine; `onDone` closes the menu once one ran or a file was picked. After them, Edit layout enters board edit mode
- * and Options opens the unified Parts & Options dialog on Interface (`PartsTray`), neither needing the engine. The
- * commands are Settings rows (`SettingsRows`), as every list of LEGO's panels.
+ * The drawing's file commands, which the File part opens beside itself: `FileCommands`, then Edit layout, which enters
+ * board edit mode, and Options, which opens the unified Parts & Options dialog on Interface (`PartsTray`), neither
+ * needing the engine. `onDone` closes the menu once a command ran or a file was picked. The commands are Settings
+ * rows (`SettingsRows`), as every list of LEGO's panels.
  */
-export function FileMenu(props: {
-  ready: boolean;
-  import: LegoServices['files']['import'];
-  download: LegoServices['files']['download'];
-  png: LegoServices['files']['png'];
-  psd: LegoServices['files']['psd'];
-  place: LegoServices['files']['place'];
-  /** Enters LEGO layout edit mode. */
-  editLayout: LegoServices['options']['editLayout'];
-  /** Opens the Options sheet. */
-  options: LegoServices['options']['open'];
-  onDone: () => void;
-}) {
+export function FileMenu(
+  props: FileCommandSet & {
+    /** Enters LEGO layout edit mode. */
+    editLayout: LegoServices['options']['editLayout'];
+    /** Opens the Options sheet. */
+    options: LegoServices['options']['open'];
+    onDone: () => void;
+  }
+) {
+  return (
+    <SettingsRows class={styles.fileMenu} role="menu" label="File">
+      <FileCommands commands={props} onDone={() => props.onDone()}>
+        <Item icon="edit" label="Edit layout" disabled={false} onSelect={() => done(props.editLayout, props.onDone)} />
+        <Item icon="options" label="Options" disabled={false} onSelect={() => done(props.options, props.onDone)} />
+      </FileCommands>
+    </SettingsRows>
+  );
+}
+
+/**
+ * The file commands as menu rows, shared by the File part's menu and the File section of Parts & Options: open a
+ * drawing (`.paint` or Photoshop), place an image as a new layer, save the drawing, and export the visible canvas as
+ * PNG or every layer as PSD. Saved and exported files are browser downloads, or land in Downloads/Paint in the Android
+ * app. Each command waits for the engine (`ready`); `onDone` runs once one ran or a file was picked. `children` are the
+ * host's own rows after the commands, and the host's `FileApplicationControls`, when given, come last. Lay it inside a
+ * `SettingsRows` of role `menu`.
+ */
+export function FileCommands(props: { commands: FileCommandSet; onDone: () => void; children?: JSX.Element }) {
   const applicationControls = useContext(FileApplicationControls);
   let drawing!: HTMLInputElement;
   let image!: HTMLInputElement;
-  const ready = () => props.ready;
-  const run = (command: () => unknown) => {
-    const result = command();
-    props.onDone();
-
-    return result;
-  };
+  const ready = () => props.commands.ready;
+  const run = (command: () => unknown) => done(command, props.onDone);
 
   return (
-    <SettingsRows class={styles.fileMenu} role="menu" label="File">
+    <>
       <input
         ref={drawing}
         type="file"
@@ -51,7 +59,7 @@ export function FileMenu(props: {
         onChange={(event) => {
           const picked = takeFile(event.currentTarget);
           if (picked) {
-            run(() => props.import(picked));
+            run(() => props.commands.import(picked));
           }
         }}
       />
@@ -63,7 +71,7 @@ export function FileMenu(props: {
         onChange={(event) => {
           const picked = takeFile(event.currentTarget);
           if (picked) {
-            run(() => props.place(picked));
+            run(() => props.commands.place(picked));
           }
         }}
       />
@@ -80,12 +88,23 @@ export function FileMenu(props: {
         label="Save drawing"
         detail=".paint"
         disabled={!ready()}
-        onSelect={() => run(props.download)}
+        onSelect={() => run(() => props.commands.download())}
       />
-      <Item icon="scene" label="Export picture" detail="PNG" disabled={!ready()} onSelect={() => run(props.png)} />
-      <Item icon="layers" label="Export layers" detail="PSD" disabled={!ready()} onSelect={() => run(props.psd)} />
-      <Item icon="edit" label="Edit layout" disabled={false} onSelect={() => run(props.editLayout)} />
-      <Item icon="options" label="Options" disabled={false} onSelect={() => run(props.options)} />
+      <Item
+        icon="scene"
+        label="Export picture"
+        detail="PNG"
+        disabled={!ready()}
+        onSelect={() => run(() => props.commands.png())}
+      />
+      <Item
+        icon="layers"
+        label="Export layers"
+        detail="PSD"
+        disabled={!ready()}
+        onSelect={() => run(() => props.commands.psd())}
+      />
+      {props.children}
       <Show when={applicationControls}>
         {(controls) => (
           <div class={appStyles.applicationGroup} role="group" aria-label="Paint app">
@@ -93,8 +112,29 @@ export function FileMenu(props: {
           </div>
         )}
       </Show>
-    </SettingsRows>
+    </>
   );
+}
+
+/**
+ * What `FileCommands` runs: whether the engine is ready, and the commands, each already guarded by the host (a part's
+ * `frame.command`, or `services.run`) so failures reach the session's error notice.
+ */
+export type FileCommandSet = {
+  readonly ready: boolean;
+  import: (file: File) => unknown;
+  download: () => unknown;
+  png: () => unknown;
+  psd: () => unknown;
+  place: (file: File) => unknown;
+};
+
+/** Runs `command`, then `onDone`, returning what the command returned. */
+function done(command: () => unknown, onDone: () => void) {
+  const result = command();
+  onDone();
+
+  return result;
 }
 
 /** A command of the menu: a Settings row with its icon, name and what it makes, if anything, as the trailing text. */

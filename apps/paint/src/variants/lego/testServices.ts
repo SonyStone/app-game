@@ -12,10 +12,25 @@ import { createRecentColors } from '../../features/color/createRecentColors';
 import { hexToHsv } from '../../features/color/hsv';
 import { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
 import type { PaintSession } from '../../features/session';
+import type { FileCommandSet } from './FileMenu';
 import { defaultCell } from './grid';
 import { createMockLayers } from './layersPrototype/mockLayers';
 import type { LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
+
+/** Spy file commands for mounting `PartsTray` or `BoardView` without a session; `ready` follows `ready`. */
+export function createTestFileCommands(ready: () => boolean = () => true) {
+  return {
+    get ready() {
+      return ready();
+    },
+    import: vi.fn(),
+    download: vi.fn(),
+    png: vi.fn(),
+    psd: vi.fn(),
+    place: vi.fn()
+  } satisfies FileCommandSet;
+}
 
 /** Fake narrow capabilities for frame/definition tests. No PaintSession mock or GPU engine is required. */
 export function createTestServices() {

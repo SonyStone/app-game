@@ -1378,7 +1378,7 @@ function openParts() {
   return dialog!;
 }
 
-it('hides any permanent Edit button in live mode and enters Edit via File menu, Options, or long-pressing a panel', () => {
+it('hides any permanent Edit button in live mode, enters Edit via File menu or Options, and not by holding a panel', () => {
   vi.useFakeTimers();
   try {
     storeParts(['action:file', 'action:options', 'action:undo']);
@@ -1414,24 +1414,15 @@ it('hides any permanent Edit button in live mode and enters Edit via File menu, 
     expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
     click('Done');
 
-    // 3) Moving a press cancels the long-press timer (protects sliders/pickers/FloatingGrip).
+    // 3) Holding still on a LEGO panel/part, however long, does not enter Edit.
     const undoPart = document.querySelector<HTMLElement>('[data-part="test-2"]')!;
     pointer(undoPart, 'pointerdown', 20, 20);
-    pointer(window, 'pointermove', 34, 20);
-    vi.advanceTimersByTime(600);
+    vi.advanceTimersByTime(1500);
     flush();
     expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
-    pointer(window, 'pointerup', 34, 20);
-
-    // 4) Holding still (~450ms) on a LEGO panel/part enters Edit mode without firing the part.
-    pointer(undoPart, 'pointerdown', 20, 20);
-    vi.advanceTimersByTime(440);
-    flush();
-    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
-    vi.advanceTimersByTime(20);
-    flush();
-    expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
     pointer(window, 'pointerup', 20, 20);
+    flush();
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
   } finally {
     vi.useRealTimers();
   }

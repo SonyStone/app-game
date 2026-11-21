@@ -17,7 +17,7 @@ import {
 import { besideRect, findPart, safeArea, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
-import { FileApplicationControls } from './FileMenu';
+import { FileApplicationControls, type FileCommandSet } from './FileMenu';
 import { cellGap, createGrid, GridContext, plateRadius, referenceCell } from './grid';
 import { createKits } from './kits';
 import layerProtoStyles from './layersPrototype/LayersPrototype.module.css';
@@ -44,8 +44,9 @@ import { StudioSettingRow } from './StudioSettingRow';
  * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
  * kits and placed again.
  *
- * Layout editing is entered by long-pressing any LEGO panel/part, or via File → Edit layout / Options → Interface.
- * The drawing stays 1:1 throughout; a draggable Edit bar placed on a free spot opens the modal Parts catalog
+ * Layout editing is entered via File → Edit layout or Parts & Options → Interface → Edit layout; a browser Back with
+ * nothing to close opens Parts & Options, whose File section holds the file commands too, so both are at hand on an
+ * empty board. The drawing stays 1:1 throughout; a draggable Edit bar placed on a free spot opens the modal Parts catalog
  * (`PartsTray`) and finishes editing (see `BoardView`). The board is kept per device.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
@@ -155,6 +156,17 @@ export function LegoStudio(
   const onBoard = (kind: string) =>
     board.board().panels.some((panel) => panel.parts.some((part) => currentKind(part.kind) === kind));
   const kits = createKits(reportSavingError);
+  /** The file commands of Parts & Options' File section, failures reported as the File part's are. */
+  const files: FileCommandSet = {
+    get ready() {
+      return services.files.ready();
+    },
+    import: (file) => services.run(() => services.files.import(file)),
+    download: () => services.run(services.files.download),
+    png: () => services.run(services.files.png),
+    psd: () => services.run(services.files.psd),
+    place: (file) => services.run(() => services.files.place(file))
+  };
 
   session.createShortcuts({
     // A Back with nothing to close opens Parts & Options, which leads to Edit layout: the way in on an empty board.
@@ -250,21 +262,24 @@ export function LegoStudio(
             </Show>
           </PaintStage>
           <div class={styles.ui}>
-            <BoardView
-              board={board}
-              kits={kits}
-              session={session}
-              editing={editing()}
-              catalog={catalog()}
-              onOpenCatalog={setCatalog}
-              onCloseCatalog={() => setCatalog(undefined)}
-              onEnterEdit={enterEdit}
-              onExitEdit={exitEdit}
-              openPanel={openPanel()}
-              onOpenPanel={setOpenPanel}
-              onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
-              ref={setBoardControls}
-            />
+            <FileApplicationControls value={props.applicationControls ? () => props.applicationControls : null}>
+              <BoardView
+                board={board}
+                kits={kits}
+                session={session}
+                editing={editing()}
+                catalog={catalog()}
+                files={files}
+                onOpenCatalog={setCatalog}
+                onCloseCatalog={() => setCatalog(undefined)}
+                onEnterEdit={enterEdit}
+                onExitEdit={exitEdit}
+                openPanel={openPanel()}
+                onOpenPanel={setOpenPanel}
+                onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
+                ref={setBoardControls}
+              />
+            </FileApplicationControls>
             <Show when={popup() && popupPlace()}>
               {(place) => (
                 <div
