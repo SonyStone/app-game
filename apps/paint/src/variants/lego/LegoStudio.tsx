@@ -21,6 +21,7 @@ import { createBoard } from './createBoard';
 import { FileApplicationControls } from './FileMenu';
 import { cellGap, createGrid, GridContext, plateRadius, referenceCell } from './grid';
 import { createKits } from './kits';
+import layerProtoStyles from './layersPrototype/LayersPrototype.module.css';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import styles from './LegoStudio.module.css';
 import { LookChooser } from './LookChooser';
@@ -231,8 +232,58 @@ export function LegoStudio(
           <PaintStage session={session} class={styles.workspace}>
             <StageGuides session={session} />
             <StageOverlays session={session} />
+            <Show when={services.layersPrototype.target() === 'mask' && services.layersPrototype.maskOverlay()}>
+              <div class={layerProtoStyles.rubylithOverlay} data-rubylith-overlay="" aria-hidden="true" />
+            </Show>
           </PaintStage>
           <div class={styles.ui}>
+            <Show when={services.layersPrototype.target() === 'mask' && services.layersPrototype.activeLayer()}>
+              {(layer) => (
+                <div
+                  class={layerProtoStyles.maskBanner}
+                  role="status"
+                  aria-label="Mask editing mode"
+                  data-keeps-panel
+                >
+                  <span class={layerProtoStyles.maskBannerTitle}>Mask: {layer().name}</span>
+                  <div class={layerProtoStyles.maskBannerSeg} role="group" aria-label="Mask paint mode">
+                    <button
+                      type="button"
+                      class={layerProtoStyles.maskBannerBtn}
+                      aria-pressed={services.layersPrototype.maskBrush() === 'reveal' ? 'true' : 'false'}
+                      onClick={() => services.layersPrototype.setMaskBrush('reveal')}
+                    >
+                      Reveal
+                    </button>
+                    <button
+                      type="button"
+                      class={layerProtoStyles.maskBannerBtn}
+                      aria-pressed={services.layersPrototype.maskBrush() === 'hide' ? 'true' : 'false'}
+                      onClick={() => services.layersPrototype.setMaskBrush('hide')}
+                    >
+                      Hide
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    class={layerProtoStyles.maskBannerBtn}
+                    data-ruby=""
+                    aria-pressed={services.layersPrototype.maskOverlay() ? 'true' : 'false'}
+                    onClick={() => services.layersPrototype.toggleRubylith()}
+                  >
+                    Red overlay
+                  </button>
+                  <button
+                    type="button"
+                    class={layerProtoStyles.maskBannerBtn}
+                    data-done=""
+                    onClick={() => services.layersPrototype.setTarget('layer')}
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+            </Show>
             <BoardView
               board={board}
               kits={kits}

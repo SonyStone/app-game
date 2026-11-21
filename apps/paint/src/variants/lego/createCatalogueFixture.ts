@@ -11,6 +11,7 @@ import { hexToHsv } from '../../features/color/hsv';
 import type { CoolorusSettings } from '../../features/coolorus-wheel';
 import type { PaintSession } from '../../features/session';
 import type { PaintError } from '../../shared/errors';
+import { createMockLayers } from './layersPrototype/mockLayers';
 import type { LegoServices } from './LegoServices';
 import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
@@ -150,6 +151,7 @@ export function createCatalogueFixture() {
         setState(drawing.state());
       }
     },
+    layersPrototype: createMockLayers(),
     files: {
       ready: createMemo(() => true),
       import: () => {},

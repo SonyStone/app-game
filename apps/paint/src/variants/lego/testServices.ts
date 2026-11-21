@@ -13,6 +13,7 @@ import { hexToHsv } from '../../features/color/hsv';
 import { createCoolorusSettings } from '../../features/coolorus-wheel/createCoolorusSettings';
 import type { PaintSession } from '../../features/session';
 import { defaultCell } from './grid';
+import { createMockLayers } from './layersPrototype/mockLayers';
 import type { LegoServices } from './LegoServices';
 import { runPartCommand } from './partCommand';
 
@@ -88,6 +89,7 @@ export function createTestServices() {
       action: vi.fn(),
       blending: vi.fn()
     },
+    layersPrototype: createMockLayers(),
     files: {
       ready: createMemo(() => true),
       import: vi.fn(),

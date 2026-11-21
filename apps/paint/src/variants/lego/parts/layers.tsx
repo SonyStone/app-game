@@ -3,6 +3,8 @@ import { blendModeLabel, BlendModePicker } from '../../../features/layers/BlendM
 import { layerCommand, LayerList, LayerName, type LayerCommand } from '../../../features/layers/LayerControls';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import styles from '../LayerParts.module.css';
+import { LayerOpenerPart } from '../layersPrototype/LayerOpenerPart';
+import { LayersStripPart } from '../layersPrototype/LayersStripPart';
 import type { LegoServices } from '../LegoServices';
 import { anyRoom, lookFits, type LookSpec } from '../looks';
 import { fits, fitsLines, type TextStyle } from '../textFit';
@@ -17,8 +19,54 @@ const listLooks: readonly LookSpec[] = [
   { id: 'wide', label: 'Wide', min: { width: 136, height: 0 } }
 ];
 
+/** The layers prototype strip's adaptive looks: compact thumbnail tiles (< 160 px) and indented wide tree (>= 160 px). */
+const stripLooks: readonly LookSpec[] = [
+  { id: 'strip', label: 'Strip', min: anyRoom },
+  { id: 'wide', label: 'Wide', min: { width: 160, height: 0 } }
+];
+
 /** Ordinary LEGO views of shared layer state. Only the mounted list acquires thumbnails, outside preview. */
 export const layerParts = [
+  definePart({
+    kind: 'layers:strip',
+    family: 'action',
+    group: 'layer-list',
+    section: 'Layers',
+    label: 'Layers strip',
+    icon: 'layers',
+    defaultSpan: { columns: 2, rows: 8 },
+    looks: { looks: stripLooks, auto: (room) => (lookFits(stripLooks[1]!, room) ? 'wide' : 'strip') },
+    needs: (s, f) => ({
+      service: s.layersPrototype,
+      get wide() {
+        return f.look === 'wide';
+      },
+      get interactive() {
+        return f.mode === 'live';
+      }
+    }),
+    View: LayersStripPart
+  }),
+  definePart({
+    kind: 'layers:opener',
+    family: 'action',
+    group: 'layer-list',
+    section: 'Layers',
+    label: 'Layers button',
+    icon: 'layers',
+    defaultSpan: { columns: 2, rows: 2 },
+    owned: {
+      parts: [{ id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }]
+    },
+    needs: (s, f) => ({
+      service: s.layersPrototype,
+      get open() {
+        return f.open;
+      },
+      onOpen: f.onOpen
+    }),
+    View: LayerOpenerPart
+  }),
   definePart({
     kind: 'layers:list',
     family: 'action',

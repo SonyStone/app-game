@@ -5,6 +5,7 @@ import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wh
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
 import { downloadBlob } from '../../shared/downloadBlob';
+import { createMockLayers } from './layersPrototype/mockLayers';
 import { deviceCell } from './options';
 import { runPartCommand } from './partCommand';
 
@@ -68,6 +69,7 @@ export function createLegoServices(
   const windows: Pick<PaintSession['windows'], 'isOpen' | 'toggle'> = session.windows;
 
   const settings = createBrushSettingsEditor(session);
+  const layersPrototype = createMockLayers();
 
   return {
     brushEditor: { ...settings, open: openBrushStudio },
@@ -182,6 +184,8 @@ export function createLegoServices(
         session.edit({ type: 'layer', action }),
       blending: (linear: boolean) => session.edit({ type: 'blending', linear })
     },
+    /** Self-contained PSD layers UI prototype state for `layers:strip` and `layers:opener`. */
+    layersPrototype,
     files: {
       ready: session.ready,
       import: (file: File) => session.edit({ type: 'import', file }),

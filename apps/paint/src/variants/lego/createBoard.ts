@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 import { pruneOwned, type Board } from './board';
-import { layersKit } from './layersKit';
 import { createPartStorage, migrateParts, migrateWindows, storedPart } from './partStorage';
 import { swatchPanelParts } from './swatchPanelParts';
 
@@ -111,7 +110,7 @@ export const defaultBoard: Board = {
     },
     {
       id: 'stroke',
-      at: { x: 0.95, y: 0.3 },
+      at: { x: 0.99, y: 0.56 },
       parts: [
         { id: 'size', kind: 'value:size', cell: { column: 0, row: 0 }, span: { columns: 1, rows: 5 } },
         { id: 'opacity', kind: 'value:opacity', cell: { column: 1, row: 0 }, span: { columns: 1, rows: 5 } }
@@ -119,10 +118,9 @@ export const defaultBoard: Board = {
     },
     swatchPanel('color'),
     {
-      id: 'layers-panel',
-      at: { x: 0.17, y: 0.5 },
-      floating: true,
-      parts: layersKit.parts.map((part) => ({ ...part, id: `layers-${part.id}` }))
+      id: 'layers-strip',
+      at: { x: 0.99, y: 0.12 },
+      parts: [{ id: 'layers-strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }]
     }
   ]
 };

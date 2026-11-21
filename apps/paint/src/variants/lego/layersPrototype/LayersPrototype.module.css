@@ -1,0 +1,1041 @@
+/*
+ * Prototype Layers UI styles: narrow 2-cell strip (`strip`), wide indented tree (`wide`), second-tap properties
+ * popover with nested pages (Blend modes + touch Blend If), layers swatch button, drawer button, and canvas mask
+ * target indicators (Rubylith overlay + top floating mask pill).
+ */
+.stripRoot {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--lego-plate);
+  color: #ffffff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-bottom: 1px solid var(--lego-divider);
+}
+
+.headerBtn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.12);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.2);
+  }
+}
+
+.multiHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  background: var(--lego-accent);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.multiCount {
+  padding: 0 4px;
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.multiBtn {
+  height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--lego-r-badge);
+  background: rgb(0 0 0 / 0.24);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(0 0 0 / 0.38);
+  }
+}
+
+.backRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--lego-divider);
+  background: rgb(61 126 255 / 0.22);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &[data-drop-hover] {
+    background: var(--lego-accent);
+  }
+}
+
+.backLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+/* Strip tile (narrow 2-3 cell mode) */
+.tile {
+  position: relative;
+  display: grid;
+  padding: 3px;
+  border-radius: var(--lego-r-tile);
+  background: rgb(255 255 255 / 0.08);
+  cursor: pointer;
+  touch-action: pan-y;
+  transition:
+    background 120ms,
+    transform 120ms;
+
+  &[data-active] {
+    background: rgb(61 126 255 / 0.26);
+    box-shadow: inset 0 0 0 2px var(--lego-accent);
+  }
+
+  &[data-mask-active] {
+    background: rgb(224 68 68 / 0.24);
+    box-shadow: inset 0 0 0 2px #ef5350;
+  }
+
+  &[data-selected] {
+    background: rgb(61 126 255 / 0.36);
+    box-shadow: inset 0 0 0 2px #8cb8ff;
+  }
+
+  &[data-pinch] {
+    transform: scale(0.95);
+    box-shadow: inset 0 0 0 2px #7fd18b;
+  }
+
+  &[data-hidden] {
+    opacity: 0.45;
+  }
+
+  &[data-clipping] {
+    margin-left: 8px;
+  }
+
+  &[data-dragging] {
+    opacity: 0.4;
+  }
+
+  &[data-drop='before'] {
+    box-shadow: inset 0 3px 0 0 var(--lego-accent);
+  }
+
+  &[data-drop='after'] {
+    box-shadow: inset 0 -3px 0 0 var(--lego-accent);
+  }
+
+  &[data-drop='into'] {
+    background: rgb(61 126 255 / 0.34);
+    box-shadow: inset 0 0 0 2px #8cb8ff;
+  }
+
+  &[data-drop='clip'] {
+    box-shadow: inset -3px 0 0 0 #f2c94c;
+  }
+}
+
+.colorStripe {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 2px;
+  width: 3px;
+  border-radius: 999px;
+  corner-shape: round;
+  pointer-events: none;
+}
+
+.clipArrow {
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  translate: 0 -50%;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.thumbWrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--lego-r-inner);
+  overflow: hidden;
+  background: repeating-conic-gradient(rgb(255 255 255 / 0.14) 0 25%, rgb(255 255 255 / 0.05) 0 50%) 0 / 8px 8px;
+}
+
+.thumbImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.groupStack {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / 0.08);
+  color: #ffffff;
+}
+
+.groupCount {
+  position: absolute;
+  bottom: 2px;
+  left: 3px;
+  padding: 0 4px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(0 0 0 / 0.66);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.enterGroupBtn {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--lego-r-badge);
+  background: rgb(0 0 0 / 0.65);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--lego-accent);
+  }
+}
+
+.eyeBtn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--lego-r-badge);
+  background: rgb(0 0 0 / 0.55);
+  color: #ffffff;
+  cursor: pointer;
+
+  &[data-solo] {
+    background: #f2c94c;
+    color: #1c1d22;
+  }
+}
+
+.badgeRow {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  max-width: calc(100% - 22px);
+  pointer-events: none;
+}
+
+.modeBadge,
+.maskBadge,
+.refBadge,
+.lockBadge {
+  padding: 1px 3px;
+  border-radius: var(--lego-r-badge);
+  background: rgb(0 0 0 / 0.72);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.maskBadge {
+  background: #d93838;
+}
+
+.refBadge {
+  background: var(--lego-accent);
+}
+
+.maskCorner {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1.5px solid #ffffff;
+  border-radius: var(--lego-r-badge);
+  overflow: hidden;
+  background: #111111;
+  cursor: pointer;
+
+  &[data-active] {
+    border-color: #ef5350;
+    box-shadow: 0 0 0 1px #ef5350;
+  }
+
+  &[data-disabled] {
+    opacity: 0.45;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+}
+
+.clipDropHint {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  translate: 0 -50%;
+  padding: 2px 5px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: #f2c94c;
+  color: #1c1d22;
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+/* Wide tree row (width >= 160px) */
+.wideRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 42px;
+  padding: 4px 6px;
+  border-radius: var(--lego-r-tile);
+  background: rgb(255 255 255 / 0.06);
+  cursor: pointer;
+  touch-action: pan-y;
+
+  &[data-active] {
+    background: rgb(61 126 255 / 0.24);
+    box-shadow: inset 0 0 0 1.5px var(--lego-accent);
+  }
+
+  &[data-mask-active] {
+    background: rgb(224 68 68 / 0.2);
+    box-shadow: inset 0 0 0 1.5px #ef5350;
+  }
+
+  &[data-selected] {
+    background: rgb(61 126 255 / 0.36);
+    box-shadow: inset 0 0 0 2px #8cb8ff;
+  }
+
+  &[data-pinch] {
+    transform: scale(0.98);
+    box-shadow: inset 0 0 0 2px #7fd18b;
+  }
+
+  &[data-hidden] {
+    opacity: 0.45;
+  }
+
+  &[data-dragging] {
+    opacity: 0.4;
+  }
+
+  &[data-drop='before'] {
+    box-shadow: inset 0 3px 0 0 var(--lego-accent);
+  }
+
+  &[data-drop='after'] {
+    box-shadow: inset 0 -3px 0 0 var(--lego-accent);
+  }
+
+  &[data-drop='into'] {
+    background: rgb(61 126 255 / 0.34);
+    box-shadow: inset 0 0 0 2px #8cb8ff;
+  }
+
+  &[data-drop='clip'] {
+    box-shadow: inset -3px 0 0 0 #f2c94c;
+  }
+}
+
+.indentGuide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgb(255 255 255 / 0.16);
+  pointer-events: none;
+}
+
+.expandBtn {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wideThumbBtn {
+  position: relative;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1.5px solid transparent;
+  border-radius: var(--lego-r-inner);
+  overflow: hidden;
+  background: repeating-conic-gradient(rgb(255 255 255 / 0.16) 0 25%, rgb(255 255 255 / 0.05) 0 50%) 0 / 8px 8px;
+  cursor: pointer;
+
+  &[data-target] {
+    border-color: var(--lego-accent);
+  }
+
+  &[data-mask-target] {
+    border-color: #ef5350;
+  }
+
+  &[data-disabled] {
+    opacity: 0.45;
+  }
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+  }
+}
+
+.wideInfo {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.wideName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wideSub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgb(255 255 255 / 0.62);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wideEyeBtn {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--lego-r-badge);
+  background: rgb(255 255 255 / 0.08);
+  color: #ffffff;
+  cursor: pointer;
+
+  &[data-solo] {
+    background: #f2c94c;
+    color: #1c1d22;
+  }
+}
+
+/* Paper row pinned at bottom */
+.paperBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 6px;
+  border: 0;
+  border-top: 1px solid var(--lego-divider);
+  background: rgb(255 255 255 / 0.06);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &[data-hidden] {
+    opacity: 0.5;
+  }
+}
+
+.paperChip {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: var(--lego-r-badge);
+}
+
+/* Pinch-to-group toast */
+.toast {
+  position: absolute;
+  right: 4px;
+  bottom: 34px;
+  left: 4px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--lego-r-inner);
+  background: rgb(20 22 28 / 0.96);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  box-shadow: var(--lego-shadow);
+
+  button {
+    padding: 2px 6px;
+    border: 0;
+    border-radius: var(--lego-r-badge);
+    background: var(--lego-accent);
+    color: #ffffff;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+}
+
+/* Second-tap Layer Properties & Paper popover */
+.popover {
+  position: fixed;
+  inset: auto;
+  z-index: 965;
+  width: 296px;
+  max-height: min(520px, calc(100vh - 24px));
+  margin: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: var(--lego-r-plate);
+  background: rgb(32 34 40 / 0.98);
+  color: #ffffff;
+  box-shadow: var(--lego-shadow);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  &::backdrop {
+    background: transparent;
+  }
+}
+
+.popHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.popBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.12);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.popTitle {
+  flex: 1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.nameInput {
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.08);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  outline: none;
+
+  &:focus {
+    border-color: var(--lego-accent);
+  }
+}
+
+.popStack {
+  display: grid;
+  gap: 10px;
+}
+
+.popRowBtn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.09);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.15);
+  }
+}
+
+.popMuted {
+  color: rgb(255 255 255 / 0.65);
+  font-weight: 500;
+}
+
+.sliderRow {
+  display: grid;
+  gap: 4px;
+}
+
+.sliderHead {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgb(255 255 255 / 0.78);
+}
+
+.rangeInput {
+  width: 100%;
+  accent-color: var(--lego-accent);
+  margin: 0;
+}
+
+.toggleRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.togglePill {
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.09);
+  color: rgb(255 255 255 / 0.85);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    background: var(--lego-accent);
+    color: #ffffff;
+  }
+
+  &[data-danger] {
+    background: rgb(224 68 68 / 0.22);
+    color: #ff9c9c;
+  }
+}
+
+.sectionLabel {
+  margin: 0;
+  color: rgb(255 255 255 / 0.58);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.tagRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tagDot {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  corner-shape: round;
+  cursor: pointer;
+
+  &[data-none] {
+    background: transparent;
+    border-color: rgb(255 255 255 / 0.35);
+  }
+
+  &[aria-pressed='true'] {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px var(--lego-accent);
+  }
+}
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.blendPage {
+  display: grid;
+  gap: 8px;
+}
+
+.blendList {
+  display: grid;
+  gap: 4px;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.blendItem {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.blendSelect {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.06);
+  color: #ffffff;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+
+  &[aria-selected='true'] {
+    background: var(--lego-accent);
+    font-weight: 700;
+  }
+}
+
+.starBtn {
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--lego-r-inner);
+  background: rgb(255 255 255 / 0.06);
+  color: rgb(255 255 255 / 0.45);
+  font-size: 13px;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    color: #f2c94c;
+  }
+}
+
+/* Touch Blend If widget */
+.blendIfTrackWrap {
+  display: grid;
+  gap: 6px;
+}
+
+.blendIfTrack {
+  position: relative;
+  height: 32px;
+  border-radius: var(--lego-r-inner);
+  background: linear-gradient(to right, #111111, #f5f5f5);
+  touch-action: none;
+}
+
+.blendIfHandle {
+  position: absolute;
+  top: 2px;
+  width: 18px;
+  height: 28px;
+  margin-left: -9px;
+  padding: 0;
+  border: 2px solid #ffffff;
+  border-radius: var(--lego-r-badge);
+  background: #1c1d22;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: ew-resize;
+  touch-action: none;
+
+  &[data-tone='white'] {
+    border-color: #1c1d22;
+    background: #ffffff;
+    color: #1c1d22;
+  }
+
+  &[data-split] {
+    width: 12px;
+    margin-left: -6px;
+  }
+}
+
+.blendIfReadout {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgb(255 255 255 / 0.72);
+}
+
+/* Layers button (owned swatch) and Drawer button */
+.openerBtn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 4px;
+  border: 0;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  cursor: pointer;
+
+  &[data-mask] {
+    box-shadow: inset 0 0 0 2px #ef5350;
+  }
+}
+
+.openerThumb {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--lego-r-inner);
+  overflow: hidden;
+  background: repeating-conic-gradient(rgb(0 0 0 / 0.1) 0 25%, transparent 0 50%) 0 / 8px 8px;
+
+  img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+}
+
+.openerCount {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(28 30 36 / 0.85);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.openerBadge {
+  position: absolute;
+  bottom: 3px;
+  left: 3px;
+  padding: 1px 4px;
+  border-radius: var(--lego-r-badge);
+  background: rgb(28 30 36 / 0.85);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+
+  &[data-mask] {
+    background: #d93838;
+  }
+}
+
+.drawerBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  padding: 0 6px;
+  border: 0;
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &[data-open] {
+    background: var(--lego-preset-active);
+    box-shadow: inset 0 0 0 2px var(--lego-accent);
+  }
+}
+
+/* Canvas-level Mask Target indicators (Rubylith overlay + safe top pill) */
+.rubylithOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgb(224 46 46 / 0.08) 0 28%, rgb(224 46 46 / 0.28) 65%);
+}
+
+.maskBanner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 945;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 12px;
+  translate: -50% 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(32 34 40 / 0.96);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--lego-shadow);
+  white-space: nowrap;
+}
+
+.maskBannerTitle {
+  color: #ff9e9e;
+  font-weight: 700;
+}
+
+.maskBannerSeg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(255 255 255 / 0.1);
+}
+
+.maskBannerBtn {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &[aria-pressed='true'] {
+    background: #ffffff;
+    color: #1c1d22;
+  }
+
+  &[data-ruby][aria-pressed='true'] {
+    background: #d93838;
+    color: #ffffff;
+  }
+
+  &[data-done] {
+    background: var(--lego-accent);
+    color: #ffffff;
+  }
+}

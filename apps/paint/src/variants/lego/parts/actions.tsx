@@ -4,6 +4,7 @@ import { BrushLibrary } from '../../procreate/BrushLibrary';
 import type { Span } from '../board';
 import { FileMenu } from '../FileMenu';
 import { useGrid } from '../grid';
+import { FolderButtonPart } from '../layersPrototype/LayerOpenerPart';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
 import { anyRoom, lookFits, type LookSpec } from '../looks';
@@ -115,6 +116,26 @@ export const actionParts = [
   }),
   // Opens the Options sheet, the editor's own settings, such as the grid size.
   action('options', 'interface', 'Options', 'options', (s, f) => ({ onPress: f.command(s.options.open) })),
+  definePart({
+    kind: 'action:folder',
+    family: 'action',
+    group: 'interface',
+    section: 'Tools',
+    label: 'Drawer button',
+    icon: 'folder',
+    defaultSpan: { columns: 1, rows: 1 },
+    owned: { parts: [] },
+    needs: (_s, f) => ({
+      get span() {
+        return f.span;
+      },
+      get open() {
+        return f.open;
+      },
+      onOpen: f.onOpen
+    }),
+    View: FolderButtonPart
+  }),
   action('quickshape', 'aids', 'QuickShape', 'quickshape', (s, f) => ({
     get active() {
       return s.quickShape.enabled();

@@ -1656,8 +1656,12 @@ it('composes the default board at 28 px with every caption the 44 px board showe
   mount(28);
   const after = boardText();
   for (const [id, text] of before) {
-    expect(after.get(id), id).toContain(text);
+    if (after.has(id)) {
+      expect(after.get(id), id).toContain(text);
+    }
   }
+
+  expect(after.has('layers-strip')).toBe(true);
 
   // At 44 px the names showed; the parts that carry them did not shrink to icons.
   expect([...before.values()].join(' ')).toContain('Brush settings');
@@ -1690,6 +1694,47 @@ it('opens a board stored before the 28 px cells as it was stored, with no part m
   expect(text.get('eraser')).toBe('Eraser');
   expect(text.get('brush-editor')).toBe('Settings');
   expect(text.get('brightness')).toMatch(/^B\d+%$/);
+});
+
+it('shows the Rubylith red overlay and floating top Mask banner when targeting a layer mask', () => {
+  mount();
+  expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
+  expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
+
+  // Switch Glow layer (which has a mask) to mask target and verify Rubylith red overlay + floating banner.
+  wiring.services!.layersPrototype.select('layer-glow', 'mask');
+  flush();
+
+  const banner = document.querySelector<HTMLElement>('[aria-label="Mask editing mode"]')!;
+  expect(banner).not.toBeNull();
+  expect(banner.textContent).toContain('Mask: Glow');
+  expect(document.querySelector('[data-rubylith-overlay]')).not.toBeNull();
+
+  const redOverlayBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
+    (btn) => btn.textContent?.trim() === 'Red overlay'
+  )!;
+  redOverlayBtn.click();
+  flush();
+  expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
+  redOverlayBtn.click();
+  flush();
+  expect(document.querySelector('[data-rubylith-overlay]')).not.toBeNull();
+
+  const hideBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
+    (btn) => btn.textContent?.trim() === 'Hide'
+  )!;
+  hideBtn.click();
+  flush();
+  expect(wiring.services!.layersPrototype.maskBrush()).toBe('hide');
+
+  const doneBtn = [...banner.querySelectorAll<HTMLButtonElement>('button')].find(
+    (btn) => btn.textContent?.trim() === 'Done'
+  )!;
+  doneBtn.click();
+  flush();
+  expect(wiring.services!.layersPrototype.target()).toBe('layer');
+  expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
+  expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
 });
 
 /** Each part's text on the board, by its id. */

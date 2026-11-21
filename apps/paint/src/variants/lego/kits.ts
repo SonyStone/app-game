@@ -181,6 +181,18 @@ const part = (id: string, kind: string, column: number, row: number, columns: nu
  * composed for a 28 px cell, each named part as long as its name needs.
  */
 const readyKits: Kit[] = [
+  {
+    id: 'ready:layers-strip',
+    name: 'Layers strip',
+    parts: [part('strip', 'layers:strip', 0, 0, 2, 8)],
+    owned: []
+  },
+  {
+    id: 'ready:layers-button',
+    name: 'Layers button',
+    parts: [part('opener', 'layers:opener', 0, 0, 2, 2)],
+    owned: [{ owner: 'opener', parts: [part('strip', 'layers:strip', 0, 0, 2, 8)] }]
+  },
   layersKit,
   { id: 'ready:swatch-panel', name: 'Color panel', parts: swatchPanelParts, owned: [] },
   {
