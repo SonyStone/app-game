@@ -272,7 +272,9 @@ export function createPaintSession(options: {
   createAutoRestore({ error, restore: restoreRenderer });
   createPointerTypeAttribute(editor);
   createContextMenuBlock();
-  createPageGestureGuard();
+  /** What a Back the page keeps does, set by the variant's `createShortcuts`. */
+  let pageBack: (() => void) | undefined;
+  createPageGestureGuard(() => pageBack?.());
   const colorWheel = createColorWheelSettings();
   const recentColors = createRecentColors();
   const coolorus = createCoolorusSettings();
@@ -572,8 +574,20 @@ export function createPaintSession(options: {
    * open panel or popover and returns whether one was open, so Escape closes it before cancelling work; the Android
    * shell's back button closes it too.
    */
-  function createShortcuts(variant: { closePanel: () => boolean }) {
+  function createShortcuts(variant: {
+    closePanel: () => boolean;
+    /**
+     * Opens the variant's menu. With it, a browser Back that finds nothing to close opens the menu, so the menu
+     * stays in reach whatever is on screen. The Android shell app keeps its own answer to Back: it offers to exit.
+     */
+    openMenu?: () => void;
+  }) {
     nativeShell.onBack(variant.closePanel);
+    pageBack = () => {
+      if (!variant.closePanel()) {
+        variant.openMenu?.();
+      }
+    };
     createPaintShortcuts({
       closePanel: variant.closePanel,
       tool,

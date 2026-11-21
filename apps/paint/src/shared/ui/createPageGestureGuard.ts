@@ -6,10 +6,11 @@ import { onCleanup } from 'solid-js';
  * navigation (a sideways swipe back or forward on touch screens and trackpads) are turned off for the document. An
  * Android back gesture or a Back press cannot be turned off, so it lands on an extra history entry of the same page
  * instead, which a press in the page puts back: Chrome skips history entries made without a user action, so the entry
- * waits for one. Two Backs without touching the page in between still leave it. Must be created within a Solid owner,
- * which restores the document's overscroll on disposal.
+ * waits for one. Two Backs without touching the page in between still leave it. A Back the guard takes is reported to
+ * `onBack`, for the page to answer as an app answers its Back button; an open modal dialog takes a Back itself, before
+ * the history does. Must be created within a Solid owner, which restores the document's overscroll on disposal.
  */
-export function createPageGestureGuard() {
+export function createPageGestureGuard(onBack?: () => void) {
   const elements = [document.documentElement, document.body];
   const previous = elements.map((element) => element.style.overscrollBehavior);
   for (const element of elements) {
@@ -27,7 +28,11 @@ export function createPageGestureGuard() {
   const stopArming = makeEventListener(window, 'pointerdown', arm, { capture: true, passive: true });
   const stopKeys = makeEventListener(window, 'keydown', arm, { capture: true, passive: true });
   const stopBack = makeEventListener(window, 'popstate', (event) => {
+    const taken = armed && !isGuard(event.state);
     armed = isGuard(event.state);
+    if (taken) {
+      onBack?.();
+    }
   });
 
   onCleanup(() => {

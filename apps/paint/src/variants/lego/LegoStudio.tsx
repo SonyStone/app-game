@@ -157,6 +157,8 @@ export function LegoStudio(
   const kits = createKits(reportSavingError);
 
   session.createShortcuts({
+    // A Back with nothing to close opens Parts & Options, which leads to Edit layout: the way in on an empty board.
+    openMenu: () => setCatalog('interface'),
     closePanel() {
       // Escape and the Android back gesture close a dialog first, keeping its changes, as Done does.
       if (catalog() !== undefined) {
