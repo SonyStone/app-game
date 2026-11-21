@@ -1,23 +1,25 @@
-import { Show } from 'solid-js';
+import { onSettled, Show } from 'solid-js';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import type { Span } from '../board';
 import { useGrid } from '../grid';
 import { fitText, type TextStyle } from '../textFit';
+import { blendModeInfo, type LayersModel } from './layersModel';
 import styles from './LayersPrototype.module.css';
-import { blendModeInfo, type MockLayersService } from './mockLayers';
 
 /**
  * Layers swatch button (`layers:opener`) owning a customizable LEGO panel (initialized with a `layers:strip`):
  * displays the active layer's thumbnail (or B&W mask thumbnail with red border when targeting a mask), total layer
- * count, and active mode/opacity badge. Tapping opens its owned LEGO folder beside it.
+ * count, and active mode/opacity badge. Tapping opens its owned LEGO folder beside it. Asks `model` for thumbnails
+ * while `acquireThumbnails`, which a part sets outside its catalog preview.
  */
 export function LayerOpenerPart(props: {
-  service: MockLayersService;
+  model: LayersModel;
   open: boolean;
   onOpen: (anchor: Element) => void;
+  acquireThumbnails?: boolean;
 }) {
-  const active = () => props.service.activeLayer();
-  const isMask = () => props.service.target() === 'mask' && !!active()?.mask;
+  const active = () => props.model.activeLayer();
+  const isMask = () => props.model.masks?.target() === 'mask' && !!active()?.mask;
   const thumb = () => (isMask() ? active()?.mask?.thumb : active()?.thumb);
   const badge = () => {
     const node = active();
@@ -47,14 +49,17 @@ export function LayerOpenerPart(props: {
       type="button"
       class={styles.openerBtn}
       data-mask={isMask() ? '' : undefined}
-      aria-label={`Layers (${props.service.totalCount()})`}
+      aria-label={`Layers (${props.model.totalCount()})`}
       aria-expanded={props.open ? 'true' : 'false'}
       onClick={(event) => props.onOpen(event.currentTarget)}
     >
+      <Show when={props.acquireThumbnails && props.model.wantThumbnails}>
+        <WantOpenerThumbnails model={props.model} />
+      </Show>
       <div class={styles.openerThumb}>
         <Show when={thumb()}>{(src) => <img src={src()} alt="" />}</Show>
       </div>
-      <span class={styles.openerCount}>{props.service.totalCount()}</span>
+      <span class={styles.openerCount}>{props.model.totalCount()}</span>
       <Show when={badge()}>
         {(text) => (
           <span class={styles.openerBadge} data-mask={isMask() ? '' : undefined}>
@@ -66,15 +71,20 @@ export function LayerOpenerPart(props: {
   );
 }
 
+/** Thumbnail demand of a mounted Layers button, released when it unmounts or turns into a preview. */
+function WantOpenerThumbnails(props: { model: LayersModel }) {
+  onSettled(() => props.model.wantThumbnails?.(openerThumbnailSize));
+  return undefined;
+}
+
+/** CSS pixels on the longer side the Layers button shows the active layer's thumbnail at. */
+const openerThumbnailSize = 40;
+
 /**
  * Universal LEGO folder/drawer button (`action:folder`) owning an initially empty panel where any LEGO parts (layers,
  * color pickers, brushes, sliders) can be dropped in Edit Mode.
  */
-export function FolderButtonPart(props: {
-  span: Span;
-  open: boolean;
-  onOpen: (anchor: Element) => void;
-}) {
+export function FolderButtonPart(props: { span: Span; open: boolean; onOpen: (anchor: Element) => void }) {
   const grid = useGrid();
   const caption = () => fitText(grid.length(props.span.columns) - drawerChrome, drawerLabelStyle, 'Drawer');
 

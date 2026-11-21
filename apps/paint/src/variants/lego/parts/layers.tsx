@@ -3,8 +3,10 @@ import { blendModeLabel, BlendModePicker } from '../../../features/layers/BlendM
 import { layerCommand, LayerList, LayerName, type LayerCommand } from '../../../features/layers/LayerControls';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import styles from '../LayerParts.module.css';
+import { createDocumentLayers } from '../layersPrototype/documentLayers';
 import { LayerOpenerPart } from '../layersPrototype/LayerOpenerPart';
 import { LayersStripPart } from '../layersPrototype/LayersStripPart';
+import { prototypeLayersModel } from '../layersPrototype/mockLayers';
 import type { LegoServices } from '../LegoServices';
 import { anyRoom, lookFits, type LookSpec } from '../looks';
 import { fits, fitsLines, type TextStyle } from '../textFit';
@@ -22,7 +24,7 @@ const listLooks: readonly LookSpec[] = [
   { id: 'wide', label: 'Wide', min: { width: 136, height: 0 } }
 ];
 
-/** The layers prototype strip's adaptive looks: compact thumbnail tiles (< 160 px) and indented wide tree (>= 160 px). */
+/** The layers strip's adaptive looks: compact thumbnail tiles (< 160 px) and indented wide tree (>= 160 px). */
 const stripLooks: readonly LookSpec[] = [
   { id: 'strip', label: 'Strip', min: anyRoom },
   { id: 'wide', label: 'Wide', min: { width: 160, height: 0 } }
@@ -43,7 +45,31 @@ export const layerParts = [
     stretch: 'rows',
     looks: { looks: stripLooks, auto: (room) => (lookFits(stripLooks[1]!, room) ? 'wide' : 'strip') },
     needs: (s, f) => ({
-      service: s.layersPrototype,
+      model: documentLayersModel(s, f),
+      get wide() {
+        return f.look === 'wide';
+      },
+      get interactive() {
+        return f.mode === 'live';
+      },
+      get acquireThumbnails() {
+        return f.mode !== 'preview';
+      }
+    }),
+    View: LayersStripPart
+  }),
+  definePart({
+    kind: 'layers:strip-prototype',
+    family: 'action',
+    group: 'layer-list',
+    section: 'Layers',
+    label: 'Layers strip (prototype)',
+    icon: 'layers',
+    defaultSpan: { columns: 2, rows: 8 },
+    stretch: 'rows',
+    looks: { looks: stripLooks, auto: (room) => (lookFits(stripLooks[1]!, room) ? 'wide' : 'strip') },
+    needs: (s, f) => ({
+      model: prototypeLayersModel(s.layersPrototype),
       get wide() {
         return f.look === 'wide';
       },
@@ -65,11 +91,14 @@ export const layerParts = [
       parts: [{ id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }]
     },
     needs: (s, f) => ({
-      service: s.layersPrototype,
+      model: documentLayersModel(s, f),
       get open() {
         return f.open;
       },
-      onOpen: f.onOpen
+      onOpen: f.onOpen,
+      get acquireThumbnails() {
+        return f.mode !== 'preview';
+      }
     }),
     View: LayerOpenerPart
   }),
@@ -350,4 +379,16 @@ function layerNeeds(services: LegoServices, frame: PartBinding) {
 function WantThumbnails(props: { want: LegoServices['layers']['wantThumbnails'] }) {
   onSettled(() => props.want(26));
   return undefined;
+}
+
+/**
+ * The drawing's layers for a strip or Layers button: edits go through the part's guarded command, so previews and
+ * Edit mode never send them, and thumbnails are read only outside previews.
+ */
+function documentLayersModel(services: LegoServices, frame: PartBinding) {
+  return createDocumentLayers({
+    layers: services.layers,
+    send: frame.command(services.layers.action),
+    thumbnails: () => frame.mode !== 'preview'
+  });
 }

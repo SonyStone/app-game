@@ -1,7 +1,6 @@
-import { createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createMemo, createSignal, For, onCleanup, onSettled, Show } from 'solid-js';
 import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import { LayerPropertiesPopover, PaperPopover } from './LayerPropertiesPopover';
-import styles from './LayersPrototype.module.css';
 import {
   blendModeInfo,
   findNode,
@@ -9,28 +8,37 @@ import {
   isEffectivelyVisible,
   layerColorHex,
   nodesAtGroupStack,
-  type MockLayerNode,
-  type MockLayersService,
+  type LayerNode,
+  type LayersModel,
   type ReorderZone
-} from './mockLayers';
+} from './layersModel';
+import styles from './LayersPrototype.module.css';
 
 /**
- * Interactive Layers prototype part (`layers:strip`) with two adaptive looks:
+ * The layers strip (`layers:strip` over the drawing, `layers:strip-prototype` over the PSD-like prototype) with two
+ * adaptive looks:
  *
  * - `strip` (width < 160 px, 2–3 cells): compact thumbnail tiles, group drill-in (`‹ GroupName`), mask toggle in
  *   the tile's bottom-right corner (or swipe left), and a pinned Paper row at the bottom.
  * - `wide` (width >= 160 px, 4+ cells): indented tree with expand/collapse chevrons and a second mask thumbnail
  *   side by side with the layer thumbnail.
  *
- * Supports second-tap properties popover, long-press eye for Solo, right-swipe multi-select, left-swipe mask toggle,
- * two-finger pinch across tiles to group with undo toast, and Affinity/MOKO drag & drop (pen drags immediately,
- * touch scrolls or lifts on 260 ms hold; auto-enter group on 500 ms hover; auto-exit on `‹ Back` 450 ms hover).
+ * Tap selects; a second tap, `⋯`, a 480 ms hold, right-click or the pen's side button opens the properties popover.
+ * Drag reorders (pen and mouse after 10 px, touch after a 220 ms hold). Where `model` offers them: long press on the
+ * eye for Solo, right swipe for multi-select, left swipe for the mask, two-finger pinch across tiles to group with an
+ * undo toast, drop into groups (auto-enter on 500 ms hover, auto-exit on `‹ Back` 450 ms hover) and clip drops. A
+ * gesture or control whose feature `model` does not offer is absent. Structural commands wait for `model.ready()`.
+ *
+ * Thumbnails are asked for (`model.wantThumbnails`) only while `acquireThumbnails`, which a part sets outside its
+ * catalog preview.
  */
 export function LayersStripPart(props: {
-  service: MockLayersService;
+  model: LayersModel;
   wide: boolean;
   /** True only in `live` mode; `edit` and `preview` stay strictly read-only with no timers or popovers. */
   interactive: boolean;
+  /** Asks the model for thumbnails while mounted; false in catalog previews. */
+  acquireThumbnails?: boolean;
 }) {
   const [popover, setPopover] = createSignal<{ id: string; anchor: Element }>();
   const [paperAnchor, setPaperAnchor] = createSignal<Element>();
@@ -70,14 +78,19 @@ export function LayersStripPart(props: {
     toastTimer = setTimeout(() => setToast(undefined), 3000);
   };
 
-  const stripView = createMemo(() => nodesAtGroupStack(props.service.layers(), props.service.groupStack()));
-  const wideRows = createMemo(() => flattenVisibleTree(props.service.layers(), props.service.expandedIds()));
+  /** Structural commands (add, reorder, group, delete) run only live and once the model accepts them. */
+  const structural = () => props.interactive && props.model.ready();
+  const target = () => props.model.masks?.target() ?? 'layer';
+  const soloId = () => props.model.solo?.id();
+  const selectedIds = () => props.model.selection?.ids() ?? [];
+  const stripView = createMemo(() => nodesAtGroupStack(props.model.layers(), props.model.groups?.stack() ?? []));
+  const wideRows = createMemo(() => flattenVisibleTree(props.model.layers(), props.model.groups?.expandedIds() ?? []));
   const visibleOrder = createMemo(() =>
     props.wide ? wideRows().map((row) => row.node.id) : stripView().items.map((node) => node.id)
   );
   const popoverLayer = createMemo(() => {
     const open = popover();
-    return open ? findNode(props.service.layers(), open.id) : undefined;
+    return open ? findNode(props.model.layers(), open.id) : undefined;
   });
 
   const clearHoverTimers = () => {
@@ -89,10 +102,11 @@ export function LayersStripPart(props: {
     setBackDropHover(false);
   };
 
-  /** Handles eye pointerdown/up: quick tap toggles visibility; 420 ms hold toggles Solo. */
+  /** Handles eye pointerdown/up: quick tap toggles visibility; 420 ms hold toggles Solo where the model has it. */
   const onEyePointerDown = (event: PointerEvent, id: string) => {
     event.stopPropagation();
-    if (!props.interactive || event.button !== 0) {
+    const solo = props.model.solo;
+    if (!props.interactive || event.button !== 0 || !solo) {
       return;
     }
 
@@ -100,7 +114,7 @@ export function LayersStripPart(props: {
     clearTimeout(eyeLongTimer);
     eyeLongTimer = setTimeout(() => {
       eyeSoloFired = true;
-      props.service.toggleSolo(id);
+      solo.toggle(id);
     }, 420);
   };
 
@@ -109,7 +123,7 @@ export function LayersStripPart(props: {
     clearTimeout(eyeLongTimer);
   };
 
-  const onEyeClick = (event: MouseEvent, node: MockLayerNode) => {
+  const onEyeClick = (event: MouseEvent, node: LayerNode) => {
     event.stopPropagation();
     if (!props.interactive) {
       return;
@@ -120,12 +134,13 @@ export function LayersStripPart(props: {
       return;
     }
 
-    if (props.service.soloId() === node.id) {
-      props.service.toggleSolo(node.id);
+    const solo = props.model.solo;
+    if (solo && solo.id() === node.id) {
+      solo.toggle(node.id);
       return;
     }
 
-    props.service.update(node.id, { visible: !node.visible });
+    props.model.update(node.id, { visible: !node.visible });
   };
 
   /** Computes pinch range between the two touched tiles in visual order. */
@@ -144,7 +159,8 @@ export function LayersStripPart(props: {
 
   /** Evaluates two-finger pinch across two different tiles to group the spanned range. */
   const checkPinch = () => {
-    if (activeTouches.size !== 2) {
+    const groups = props.model.groups;
+    if (!groups || activeTouches.size !== 2) {
       pinchStartDistance = undefined;
       setPinchRange(new Set<string>());
       return false;
@@ -164,14 +180,14 @@ export function LayersStripPart(props: {
 
     const range = idsBetween(first.layerId, second.layerId);
     setPinchRange(new Set(range));
-    if (pinchStartDistance - dist >= 24 && !pinchConsumed && range.length >= 2) {
+    if (pinchStartDistance - dist >= 24 && !pinchConsumed && range.length >= 2 && structural()) {
       pinchConsumed = true;
       clearTimeout(touchArmTimer);
       clearTimeout(longPressPropsTimer);
       setArmedId(undefined);
       setDraggingId(undefined);
       setDropTarget(undefined);
-      props.service.groupLayers(range);
+      groups.group(range);
       setPinchRange(new Set<string>());
       showToast(`Grouped ${range.length} layers`);
       return true;
@@ -180,11 +196,34 @@ export function LayersStripPart(props: {
     return true;
   };
 
-  /** Computes Affinity drop zone from pointer coordinates relative to hovered tile/back row. */
+  /** The drop zone under the pointer: the top and bottom bands, the middle of a group, the right of a layer. */
+  const zoneAt = (node: LayerNode, relX: number, relY: number): ReorderZone => {
+    const zones = props.model.capabilities.dropZones;
+    if (relY < 0.28) {
+      return 'before';
+    }
+
+    if (relY > 0.72) {
+      return 'after';
+    }
+
+    if (node.type === 'group' && zones.includes('into')) {
+      return 'into';
+    }
+
+    if (node.type !== 'group' && relX > 0.68 && zones.includes('clip')) {
+      return 'clip';
+    }
+
+    return relY < 0.5 ? 'before' : 'after';
+  };
+
+  /** Computes the drop zone from pointer coordinates relative to the hovered tile or back row. */
   const updateDragHover = (dragId: string, clientX: number, clientY: number) => {
+    const groups = props.model.groups;
     const hit = typeof document.elementFromPoint === 'function' ? document.elementFromPoint(clientX, clientY) : null;
     const backHit = hit?.closest<HTMLElement>('[data-layers-back]');
-    if (backHit && !props.wide && props.service.groupStack().length > 0) {
+    if (backHit && groups && !props.wide && groups.stack().length > 0) {
       setDropTarget(undefined);
       setBackDropHover(true);
       clearTimeout(hoverGroupTimer);
@@ -194,7 +233,7 @@ export function LayersStripPart(props: {
         hoverBackTimer = setTimeout(() => {
           hoverBackTimer = undefined;
           setBackDropHover(false);
-          props.service.moveOutOfGroup(dragId);
+          groups.moveOut(dragId);
         }, 450);
       }
 
@@ -215,7 +254,7 @@ export function LayersStripPart(props: {
       return;
     }
 
-    const targetNode = findNode(props.service.layers(), targetId);
+    const targetNode = findNode(props.model.layers(), targetId);
     if (!targetNode) {
       setDropTarget(undefined);
       return;
@@ -224,30 +263,17 @@ export function LayersStripPart(props: {
     const rect = tileEl.getBoundingClientRect();
     const relY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0.5;
     const relX = rect.width > 0 ? (clientX - rect.left) / rect.width : 0.5;
-
-    let zone: ReorderZone;
-    if (relY < 0.28) {
-      zone = 'before';
-    } else if (relY > 0.72) {
-      zone = 'after';
-    } else if (targetNode.type === 'group') {
-      zone = 'into';
-    } else if (relX > 0.68) {
-      zone = 'clip';
-    } else {
-      zone = relY < 0.5 ? 'before' : 'after';
-    }
-
+    const zone = zoneAt(targetNode, relX, relY);
     setDropTarget({ id: targetId, zone });
 
-    if (zone === 'into' && targetNode.type === 'group' && !props.wide) {
+    if (zone === 'into' && groups && !props.wide) {
       if (hoverGroupId !== targetId) {
         clearTimeout(hoverGroupTimer);
         hoverGroupId = targetId;
         hoverGroupTimer = setTimeout(() => {
           hoverGroupTimer = undefined;
           hoverGroupId = undefined;
-          props.service.enterGroup(targetId);
+          groups.enter(targetId);
         }, 500);
       }
     } else {
@@ -257,15 +283,48 @@ export function LayersStripPart(props: {
     }
   };
 
-  /** Selects `node` (preserving mask target when already on its mask) and opens its properties popover. */
-  const openPropertiesFor = (node: MockLayerNode, anchor: Element) => {
-    const keepMask = props.service.activeId() === node.id && props.service.target() === 'mask' && !!node.mask;
-    props.service.select(node.id, keepMask ? 'mask' : 'layer');
+  /** Selects `node` (keeping its mask as the target when already painting it) and opens its properties popover. */
+  const openPropertiesFor = (node: LayerNode, anchor: Element) => {
+    const keepMask = props.model.activeId() === node.id && target() === 'mask' && !!node.mask;
+    if (!keepMask) {
+      props.model.select(node.id);
+    }
+
     setPopover({ id: node.id, anchor });
   };
 
+  /** Toggles the popover anchored to the tile around `button`. */
+  const togglePopoverFrom = (button: Element, node: LayerNode) => {
+    const tile = button.closest('[data-layer-tile]') ?? button;
+    setPopover((current) => (current?.id === node.id ? undefined : { id: node.id, anchor: tile }));
+  };
+
+  /**
+   * Tap on a tile: follows selection while the popover is open, otherwise selects, and a second tap opens it. In the
+   * wide tree the thumbnail selects the pixels, so a tap there while painting the mask goes back to the pixels.
+   */
+  const tapTile = (node: LayerNode, tile: Element, pixels = false) => {
+    const open = popover();
+    if (open) {
+      if (open.id === node.id) {
+        setPopover(undefined);
+      } else {
+        props.model.select(node.id);
+        setPopover({ id: node.id, anchor: tile });
+      }
+
+      return;
+    }
+
+    if (props.model.activeId() === node.id && (!pixels || target() === 'layer')) {
+      setPopover({ id: node.id, anchor: tile });
+    } else {
+      props.model.select(node.id);
+    }
+  };
+
   /** Unified gesture handler per tile: tap / follow-selection / second-tap popover, 480ms hold properties, right-click, swipe, pinch, and drag-and-drop. */
-  const onTilePointerDown = (event: PointerEvent, node: MockLayerNode) => {
+  const onTilePointerDown = (event: PointerEvent, node: LayerNode) => {
     if (!props.interactive) {
       return;
     }
@@ -284,9 +343,10 @@ export function LayersStripPart(props: {
 
     const pointer = event.pointerId;
     const isTouch = event.pointerType === 'touch';
+    const pinchable = isTouch && !!props.model.groups;
     const start = { x: event.clientX, y: event.clientY };
 
-    if (isTouch) {
+    if (pinchable) {
       activeTouches.set(pointer, { layerId: node.id, x: start.x, y: start.y });
       if (activeTouches.size === 2) {
         clearTimeout(touchArmTimer);
@@ -302,9 +362,10 @@ export function LayersStripPart(props: {
     let swiped = false;
     let moved = false;
     let openedByHold = false;
+    const alone = () => !pinchable || activeTouches.size === 1;
 
     const beginDrag = () => {
-      if (dragging) {
+      if (dragging || !structural()) {
         return;
       }
 
@@ -319,10 +380,10 @@ export function LayersStripPart(props: {
       }
     };
 
-    if (!isTouch || activeTouches.size === 1) {
+    if (alone()) {
       clearTimeout(longPressPropsTimer);
       longPressPropsTimer = setTimeout(() => {
-        if (!moved && !dragging && !swiped && !pinchConsumed && (!isTouch || activeTouches.size === 1)) {
+        if (!moved && !dragging && !swiped && !pinchConsumed && alone()) {
           openedByHold = true;
           setArmedId(undefined);
           openPropertiesFor(node, tileElement);
@@ -330,10 +391,10 @@ export function LayersStripPart(props: {
       }, longPressPropertiesDelay);
     }
 
-    if (isTouch && activeTouches.size === 1) {
+    if (isTouch && alone() && structural()) {
       clearTimeout(touchArmTimer);
       touchArmTimer = setTimeout(() => {
-        if (!moved && !openedByHold && activeTouches.size === 1) {
+        if (!moved && !openedByHold && alone()) {
           // Arm visually at 220ms without consuming a clean tap; real drag starts only once moved > 10px.
           armed = true;
           setArmedId(node.id);
@@ -341,12 +402,28 @@ export function LayersStripPart(props: {
       }, touchArmDelay);
     }
 
+    /** The swipe action for a horizontal swipe by `dx`, if the model offers one. */
+    const swipeAction = (dx: number) => {
+      const selection = props.model.selection;
+      const masks = props.model.masks;
+      if (dx > 0) {
+        return selection && (() => selection.toggle(node.id));
+      }
+
+      if (masks && node.mask) {
+        return () =>
+          masks.setTarget(node.id, props.model.activeId() === node.id && masks.target() === 'mask' ? 'layer' : 'mask');
+      }
+
+      return undefined;
+    };
+
     const onMove = (moveEvent: PointerEvent) => {
       if (moveEvent.pointerId !== pointer) {
         return;
       }
 
-      if (isTouch && activeTouches.has(pointer)) {
+      if (pinchable && activeTouches.has(pointer)) {
         activeTouches.set(pointer, { layerId: node.id, x: moveEvent.clientX, y: moveEvent.clientY });
         if (activeTouches.size >= 2) {
           checkPinch();
@@ -370,17 +447,13 @@ export function LayersStripPart(props: {
       }
 
       if (!dragging && !swiped && Math.abs(dx) > 32 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-        swiped = true;
-        setArmedId(undefined);
-        if (dx > 0) {
-          props.service.toggleSelect(node.id);
-        } else if (node.mask) {
-          const nextTarget =
-            props.service.activeId() === node.id && props.service.target() === 'mask' ? 'layer' : 'mask';
-          props.service.select(node.id, nextTarget);
+        const action = swipeAction(dx);
+        if (action) {
+          swiped = true;
+          setArmedId(undefined);
+          action();
+          return;
         }
-
-        return;
       }
 
       // Touch drag begins only after 220ms arm AND > 10px move; pen/mouse drags after 10px vertical/diagonal move.
@@ -402,7 +475,7 @@ export function LayersStripPart(props: {
 
       cleanup();
       setArmedId(undefined);
-      if (isTouch) {
+      if (pinchable) {
         activeTouches.delete(pointer);
         if (activeTouches.size === 0) {
           pinchStartDistance = undefined;
@@ -421,9 +494,9 @@ export function LayersStripPart(props: {
         setDraggingId(undefined);
         setDropTarget(undefined);
         if (overBack) {
-          props.service.moveOutOfGroup(node.id);
-        } else if (drop) {
-          props.service.reorder(node.id, drop.id, drop.zone);
+          props.model.groups?.moveOut(node.id);
+        } else if (drop && structural()) {
+          props.model.reorder(node.id, drop.id, drop.zone);
         }
 
         return;
@@ -433,26 +506,8 @@ export function LayersStripPart(props: {
         return;
       }
 
-      // Clean tap (including 220–479ms touch taps):
-      // - While popover is open: tapping another tile follows selection; tapping the anchored tile closes it cleanly.
-      // - While popover is closed: first tap selects; second tap on the active tile opens properties.
-      const open = popover();
-      if (open) {
-        if (open.id === node.id) {
-          setPopover(undefined);
-        } else {
-          props.service.select(node.id, 'layer');
-          setPopover({ id: node.id, anchor: tileElement });
-        }
-
-        return;
-      }
-
-      if (props.service.activeId() === node.id) {
-        setPopover({ id: node.id, anchor: tileElement });
-      } else {
-        props.service.select(node.id, 'layer');
-      }
+      // Clean tap, including 220–479ms touch taps.
+      tapTile(node, tileElement);
     };
 
     const cleanup = () => {
@@ -469,7 +524,7 @@ export function LayersStripPart(props: {
   };
 
   /** Compact mode/opacity badge text shown on narrow strip tiles when not Normal 100%. */
-  const compactBadge = (node: MockLayerNode) => {
+  const compactBadge = (node: LayerNode) => {
     const mode = blendModeInfo(node.blend);
     const defaultMode = node.type === 'group' ? node.blend === 'pass-through' : node.blend === 'normal';
     const showMode = !defaultMode;
@@ -485,38 +540,183 @@ export function LayersStripPart(props: {
     return showMode ? mode.short : `${node.opacity}%`;
   };
 
-  const hasAnyLock = (node: MockLayerNode) =>
+  const hasAnyLock = (node: LayerNode) =>
     node.locks.alpha || node.locks.pixels || node.locks.position || node.locks.all;
 
   return (
     <div class={styles.stripRoot} data-layers-strip="" data-layers-look={props.wide ? 'wide' : 'strip'}>
+      <Show when={props.acquireThumbnails && props.model.wantThumbnails}>
+        <WantThumbnails model={props.model} />
+      </Show>
+
       {/* Header: multi-selection bar, mask controls bar (when targeting a mask), or Add layer / Add group */}
       <Show
-        when={props.service.selectedIds().length === 0}
+        when={props.model.selection && selectedIds().length > 0 ? props.model.selection : undefined}
         fallback={
-          <div class={styles.multiHeader} role="toolbar" aria-label="Selected layers" data-no-edit-long-press="">
-            <span class={styles.multiCount}>{props.service.selectedIds().length} sel</span>
-            <button
-              type="button"
-              class={styles.multiBtn}
-              onClick={() => {
-                if (!props.interactive) {
-                  return;
-                }
+          <Show
+            when={target() === 'mask' ? props.model.masks : undefined}
+            fallback={
+              <div class={styles.header}>
+                <button
+                  type="button"
+                  class={styles.headerBtn}
+                  aria-label="New layer"
+                  title="New layer"
+                  disabled={!props.model.ready()}
+                  onClick={() => {
+                    if (structural()) {
+                      props.model.addLayer();
+                    }
+                  }}
+                >
+                  <SketchIcon name="plus" size={14} />
+                </button>
+                <Show when={props.model.groups}>
+                  {(groups) => (
+                    <button
+                      type="button"
+                      class={styles.headerBtn}
+                      aria-label="New group"
+                      title="New group"
+                      disabled={!props.model.ready()}
+                      onClick={() => {
+                        if (structural()) {
+                          groups().add();
+                        }
+                      }}
+                    >
+                      <SketchIcon name="folder" size={14} />
+                    </button>
+                  )}
+                </Show>
+              </div>
+            }
+          >
+            {(masks) => (
+              <div class={styles.maskHeader} role="toolbar" aria-label="Mask controls">
+                <Show
+                  when={props.wide}
+                  fallback={
+                    <button
+                      type="button"
+                      class={styles.maskCtrlBtn}
+                      data-mask-brush={masks().brush()}
+                      aria-label={
+                        masks().brush() === 'reveal'
+                          ? 'Mask brush: Reveal (White). Tap to switch to Hide'
+                          : 'Mask brush: Hide (Black). Tap to switch to Reveal'
+                      }
+                      title={
+                        masks().brush() === 'reveal'
+                          ? 'Mask: Reveal (White) — tap for Hide'
+                          : 'Mask: Hide (Black) — tap for Reveal'
+                      }
+                      onClick={() => {
+                        if (props.interactive) {
+                          masks().setBrush(masks().brush() === 'reveal' ? 'hide' : 'reveal');
+                        }
+                      }}
+                    >
+                      <span class={styles.maskSwatch} data-tone={masks().brush()} />
+                    </button>
+                  }
+                >
+                  <button
+                    type="button"
+                    class={styles.maskCtrlBtn}
+                    aria-pressed={masks().brush() === 'reveal' ? 'true' : 'false'}
+                    title="Reveal (White)"
+                    onClick={() => {
+                      if (props.interactive) {
+                        masks().setBrush('reveal');
+                      }
+                    }}
+                  >
+                    <span class={styles.maskSwatch} data-tone="reveal" />
+                    <span>Reveal</span>
+                  </button>
+                  <button
+                    type="button"
+                    class={styles.maskCtrlBtn}
+                    aria-pressed={masks().brush() === 'hide' ? 'true' : 'false'}
+                    title="Hide (Black)"
+                    onClick={() => {
+                      if (props.interactive) {
+                        masks().setBrush('hide');
+                      }
+                    }}
+                  >
+                    <span class={styles.maskSwatch} data-tone="hide" />
+                    <span>Hide</span>
+                  </button>
+                </Show>
+                <button
+                  type="button"
+                  class={styles.maskCtrlBtn}
+                  data-ruby=""
+                  aria-label="Red mask overlay"
+                  aria-pressed={masks().overlay() ? 'true' : 'false'}
+                  title="Toggle red Rubylith overlay"
+                  onClick={() => {
+                    if (props.interactive) {
+                      masks().toggleOverlay();
+                    }
+                  }}
+                >
+                  <span class={styles.maskRedDot} />
+                  <Show when={props.wide}>
+                    <span>Red</span>
+                  </Show>
+                </button>
+                <button
+                  type="button"
+                  class={styles.maskCtrlBtn}
+                  data-exit=""
+                  aria-label="Exit mask mode"
+                  title="Back to layer"
+                  onClick={() => {
+                    if (props.interactive) {
+                      masks().exit();
+                    }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </Show>
+        }
+      >
+        {(selection) => (
+          <div class={styles.multiHeader} role="toolbar" aria-label="Selected layers">
+            <span class={styles.multiCount}>{selectedIds().length} sel</span>
+            <Show when={props.model.groups}>
+              {(groups) => (
+                <button
+                  type="button"
+                  class={styles.multiBtn}
+                  disabled={!props.model.ready()}
+                  onClick={() => {
+                    if (!structural()) {
+                      return;
+                    }
 
-                const count = props.service.selectedIds().length;
-                props.service.groupLayers(props.service.selectedIds());
-                showToast(`Grouped ${count} layers`);
-              }}
-            >
-              Group
-            </button>
+                    const ids = selectedIds();
+                    groups().group(ids);
+                    showToast(`Grouped ${ids.length} layers`);
+                  }}
+                >
+                  Group
+                </button>
+              )}
+            </Show>
             <button
               type="button"
               class={styles.multiBtn}
+              disabled={!props.model.ready()}
               onClick={() => {
-                if (props.interactive) {
-                  props.service.delete(props.service.selectedIds());
+                if (structural()) {
+                  selection().delete(selectedIds());
                 }
               }}
             >
@@ -528,154 +728,28 @@ export function LayersStripPart(props: {
               aria-label="Clear selection"
               onClick={() => {
                 if (props.interactive) {
-                  props.service.clearSelection();
+                  selection().clear();
                 }
               }}
             >
               ✕
             </button>
           </div>
-        }
-      >
-        <Show
-          when={props.service.target() === 'mask'}
-          fallback={
-            <div class={styles.header}>
-              <button
-                type="button"
-                class={styles.headerBtn}
-                aria-label="New layer"
-                title="New layer"
-                onClick={() => {
-                  if (props.interactive) {
-                    props.service.addLayer();
-                  }
-                }}
-              >
-                <SketchIcon name="plus" size={14} />
-              </button>
-              <button
-                type="button"
-                class={styles.headerBtn}
-                aria-label="New group"
-                title="New group"
-                onClick={() => {
-                  if (props.interactive) {
-                    props.service.addGroup();
-                  }
-                }}
-              >
-                <SketchIcon name="folder" size={14} />
-              </button>
-            </div>
-          }
-        >
-          <div class={styles.maskHeader} role="toolbar" aria-label="Mask controls" data-no-edit-long-press="">
-            <Show
-              when={props.wide}
-              fallback={
-                <button
-                  type="button"
-                  class={styles.maskCtrlBtn}
-                  data-mask-brush={props.service.maskBrush()}
-                  aria-label={
-                    props.service.maskBrush() === 'reveal'
-                      ? 'Mask brush: Reveal (White). Tap to switch to Hide'
-                      : 'Mask brush: Hide (Black). Tap to switch to Reveal'
-                  }
-                  title={
-                    props.service.maskBrush() === 'reveal'
-                      ? 'Mask: Reveal (White) — tap for Hide'
-                      : 'Mask: Hide (Black) — tap for Reveal'
-                  }
-                  onClick={() => {
-                    if (props.interactive) {
-                      props.service.setMaskBrush(props.service.maskBrush() === 'reveal' ? 'hide' : 'reveal');
-                    }
-                  }}
-                >
-                  <span class={styles.maskSwatch} data-tone={props.service.maskBrush()} />
-                </button>
-              }
-            >
-              <button
-                type="button"
-                class={styles.maskCtrlBtn}
-                aria-pressed={props.service.maskBrush() === 'reveal' ? 'true' : 'false'}
-                title="Reveal (White)"
-                onClick={() => {
-                  if (props.interactive) {
-                    props.service.setMaskBrush('reveal');
-                  }
-                }}
-              >
-                <span class={styles.maskSwatch} data-tone="reveal" />
-                <span>Reveal</span>
-              </button>
-              <button
-                type="button"
-                class={styles.maskCtrlBtn}
-                aria-pressed={props.service.maskBrush() === 'hide' ? 'true' : 'false'}
-                title="Hide (Black)"
-                onClick={() => {
-                  if (props.interactive) {
-                    props.service.setMaskBrush('hide');
-                  }
-                }}
-              >
-                <span class={styles.maskSwatch} data-tone="hide" />
-                <span>Hide</span>
-              </button>
-            </Show>
-            <button
-              type="button"
-              class={styles.maskCtrlBtn}
-              data-ruby=""
-              aria-label="Red mask overlay"
-              aria-pressed={props.service.maskOverlay() ? 'true' : 'false'}
-              title="Toggle red Rubylith overlay"
-              onClick={() => {
-                if (props.interactive) {
-                  props.service.toggleRubylith();
-                }
-              }}
-            >
-              <span class={styles.maskRedDot} />
-              <Show when={props.wide}>
-                <span>Red</span>
-              </Show>
-            </button>
-            <button
-              type="button"
-              class={styles.maskCtrlBtn}
-              data-exit=""
-              aria-label="Exit mask mode"
-              title="Back to layer"
-              onClick={() => {
-                if (props.interactive) {
-                  props.service.setTarget('layer');
-                }
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        </Show>
+        )}
       </Show>
 
       {/* Group breadcrumb back row in narrow strip view */}
-      <Show when={!props.wide && stripView().currentGroup} fallback={<div />}>
+      <Show when={!props.wide && props.model.groups ? stripView().currentGroup : undefined} fallback={<div />}>
         {(group) => (
           <button
             type="button"
             class={styles.backRow}
             data-layers-back=""
-            data-no-edit-long-press=""
             data-drop-hover={backDropHover() ? '' : undefined}
             aria-label={`Back from ${group().name}`}
             onClick={() => {
               if (props.interactive) {
-                props.service.exitGroup();
+                props.model.groups?.exit();
               }
             }}
           >
@@ -686,28 +760,27 @@ export function LayersStripPart(props: {
       </Show>
 
       {/* Scrollable layer tiles (strip or wide indented tree) */}
-      <div class={styles.scroll} role="list" aria-label="Prototype layers" data-no-edit-long-press="">
+      <div class={styles.scroll} role="list" aria-label="Layers">
         <Show
           when={props.wide}
           fallback={
             <For each={stripView().items} keyed={(node) => node.id}>
               {(item) => {
                 const node = () => item();
-                const isActive = () => props.service.activeId() === node().id;
-                const isMaskTarget = () => isActive() && props.service.target() === 'mask' && !!node().mask;
-                const isSelected = () => props.service.selectedIds().includes(node().id);
-                const isSolo = () => props.service.soloId() === node().id;
-                const visible = () =>
-                  isEffectivelyVisible(props.service.layers(), node(), props.service.soloId());
+                const isActive = () => props.model.activeId() === node().id;
+                const isMaskTarget = () => isActive() && target() === 'mask' && !!node().mask;
+                const isSelected = () => selectedIds().includes(node().id);
+                const isSolo = () => soloId() === node().id;
+                const visible = () => isEffectivelyVisible(props.model.layers(), node(), soloId());
                 const tagHex = () => layerColorHex(node().colorTag);
                 const dropZone = () => (dropTarget()?.id === node().id ? dropTarget()!.zone : undefined);
+                const thumb = () => (isMaskTarget() ? node().mask?.thumb : node().thumb);
 
                 return (
                   <div
                     role="listitem"
                     class={styles.tile}
                     data-layer-tile={node().id}
-                    data-no-edit-long-press=""
                     data-active={isActive() && !isMaskTarget() ? '' : undefined}
                     data-mask-active={isMaskTarget() ? '' : undefined}
                     data-open={popover()?.id === node().id ? '' : undefined}
@@ -743,11 +816,16 @@ export function LayersStripPart(props: {
                           </div>
                         }
                       >
-                        <img
-                          class={styles.thumbImg}
-                          src={isMaskTarget() && node().mask ? node().mask!.thumb : node().thumb}
-                          alt=""
-                        />
+                        <Show
+                          when={thumb()}
+                          fallback={
+                            <span class={styles.thumbEmpty} aria-hidden="true">
+                              <SketchIcon name="paper" size={20} />
+                            </span>
+                          }
+                        >
+                          {(src) => <img class={styles.thumbImg} src={src()} alt="" draggable={false} />}
+                        </Show>
                       </Show>
 
                       <Show when={tagHex()}>
@@ -765,19 +843,15 @@ export function LayersStripPart(props: {
                         <button
                           type="button"
                           class={styles.propsBtn}
-                          data-no-edit-long-press=""
                           data-open={popover()?.id === node().id ? '' : undefined}
                           aria-label={`Layer properties for ${node().name}`}
                           title="Layer properties"
                           onPointerDown={(event) => event.stopPropagation()}
                           onClick={(event) => {
                             event.stopPropagation();
-                            if (!props.interactive) {
-                              return;
+                            if (props.interactive) {
+                              togglePopoverFrom(event.currentTarget, node());
                             }
-
-                            const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
-                            setPopover((current) => (current?.id === node().id ? undefined : { id: node().id, anchor: tile }));
                           }}
                         >
                           <SketchIcon name="more" size={12} />
@@ -787,7 +861,6 @@ export function LayersStripPart(props: {
                       <button
                         type="button"
                         class={styles.eyeBtn}
-                        data-no-edit-long-press=""
                         data-solo={isSolo() ? '' : undefined}
                         aria-label={`Toggle visibility for ${node().name}`}
                         onPointerDown={(event) => onEyePointerDown(event, node().id)}
@@ -814,41 +887,39 @@ export function LayersStripPart(props: {
                         </Show>
                       </div>
 
-                      <Show when={node().type === 'group'}>
-                        <button
-                          type="button"
-                          class={styles.enterGroupBtn}
-                          data-no-edit-long-press=""
-                          aria-label={`Open group ${node().name}`}
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (props.interactive) {
-                              props.service.enterGroup(node().id);
-                            }
-                          }}
-                        >
-                          ›
-                        </button>
+                      <Show when={node().type === 'group' ? props.model.groups : undefined}>
+                        {(groups) => (
+                          <button
+                            type="button"
+                            class={styles.enterGroupBtn}
+                            aria-label={`Open group ${node().name}`}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              if (props.interactive) {
+                                groups().enter(node().id);
+                              }
+                            }}
+                          >
+                            ›
+                          </button>
+                        )}
                       </Show>
 
-                      <Show when={node().mask}>
+                      <Show when={props.model.masks && node().mask}>
                         {(mask) => (
                           <button
                             type="button"
                             class={styles.maskCorner}
-                            data-no-edit-long-press=""
                             data-active={isMaskTarget() ? '' : undefined}
                             data-disabled={!mask().enabled ? '' : undefined}
                             aria-label={`Toggle mask target for ${node().name}`}
                             onPointerDown={(event) => event.stopPropagation()}
                             onClick={(event) => {
                               event.stopPropagation();
-                              if (!props.interactive) {
-                                return;
+                              if (props.interactive) {
+                                props.model.masks?.setTarget(node().id, isMaskTarget() ? 'layer' : 'mask');
                               }
-
-                              props.service.select(node().id, isMaskTarget() ? 'layer' : 'mask');
                             }}
                           >
                             <img src={mask().thumb} alt="" />
@@ -871,14 +942,13 @@ export function LayersStripPart(props: {
             {(entry) => {
               const node = () => entry().node;
               const depth = () => entry().depth;
-              const isActive = () => props.service.activeId() === node().id;
-              const isMaskTarget = () => isActive() && props.service.target() === 'mask' && !!node().mask;
-              const isSelected = () => props.service.selectedIds().includes(node().id);
-              const isSolo = () => props.service.soloId() === node().id;
-              const visible = () =>
-                isEffectivelyVisible(props.service.layers(), node(), props.service.soloId());
+              const isActive = () => props.model.activeId() === node().id;
+              const isMaskTarget = () => isActive() && target() === 'mask' && !!node().mask;
+              const isSelected = () => selectedIds().includes(node().id);
+              const isSolo = () => soloId() === node().id;
+              const visible = () => isEffectivelyVisible(props.model.layers(), node(), soloId());
               const tagHex = () => layerColorHex(node().colorTag);
-              const expanded = () => props.service.expandedIds().includes(node().id);
+              const expanded = () => props.model.groups?.expandedIds().includes(node().id) ?? false;
               const dropZone = () => (dropTarget()?.id === node().id ? dropTarget()!.zone : undefined);
 
               return (
@@ -886,7 +956,6 @@ export function LayersStripPart(props: {
                   role="listitem"
                   class={styles.wideRow}
                   data-layer-tile={node().id}
-                  data-no-edit-long-press=""
                   data-depth={depth()}
                   data-active={isActive() && !isMaskTarget() ? '' : undefined}
                   data-mask-active={isMaskTarget() ? '' : undefined}
@@ -916,68 +985,50 @@ export function LayersStripPart(props: {
                     </span>
                   </Show>
 
-                  <Show when={node().type === 'group'}>
-                    <button
-                      type="button"
-                      class={styles.expandBtn}
-                      data-no-edit-long-press=""
-                      aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${node().name}`}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        if (props.interactive) {
-                          props.service.toggleExpand(node().id);
-                        }
-                      }}
-                    >
-                      {expanded() ? '▾' : '▸'}
-                    </button>
+                  <Show when={node().type === 'group' ? props.model.groups : undefined}>
+                    {(groups) => (
+                      <button
+                        type="button"
+                        class={styles.expandBtn}
+                        aria-label={`${expanded() ? 'Collapse' : 'Expand'} ${node().name}`}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (props.interactive) {
+                            groups().toggleExpand(node().id);
+                          }
+                        }}
+                      >
+                        {expanded() ? '▾' : '▸'}
+                      </button>
+                    )}
                   </Show>
 
                   <button
                     type="button"
                     class={styles.wideThumbBtn}
-                    data-no-edit-long-press=""
                     data-target={isActive() && !isMaskTarget() ? '' : undefined}
                     aria-label={`Select layer ${node().name}`}
                     onPointerDown={(event) => event.stopPropagation()}
                     onClick={(event) => {
                       event.stopPropagation();
-                      if (!props.interactive) {
-                        return;
-                      }
-
-                      const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
-                      const open = popover();
-                      if (open) {
-                        if (open.id === node().id) {
-                          setPopover(undefined);
-                        } else {
-                          props.service.select(node().id, 'layer');
-                          setPopover({ id: node().id, anchor: tile });
-                        }
-
-                        return;
-                      }
-
-                      if (props.service.activeId() === node().id && props.service.target() === 'layer') {
-                        setPopover({ id: node().id, anchor: tile });
-                      } else {
-                        props.service.select(node().id, 'layer');
+                      if (props.interactive) {
+                        tapTile(node(), event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget, true);
                       }
                     }}
                   >
                     <Show when={node().type !== 'group'} fallback={<SketchIcon name="folder" size={16} />}>
-                      <img src={node().thumb} alt="" />
+                      <Show when={node().thumb} fallback={<SketchIcon name="paper" size={16} />}>
+                        {(src) => <img src={src()} alt="" draggable={false} />}
+                      </Show>
                     </Show>
                   </button>
 
-                  <Show when={node().mask}>
+                  <Show when={props.model.masks && node().mask}>
                     {(mask) => (
                       <button
                         type="button"
                         class={styles.wideThumbBtn}
-                        data-no-edit-long-press=""
                         data-mask-target={isMaskTarget() ? '' : undefined}
                         data-disabled={!mask().enabled ? '' : undefined}
                         aria-label={`Select mask for ${node().name}`}
@@ -985,7 +1036,7 @@ export function LayersStripPart(props: {
                         onClick={(event) => {
                           event.stopPropagation();
                           if (props.interactive) {
-                            props.service.select(node().id, 'mask');
+                            props.model.masks?.setTarget(node().id, 'mask');
                           }
                         }}
                       >
@@ -1018,19 +1069,15 @@ export function LayersStripPart(props: {
                     <button
                       type="button"
                       class={styles.widePropsBtn}
-                      data-no-edit-long-press=""
                       data-open={popover()?.id === node().id ? '' : undefined}
                       aria-label={`Layer properties for ${node().name}`}
                       title="Layer properties"
                       onPointerDown={(event) => event.stopPropagation()}
                       onClick={(event) => {
                         event.stopPropagation();
-                        if (!props.interactive) {
-                          return;
+                        if (props.interactive) {
+                          togglePopoverFrom(event.currentTarget, node());
                         }
-
-                        const tile = event.currentTarget.closest('[data-layer-tile]') ?? event.currentTarget;
-                        setPopover((current) => (current?.id === node().id ? undefined : { id: node().id, anchor: tile }));
                       }}
                     >
                       <SketchIcon name="more" size={14} />
@@ -1040,7 +1087,6 @@ export function LayersStripPart(props: {
                   <button
                     type="button"
                     class={styles.wideEyeBtn}
-                    data-no-edit-long-press=""
                     data-solo={isSolo() ? '' : undefined}
                     aria-label={`Toggle visibility for ${node().name}`}
                     onPointerDown={(event) => onEyePointerDown(event, node().id)}
@@ -1061,38 +1107,42 @@ export function LayersStripPart(props: {
       </div>
 
       {/* Pinned Paper row */}
-      <button
-        type="button"
-        class={styles.paperBtn}
-        data-hidden={!props.service.paper().visible ? '' : undefined}
-        aria-label="Paper settings"
-        onClick={(event) => {
-          if (!props.interactive) {
-            return;
-          }
+      <Show when={props.model.paper}>
+        {(paper) => (
+          <button
+            type="button"
+            class={styles.paperBtn}
+            data-hidden={!paper().state().visible ? '' : undefined}
+            aria-label="Paper settings"
+            onClick={(event) => {
+              if (props.interactive) {
+                setPaperAnchor((current) => (current ? undefined : event.currentTarget));
+              }
+            }}
+          >
+            <span class={styles.paperChip} style={{ background: paper().state().color }} />
+            <span>{props.wide ? `Paper · ${paper().state().label}` : 'Paper'}</span>
+          </button>
+        )}
+      </Show>
 
-          setPaperAnchor((current) => (current ? undefined : event.currentTarget));
-        }}
-      >
-        <span class={styles.paperChip} style={{ background: props.service.paper().color }} />
-        <span>{props.wide ? `Paper · ${props.service.paper().label}` : 'Paper'}</span>
-      </button>
-
-      {/* Pinch-to-group toast with Undo */}
+      {/* Pinch-to-group toast, with Undo where the model keeps an undo of its own */}
       <Show when={toast()}>
         {(message) => (
           <div class={styles.toast} role="status">
             <span>{message()}</span>
-            <Show when={props.service.canUndo()}>
-              <button
-                type="button"
-                onClick={() => {
-                  props.service.undo();
-                  setToast(undefined);
-                }}
-              >
-                Undo
-              </button>
+            <Show when={props.model.localUndo?.canUndo() ? props.model.localUndo : undefined}>
+              {(undo) => (
+                <button
+                  type="button"
+                  onClick={() => {
+                    undo().undo();
+                    setToast(undefined);
+                  }}
+                >
+                  Undo
+                </button>
+              )}
             </Show>
           </div>
         )}
@@ -1104,21 +1154,30 @@ export function LayersStripPart(props: {
           <LayerPropertiesPopover
             anchor={popover()!.anchor}
             layer={layer()}
-            service={props.service}
+            model={props.model}
             onClose={() => setPopover(undefined)}
           />
         )}
       </Show>
 
       {/* Paper tone/visibility popover */}
-      <Show when={props.interactive && paperAnchor()}>
+      <Show when={props.interactive && props.model.paper && paperAnchor()}>
         {(anchor) => (
-          <PaperPopover anchor={anchor()} service={props.service} onClose={() => setPaperAnchor(undefined)} />
+          <PaperPopover anchor={anchor()} paper={props.model.paper!} onClose={() => setPaperAnchor(undefined)} />
         )}
       </Show>
     </div>
   );
 }
+
+/** Thumbnail demand lives under the mounted strip's owner, released when it unmounts or turns into a preview. */
+function WantThumbnails(props: { model: LayersModel }) {
+  onSettled(() => props.model.wantThumbnails?.(stripThumbnailSize));
+  return undefined;
+}
+
+/** CSS pixels on the longer side a strip tile shows its thumbnail at. */
+const stripThumbnailSize = 64;
 
 /** Distance in CSS pixels separating a clean tap from drag/swipe on glass tablet displays. */
 const gestureThreshold = 10;

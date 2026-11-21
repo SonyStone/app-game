@@ -7,7 +7,8 @@ import { createGrid, defaultCell, GridContext } from '../grid';
 import { partDefinition } from '../parts';
 import { FolderButtonPart, LayerOpenerPart } from './LayerOpenerPart';
 import { LayersStripPart } from './LayersStripPart';
-import { createMockLayers, findNode, psdBlendModes, type MockLayersService } from './mockLayers';
+import { findNode, psdBlendModes } from './layersModel';
+import { createMockLayers, prototypeLayersModel, type MockLayersService } from './mockLayers';
 
 let dispose: (() => void) | undefined;
 
@@ -45,7 +46,10 @@ function pointerEvent(
 }
 
 function mountStrip(service: MockLayersService, wide = false, interactive = true) {
-  dispose = render(() => <LayersStripPart service={service} wide={wide} interactive={interactive} />, document.body);
+  dispose = render(
+    () => <LayersStripPart model={prototypeLayersModel(service)} wide={wide} interactive={interactive} />,
+    document.body
+  );
   flush();
 }
 
@@ -74,7 +78,7 @@ describe('mockLayers', () => {
     expect(glow.opacity).toBe(75);
     expect(glow.colorTag).toBe('none');
     expect(glow.mask).toBeDefined();
-    expect(glow.thumb.startsWith('data:image/svg+xml;utf8,')).toBe(true);
+    expect(glow.thumb!.startsWith('data:image/svg+xml;utf8,')).toBe(true);
     expect(glow.mask!.thumb.startsWith('data:image/svg+xml;utf8,')).toBe(true);
     expect(service.layers().every((node) => node.colorTag === 'none')).toBe(true);
   });
@@ -475,9 +479,7 @@ describe('LayersStripPart', () => {
 
   it('allows stretching a layers:strip panel well past 10 rows (up to maxSpan = 36)', () => {
     expect(maxSpan).toBe(36);
-    const parts = [
-      { id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }
-    ];
+    const parts = [{ id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }];
     const tall = resizePart(parts, 'strip', { columns: 2, rows: 24 });
     expect(tall[0]!.span).toEqual({ columns: 2, rows: 24 });
 
@@ -506,7 +508,10 @@ describe('layers:opener, action:folder and registry definitions', () => {
   it('renders LayerOpenerPart with layer count, mode/mask badge, and fires onOpen on click', () => {
     const service = createMockLayers();
     const onOpen = vi.fn();
-    dispose = render(() => <LayerOpenerPart service={service} open={false} onOpen={onOpen} />, document.body);
+    dispose = render(
+      () => <LayerOpenerPart model={prototypeLayersModel(service)} open={false} onOpen={onOpen} />,
+      document.body
+    );
     flush();
 
     const button = document.querySelector<HTMLButtonElement>('button')!;

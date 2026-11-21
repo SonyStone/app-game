@@ -206,7 +206,7 @@ export function createLegoServices(
         session.edit({ type: 'layer', action }),
       blending: (linear: boolean) => session.edit({ type: 'blending', linear })
     },
-    /** Self-contained PSD layers UI prototype state for `layers:strip` and `layers:opener`. */
+    /** Self-contained PSD layers UI prototype state for `layers:strip-prototype` and the canvas's red mask overlay. */
     layersPrototype,
     files: {
       ready: session.ready,

@@ -1311,6 +1311,21 @@ function openStudio() {
   return dialog!;
 }
 
+/** A board holding only the prototype layers strip, whose mock layers (Glow with a mask) the mask tests use. */
+function storePrototypeStrip() {
+  localStorage.clear();
+  const strip = {
+    id: 'strip',
+    kind: 'layers:strip-prototype',
+    cell: { column: 0, row: 0 },
+    span: { columns: 2, rows: 8 }
+  };
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({ version: 5, board: { panels: [{ id: 'layers', at: { x: 0.9, y: 0.1 }, parts: [strip] }] } })
+  );
+}
+
 /** Writes a small, known board without using the live session or the app's stored drawing. */
 function storeParts(kinds: string[]) {
   localStorage.setItem(
@@ -1688,7 +1703,7 @@ it('opens a board stored before the 28 px cells as it was stored, with no part m
 });
 
 it('shows the Rubylith overlay and inline strip mask controls without any floating top banner', () => {
-  localStorage.clear();
+  storePrototypeStrip();
   mount();
   expect(document.querySelector('[aria-label="Mask editing mode"]')).toBeNull();
   expect(document.querySelector('[data-rubylith-overlay]')).toBeNull();
@@ -1727,7 +1742,7 @@ it('shows the Rubylith overlay and inline strip mask controls without any floati
 it('does not trigger board Edit Mode when holding still on a layer tile inside layers:strip', () => {
   vi.useFakeTimers();
   try {
-    localStorage.clear();
+    storePrototypeStrip();
     mount();
     const glowTile = document.querySelector<HTMLElement>('[data-layer-tile="layer-glow"]')!;
     expect(glowTile).not.toBeNull();

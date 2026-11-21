@@ -641,4 +641,4 @@ function clampSpan(value: number) {
 
 /** Built-in fallback stretch lookup for pure callers that do not pass `partStretch`. */
 const defaultStretch: StretchResolver = (kind) =>
-  kind === 'layers:strip' || kind === 'layers:list' ? 'rows' : undefined;
+  kind === 'layers:strip' || kind === 'layers:strip-prototype' || kind === 'layers:list' ? 'rows' : undefined;

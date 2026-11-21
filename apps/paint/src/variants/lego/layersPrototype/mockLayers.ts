@@ -1,181 +1,22 @@
 import { createMemo } from 'solid-js';
 import { createImmediateSignal } from '../../../shared/createImmediateSignal';
-
-/** All 27 Photoshop-compatible PSD blend modes plus Pass Through for groups. */
-export type PsdBlendMode =
-  | 'pass-through'
-  | 'normal'
-  | 'dissolve'
-  | 'darken'
-  | 'multiply'
-  | 'color-burn'
-  | 'linear-burn'
-  | 'darker-color'
-  | 'lighten'
-  | 'screen'
-  | 'color-dodge'
-  | 'linear-dodge'
-  | 'lighter-color'
-  | 'overlay'
-  | 'soft-light'
-  | 'hard-light'
-  | 'vivid-light'
-  | 'linear-light'
-  | 'pin-light'
-  | 'hard-mix'
-  | 'difference'
-  | 'exclusion'
-  | 'subtract'
-  | 'divide'
-  | 'hue'
-  | 'saturation'
-  | 'color'
-  | 'luminosity';
-
-/** Semantic groups matching Photoshop's blend mode dropdown. */
-export type BlendModeGroup = 'Normal' | 'Darken' | 'Lighten' | 'Contrast' | 'Inversion' | 'Component';
-
-/** Metadata for one PSD blend mode: display label, compact strip badge, and group. */
-export type BlendModeInfo = {
-  id: PsdBlendMode;
-  label: string;
-  short: string;
-  group: BlendModeGroup;
-  groupOnly?: true;
-};
-
-/** Ordered catalog of PSD blend modes (Pass Through + 27 layer modes). */
-export const psdBlendModes: readonly BlendModeInfo[] = [
-  { id: 'pass-through', label: 'Pass Through', short: 'PT', group: 'Normal', groupOnly: true },
-  { id: 'normal', label: 'Normal', short: 'N', group: 'Normal' },
-  { id: 'dissolve', label: 'Dissolve', short: 'Dis', group: 'Normal' },
-  { id: 'darken', label: 'Darken', short: 'Dk', group: 'Darken' },
-  { id: 'multiply', label: 'Multiply', short: 'M', group: 'Darken' },
-  { id: 'color-burn', label: 'Color Burn', short: 'CB', group: 'Darken' },
-  { id: 'linear-burn', label: 'Linear Burn', short: 'LB', group: 'Darken' },
-  { id: 'darker-color', label: 'Darker Color', short: 'DC', group: 'Darken' },
-  { id: 'lighten', label: 'Lighten', short: 'Lt', group: 'Lighten' },
-  { id: 'screen', label: 'Screen', short: 'Sc', group: 'Lighten' },
-  { id: 'color-dodge', label: 'Color Dodge', short: 'CD', group: 'Lighten' },
-  { id: 'linear-dodge', label: 'Linear Dodge (Add)', short: 'Add', group: 'Lighten' },
-  { id: 'lighter-color', label: 'Lighter Color', short: 'LC', group: 'Lighten' },
-  { id: 'overlay', label: 'Overlay', short: 'Ov', group: 'Contrast' },
-  { id: 'soft-light', label: 'Soft Light', short: 'SL', group: 'Contrast' },
-  { id: 'hard-light', label: 'Hard Light', short: 'HL', group: 'Contrast' },
-  { id: 'vivid-light', label: 'Vivid Light', short: 'VL', group: 'Contrast' },
-  { id: 'linear-light', label: 'Linear Light', short: 'LL', group: 'Contrast' },
-  { id: 'pin-light', label: 'Pin Light', short: 'PL', group: 'Contrast' },
-  { id: 'hard-mix', label: 'Hard Mix', short: 'HM', group: 'Contrast' },
-  { id: 'difference', label: 'Difference', short: 'Df', group: 'Inversion' },
-  { id: 'exclusion', label: 'Exclusion', short: 'Ex', group: 'Inversion' },
-  { id: 'subtract', label: 'Subtract', short: 'Sb', group: 'Inversion' },
-  { id: 'divide', label: 'Divide', short: 'Dv', group: 'Inversion' },
-  { id: 'hue', label: 'Hue', short: 'H', group: 'Component' },
-  { id: 'saturation', label: 'Saturation', short: 'S', group: 'Component' },
-  { id: 'color', label: 'Color', short: 'C', group: 'Component' },
-  { id: 'luminosity', label: 'Luminosity', short: 'L', group: 'Component' }
-];
-
-export const blendModeGroups: readonly BlendModeGroup[] = [
-  'Normal',
-  'Darken',
-  'Lighten',
-  'Contrast',
-  'Inversion',
-  'Component'
-];
-
-/** Looks up display info for a PSD blend mode. */
-export function blendModeInfo(mode: PsdBlendMode): BlendModeInfo {
-  return psdBlendModes.find((entry) => entry.id === mode) ?? psdBlendModes[1]!;
-}
-
-/** Optional color label on a layer tile. */
-export type LayerColorTag = 'none' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray';
-
-export const layerColorTags: readonly { id: LayerColorTag; label: string; hex: string | undefined }[] = [
-  { id: 'none', label: 'None', hex: undefined },
-  { id: 'red', label: 'Red', hex: '#ef5350' },
-  { id: 'orange', label: 'Orange', hex: '#ff9800' },
-  { id: 'yellow', label: 'Yellow', hex: '#f2c94c' },
-  { id: 'green', label: 'Green', hex: '#4caf7d' },
-  { id: 'blue', label: 'Blue', hex: '#3d7eff' },
-  { id: 'purple', label: 'Purple', hex: '#a864fd' },
-  { id: 'gray', label: 'Gray', hex: '#8e939e' }
-];
-
-/** Returns the swatch hex for `tag`, or `undefined` for `'none'`. */
-export function layerColorHex(tag: LayerColorTag) {
-  return layerColorTags.find((entry) => entry.id === tag)?.hex;
-}
-
-/** Paper layer state pinned at the bottom of the stack. */
-export type PaperState = {
-  visible: boolean;
-  color: string;
-  label: string;
-};
-
-export const paperPresets: readonly { label: string; color: string }[] = [
-  { label: 'Cream', color: '#f7f3eb' },
-  { label: 'White', color: '#ffffff' },
-  { label: 'Warm gray', color: '#e5e2dc' },
-  { label: 'Dark', color: '#26282e' }
-];
-
-/** Four-number PSD Blend If channel tuple: `[blackLow, blackHigh, whiteLow, whiteHigh]` in `0..255`. */
-export type BlendIfRange = [number, number, number, number];
-
-export type LayerLocks = {
-  alpha: boolean;
-  pixels: boolean;
-  position: boolean;
-  all: boolean;
-};
-
-export type LayerMask = {
-  thumb: string;
-  enabled: boolean;
-  linked: boolean;
-  inverted: boolean;
-};
-
-/** One node in the prototype PSD layer tree. Topmost layer comes first in every array. */
-export type MockLayerNode = {
-  id: string;
-  name: string;
-  type: 'raster' | 'group' | 'adjustment';
-  adjustment?: 'curves' | 'levels' | 'hue-sat';
-  visible: boolean;
-  blend: PsdBlendMode;
-  opacity: number;
-  fill: number;
-  clipping: boolean;
-  reference: boolean;
-  locks: LayerLocks;
-  colorTag: LayerColorTag;
-  thumb: string;
-  mask?: LayerMask;
-  blendIf: {
-    thisLayer: BlendIfRange;
-    underlying: BlendIfRange;
-  };
-  children?: MockLayerNode[];
-};
-
-export type ReorderZone = 'before' | 'after' | 'into' | 'clip';
-
-export type MockLayerPatch = Partial<
-  Pick<
-    MockLayerNode,
-    'name' | 'visible' | 'blend' | 'opacity' | 'fill' | 'clipping' | 'reference' | 'colorTag' | 'blendIf'
-  >
-> & {
-  locks?: Partial<LayerLocks>;
-};
+import {
+  countLayers,
+  defaultBlendIf,
+  emptyLocks,
+  findNode,
+  findNodeWithParent,
+  psdBlendModes,
+  type LayerNode,
+  type LayerPatch,
+  type LayersModel,
+  type PaperState,
+  type PsdBlendMode,
+  type ReorderZone
+} from './layersModel';
 
 type PrototypeSnapshot = {
-  layers: MockLayerNode[];
+  layers: LayerNode[];
   activeId: string;
   target: 'layer' | 'mask';
   maskOverlay: boolean;
@@ -288,7 +129,7 @@ export function createMockLayers() {
     /** Adds a new raster layer above the active layer (or at the top of the current group). */
     addLayer() {
       const id = `mock-layer-${nextLayerNumber++}`;
-      const created: MockLayerNode = {
+      const created: LayerNode = {
         id,
         name: `Layer ${nextLayerNumber - 1}`,
         type: 'raster',
@@ -316,7 +157,7 @@ export function createMockLayers() {
     /** Adds a new empty group above the active layer and expands it in wide view. */
     addGroup() {
       const id = `mock-group-${nextGroupNumber++}`;
-      const created: MockLayerNode = {
+      const created: LayerNode = {
         id,
         name: `Group ${nextGroupNumber - 1}`,
         type: 'group',
@@ -416,7 +257,7 @@ export function createMockLayers() {
     },
 
     /** Updates properties (name, visibility, blend, opacity, fill, locks, clipping, reference, tag, blendIf). */
-    update(id: string, patch: MockLayerPatch) {
+    update(id: string, patch: LayerPatch) {
       commit((current) => ({
         ...current,
         layers: mapNode(current.layers, id, (node) => {
@@ -496,10 +337,13 @@ export function createMockLayers() {
     },
 
     toggleSolo(id: string) {
-      commit((current) => ({
-        ...current,
-        soloId: current.soloId === id ? undefined : id
-      }), false);
+      commit(
+        (current) => ({
+          ...current,
+          soloId: current.soloId === id ? undefined : id
+        }),
+        false
+      );
     },
 
     /** Enters group `groupId` in strip view navigation. */
@@ -591,9 +435,9 @@ export function createMockLayers() {
 
         const extracted = flatOrder
           .map((id) => findNode(current.layers, id))
-          .filter((node): node is MockLayerNode => node !== undefined);
+          .filter((node): node is LayerNode => node !== undefined);
         const stripped = removeNodes(current.layers, topSet);
-        const group: MockLayerNode = {
+        const group: LayerNode = {
           id: groupId,
           name: `Group ${nextGroupNumber - 1}`,
           type: 'group',
@@ -649,7 +493,7 @@ export function createMockLayers() {
 
         const stripped = removeNodes(current.layers, new Set([dragId]));
         if (zone === 'into' && targetNode.type === 'group') {
-          const moved: MockLayerNode = { ...dragged, clipping: false };
+          const moved: LayerNode = { ...dragged, clipping: false };
           return {
             ...current,
             layers: insertIntoParent(stripped, targetId, 0, moved),
@@ -658,14 +502,14 @@ export function createMockLayers() {
         }
 
         if (zone === 'clip') {
-          const moved: MockLayerNode = { ...dragged, clipping: true };
+          const moved: LayerNode = { ...dragged, clipping: true };
           return {
             ...current,
             layers: insertBeside(stripped, targetId, moved, 'before')
           };
         }
 
-        const moved: MockLayerNode = { ...dragged, clipping: zone === 'before' ? dragged.clipping : false };
+        const moved: LayerNode = { ...dragged, clipping: zone === 'before' ? dragged.clipping : false };
         return {
           ...current,
           layers: insertBeside(stripped, targetId, moved, zone === 'after' ? 'after' : 'before')
@@ -746,128 +590,87 @@ export function createMockLayers() {
 
 export type MockLayersService = ReturnType<typeof createMockLayers>;
 
-/** Finds node `id` anywhere in the layer tree. */
-export function findNode(nodes: readonly MockLayerNode[], id: string): MockLayerNode | undefined {
-  for (const node of nodes) {
-    if (node.id === id) {
-      return node;
-    }
-
-    if (node.children) {
-      const found = findNode(node.children, id);
-      if (found) {
-        return found;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-/** Finds node `id` along with its parent group id, sibling array, and index. */
-export function findNodeWithParent(
-  nodes: readonly MockLayerNode[],
-  id: string,
-  parentId?: string
-): { node: MockLayerNode; parentId: string | undefined; siblings: readonly MockLayerNode[]; index: number } | undefined {
-  for (let index = 0; index < nodes.length; index++) {
-    const node = nodes[index]!;
-    if (node.id === id) {
-      return { node, parentId, siblings: nodes, index };
-    }
-
-    if (node.children) {
-      const found = findNodeWithParent(node.children, id, node.id);
-      if (found) {
-        return found;
-      }
-    }
-  }
-
-  return undefined;
-}
-
-/** Flattens the visible tree for the wide indented view, respecting `expandedIds`. */
-export function flattenVisibleTree(
-  nodes: readonly MockLayerNode[],
-  expandedIds: readonly string[],
-  depth = 0,
-  parentId?: string
-): { node: MockLayerNode; depth: number; parentId: string | undefined }[] {
-  const expanded = new Set(expandedIds);
-  const rows: { node: MockLayerNode; depth: number; parentId: string | undefined }[] = [];
-  for (const node of nodes) {
-    rows.push({ node, depth, parentId });
-    if (node.type === 'group' && node.children && expanded.has(node.id)) {
-      rows.push(...flattenVisibleTree(node.children, expandedIds, depth + 1, node.id));
-    }
-  }
-
-  return rows;
-}
-
-/** Resolves the current folder's children and group breadcrumb for the narrow strip view. */
-export function nodesAtGroupStack(nodes: readonly MockLayerNode[], stack: readonly string[]) {
-  let items = nodes;
-  const breadcrumb: MockLayerNode[] = [];
-  for (const groupId of stack) {
-    const found = items.find((node) => node.id === groupId && node.type === 'group');
-    if (!found) {
-      break;
-    }
-
-    breadcrumb.push(found);
-    items = found.children ?? [];
-  }
-
-  return { items, currentGroup: breadcrumb.at(-1), breadcrumb };
-}
-
-/** Counts every node (layers and groups) in the tree. */
-export function countLayers(nodes: readonly MockLayerNode[]): number {
-  return nodes.reduce((sum, node) => sum + 1 + (node.children ? countLayers(node.children) : 0), 0);
-}
-
-/** Whether `node` is effectively visible taking `soloId` into account. */
-export function isEffectivelyVisible(
-  nodes: readonly MockLayerNode[],
-  node: MockLayerNode,
-  soloId: string | undefined
-) {
-  if (!soloId) {
-    return node.visible;
-  }
-
-  if (node.id === soloId) {
-    return true;
-  }
-
-  // Keep ancestors and descendants of the soloed node visible so the soloed group/layer reads clearly.
-  const soloNode = findNode(nodes, soloId);
-  if (soloNode && findNode([soloNode], node.id)) {
-    return true;
-  }
-
-  if (node.children && findNode(node.children, soloId)) {
-    return true;
-  }
-
-  return false;
-}
-
-/** Default Blend If ranges: full 0..255 with unsplit paired handles. */
-export function defaultBlendIf(): MockLayerNode['blendIf'] {
+/**
+ * The prototype as a `LayersModel` offering everything the layers UI can show: every PSD blend mode with favourites,
+ * fill, Blend If, colour tags, all four locks and Reference, groups, masks, Solo, multi-selection, Paper, clearing
+ * and its own undo for the strip's toast. Forwards to `mock`, so it holds no state of its own and may be made per view.
+ */
+export function prototypeLayersModel(mock: MockLayersService): LayersModel {
   return {
-    thisLayer: [0, 0, 255, 255],
-    underlying: [0, 0, 255, 255]
+    capabilities: {
+      blendModes: psdBlendModes,
+      locks: ['alpha', 'pixels', 'position', 'all'],
+      clipping: true,
+      fill: true,
+      blendIf: true,
+      colorTags: true,
+      reference: true,
+      dropZones: ['before', 'after', 'into', 'clip']
+    },
+    ready: () => true,
+    layers: mock.layers,
+    activeId: mock.activeId,
+    activeLayer: mock.activeLayer,
+    totalCount: mock.totalCount,
+    select: (id) => mock.select(id, 'layer'),
+    update: mock.update,
+    addLayer: () => {
+      mock.addLayer();
+    },
+    duplicate: (id) => mock.duplicate(id),
+    canDelete: (id) => {
+      const top = mock.layers();
+      return !(top.length === 1 && top[0]!.id === id);
+    },
+    delete: (id) => mock.delete([id]),
+    canMergeDown: (id) => {
+      const located = findNodeWithParent(mock.layers(), id);
+      return !!located && located.index < located.siblings.length - 1;
+    },
+    mergeDown: (id) => mock.mergeDown(id),
+    reorder: mock.reorder,
+    clear: (id) => mock.clear(id),
+    favoriteBlends: { modes: mock.favoriteBlends, toggle: mock.toggleFavoriteBlend },
+    selection: {
+      ids: mock.selectedIds,
+      toggle: mock.toggleSelect,
+      clear: mock.clearSelection,
+      delete: (ids) => mock.delete(ids)
+    },
+    solo: { id: mock.soloId, toggle: mock.toggleSolo },
+    groups: {
+      stack: mock.groupStack,
+      expandedIds: mock.expandedIds,
+      add: () => {
+        mock.addGroup();
+      },
+      enter: mock.enterGroup,
+      exit: mock.exitGroup,
+      toggleExpand: mock.toggleExpand,
+      group: (ids) => {
+        mock.groupLayers(ids);
+      },
+      moveOut: mock.moveOutOfGroup
+    },
+    masks: {
+      target: mock.target,
+      overlay: mock.maskOverlay,
+      brush: mock.maskBrush,
+      setTarget: (id, target) => mock.select(id, target),
+      exit: () => mock.setTarget('layer'),
+      add: (id) => mock.addMask(id),
+      toggleEnabled: (id) => mock.toggleMaskEnabled(id),
+      invert: (id) => mock.invertMask(id),
+      remove: (id) => mock.deleteMask(id),
+      toggleOverlay: mock.toggleRubylith,
+      setBrush: mock.setMaskBrush
+    },
+    paper: { state: mock.paper, set: mock.setPaper },
+    localUndo: { canUndo: mock.canUndo, undo: mock.undo }
   };
 }
 
 const maxUndoSteps = 30;
-
-function emptyLocks(): LayerLocks {
-  return { alpha: false, pixels: false, position: false, all: false };
-}
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
@@ -879,7 +682,7 @@ function unique<T>(items: readonly T[]) {
 
 function normalizeSnapshot(snapshot: PrototypeSnapshot): PrototypeSnapshot {
   const validStack: string[] = [];
-  let current = snapshot.layers;
+  let current: readonly LayerNode[] = snapshot.layers;
   for (const id of snapshot.groupStack) {
     const found = current.find((node) => node.id === id && node.type === 'group');
     if (!found) {
@@ -902,11 +705,7 @@ function normalizeSnapshot(snapshot: PrototypeSnapshot): PrototypeSnapshot {
   };
 }
 
-function mapNode(
-  nodes: readonly MockLayerNode[],
-  id: string,
-  transform: (node: MockLayerNode) => MockLayerNode
-): MockLayerNode[] {
+function mapNode(nodes: readonly LayerNode[], id: string, transform: (node: LayerNode) => LayerNode): LayerNode[] {
   return nodes.map((node) => {
     if (node.id === id) {
       return transform(node);
@@ -920,18 +719,18 @@ function mapNode(
   });
 }
 
-function removeNodes(nodes: readonly MockLayerNode[], ids: ReadonlySet<string>): MockLayerNode[] {
+function removeNodes(nodes: readonly LayerNode[], ids: ReadonlySet<string>): LayerNode[] {
   return nodes
     .filter((node) => !ids.has(node.id))
     .map((node) => (node.children ? { ...node, children: removeNodes(node.children, ids) } : node));
 }
 
 function insertBeside(
-  nodes: readonly MockLayerNode[],
+  nodes: readonly LayerNode[],
   targetId: string,
-  item: MockLayerNode,
+  item: LayerNode,
   side: 'before' | 'after'
-): MockLayerNode[] {
+): LayerNode[] {
   const index = nodes.findIndex((node) => node.id === targetId);
   if (index >= 0) {
     const at = side === 'before' ? index : index + 1;
@@ -944,11 +743,11 @@ function insertBeside(
 }
 
 function insertIntoParent(
-  nodes: readonly MockLayerNode[],
+  nodes: readonly LayerNode[],
   parentId: string | undefined,
   index: number,
-  item: MockLayerNode
-): MockLayerNode[] {
+  item: LayerNode
+): LayerNode[] {
   if (!parentId) {
     const at = clamp(index, 0, nodes.length);
     return [...nodes.slice(0, at), item, ...nodes.slice(at)];
@@ -962,11 +761,11 @@ function insertIntoParent(
 }
 
 function insertAboveActive(
-  nodes: readonly MockLayerNode[],
+  nodes: readonly LayerNode[],
   activeId: string,
   groupStack: readonly string[],
-  item: MockLayerNode
-): MockLayerNode[] {
+  item: LayerNode
+): LayerNode[] {
   if (findNode(nodes, activeId)) {
     return insertBeside(nodes, activeId, item, 'before');
   }
@@ -974,11 +773,11 @@ function insertAboveActive(
   return insertIntoParent(nodes, groupStack.at(-1), 0, item);
 }
 
-function collectIds(nodes: readonly MockLayerNode[]): string[] {
+function collectIds(nodes: readonly LayerNode[]): string[] {
   return nodes.flatMap((node) => [node.id, ...(node.children ? collectIds(node.children) : [])]);
 }
 
-function hasSelectedAncestor(nodes: readonly MockLayerNode[], id: string, selected: ReadonlySet<string>): boolean {
+function hasSelectedAncestor(nodes: readonly LayerNode[], id: string, selected: ReadonlySet<string>): boolean {
   let located = findNodeWithParent(nodes, id);
   while (located?.parentId) {
     if (selected.has(located.parentId)) {
@@ -991,7 +790,7 @@ function hasSelectedAncestor(nodes: readonly MockLayerNode[], id: string, select
   return false;
 }
 
-function cloneNode(node: MockLayerNode, makeId: () => string): MockLayerNode {
+function cloneNode(node: LayerNode, makeId: () => string): LayerNode {
   return {
     ...node,
     id: makeId(),
