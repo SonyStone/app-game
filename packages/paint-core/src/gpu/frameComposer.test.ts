@@ -87,15 +87,28 @@ it('changes the composition when a folder is hidden, as hiding its layers does',
   expect(sameBytes(composite(grouped.layers, true), composite(flat.layers, true))).toBe(true);
 });
 
-it('shows a clipped layer right above a folder unclipped, in every path that reads the layers', () => {
+it('clips a layer right above a folder to the folder, which the composition signature tells apart', () => {
   const { grouped, flat, ids } = drawings();
   grouped.changeLayer({ type: 'update', id: ids.top, patch: { clipping: true } });
-  // Clipping to a folder is not supported: Top shows as an ordinary layer, as it does flat and unclipped.
-  expect(grouped.layers.at(-1)!.clipping).toBe(false);
-  expect(compositionSignature(grouped.layers)).toBe(compositionSignature(flat.layers));
-  expect(sameBytes(composite(grouped.layers, true), composite(flat.layers, true))).toBe(true);
-  // Its own property is kept, so moving it above a raster layer clips it again.
-  expect(grouped.state().layers.at(-1)!.clipping).toBe(true);
+  flat.changeLayer({ type: 'update', id: ids.top, patch: { clipping: true } });
+  expect(grouped.layers.at(-1)).toMatchObject({ clipping: true, clipGroup: { id: ids.folder, base: true } });
+  // Flat, Top would clip to Shade alone; clipped to the folder, it shows through Ink and Shade.
+  expect(compositionSignature(grouped.layers)).not.toBe(compositionSignature(flat.layers));
+});
+
+it('tells a folder’s blend mode, opacity and nesting apart in the composition signature', () => {
+  const { grouped, ids } = drawings();
+  const signatures = new Set([compositionSignature(grouped.layers)]);
+  grouped.changeLayer({ type: 'update', id: ids.folder, patch: { opacity: 0.5 } });
+  signatures.add(compositionSignature(grouped.layers));
+  grouped.changeLayer({ type: 'update', id: ids.folder, patch: { blend: 'normal' } });
+  signatures.add(compositionSignature(grouped.layers));
+  grouped.changeLayer({ type: 'update', id: ids.folder, patch: { opacity: 1 } });
+  signatures.add(compositionSignature(grouped.layers));
+  grouped.changeLayer({ type: 'group', ids: [ids.folder] });
+  grouped.changeLayer({ type: 'update', id: grouped.activeId, patch: { blend: 'screen' } });
+  signatures.add(compositionSignature(grouped.layers));
+  expect(signatures.size).toBe(5);
 });
 
 /** Whether two composited tiles hold the same bytes; a deep `toEqual` would walk them an element at a time. */

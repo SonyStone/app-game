@@ -1,4 +1,5 @@
 export { compositeLayout, compositeFragment } from '@app-game/abr-paint/gpu/layerComposite';
+import { mixPremultiplied } from '@app-game/abr-brush/effects';
 import { d, std, tgpu } from 'typegpu';
 export { brushLayout, stampLayout, stampVertex, stampFragment, strokeLayout, fullscreenVertex, strokeFragment } from '@app-game/abr-paint/gpu/paintRound';
 
@@ -89,4 +90,25 @@ export const resolveFragment = tgpu.fragmentFn({ in: { position: d.builtin.posit
 export const clearFragment = tgpu.fragmentFn({ out: d.vec4f })(() => {
   'use gpu';
   return d.vec4f(0);
+});
+
+/**
+ * Ends a fading Pass Through folder: `layer`, the folder's layers composited onto the backdrop it entered with,
+ * interpolated from `base`, that backdrop, by the folder's opacity `settings.x`, in linear light when `settings.w` is
+ * set, as `mixPremultiplied` mixes; `fadePixels` of `layerStack` is its CPU port.
+ */
+export const fadeLayout = tgpu.bindGroupLayout({
+  base: { texture: d.texture2d() },
+  layer: { texture: d.texture2d() },
+  settings: { uniform: d.vec4f }
+});
+export const fadeFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+  'use gpu';
+  const pixel = d.vec2i(input.position.xy);
+  return mixPremultiplied(
+    std.textureLoad(fadeLayout.$.base, pixel, 0),
+    std.textureLoad(fadeLayout.$.layer, pixel, 0),
+    fadeLayout.$.settings.x,
+    fadeLayout.$.settings.w > 0.5
+  );
 });

@@ -6,6 +6,7 @@ import { tgpu } from 'typegpu';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import type { Camera, Point, ViewSize } from '../camera';
 import type { Layer, TileChange } from '../document';
+import type { ShownLayer } from '../layerTree';
 import { unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
 import { createDisplayCache } from './displayCache';
@@ -408,6 +409,8 @@ async function assemblePaintRenderer(
         previewTileDraws: frame.previewTileDraws,
         viewportUpdate: frame.viewportUpdate,
         sourceTileDraws: frame.sourceTileDraws,
+        folderLevels: frame.folderLevels,
+        scratchTextures: frame.scratchTextures,
         virtual: virtualStats,
         displayTiles: displayCache.stats().tiles,
         brushTextures: brush.brushTextures,
@@ -562,7 +565,7 @@ async function assemblePaintRenderer(
     /** Rebuilds changed screen regions of `target` (the construction canvas by default), attaching it on first
      * use; camera/layer changes rebuild the full view. Cached output survives tile eviction.
      */
-    async render(layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = canvas) {
+    async render(layers: ShownLayer[], camera: Camera, size: ViewSize, dpr: number, exact = false, target = canvas) {
       if (disposed) {
         throw new Error('The renderer is disposed.');
       }

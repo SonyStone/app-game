@@ -168,8 +168,9 @@ function createTargetView(
      */
     bytes() {
       const pixels = this.view ? this.view.width * this.view.height : 0;
-      // Two rgba16float composition textures and three rgba8unorm images.
-      return (this.fallback?.bytes() ?? 0) + pixels * (8 * 2 + 4 * 3 + swapChainBytesPerPixel);
+      // Two rgba16float composition textures, those of folders that composite on their own, and three rgba8unorm images.
+      const levels = 2 + (this.view?.scratchCount() ?? 0);
+      return (this.fallback?.bytes() ?? 0) + pixels * (8 * levels + 4 * 3 + swapChainBytesPerPixel);
     },
 
     /** Releases every GPU resource of this target and unconfigures its context. */
@@ -190,9 +191,15 @@ function createTargetView(
  * Ping-pong composition textures, the per-layer scratch target and the presented image of one target. Layers blend
  * into `a`/`b` in rgba16float, so rounding does not accumulate across many translucent layers; `layer` holds 8-bit
  * tile pixels, `clip` a copy of the clipping base layer's pixels for the layers clipped to it, and `composed` the
- * 8-bit result.
+ * 8-bit result. Folders that composite on their own blend into further rgba16float textures of the same size, made
+ * on first use by `scratch` and kept with the others.
  */
 export type ViewTextures = ReturnType<typeof createViewTextures>;
+
+/** A texture of a view, with the view it is rendered through and a number naming it in binding caches. */
+export type ViewTexture = { texture: TgpuTexture; render: GPUTextureView; id: number };
+
+type TgpuTexture = ReturnType<ReturnType<TgpuRoot['createTexture']>['$usage']>;
 
 function createViewTextures(root: TgpuRoot, width: number, height: number) {
   const texture = <F extends 'rgba8unorm' | 'rgba16float'>(format: F) =>
@@ -202,7 +209,22 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     layer = texture('rgba8unorm'),
     clip = texture('rgba8unorm'),
     composed = texture('rgba8unorm');
-  const slots: { settings: TgpuBuffer<d.Vec4f> & UniformFlag; fromA: TgpuBindGroup; fromB: TgpuBindGroup }[] = [];
+  const slots: {
+    settings: TgpuBuffer<d.Vec4f> & UniformFlag;
+    fromA: TgpuBindGroup;
+    fromB: TgpuBindGroup;
+    /** Bindings of the folder compositor by the textures they read; see `bindComposite`. */
+    bindings: Map<string, TgpuBindGroup>;
+  }[] = [];
+  let nextId = 0;
+  const entry = (texture: TgpuTexture): ViewTexture => ({
+    texture,
+    render: root.unwrap(texture).createView(),
+    id: nextId++
+  });
+  const entries = { a: entry(a), b: entry(b), layer: entry(layer), clip: entry(clip) };
+  const scratch: ViewTexture[] = [];
+  const resolves = new Map<number, TgpuBindGroup>();
   return {
     width,
     height,
@@ -231,10 +253,70 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       const created = {
         settings,
         fromA: root.createBindGroup(shader.compositeLayout, { base: a, layer, clip, settings }),
-        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, clip, settings })
+        fromB: root.createBindGroup(shader.compositeLayout, { base: b, layer, clip, settings }),
+        bindings: new Map<string, TgpuBindGroup>()
       };
       slots[slot] = created;
       return created;
+    },
+    /** `a`, `b`, `layer` and `clip` with their render views, for the folder compositor. */
+    entries,
+    /**
+     * The `index`-th further composition texture, for a folder that composites on its own, made on first use and kept
+     * until the view is destroyed.
+     */
+    scratch(index: number): ViewTexture {
+      while (scratch.length <= index) {
+        scratch.push(entry(texture(compositionFormat)));
+      }
+
+      return scratch[index]!;
+    },
+    /** How many further composition textures `scratch` has made. */
+    scratchCount: () => scratch.length,
+    /**
+     * The `slot`-th settings buffer bound with `base`, `layer` and `clip` for `compositeFragment`, or with `base` and
+     * `layer` for `fadeFragment` (`fade`). Bindings are cached by slot and textures.
+     */
+    bindComposite(slot: number, base: ViewTexture, source: ViewTexture, mask: ViewTexture, fade = false) {
+      const target = this.composite(slot);
+      const key = `${fade ? 'fade' : 'composite'}|${base.id}|${source.id}|${mask.id}`;
+      let binding = target.bindings.get(key);
+      if (!binding) {
+        binding = fade
+          ? root.createBindGroup(shader.fadeLayout, {
+              base: base.texture,
+              layer: source.texture,
+              settings: target.settings
+            })
+          : root.createBindGroup(shader.compositeLayout, {
+              base: base.texture,
+              layer: source.texture,
+              clip: mask.texture,
+              settings: target.settings
+            });
+        target.bindings.set(key, binding);
+      }
+
+      return { settings: target.settings, binding };
+    },
+    /** The resolve pass's binding for the composition texture `image`, which holds the final result. */
+    resolveOf(image: ViewTexture) {
+      if (image.texture === a) {
+        return this.resolveA;
+      }
+
+      if (image.texture === b) {
+        return this.resolveB;
+      }
+
+      let binding = resolves.get(image.id);
+      if (!binding) {
+        binding = root.createBindGroup(shader.presentLayout, { image: image.texture });
+        resolves.set(image.id, binding);
+      }
+
+      return binding;
     },
     present: root.createBindGroup(shader.presentLayout, { image: composed }),
     destroy() {
@@ -243,6 +325,10 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       layer.destroy();
       clip.destroy();
       composed.destroy();
+      for (const extra of scratch) {
+        extra.texture.destroy();
+      }
+
       for (const slot of slots) {
         slot.settings.destroy();
       }

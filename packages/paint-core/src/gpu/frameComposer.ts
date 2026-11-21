@@ -2,15 +2,17 @@ import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
 import { d, type TgpuRoot } from 'typegpu';
 import { TILE_SIZE } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
-import type { Layer } from '../document';
+import type { BlendMode, Layer } from '../document';
 import { blendModes } from '../layerMerge';
+import { stackItems, walkStack } from '../layerStack';
+import { isFlatStack, type ShownLayer } from '../layerTree';
 import type { createDisplayCache } from './displayCache';
 import type { FloatingPixelsState } from './floatingPixels';
 import { createPixelGrid } from './pixelGrid';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
 import type { StrokeData } from './strokeState';
-import { compositionFormat, type TargetView } from './targetView';
+import { compositionFormat, type TargetView, type ViewTexture, type ViewTextures } from './targetView';
 import type { TileResidency } from './tileResidency';
 import { clearAttachment, MAX_RESIDENT_TILES, tileCoordinates, tileId, type createMipmapEnsurer } from './tileTextures';
 import type { createVirtualTexture } from './virtualTexture';
@@ -78,9 +80,22 @@ export function createFrameComposer(
       vertex: shader.fullscreenVertex,
       fragment: shader.clearFragment,
       targets: { format: compositionFormat }
+    }),
+    fade: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.fadeFragment,
+      targets: { format: compositionFormat }
     })
   };
-  const stats = { viewportUpdate: { full: false, pixels: 0 }, previewTileDraws: 0, sourceTileDraws: 0 };
+  const stats = {
+    viewportUpdate: { full: false, pixels: 0 },
+    previewTileDraws: 0,
+    sourceTileDraws: 0,
+    /** Deepest nesting of folder levels the latest frame composited; 0 for a flat stack. */
+    folderLevels: 0,
+    /** Further composition textures the latest frame used (`ViewTextures.scratch`), each a full view in rgba16float. */
+    scratchTextures: 0
+  };
 
   return {
     /** Draw counters and damaged pixels of the latest frame. */
@@ -89,7 +104,14 @@ export function createFrameComposer(
     /** Rebuilds changed screen regions; camera/layer changes rebuild the full view. Cached output survives tile
      * eviction. Presents unless a finished stroke's preview is held until its refreshed overview is resident.
      */
-    async render(target: TargetView, layers: Layer[], camera: Camera, size: ViewSize, dpr: number, exact: boolean) {
+    async render(
+      target: TargetView,
+      layers: ShownLayer[],
+      camera: Camera,
+      size: ViewSize,
+      dpr: number,
+      exact: boolean
+    ) {
       const scale = renderScale(size, dpr, device.limits.maxTextureDimension2D);
       const width = Math.max(1, Math.round(size.width * scale)),
         height = Math.max(1, Math.round(size.height * scale));
@@ -104,6 +126,8 @@ export function createFrameComposer(
       const region = plan.region;
       stats.previewTileDraws = 0;
       stats.sourceTileDraws = 0;
+      stats.folderLevels = 0;
+      stats.scratchTextures = 0;
       stats.viewportUpdate = { full: plan.full, pixels: region ? region.width * region.height : 0 };
       // One encoder holds the frame. It is submitted early only before resources referenced by encoded passes are
       // recycled (tile eviction, display-cache replacement, tail scratch reuse, instance-range wrap) and before
@@ -173,33 +197,13 @@ export function createFrameComposer(
           pass.end();
         }
 
-        // `layers` are the raster layers as they show (`shownLayers`): folders are Pass Through at full strength, so
-        // compositing them flat, with clipping resolved among siblings already, is compositing the tree.
         const stream = virtual && layers.filter((layer) => layer.visible && layer.opacity > 0).length <= 24;
         pages?.begin(layers);
-        let read = view.a,
-          write = view.b;
-        let slot = 0;
         /**
-         * The clipping base for clipped layers that follow: none before the first unclipped layer, hidden when the
-         * base is not drawn, so its clipped layers are not either, and ready once its pixels are in `view.clip`.
+         * Draws `layer`'s pixels in the damaged region into `view.layer`: streamed pages, resident or display-cache
+         * tiles, the active stroke's output and floating pixels. Returns false when nothing needs compositing.
          */
-        let clipBase: 'none' | 'hidden' | 'ready' = 'none';
-        for (const [index, layer] of layers.entries()) {
-          // A clipped layer without a base below it is drawn as an ordinary layer.
-          const clipped = !!layer.clipping && clipBase !== 'none';
-          if (clipped && clipBase === 'hidden') {
-            continue;
-          }
-
-          if (!layer.visible || layer.opacity <= 0) {
-            if (!clipped) {
-              clipBase = 'hidden';
-            }
-
-            continue;
-          }
-
+        const drawLayer = async (layer: Layer) => {
           const active = stroke.current?.layer.id === layer.id;
           const floats = deps.floating.layerId() === layer.id;
           let streamed = false;
@@ -235,11 +239,7 @@ export function createFrameComposer(
             );
             if (!drawn) {
               if (!floats) {
-                if (!clipped) {
-                  clipBase = 'hidden';
-                }
-
-                continue;
+                return false;
               }
 
               // Floating pixels may move over a part of their layer without pixels of its own.
@@ -251,37 +251,11 @@ export function createFrameComposer(
             deps.floating.render(frame.encoder(), view.layerRender, region, camera, size);
           }
 
-          if (!clipped) {
-            clipBase = 'ready';
-            if (layers[index + 1]?.clipping) {
-              frame
-                .encoder()
-                .copyTextureToTexture(
-                  { texture: root.unwrap(view.layer), origin: [region.x, region.y] },
-                  { texture: root.unwrap(view.clip), origin: [region.x, region.y] },
-                  [region.width, region.height]
-                );
-            }
-          }
-
-          // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
-          const composite = view.composite(slot++);
-          composite.settings.write(
-            d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, deps.linearBlending() ? 1 : 0)
-          );
-          const pass = frame.encoder().beginRenderPass({
-            colorAttachments: [
-              { view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }
-            ]
-          });
-          pass.setScissorRect(region.x, region.y, region.width, region.height);
-          pipelines.composite
-            .with(pass)
-            .with(read === view.a ? composite.fromA : composite.fromB)
-            .draw(3);
-          pass.end();
-          [read, write] = [write, read];
-        }
+          return true;
+        };
+        const read = isFlatStack(layers)
+          ? await composeFlat(frame, view, layers, region, drawLayer)
+          : await composeFolders(frame, view, layers, region, drawLayer);
 
         pages?.end();
         // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
@@ -302,10 +276,7 @@ export function createFrameComposer(
           colorAttachments: [{ view: view.composedRender, loadOp: 'load', storeOp: 'store' }]
         });
         resolve.setScissorRect(region.x, region.y, region.width, region.height);
-        pipelines.resolve
-          .with(resolve)
-          .with(read === view.a ? view.resolveA : view.resolveB)
-          .draw(3);
+        pipelines.resolve.with(resolve).with(view.resolveOf(read)).draw(3);
         resolve.end();
         if (refining && !stroke.current) {
           // Reprojection submits its own pass, which must draw over the resolved region.
@@ -327,6 +298,195 @@ export function createFrameComposer(
       }
     }
   };
+
+  /**
+   * Composites a flat stack (`isFlatStack`): each layer is drawn into `view.layer`, then blended over the result in
+   * `a`/`b`. Returns the texture holding the result.
+   */
+  async function composeFlat(
+    frame: ReturnType<typeof commandBatch>,
+    view: ViewTextures,
+    layers: readonly ShownLayer[],
+    region: Region,
+    drawLayer: (layer: Layer) => Promise<boolean>
+  ): Promise<ViewTexture> {
+    let read = view.a,
+      write = view.b;
+    let slot = 0;
+    /**
+     * The clipping base for clipped layers that follow: none before the first unclipped layer, hidden when the
+     * base is not drawn, so its clipped layers are not either, and ready once its pixels are in `view.clip`.
+     */
+    let clipBase: 'none' | 'hidden' | 'ready' = 'none';
+    for (const [index, layer] of layers.entries()) {
+      // A clipped layer without a base below it is drawn as an ordinary layer.
+      const clipped = !!layer.clipping && clipBase !== 'none';
+      if (clipped && clipBase === 'hidden') {
+        continue;
+      }
+
+      if (!layer.visible || layer.opacity <= 0) {
+        if (!clipped) {
+          clipBase = 'hidden';
+        }
+
+        continue;
+      }
+
+      if (!(await drawLayer(layer))) {
+        if (!clipped) {
+          clipBase = 'hidden';
+        }
+
+        continue;
+      }
+
+      if (!clipped) {
+        clipBase = 'ready';
+        if (layers[index + 1]?.clipping) {
+          copyRegion(frame, view.entries.layer, view.entries.clip, region);
+        }
+      }
+
+      // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
+      const composite = view.composite(slot++);
+      composite.settings.write(
+        d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, deps.linearBlending() ? 1 : 0)
+      );
+      const pass = frame.encoder().beginRenderPass({
+        colorAttachments: [{ view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }]
+      });
+      pass.setScissorRect(region.x, region.y, region.width, region.height);
+      pipelines.composite
+        .with(pass)
+        .with(read === view.a ? composite.fromA : composite.fromB)
+        .draw(3);
+      pass.end();
+      [read, write] = [write, read];
+    }
+
+    return read === view.a ? view.entries.a : view.entries.b;
+  }
+
+  /**
+   * Composites a stack with folders that composite on their own, following `walkStack` as the CPU compositor
+   * (`composeStack`) does. Every level is a composition texture of its own: `a` starts the root, cleared in the
+   * region; a folder's level comes from the free textures, `b` first, then `view.scratch`. A composite writes into a
+   * free texture and frees the one it read, so each live level holds one texture and the frame needs one more
+   * than its deepest nesting, plus one for a folder whose coverage clipped layers use. Returns the result's texture.
+   */
+  async function composeFolders(
+    frame: ReturnType<typeof commandBatch>,
+    view: ViewTextures,
+    layers: readonly ShownLayer[],
+    region: Region,
+    drawLayer: (layer: Layer) => Promise<boolean>
+  ): Promise<ViewTexture> {
+    const linear = deps.linearBlending() ? 1 : 0;
+    const free: ViewTexture[] = [view.entries.b];
+    let scratch = 0;
+    let slot = 0;
+    const take = () => free.pop() ?? view.scratch(scratch++);
+    const release = (texture: ViewTexture | undefined) => {
+      if (texture) {
+        free.push(texture);
+      }
+    };
+    /** Each level's result so far, and the folder coverage it keeps for clipped layers right above that folder. */
+    const levels: { image: ViewTexture; kept?: ViewTexture }[] = [{ image: view.entries.a }];
+    /** Writes the `fade`, or the composite, of `source` onto the top level's result, with `settings`. */
+    const blendOnto = (source: ViewTexture, mask: ViewTexture, settings: d.v4f, fade: boolean) => {
+      const level = levels.at(-1)!;
+      const target = take();
+      const bound = view.bindComposite(slot++, level.image, source, mask, fade);
+      bound.settings.write(settings);
+      const pass = frame.encoder().beginRenderPass({
+        colorAttachments: [{ view: target.render, loadOp: 'clear', storeOp: 'store' }]
+      });
+      pass.setScissorRect(region.x, region.y, region.width, region.height);
+      (fade ? pipelines.fade : pipelines.composite).with(pass).with(bound.binding).draw(3);
+      pass.end();
+      release(level.image);
+      level.image = target;
+    };
+    const dropKept = (level: (typeof levels)[number]) => {
+      release(level.kept);
+      level.kept = undefined;
+    };
+
+    await walkStack(stackItems(layers), {
+      async layer(layer, clip, base) {
+        const level = levels.at(-1)!;
+        if (!clip) {
+          dropKept(level);
+        }
+
+        if (!(await drawLayer(layer))) {
+          return false;
+        }
+
+        if (!clip && base) {
+          copyRegion(frame, view.entries.layer, view.entries.clip, region);
+        }
+
+        const mask = clip?.type === 'group' ? level.kept! : view.entries.clip;
+        blendOnto(
+          view.entries.layer,
+          mask,
+          d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clip ? 1 : 0, linear),
+          false
+        );
+        return true;
+      },
+      enter(_group, mode) {
+        const level = levels.at(-1)!;
+        dropKept(level);
+        const image = take();
+        if (mode === 'fade') {
+          copyRegion(frame, level.image, image, region);
+        } else {
+          const pass = frame.encoder().beginRenderPass({
+            colorAttachments: [{ view: image.render, loadOp: 'load', storeOp: 'store' }]
+          });
+          pass.setScissorRect(region.x, region.y, region.width, region.height);
+          pipelines.clear.with(pass).draw(3);
+          pass.end();
+        }
+
+        levels.push({ image });
+        stats.folderLevels = Math.max(stats.folderLevels, levels.length - 1);
+      },
+      leave(group, mode, drew, keep) {
+        const { image } = levels.pop()!;
+        if (drew && mode === 'isolated') {
+          const settings = d.vec4f(group.opacity, blendModes.indexOf(group.blend as BlendMode), 0, linear);
+          blendOnto(image, view.entries.clip, settings, false);
+        } else if (drew && mode === 'fade') {
+          blendOnto(image, view.entries.clip, d.vec4f(group.opacity, 0, 0, linear), true);
+        }
+
+        const level = levels.at(-1)!;
+        if (keep) {
+          level.kept = image;
+        } else {
+          release(image);
+        }
+      }
+    });
+    stats.scratchTextures = Math.max(stats.scratchTextures, scratch);
+    return levels[0]!.image;
+  }
+
+  /** Copies `region` of `from` into `to`, two textures of the same format and size. */
+  function copyRegion(frame: ReturnType<typeof commandBatch>, from: ViewTexture, to: ViewTexture, region: Region) {
+    frame
+      .encoder()
+      .copyTextureToTexture(
+        { texture: root.unwrap(from.texture), origin: [region.x, region.y] },
+        { texture: root.unwrap(to.texture), origin: [region.x, region.y] },
+        [region.width, region.height]
+      );
+  }
 
   /**
    * Draws a layer's resident/display tiles (and, for the active stroke, its output and preview tail) into
@@ -454,6 +614,9 @@ export function createFrameComposer(
   }
 }
 
+/** A rectangle of the view's backing pixels. */
+type Region = { x: number; y: number; width: number; height: number };
+
 /** Shared target pixel budget for presentation and contact-time LOD selection. */
 export function renderScale(size: ViewSize, dpr: number, maxDimension: number) {
   return Math.min(
@@ -473,12 +636,23 @@ function viewSignature(camera: Camera, size: ViewSize, width: number, height: nu
  * Layer order and composite settings, clipping included; length-prefixed ids cannot collide with separators. Reads
  * the layers as they show (`createDocument`'s `layers`), so a change of folders damages the view exactly when it
  * changes what the canvas shows: wrapping layers in a visible folder changes nothing, hiding it changes the layers'
- * visibility.
+ * visibility, and a folder that composites on its own adds itself, its settings and the folders around it to each of
+ * its layers, as a folder a layer is clipped to adds itself. A flat stack's signature is what it was before folders
+ * could blend.
  */
-export function compositionSignature(layers: readonly Layer[]) {
+export function compositionSignature(layers: readonly ShownLayer[]) {
   let signature = '';
-  for (const { id, visible, opacity, blend, clipping } of layers) {
-    signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping};`;
+  for (const { id, visible, opacity, blend, clipping, group, clipGroup } of layers) {
+    signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping}`;
+    for (let folder = group; folder; folder = folder.parent) {
+      signature += `/${folder.id.length}:${folder.id},${folder.visible},${folder.opacity},${folder.blend},${folder.base}`;
+    }
+
+    if (clipGroup) {
+      signature += `^${clipGroup.id.length}:${clipGroup.id}`;
+    }
+
+    signature += ';';
   }
 
   return signature;

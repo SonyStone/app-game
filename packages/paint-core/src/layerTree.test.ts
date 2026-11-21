@@ -73,7 +73,7 @@ describe('shown layers', () => {
     expect(shown[1]!.tiles).toBe((nodes.find((node) => node.id === 'deep') as Layer).tiles);
   });
 
-  it('resolve clipping among siblings: a folder below, or none, leaves a clipped layer unclipped', () => {
+  it('resolve clipping among siblings: a folder below is the base, none leaves a clipped layer unclipped', () => {
     const nodes = orderLayerTree([
       raster('base'),
       group('g'),
@@ -82,14 +82,14 @@ describe('shown layers', () => {
       raster('above', undefined, { clipping: true }),
       raster('onAbove', undefined, { clipping: true })
     ]);
-    expect(shownLayers(nodes).map((layer) => [layer.id, !!layer.clipping])).toEqual([
-      ['base', false],
+    expect(shownLayers(nodes).map((layer) => [layer.id, !!layer.clipping, layer.clipGroup?.id])).toEqual([
+      ['base', false, undefined],
       // The bottom layer of a folder has no base, so it shows unclipped and is the base of the one above it.
-      ['first', false],
-      ['second', true],
-      // Right above a folder: clipping to a folder is not supported, so it shows unclipped and is a base itself.
-      ['above', false],
-      ['onAbove', true]
+      ['first', false, undefined],
+      ['second', true, undefined],
+      // Right above a folder: the folder is the base of both clipped layers above it.
+      ['above', true, 'g'],
+      ['onAbove', true, 'g']
     ]);
   });
 });

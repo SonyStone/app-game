@@ -3,13 +3,13 @@ import { createPaintRenderer } from '@app-game/paint-core/gpu/renderer';
 
 /**
  * Renders a drawing whose layers sit in folders, and the same layers flat, through the real renderer and compares
- * every presented pixel: folders are Pass Through at full strength, so they must composite exactly as the flat stack.
- * Covers a clipped layer inside a folder, a hidden folder, and a clipped layer right above a folder, which shows
- * unclipped as clipping to a folder is not supported; in both blending modes.
+ * every presented pixel: Pass Through folders at full strength must composite exactly as the flat stack, which the
+ * renderer composites on its flat path. Covers a clipped layer inside a folder and a hidden folder, in both blending
+ * modes; folders that composite on their own, and layers clipped to folders, are `isolated-folders`.
  */
 export async function verifyLayerFolders(report: (message: string) => void) {
   for (const linear of [false, true]) {
-    for (const variant of ['visible folder', 'hidden folder', 'clipped above folder'] as const) {
+    for (const variant of ['visible folder', 'hidden folder'] as const) {
       const { grouped, flat } = drawings(variant);
       const shown = await renderImage(grouped.layers, linear);
       const expected = await renderImage(flat.layers, linear);
@@ -32,7 +32,7 @@ export async function verifyLayerFolders(report: (message: string) => void) {
  * `Base`, a folder of `Ink` (Multiply) and `Shade` (clipped to Ink), and `Top` at half opacity, each with its own
  * alpha ramp; and the same layers flat, with the visibility and clipping they show with.
  */
-function drawings(variant: 'visible folder' | 'hidden folder' | 'clipped above folder') {
+function drawings(variant: 'visible folder' | 'hidden folder') {
   const grouped = createDocument();
   const base = grouped.activeId;
   paint(grouped, base, [250, 240, 220], (x) => 255 - x);
@@ -48,11 +48,7 @@ function drawings(variant: 'visible folder' | 'hidden folder' | 'clipped above f
   paint(grouped, shade, [200, 40, 40], (_x, y) => y);
   grouped.changeLayer({ type: 'add' });
   const top = grouped.activeId;
-  grouped.changeLayer({
-    type: 'update',
-    id: top,
-    patch: { opacity: 0.5, clipping: variant === 'clipped above folder' }
-  });
+  grouped.changeLayer({ type: 'update', id: top, patch: { opacity: 0.5 } });
   paint(grouped, top, [255, 255, 255], (x) => x);
   if (variant === 'hidden folder') {
     grouped.changeLayer({ type: 'update', id: folder, patch: { visible: false } });

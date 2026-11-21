@@ -234,7 +234,7 @@ describe('portable document', () => {
   it('rejects malformed and unsupported documents before replacement', () => {
     const doc = createDocument(),
       saved = snapshotDocument(doc.layers, doc.active.id, defaultCamera());
-    expect(() => restoreDocument({ ...saved, version: 5 })).toThrow();
+    expect(() => restoreDocument({ ...saved, version: 6 })).toThrow();
     expect(() => restoreDocument({ ...saved, activeId: 'missing' })).toThrow();
     expect(() =>
       restoreDocument({

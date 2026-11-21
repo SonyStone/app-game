@@ -235,7 +235,7 @@ describe('folders in the document', () => {
     expect(doc.activeId).toBe(copy.id);
   });
 
-  it('keeps only a name and visibility on a folder; hiding it hides what is inside', () => {
+  it('keeps a folder unclipped; hiding it hides what is inside', () => {
     const { doc, ids } = folderDocument();
     doc.changeLayer({ type: 'update', id: ids.group, patch: { name: 'Sketch', visible: false } });
     expect(doc.layers.map((layer) => [layer.name, layer.visible])).toEqual([
@@ -247,8 +247,6 @@ describe('folders in the document', () => {
     // Own properties are unchanged.
     expect(doc.state().layers.every((layer) => layer.visible)).toBe(true);
     const steps = doc.state().historyStates.length;
-    expect(() => doc.changeLayer({ type: 'update', id: ids.group, patch: { opacity: 0.5 } })).toThrow('folder');
-    expect(() => doc.changeLayer({ type: 'update', id: ids.group, patch: { blend: 'multiply' } })).toThrow('folder');
     expect(() => doc.changeLayer({ type: 'update', id: ids.group, patch: { clipping: true } })).toThrow('folder');
     expect(doc.state().historyStates).toHaveLength(steps);
     doc.undo();
@@ -416,15 +414,13 @@ describe('saved folders', () => {
     expect(unpackTile(loaded.layers[0]!.tiles.get('0,0') as Uint8Array)[0]).toBe(6);
   });
 
-  it('refuses folders this version cannot show and broken trees', () => {
+  it('refuses clipped folders and broken trees', () => {
     const { doc, ids } = folderDocument();
     const saved = snapshotDocument(doc.nodes, doc.activeId, defaultCamera());
     const withFolder = (patch: object) => ({
       ...saved,
       layers: saved.layers.map((node) => (node.id === ids.group ? { ...node, ...patch } : node))
     });
-    expect(() => restoreDocument(withFolder({ opacity: 0.5 }))).toThrow('cannot show');
-    expect(() => restoreDocument(withFolder({ blend: 'multiply' }))).toThrow('cannot show');
     expect(() => restoreDocument(withFolder({ clipping: true }))).toThrow('cannot show');
     expect(() => restoreDocument(withFolder({ parentId: ids.group }))).toThrow('inside itself');
     expect(() => restoreDocument(withFolder({ parentId: ids.base }))).toThrow('not a folder');

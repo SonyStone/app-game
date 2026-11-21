@@ -7,7 +7,8 @@ import {
   siblingBelow,
   subtreeIds,
   withParent,
-  type LayerPlace
+  type LayerPlace,
+  type ShownLayer
 } from './layerTree';
 import { packTile, type TileData } from './tilePixels';
 export { TILE_BYTES } from './tilePixels';
@@ -39,10 +40,13 @@ export type Layer = {
  */
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
 /**
- * A folder of the layer tree. It owns no pixels; it shows its layers as they are (Pass Through at full strength), so
- * wrapping layers in a visible folder changes nothing on the canvas, and hiding it hides everything inside it. A
- * folder's `opacity`, `blend` and `clipping` are always 1, `pass-through` and absent: Paint has no isolated folders
- * yet, and the document refuses other values rather than show them wrongly.
+ * A folder of the layer tree. It owns no pixels, and hiding it hides everything inside it. A new folder is Pass
+ * Through at full strength: it shows its layers as they are, so wrapping layers in a visible folder changes nothing
+ * on the canvas. With another blend mode it composites isolated: its layers are composited together on their own,
+ * then the result is blended into what is below once, with the folder's blend mode and opacity. Pass Through below
+ * full opacity fades: its layers composite onto what is below as they are, and the folder's opacity interpolates
+ * between what was below and that result (see `groupMode`). A folder can be the clipping base of the clipped layers
+ * right above it (see `clipBases`); it cannot be clipped itself, so `clipping` is always absent.
  */
 export type LayerGroup = {
   kind: 'group';
@@ -52,11 +56,13 @@ export type LayerGroup = {
   name: string;
   /** Hides the folder and everything inside it, whatever their own visibility. */
   visible: boolean;
+  /** From 0 to 1; see {@link LayerGroup} for how it applies in each mode. */
   opacity: number;
   blend: GroupBlendMode;
+  /** Always absent: a folder cannot be clipped. */
   clipping?: boolean;
 };
-/** How a folder blends; only `pass-through` is supported, see {@link LayerGroup}. */
+/** How a folder blends: Pass Through, or one of the raster blend modes, which isolates it; see {@link LayerGroup}. */
 export type GroupBlendMode = 'pass-through' | BlendMode;
 /** A node of the layer tree: a raster layer or a folder. */
 export type DocumentNode = Layer | LayerGroup;
@@ -216,12 +222,12 @@ export function createDocument(options: { paged?: boolean } = {}) {
     },
     /**
      * The raster layers bottom to top, in compositing order, as they show on the canvas (see `shownLayers`): a layer
-     * inside a hidden folder reads as hidden, a clipped one without a clipping base among its siblings as unclipped.
-     * What renders, exports and samples the drawing reads; a layer's own properties are in `nodes`. Without folders,
-     * the same objects as `nodes`.
+     * inside a hidden folder reads as hidden, a clipped one without a clipping base among its siblings as unclipped,
+     * and each names the folders around it that composite on their own. What renders, exports and samples the drawing
+     * reads; a layer's own properties are in `nodes`. Without folders, the same objects as `nodes`.
      */
-    get layers(): Layer[] {
-      return shownNow() as Layer[];
+    get layers(): ShownLayer[] {
+      return shownNow() as ShownLayer[];
     },
     /** Changes only when committed document metadata or pixels change; excludes active preview stamps. */
     get revision() {
@@ -358,7 +364,7 @@ export function createDocument(options: { paged?: boolean } = {}) {
         case 'update': {
           const current = node(action.id);
           if (!current) return;
-          if (current.kind === 'group') checkFolderPatch(action.patch);
+          checkPatch(current, action.patch);
           next = nodes.map((node) => (node.id === action.id ? ({ ...node, ...action.patch } as DocumentNode) : node));
           break;
         }
@@ -424,10 +430,17 @@ export function createDocument(options: { paged?: boolean } = {}) {
           break;
         }
         case 'relocate': {
-          if (!node(action.id)) return;
+          const current = node(action.id);
+          if (!current) return;
+          if (action.clipping !== undefined) checkPatch(current, { clipping: action.clipping });
           const tree = editLayerTree(nodes);
           tree.move(action.id, { parentId: action.parentId, anchorId: action.anchorId, side: action.side });
           next = tree.result();
+          if (action.clipping !== undefined && !!current.clipping !== action.clipping) {
+            next = next.map((node) =>
+              node.id === action.id ? ({ ...node, clipping: action.clipping } as DocumentNode) : node
+            );
+          }
           break;
         }
         case 'group': {
@@ -677,16 +690,18 @@ export type LayerAction =
   | { type: 'add' | 'add-group'; place?: LayerPlace }
   /**
    * Puts nodes `ids` into a new folder, in their order on the canvas, and selects it. The folder takes the place of
-   * the topmost of them; ids inside other grouped folders are skipped, and unknown ones ignored. The folder shows its
-   * layers as they are, so grouping siblings that are next to each other changes nothing on the canvas, apart from
-   * clipping, which is resolved among siblings (see `shownLayers`).
+   * the topmost of them; ids inside other grouped folders are skipped, and unknown ones ignored. The folder is Pass
+   * Through at full strength, so grouping siblings that are next to each other changes nothing on the canvas, apart
+   * from clipping, which is resolved among siblings (see `clipBases`).
    */
   | { type: 'group'; ids: readonly string[] }
   /**
    * Moves node `id`, and everything inside a folder, to a `LayerPlace`: into a folder, out of it or across folders.
-   * Throws for a folder that does not exist, an anchor that is not in it, or a folder moved into itself.
+   * With `clipping`, a raster layer is also clipped to whatever ends up right below it, or unclipped, in the same undo
+   * step: a drop "onto" a layer or folder. Throws for a folder that does not exist, an anchor that is not in it, a
+   * folder moved into itself, or `clipping` on a folder.
    */
-  | ({ type: 'relocate'; id: string } & LayerPlace)
+  | ({ type: 'relocate'; id: string; clipping?: boolean } & LayerPlace)
   /** Swaps the node with the sibling above (1) or below (-1) it; nothing happens at the end of its folder. */
   | { type: 'move'; id: string; direction: -1 | 1 }
   /**
@@ -694,11 +709,17 @@ export type LayerAction =
    * is ignored. In a drawing without folders, the position in the layer stack.
    */
   | { type: 'reorder'; id: string; index: number }
-  /** Changes node properties. A folder takes only `name` and `visible`; anything else throws (see `LayerGroup`). */
+  /**
+   * Changes node properties. `opacity` runs from 0 to 1. A folder takes `name`, `visible`, `opacity` and a `blend`
+   * that may be `pass-through`; it cannot be clipped or alpha-locked (see `LayerGroup`). A raster layer cannot be Pass
+   * Through. A patch that breaks these rules throws.
+   */
   | {
       type: 'update';
       id: string;
-      patch: Partial<Pick<RasterInfo, 'name' | 'visible' | 'opacity' | 'blend' | 'alphaLock' | 'clipping'>>;
+      patch: Partial<Pick<RasterInfo, 'name' | 'visible' | 'opacity' | 'alphaLock' | 'clipping'>> & {
+        blend?: GroupBlendMode;
+      };
     };
 
 /** A drawing holds at most this many raster layers. */
@@ -788,13 +809,25 @@ function checkCapacity(nodes: readonly DocumentNode[], layers: number, groups: n
   }
 }
 
-/** Throws for a folder patch that sets anything but its name and visibility to another than its fixed value. */
-function checkFolderPatch(patch: Extract<LayerAction, { type: 'update' }>['patch']) {
-  const fixed = { opacity: 1, blend: 'pass-through', clipping: false, alphaLock: false } as const;
-  for (const [key, value] of Object.entries(patch)) {
-    if (key !== 'name' && key !== 'visible' && value !== undefined && value !== fixed[key as keyof typeof fixed]) {
-      throw new Error('A folder has only a name and visibility: it shows its layers as they are.');
+/**
+ * Throws for a patch node `node` cannot take: an opacity outside 0–1, Pass Through on a raster layer, or clipping or
+ * alpha lock on a folder.
+ */
+function checkPatch(node: DocumentNode, patch: Extract<LayerAction, { type: 'update' }>['patch']) {
+  if (patch.opacity !== undefined && !(patch.opacity >= 0 && patch.opacity <= 1)) {
+    throw new Error('Opacity runs from 0 to 1.');
+  }
+
+  if (node.kind !== 'group') {
+    if (patch.blend === 'pass-through') {
+      throw new Error('Only a folder can be Pass Through.');
     }
+
+    return;
+  }
+
+  if (patch.clipping || patch.alphaLock) {
+    throw new Error('A folder cannot be clipped or alpha-locked: it has no pixels of its own.');
   }
 }
 /** Starts a Paint identity, independently of future save events and imported PSD provenance. */

@@ -1,4 +1,4 @@
-import type { DocumentNode, Layer } from './document';
+import type { DocumentNode, GroupBlendMode, Layer, LayerGroup } from './document';
 
 /**
  * The layer tree of a drawing is one list of nodes, raster layers and folders, each naming the folder it is in by
@@ -99,17 +99,22 @@ export function parentKey(parentId: string | null | undefined): string {
 
 /**
  * The raster layers of `nodes`, in canonical order, as they show on the canvas: a raster inside a hidden folder
- * reads as hidden, and a clipped raster without a clipping base among its siblings reads as unclipped. Clipping is
- * resolved among siblings, as Photoshop does: a clipped raster's base is the raster sibling right below it, or that
- * sibling's own base when it is clipped too. A clipped raster that is the bottom one of its folder, or that has a
- * folder right below it (clipping to a folder is not supported), has no base: it shows as an ordinary layer and is
- * the base of clipped rasters above it, as a clipped bottom layer of a flat drawing always has. Folders are Pass
- * Through at full strength, so reading the result as a flat stack composites exactly as the tree does.
+ * reads as hidden, a clipped raster without a clipping base among its siblings reads as unclipped, and each raster
+ * names the folders around it that composite on their own (`group`) and the folder it is clipped to (`clipGroup`).
+ *
+ * Clipping is resolved among siblings, as Photoshop does (see {@link clipBases}): a clipped raster's base is the
+ * sibling right below it, a raster or a folder, or that sibling's own base when it is a clipped raster too. A clipped
+ * raster that is the bottom one of its folder has no base: it shows as an ordinary layer and is the base of clipped
+ * rasters above it, as a clipped bottom layer of a flat drawing always has.
+ *
+ * A folder that is Pass Through at full strength and no clipping base composites as its layers do flat, so it is left
+ * out of `group`: a drawing whose folders are all such reads as a flat stack, with no `group` or `clipGroup` anywhere,
+ * and composites exactly as it did before folders could blend (see {@link isFlatStack}).
  *
  * Without folders, returns `nodes` itself. Otherwise a raster that shows as it is stays the same object; one that
- * does not becomes a copy with the shown `visible` and `clipping`, sharing its tiles.
+ * does not becomes a copy with the shown `visible` and `clipping` and its `group` and `clipGroup`, sharing its tiles.
  */
-export function shownLayers(nodes: readonly DocumentNode[]): readonly Layer[] {
+export function shownLayers(nodes: readonly DocumentNode[]): readonly ShownLayer[] {
   if (!nodes.some((node) => node.kind === 'group')) {
     return nodes as readonly Layer[];
   }
@@ -130,22 +135,131 @@ export function shownLayers(nodes: readonly DocumentNode[]): readonly Layer[] {
 
     return shown;
   };
-  /** The node seen last in each folder: in canonical order, the sibling right below the next node. */
-  const below = new Map<string, DocumentNode>();
-  const layers: Layer[] = [];
-  for (const node of nodes) {
-    const key = parentKey(node.parentId);
-    if (node.kind !== 'group') {
-      const visible = node.visible && folderShown(node.parentId);
-      const sibling = below.get(key);
-      const clipping = !!node.clipping && !!sibling && sibling.kind !== 'group';
-      layers.push(visible === node.visible && clipping === !!node.clipping ? node : { ...node, visible, clipping });
+  const bases = clipBases(nodes);
+  const baseFolders = new Set([...bases.values()].filter((base) => base.kind === 'group').map(({ id }) => id));
+  const composites = new Map<string, CompositeGroup | undefined>();
+  /** The innermost folder around a node in folder `id` that composites on its own, if any. */
+  const compositeOf = (id: string | undefined): CompositeGroup | undefined => {
+    if (id === undefined) {
+      return undefined;
     }
 
-    below.set(key, node);
+    if (!composites.has(id)) {
+      const folder = byId.get(id) as LayerGroup;
+      const parent = compositeOf(folder.parentId);
+      const own = groupMode(folder) !== 'pass-through' || baseFolders.has(id);
+      composites.set(
+        id,
+        own
+          ? {
+              id,
+              visible: folderShown(id),
+              opacity: folder.opacity,
+              blend: folder.blend,
+              base: baseFolders.has(id),
+              ...(parent ? { parent } : {})
+            }
+          : parent
+      );
+    }
+
+    return composites.get(id);
+  };
+  const layers: ShownLayer[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'group') {
+      continue;
+    }
+
+    const visible = node.visible && folderShown(node.parentId);
+    const base = bases.get(node.id);
+    const clipping = !!node.clipping && !!base;
+    const group = compositeOf(node.parentId);
+    const clipGroup = base?.kind === 'group' ? compositeOf(base.id) : undefined;
+    if (visible === node.visible && clipping === !!node.clipping && !group && !clipGroup) {
+      layers.push(node);
+      continue;
+    }
+
+    layers.push({ ...node, visible, clipping, ...(group ? { group } : {}), ...(clipGroup ? { clipGroup } : {}) });
   }
 
   return layers;
+}
+
+/** A raster layer as it shows on the canvas; see {@link shownLayers}. Any `Layer` is one without folders. */
+export type ShownLayer = Layer & {
+  /**
+   * The innermost folder around the layer that composites on its own; absent when every folder around it is Pass
+   * Through at full strength and no clipping base, which composite as the layers do flat.
+   */
+  group?: CompositeGroup;
+  /** On a clipped layer whose clipping base is a folder: the layer shows only where the folder's layers cover. */
+  clipGroup?: CompositeGroup;
+};
+
+/**
+ * A folder as the compositors read it, shared by every raster inside it: one that blends on its own (not Pass
+ * Through), fades (Pass Through below full opacity), or is the clipping base of the siblings right above it.
+ */
+export type CompositeGroup = {
+  id: string;
+  /** Whether the folder shows: it and every folder around it are visible. */
+  visible: boolean;
+  opacity: number;
+  blend: GroupBlendMode;
+  /** The nearest folder around this one that composites on its own, if any. */
+  parent?: CompositeGroup;
+  /**
+   * Clipped siblings right above the folder use its coverage: the alpha of its layers composited on their own, after
+   * the folder's visibility, before its opacity.
+   */
+  base: boolean;
+};
+
+/**
+ * How folder `group` composites (see `LayerGroup`): `isolated`, blending its layers' composite into the backdrop once
+ * with its blend mode and opacity, for any mode but Pass Through; `fade`, Pass Through below full opacity, which
+ * interpolates between the backdrop it entered with and its layers composited onto that backdrop; or `pass-through`,
+ * at full strength, which composites its layers as they are.
+ */
+export function groupMode(group: Pick<LayerGroup, 'opacity' | 'blend'>): 'isolated' | 'fade' | 'pass-through' {
+  if (group.blend !== 'pass-through') {
+    return 'isolated';
+  }
+
+  return group.opacity < 1 ? 'fade' : 'pass-through';
+}
+
+/**
+ * Whether `layers`, as {@link shownLayers} returns them, composite as a flat stack: no folder composites on its own
+ * and no layer is clipped to a folder. Compositors keep their flat path for such a stack.
+ */
+export function isFlatStack(layers: readonly ShownLayer[]): boolean {
+  return !layers.some((layer) => layer.group || layer.clipGroup);
+}
+
+/**
+ * The clipping base of every clipped raster of `nodes` that has one, by raster id: the sibling right below it, a
+ * raster or a folder, or that sibling's own base when it is a clipped raster too. A clipped raster at the bottom of
+ * its folder has none, and is itself the base of the clipped rasters above it.
+ */
+export function clipBases(nodes: readonly DocumentNode[]): Map<string, DocumentNode> {
+  /** Per folder, the base of the clipped rasters that come next: in canonical order, the latest unclipped sibling. */
+  const runBase = new Map<string, DocumentNode>();
+  const bases = new Map<string, DocumentNode>();
+  for (const node of nodes) {
+    const key = parentKey(node.parentId);
+    const base = runBase.get(key);
+    if (node.kind !== 'group' && node.clipping && base) {
+      bases.set(node.id, base);
+      continue;
+    }
+
+    runBase.set(key, node);
+  }
+
+  return bases;
 }
 
 /** Ids of node `id` and every node inside it, in canonical order; empty when there is no such node. */

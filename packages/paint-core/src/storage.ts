@@ -13,15 +13,21 @@ import {
   type LayerGroup,
   type PsdDocumentIdentity
 } from './document';
-import { MAX_FOLDERS, orderLayerTree } from './layerTree';
+import { clipBases, MAX_FOLDERS, orderLayerTree } from './layerTree';
 import { packTile, unpackTile, type TileData, type TileReference } from './tilePixels';
 
 /**
  * Versioned on-disk format. Tile pixels remain premultiplied; no lossy image conversion occurs. Versions 1 and 2 are
  * portable JSON with the pixels inline, version 3 a checkpoint whose pixels are stored tile versions; all three hold a
- * flat list of raster layers, which open at the root. Version 4, which `snapshotDocument` writes, holds the layer
- * tree: every entry of `layers` is a node marked by `kind`, a raster with its tiles or a folder without, in canonical
- * order (see `layerTree`); its pixels are inline or stored versions.
+ * flat list of raster layers, which open at the root. Version 4 holds the layer tree: every entry of `layers` is a
+ * node marked by `kind`, a raster with its tiles or a folder without, in canonical order (see `layerTree`); its pixels
+ * are inline or stored versions. A folder's opacity and blend mode are its own (see `LayerGroup`); builds before
+ * isolated folders refuse a folder with others than full opacity and Pass Through.
+ *
+ * Version 5 has the same shape; in it a clipped layer whose clipping base is a folder clips to that folder, while in
+ * version 4 it shows unclipped, as before folders could be clipping bases. `snapshotDocument` writes version 5 only
+ * for a drawing with such a layer, so builds that would show it unclipped refuse it, and every other drawing stays
+ * version 4.
  */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
@@ -39,8 +45,9 @@ export function snapshotDocument(
   linearBlending = true,
   psdIdentity?: PsdDocumentIdentity
 ) {
+  const clipsToFolder = [...clipBases(nodes).values()].some((base) => base.kind === 'group');
   return {
-    version: 4 as const,
+    version: (clipsToFolder ? 5 : 4) as 4 | 5,
     ...(psdIdentity ? { psdIdentity: structuredClone(psdIdentity) } : {}),
     tileSize: TILE_SIZE,
     activeId,
@@ -65,8 +72,8 @@ function savedNode(node: DocumentNode) {
 export type SavedNode = SavedDocument['layers'][number];
 
 /**
- * The checkpoint of `snapshot` that storage keeps: the same version 4 document, each tile's pixels replaced by the
- * stored version `capture` names, so it holds no pixels.
+ * The checkpoint of `snapshot` that storage keeps: the same version 4 or 5 document, each tile's pixels replaced by
+ * the stored version `capture` names, so it holds no pixels.
  */
 export function checkpointDocument(snapshot: SavedDocument, capture: (pixels: TileData) => TileReference) {
   return {
@@ -95,10 +102,10 @@ export function* savedTiles(saved: unknown): Generator<unknown> {
  * returned as the `symmetry` feature's data.
  *
  * Returns the layer tree in canonical order as `nodes`, and its raster layers, the same objects, as `layers`; a
- * document saved before folders opens with its layers at the root. Throws for a tree `orderLayerTree` refuses, one
- * without a raster layer, more than `MAX_LAYERS` layers or `MAX_FOLDERS` folders, and a folder with an opacity, blend
- * mode or clipping this version cannot show. A `portable` document, one read from a file rather than storage, must
- * hold its pixels inline and stay within the import budget.
+ * document saved before folders opens with its layers at the root, and a version 4 layer clipped to a folder opens
+ * unclipped, as it showed. Throws for a tree `orderLayerTree` refuses, one without a raster layer, more than
+ * `MAX_LAYERS` layers or `MAX_FOLDERS` folders, and a clipped folder. A `portable` document, one read from a file
+ * rather than storage, must hold its pixels inline and stay within the import budget.
  */
 export function restoreDocument(
   value: unknown,
@@ -153,7 +160,11 @@ export function restoreDocument(
     // Smooth color layers become Normal ones in a document that blends in linear light.
     return { ...layer, blend: layer.blend === 'linear' ? ('normal' as const) : layer.blend, tiles };
   });
-  const ordered = orderLayerTree(nodes);
+  let ordered = orderLayerTree(nodes);
+  if (parsed.version === 4) {
+    ordered = unclipFromFolders(ordered);
+  }
+
   const legacy = parsed.symmetry === undefined ? {} : { symmetry: parsed.symmetry };
   // Documents saved before `blending` blend in linear light, unless no layer used Smooth color and one used Normal.
   const linearBlending =
@@ -169,6 +180,17 @@ export function restoreDocument(
     psdIdentity: parsed.psdIdentity,
     linearBlending
   };
+}
+
+/**
+ * `nodes` with every raster clipped to a folder unclipped, as version 4 shows it; the same objects where nothing
+ * changes.
+ */
+function unclipFromFolders(nodes: DocumentNode[]): DocumentNode[] {
+  const bases = clipBases(nodes);
+  return nodes.map((node) =>
+    node.kind !== 'group' && bases.get(node.id)?.kind === 'group' ? { ...node, clipping: false } : node
+  );
 }
 
 /**
@@ -313,9 +335,9 @@ const savedGroupSchema = z
     blend: z.enum(['pass-through', 'normal', 'multiply', 'screen', 'overlay']),
     clipping: z.boolean().optional()
   })
-  // Folders show their layers as they are; one saved with effects of its own would show wrongly, so it is refused.
-  .refine((group) => group.opacity === 1 && group.blend === 'pass-through' && !group.clipping, {
-    message: 'This drawing has folders with an opacity, blend mode or clipping this version of Paint cannot show.'
+  // A folder cannot be clipped; one saved clipped would show wrongly, so it is refused.
+  .refine((group) => !group.clipping, {
+    message: 'This drawing has clipped folders, which this version of Paint cannot show.'
   });
 type SavedGroup = z.infer<typeof savedGroupSchema> & LayerGroup;
 const savedFields = {
@@ -337,7 +359,7 @@ const savedSchema = z.union([
   }),
   z.object({
     ...savedFields,
-    version: z.literal(4),
+    version: z.union([z.literal(4), z.literal(5)]),
     layers: z
       .array(z.discriminatedUnion('kind', [savedRasterSchema, savedGroupSchema]))
       .min(1)
