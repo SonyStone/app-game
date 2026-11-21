@@ -1,0 +1,34 @@
+diff --git a/dist/bundle-info.js b/dist/bundle-info.js
+index fec6ef5417214d2b612f685790279253daf7bdf0..3149d6a70650a8003ab70c8bbcb519c42482317a 100644
+--- a/dist/bundle-info.js
++++ b/dist/bundle-info.js
+@@ -85,18 +85,24 @@ async function parseBundleInfo(bundleAsts) {
+         moduleInfo.withTopLevelAwait = highestPattern === find_1.CodePattern.TopLevelAwait;
+     }
+     // Pass 2: transfer each modules's "top-level await usage" property to all successors in reverse graph
++    // Patched: every transformed module assigns its exports inside its "__tla" promise, also one transformed only
++    // for a dynamic import, so each static importer of a transformed module must be transformed to await it.
++    // Upstream seeds this pass with top-level await modules alone, which leaves importers of the others reading
++    // exports before they are assigned.
+     const q = Object.entries(bundleInfo)
+-        .filter(([, module]) => module.withTopLevelAwait)
++        .filter(([, module]) => module.transformNeeded)
+         .map(([moduleName]) => moduleName);
++    const enqueued = new Set(q);
+     while (q.length > 0) {
+         const moduleName = q.shift();
+         for (const nextModuleName of bundleInfo[moduleName].importedBy) {
++            if (bundleInfo[moduleName].withTopLevelAwait)
++                bundleInfo[nextModuleName].withTopLevelAwait = true;
++            bundleInfo[nextModuleName].transformNeeded = true;
+             // Skip modules which are already enqueued once
+-            if (bundleInfo[nextModuleName].withTopLevelAwait)
++            if (enqueued.has(nextModuleName))
+                 continue;
+-            // Enqueue next module
+-            bundleInfo[nextModuleName].withTopLevelAwait = true;
+-            bundleInfo[nextModuleName].transformNeeded = true;
++            enqueued.add(nextModuleName);
+             q.push(nextModuleName);
+         }
+     }
