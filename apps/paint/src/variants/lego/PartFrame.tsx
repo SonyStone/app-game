@@ -33,6 +33,8 @@ export function PartFrame(props: {
   onOpen?: (anchor: Element) => void;
   /** Owned panel state, resolved by the board rather than the document services. */
   open?: boolean;
+  /** The name the part shows in place of its own; see `PartBinding`'s `label`. */
+  label?: string;
   onDone?: () => void;
   children?: JSX.Element;
 }) {
@@ -126,6 +128,9 @@ function Binding(props: Parameters<typeof PartFrame>[0]) {
     },
     get open() {
       return props.open ?? false;
+    },
+    get label() {
+      return props.label;
     },
     onOpen: (anchor) => {
       if (frame.mode === 'live') {

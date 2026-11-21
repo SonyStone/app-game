@@ -14,6 +14,7 @@ import {
   StageGuides,
   StageOverlays
 } from '../../features/session';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart, safeArea, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
@@ -102,6 +103,14 @@ export function LegoStudio(
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
+  /** Whether the user has put a setting on the board from the studio once, which retires the studio's pin hint. */
+  const [pinHinted, setPinHinted] = createSignal(readPinHinted());
+  const learnPin = () => {
+    if (!pinHinted()) {
+      setPinHinted(true);
+      keepPinHinted();
+    }
+  };
 
   const enterEdit = () => {
     setPopup(undefined);
@@ -368,12 +377,26 @@ export function LegoStudio(
                       span={studioPartSpan}
                       look="slider"
                       label={brushSettingName(category, setting)}
+                      name={setting.label}
                       onBoard={onBoard(kind)}
-                      onLift={(event) => boardControls()?.lift(event, kind, liftedSpan(kind))}
-                      onPlace={() => boardControls()?.place(kind, liftedSpan(kind))}
+                      onLift={(event) => {
+                        learnPin();
+                        boardControls()?.lift(event, kind, liftedSpan(kind));
+                      }}
+                      onPlace={() => {
+                        learnPin();
+                        boardControls()?.place(kind, liftedSpan(kind));
+                      }}
                     />
                   );
                 }}
+                paneHint={
+                  <Show when={!pinHinted()}>
+                    <p class={styles.studioPinHint} data-pin-hint>
+                      Drag <SketchIcon name="pin" size={16} /> to keep a setting on the board
+                    </p>
+                  </Show>
+                }
                 penPane={
                   <StudioSettingRow
                     kind={penPressureKind}
@@ -399,6 +422,25 @@ export function LegoStudio(
     </GridContext>
   );
 }
+
+/** Whether the studio's pin hint was learned on this device: a setting was put on the board from the studio once. */
+function readPinHinted() {
+  try {
+    return localStorage.getItem(pinHintKey) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function keepPinHinted() {
+  try {
+    localStorage.setItem(pinHintKey, '1');
+  } catch {
+    // Storage refused: the hint stays retired until the page closes.
+  }
+}
+
+const pinHintKey = 'paint.lego.studioPinHinted';
 
 /** `cell` when it is a positive number of pixels, else `undefined`. */
 function validCell(cell: number | undefined) {

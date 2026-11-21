@@ -32,6 +32,11 @@ export type PartBinding = {
   open: boolean;
   /** Closes the current popup after a live command or file selection. */
   onDone: () => void;
+  /**
+   * The name the part shows in place of its own, as a brush studio row does under its section's heading; `undefined`
+   * keeps the part's own. Parts without a name ignore it.
+   */
+  label?: string;
 };
 
 /**

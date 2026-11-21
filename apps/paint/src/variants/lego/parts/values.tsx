@@ -720,8 +720,13 @@ function valueNeeds(services: LegoServices, frame: PartBinding, channel: ValueCh
 
   return {
     id: channel.id,
-    label: channel.label,
-    short: channel.short,
+    /** The frame's name for the part, as a studio row's, else the channel's. */
+    get label() {
+      return frame.label ?? channel.label;
+    },
+    get short() {
+      return frame.label ?? channel.short;
+    },
     unit: channel.unit,
     get span() {
       return frame.span;

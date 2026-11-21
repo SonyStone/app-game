@@ -306,6 +306,21 @@
   overflow: hidden;
 }
 
+/* A brush changed since it was saved: an accent dot, ringed in the tile's color, in the top right corner. */
+.presetModified {
+  position: absolute;
+  z-index: 2;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--lego-accent);
+  box-shadow: 0 0 0 2px var(--lego-tile);
+  pointer-events: none;
+}
+
 /* The brush glyph on a sample shown without its name (see `BrushMark`), on a badge of the tile's color. */
 .presetMark {
   position: absolute;
@@ -575,6 +590,62 @@
   header {
     min-height: var(--lego-pitch);
     padding: 0 0 0 8px;
+  }
+}
+
+/* The eraser's mode over the brush sets while the eraser is the tool: its label and a switch, lit while on. */
+.eraserMode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--lego-hit-size);
+  margin: 0 8px 4px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: var(--settings-list-radius, var(--lego-r-tile));
+  background: rgb(255 255 255 / 0.07);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+
+  &:disabled {
+    color: rgb(255 255 255 / 0.35);
+    cursor: default;
+  }
+}
+
+.eraserSwitch {
+  position: relative;
+  flex: none;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(255 255 255 / 0.25);
+  transition: background 160ms;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    corner-shape: round;
+    background: #ffffff;
+    transition: translate 160ms;
+  }
+
+  .eraserMode[aria-checked='true'] > & {
+    background: var(--lego-accent);
+
+    &::after {
+      translate: 18px 0;
+    }
   }
 }
 
@@ -2150,9 +2221,10 @@ a.editButton {
   --studio-row-top: var(--studio-row-top-radius, var(--lego-r-tile));
   --studio-row-bottom: var(--studio-row-bottom-radius, var(--lego-r-tile));
 
+  /* At least a finger's hit size, as the toggles beside it, whatever the board's cell; the grip as wide. */
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
-  height: var(--lego-cell);
+  grid-template-columns: var(--lego-hit-size) minmax(0, 1fr);
+  height: max(var(--lego-cell), var(--lego-hit-size));
   border-radius: var(--studio-row-top) var(--studio-row-top) var(--studio-row-bottom) var(--studio-row-bottom);
   background: var(--lego-tile);
   color: var(--lego-ink);
@@ -2220,22 +2292,32 @@ a.editButton {
   }
 }
 
-.studioGripDots {
-  width: 12px;
-  height: 20px;
-  background: radial-gradient(circle, var(--lego-quiet) 1.6px, transparent 2.2px) 0 0 / 6px 6.67px;
+.studioGripPin {
+  display: grid;
+  color: var(--lego-quiet);
 }
 
-.studioSetting[data-on-board] .studioGripDots {
-  background-image: radial-gradient(circle, var(--lego-accent) 1.6px, transparent 2.2px);
+.studioSetting[data-on-board] .studioGripPin {
+  color: var(--lego-accent);
 }
 
-.studioSetting:has(.valueState[data-inactive]) .studioGripDots {
-  background-image: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--lego-plate-ink) 50%, transparent) 1.6px,
-    transparent 2.2px
-  );
+.studioSetting:has(.valueState[data-inactive]) .studioGripPin {
+  color: color-mix(in srgb, var(--lego-plate-ink) 50%, transparent);
+}
+
+/* The studio's one-time hint over a category's rows: how to keep a setting on the board, its pin drawn inline. */
+.studioPinHint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 8px;
+  color: var(--studio-column-quiet, rgb(255 255 255 / 0.62));
+  font-size: 13px;
+
+  svg {
+    color: var(--lego-accent);
+  }
 }
 
 /*
