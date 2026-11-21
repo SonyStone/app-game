@@ -3,6 +3,7 @@ import { readPsd, readPsdSource, type PsdNewDocumentContext } from '@app-game/ps
 import { createBrushResources } from '@app-game/abr-paint/resources';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createRendererDouble } from '../tests/fixtures/rendererDouble';
+import { defaultBrush } from './brush';
 import { defaultCamera } from './camera';
 import type { PaintModules, PaintStorage } from './composition/contracts';
 import { defineDocumentEdit, type DocumentEdit } from './composition/documentEdit';
@@ -238,9 +239,9 @@ it('commits a module edit as one undo step and leaves the document unchanged whe
     },
     async run({ active, readTile }, command) {
       if (command === 'fail') throw new Error('Nothing to fill here.');
-      const before = active.tiles.get('0,0');
+      const before = active!.tiles.get('0,0');
       expect(before === undefined || (await readTile(before)).length === TILE_BYTES).toBe(true);
-      return { changes: [{ layerId: active.id, key: '0,0', before, after: new Uint8Array(TILE_BYTES).fill(255) }] };
+      return { changes: [{ layerId: active!.id, key: '0,0', before, after: new Uint8Array(TILE_BYTES).fill(255) }] };
     }
   });
   const { runtime, document, events, storage, waitFor } = await start({ edits: [paint] });
@@ -270,11 +271,11 @@ it('amends an interactive edit into one undo step, replies to requests and refus
     parse: (input: unknown) => input as number,
     async run({ active, state }, alpha) {
       const session = state.get() as { before: TileData | undefined } | undefined;
-      const before = session ? session.before : active.tiles.get('0,0');
+      const before = session ? session.before : active!.tiles.get('0,0');
       // A zero alpha ends the session: its step is removed.
       state.set(alpha ? { before } : undefined);
       const after = new Uint8Array(TILE_BYTES).fill(alpha);
-      const changes = alpha ? [{ layerId: active.id, key: '0,0', before, after }] : [];
+      const changes = alpha ? [{ layerId: active!.id, key: '0,0', before, after }] : [];
       return { changes, amend: session !== undefined, reply: { alpha } };
     }
   });
@@ -322,7 +323,7 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
       if (command === 'lift') {
         const bounds = { left: 0, top: 0, right: 2, bottom: 2 };
         floating.show({
-          layerId: active.id,
+          layerId: active!.id,
           bounds,
           pixels: new Uint8Array(16),
           matrix: [1, 0, 0, 0, 1, 0, 0, 0, 1],
@@ -335,7 +336,7 @@ it('shows floating pixels of an edit and clears them after its result, keeping t
         if (command === 'fail') throw new Error('The transform is too thin to draw.');
         if (command === 'drop') {
           const after = new Uint8Array(TILE_BYTES).fill(255);
-          return { changes: [{ layerId: active.id, key: '0,0', before: undefined, after }] };
+          return { changes: [{ layerId: active!.id, key: '0,0', before: undefined, after }] };
         }
       }
 
@@ -387,20 +388,20 @@ it('shows an edit preview in place of layer tiles without changing the document,
       seen.push(history.map(({ id }) => id));
       revisions.push(revision);
       if (command === 'paint') {
-        return { changes: [{ layerId: active.id, key: '0,0', before: active.tiles.get('0,0'), after: red }] };
+        return { changes: [{ layerId: active!.id, key: '0,0', before: active!.tiles.get('0,0'), after: red }] };
       }
 
       if (command === 'show') {
         preview.show([
-          { layerId: active.id, key: '0,0', pixels: blue },
-          { layerId: active.id, key: '1,0', pixels: undefined }
+          { layerId: active!.id, key: '0,0', pixels: blue },
+          { layerId: active!.id, key: '1,0', pixels: undefined }
         ]);
         return { changes: [] };
       }
 
       preview.clear();
       return command === 'apply'
-        ? { changes: [{ layerId: active.id, key: '0,0', before: active.tiles.get('0,0'), after: blue }] }
+        ? { changes: [{ layerId: active!.id, key: '0,0', before: active!.tiles.get('0,0'), after: blue }] }
         : { changes: [] };
     }
   });
@@ -461,7 +462,7 @@ it('shows an edit preview in place of layer tiles without changing the document,
 async function readSavedTile(storage: PaintStorage & { save: ReturnType<typeof vi.fn> }, layerId: string, key: string) {
   const snapshot = storage.save.mock.lastCall![0] as ReturnType<typeof snapshotDocument>;
   const layer = snapshot.layers.find((candidate) => candidate.id === layerId)!;
-  const data = layer.tiles.find((tile) => tile.key === key)!.pixels;
+  const data = ('tiles' in layer ? layer.tiles : []).find((tile) => tile.key === key)!.pixels;
   return unpackTile(data instanceof Uint8Array ? data : await storage.read(data));
 }
 
@@ -470,7 +471,9 @@ it('reports the layers with paint in the view and in watched regions', async () 
     id: 'paint-tile',
     parse: (input: unknown) => input as string,
     async run({ active }, key) {
-      return { changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(255) }] };
+      return {
+        changes: [{ layerId: active!.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(255) }]
+      };
     }
   });
   const { runtime, document, events, waitFor } = await start({ edits: [paint] });
@@ -546,7 +549,9 @@ it('lists and reads the tile versions a live viewer lacks, and a viewer applies 
     id: 'paint-tile',
     parse: (input: unknown) => input as string,
     async run({ active }, key) {
-      return { changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }] };
+      return {
+        changes: [{ layerId: active!.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }]
+      };
     }
   });
   const author = await start({ edits: [paint] });
@@ -617,7 +622,7 @@ it('sends layer thumbnails while asked for, again after edits, and stops when as
       parse: (input: unknown) => input as string,
       async run({ active }, key) {
         return {
-          changes: [{ layerId: active.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }]
+          changes: [{ layerId: active!.id, key, before: undefined, after: new Uint8Array(TILE_BYTES).fill(200) }]
         };
       }
     });
@@ -710,3 +715,73 @@ async function start(
 
   return { runtime, renderer, storage, document, events, waitFor };
 }
+
+it('ignores strokes and refuses pixel edits while a folder is active, saying so in its state', async () => {
+  const probe = defineDocumentEdit({
+    id: 'probe',
+    parse: (input: unknown) => input,
+    async run({ active }) {
+      if (!active) throw new Error('Select a layer to fill.');
+      return { changes: [] };
+    }
+  });
+  const { runtime, document, events, waitFor } = await start({ edits: [probe] });
+  const latestState = () => events.filter((event) => event.type === 'state').at(-1);
+  const errors = () => events.filter((event) => event.type === 'error').map((event) => event.message);
+  const sample = { x: 10, y: 10, pressure: 1, time: 0 };
+
+  // On a raster layer a stroke starts, here failing for want of a registered brush engine.
+  runtime.send({ type: 'begin', brush: defaultBrush(), samples: [sample] });
+  await waitFor(() => errors().some((message) => message.includes('not registered')));
+
+  runtime.send({ type: 'layer', action: { type: 'add-group' } });
+  await waitFor(() => latestState()?.type === 'state' && latestState()!.document.nodes.length === 2);
+  const state = latestState()!;
+  expect(state.type === 'state' && state.document.activeId).toBe(document.activeId);
+  expect(state.type === 'state' && state.document.activePaintable).toBe(false);
+
+  const before = errors().length;
+  runtime.send({ type: 'begin', brush: defaultBrush(), samples: [sample] });
+  runtime.send({ type: 'end' });
+  runtime.send({ type: 'selection', action: 'delete', layerId: document.activeId, revision: document.revision });
+  await waitFor(() => errors().length === before + 1);
+  expect(errors().at(-1)).toContain('Select a layer');
+  runtime.send({ ...probe.command('x'), requestId: 'probe' });
+  await waitFor(() => events.some((event) => event.type === 'edited'));
+  expect(events.find((event) => event.type === 'edited')).toMatchObject({
+    result: { ok: false, error: 'Select a layer to fill.' }
+  });
+  // The ignored stroke left nothing to undo but the folder.
+  expect(document.state().historyStates).toHaveLength(2);
+});
+
+it('edits folders through layer commands, one undo step each, releasing deleted layers on the GPU', async () => {
+  const openStorage = createMemoryStorage();
+  const { runtime, renderer, document, storage, waitFor } = await start({ openStorage });
+  const base = document.activeId;
+  runtime.send({ type: 'layer', action: { type: 'group', ids: [base] } });
+  await waitFor(() => document.activeNode.kind === 'group');
+  const folder = document.activeId;
+  runtime.send({ type: 'layer', action: { type: 'add', place: { parentId: folder, anchorId: base, side: 'above' } } });
+  await waitFor(() => document.layers.length === 2);
+  const inner = document.activeId;
+  runtime.send({ type: 'layer', action: { type: 'add' } });
+  await waitFor(() => document.layers.length === 3);
+  runtime.send({ type: 'layer', action: { type: 'relocate', id: inner, parentId: null, side: 'below' } });
+  await waitFor(() => document.nodes[0]!.id === inner);
+  runtime.send({ type: 'undo' });
+  await waitFor(() => document.node(inner)?.parentId === folder);
+
+  runtime.send({ type: 'layer', action: { type: 'delete', id: folder } });
+  await waitFor(() => !document.node(folder));
+  expect(renderer.releaseLayer.mock.calls.map(([id]) => id).sort()).toEqual([base, inner].sort());
+  runtime.send({ type: 'undo' });
+  await waitFor(() => !!document.node(folder));
+
+  runtime.send({ type: 'save' });
+  await waitFor(() => storage.save.mock.calls.length > 0);
+  const reopened = await start({ openStorage });
+  expect(reopened.document.nodes.map((node) => [node.id, node.kind, node.parentId])).toEqual(
+    document.nodes.map((node) => [node.id, node.kind, node.parentId])
+  );
+});

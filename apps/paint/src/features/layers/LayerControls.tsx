@@ -1,4 +1,4 @@
-import type { LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
 import { createEffect, createMemo, For, Show, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
@@ -61,7 +61,7 @@ export function LayerList(props: {
 }
 
 /** Commits nonempty names on blur or Enter, preserving the original on empty input. */
-export function LayerName(props: { layer: LayerInfo; onAction: (action: LayerAction) => void; class?: string }) {
+export function LayerName(props: { layer: RasterInfo; onAction: (action: LayerAction) => void; class?: string }) {
   return (
     <input
       class={props.class ?? styles.layerName}
@@ -156,7 +156,7 @@ export function layerCommand(command: LayerCommand, state: DocumentState, ready:
  * Space or Enter). Rows are keyed by layer id, so the drag registration keeps the first id.
  */
 function LayerRow(props: {
-  layer: LayerInfo;
+  layer: RasterInfo;
   thumbnail?: string;
   selected: boolean;
   ready: boolean;

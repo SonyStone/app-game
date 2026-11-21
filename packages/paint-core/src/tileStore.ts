@@ -1,7 +1,16 @@
 import { createTaskQueue, unwrapResult } from './asyncResult';
 import type { Camera } from './camera';
 import { openDrawingFolder, type DrawingFolder } from './drawingFolder';
-import { restoreDocument, restoreHandoff, restoreView, snapshotView, type EngineHandoff, type SavedDocument } from './storage';
+import {
+  checkpointDocument,
+  restoreDocument,
+  restoreHandoff,
+  restoreView,
+  savedTiles,
+  snapshotView,
+  type EngineHandoff,
+  type SavedDocument
+} from './storage';
 import { compressTile, restoreTile } from './tileCodec';
 import { packTile, TILE_BYTES, type TileData, type TileReference } from './tilePixels';
 
@@ -335,15 +344,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
      * Rejects failed transactions; dirty pixels stay pinned for a later retry.
      */
     save(snapshot: SavedDocument, handoff?: EngineHandoff) {
-      const checkpoint = {
-        ...snapshot,
-        version: 3,
-        overviewKeys: [...protectedOverviews],
-        layers: snapshot.layers.map((layer) => ({
-          ...layer,
-          tiles: layer.tiles.map((tile) => ({ ...tile, pixels: capture(tile.pixels) }))
-        }))
-      };
+      const checkpoint = { ...checkpointDocument(snapshot, capture), overviewKeys: [...protectedOverviews] };
       return flush(checkpoint, handoff);
     },
     /** Persists staged imports without replacing the current drawing checkpoint. Rejects failed transactions. */
@@ -427,9 +428,7 @@ export async function createTileStore(name: string, budget = 64 * 1048576) {
                 total -= record.bytes;
               }
 
-              for (const layer of saved?.layers ?? [])
-                for (const tile of layer.tiles)
-                  if (!(tile.pixels instanceof Uint8Array)) keep.add(tile.pixels.storageId);
+              for (const id of checkpointTiles(saved)) keep.add(id);
               const request = tx.objectStore('tiles').openKeyCursor();
               request.onsuccess = () => {
                 const cursor = request.result;
@@ -611,15 +610,12 @@ export async function readLinkedFolder(name: string): Promise<FileSystemDirector
   }
 }
 
-/** The version ids a saved checkpoint refers to. */
+/** The version ids a saved checkpoint refers to; folders refer to none. */
 function checkpointTiles(checkpoint: unknown): string[] {
-  const layers = (checkpoint as { layers?: { tiles?: { pixels?: unknown }[] }[] }).layers ?? [];
-  return layers.flatMap((layer) =>
-    (layer.tiles ?? []).flatMap(({ pixels }) =>
-      pixels && typeof pixels === 'object' && 'storageId' in pixels && typeof pixels.storageId === 'string'
-        ? [pixels.storageId]
-        : []
-    )
+  return [...savedTiles(checkpoint)].flatMap((pixels) =>
+    pixels && typeof pixels === 'object' && 'storageId' in pixels && typeof pixels.storageId === 'string'
+      ? [pixels.storageId]
+      : []
   );
 }
 

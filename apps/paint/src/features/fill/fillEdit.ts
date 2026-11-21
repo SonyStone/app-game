@@ -1,4 +1,4 @@
-import { defineDocumentEdit } from '@app-game/paint-core/composition/documentEdit';
+import { defineDocumentEdit, editedLayer } from '@app-game/paint-core/composition/documentEdit';
 import type { TileChange } from '@app-game/paint-core/document';
 import { areaCoverage, isSelected } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
@@ -17,7 +17,8 @@ export const fillEdit = defineDocumentEdit({
   id: 'fill',
   parse: (input: unknown) => fillCommandSchema.parse(input),
   async run(context, command) {
-    if (!context.active.visible) {
+    const layer = editedLayer(context);
+    if (!layer.visible) {
       throw new Error('Show the active layer before filling it.');
     }
 
@@ -47,7 +48,7 @@ export const fillEdit = defineDocumentEdit({
     const color = parseColor(command.color);
     const changes: TileChange[] = [];
     for (const key of areaTiles(area)) {
-      const before = context.active.tiles.get(key);
+      const before = layer.tiles.get(key);
       const after = fillTile(
         key,
         before && (await context.readTile(before)),
@@ -55,10 +56,10 @@ export const fillEdit = defineDocumentEdit({
         area,
         color,
         command.opacity,
-        context.active.alphaLock
+        layer.alphaLock
       );
       if (after) {
-        changes.push({ layerId: context.active.id, key, before, after });
+        changes.push({ layerId: layer.id, key, before, after });
       }
     }
 

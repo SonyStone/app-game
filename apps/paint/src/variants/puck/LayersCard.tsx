@@ -1,4 +1,4 @@
-import type { BlendMode, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { BlendMode, LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { createSignal, For, Show, untrack } from 'solid-js';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import css from './cluster.module.css';
@@ -23,7 +23,7 @@ import { percentSetting } from './values';
 export function LayersCard(props: {
   box: Box;
   /** The layers, bottom first, as the document lists them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
   activeId: string;
   /** Layer commands wait while the engine is not ready. */
   ready: boolean;
@@ -304,8 +304,8 @@ export function LayersCard(props: {
  * a drag lifts, so that a drag is one undo step.
  */
 function BlendSheet(props: {
-  layer: LayerInfo;
-  below: LayerInfo | undefined;
+  layer: RasterInfo;
+  below: RasterInfo | undefined;
   act: (action: LayerAction) => void;
   back: () => void;
 }) {

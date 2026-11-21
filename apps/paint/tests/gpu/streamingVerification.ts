@@ -96,7 +96,8 @@ export async function verifyStreaming(report: (message: string) => void) {
     );
     // The pixels cross the old 256 MiB document limit; the file itself is far smaller, its tiles compressed.
     const pixelBytes = saved().layers.reduce(
-      (sum, layer) => sum + layer.tiles.reduce((bytes, tile) => bytes + tile.pixels.byteLength, 0),
+      (sum, layer) =>
+        sum + ('tiles' in layer ? layer.tiles : []).reduce((bytes, tile) => bytes + tile.pixels.byteLength, 0),
       0
     );
     assert(pixelBytes > 256 * 1048576, 'Large-file regression did not cross the old document limit');

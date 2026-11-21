@@ -80,8 +80,11 @@ it('shows the past only in the preview, never in the document or its autosave', 
   stroke(document, 10, 10, blue);
   const saved = () =>
     JSON.stringify(
-      snapshotDocument(document.layers, document.active.id, defaultCamera()).layers.map(({ tiles }) =>
-        tiles.map(({ key, pixels }) => [key, [...unpackTile(pixels as TileData).subarray(0, 64)]])
+      snapshotDocument(document.layers, document.active.id, defaultCamera()).layers.map((layer) =>
+        ('tiles' in layer ? layer.tiles : []).map(({ key, pixels }) => [
+          key,
+          [...unpackTile(pixels as TileData).subarray(0, 64)]
+        ])
       )
     );
   const before = saved();

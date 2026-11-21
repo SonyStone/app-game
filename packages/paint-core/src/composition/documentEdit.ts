@@ -1,4 +1,4 @@
-import type { HistoryStep, Layer, LayerInfo, TileChange } from '../document';
+import type { HistoryStep, Layer, RasterInfo, TileChange } from '../document';
 import type { FloatingPixels } from '../gpu/floatingPixels';
 import type { SelectionMask } from '../selectionMask';
 import type { TileData } from '../tilePixels';
@@ -45,12 +45,30 @@ export function defineDocumentEdit<const Id extends string, Command>(definition:
   };
 }
 
+/**
+ * The active layer of `context`, for an edit that changes or reads its pixels. Throws, asking the user to select a
+ * layer, while a folder is active: a folder has no pixels of its own.
+ */
+export function editedLayer(context: Pick<DocumentEditContext, 'active'>): Layer {
+  if (!context.active) {
+    throw new Error('Select a layer: a folder has no pixels of its own to edit.');
+  }
+
+  return context.active;
+}
+
 /** What an edit reads: the document's layers and a reader for their tiles. */
 export type DocumentEditContext = {
-  /** Current layers, bottom to top. Tiles are immutable; replace them through the returned changes. */
+  /**
+   * Current raster layers, bottom to top, as they show on the canvas (see `createDocument`'s `layers`). Tiles are
+   * immutable; replace them through the returned changes.
+   */
   layers: readonly Layer[];
-  /** The selected layer, among `layers`. */
-  active: Layer;
+  /**
+   * The selected layer, among `layers`; undefined while a folder is selected, which has no pixels: an edit that
+   * changes or reads the active layer's pixels then throws, telling the user to select a layer.
+   */
+  active: Layer | undefined;
   /** Unpacked premultiplied sRGB RGBA8 pixels of a tile, reading paged-out tiles from storage. */
   readTile: (pixels: TileData) => Promise<Uint8Array>;
   /** Whether the document blends its layers in linear light; see `mergeTilePixels`. */
@@ -122,7 +140,8 @@ export type DocumentEditContext = {
 export type PreviewTile = { layerId: string; key: string; pixels: Uint8Array | undefined };
 
 /**
- * The changes of an edit. `layer` adds a new layer above the active one and selects it; changes may then refer to its
+ * The changes of an edit. `layer` adds a new layer right above the active one, or the active folder, in the same folder,
+ * and selects it; changes may then refer to its
  * id. A change's `after` holds unpacked RGBA8 pixels, or `undefined` to clear the tile. `selection` replaces the
  * selection, as selection tools and a transform of selected pixels do; it is not part of the undo step.
  *
@@ -132,7 +151,7 @@ export type PreviewTile = { layerId: string; key: string; pixels: Uint8Array | u
  */
 export type DocumentEditResult = {
   changes: TileChange[];
-  layer?: LayerInfo;
+  layer?: RasterInfo;
   amend?: boolean;
   reply?: unknown;
   selection?: SelectionMask;

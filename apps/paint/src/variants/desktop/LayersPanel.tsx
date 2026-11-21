@@ -1,4 +1,4 @@
-import type { BlendMode, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { BlendMode, LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { createSignal, For, Show } from 'solid-js';
 import { pressHandlers } from '../../shared/ui/pressHandlers';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
@@ -17,7 +17,7 @@ import styles from './panels.module.css';
  */
 export function LayersPanel(props: {
   /** The layers, bottom first, as the document lists them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
   activeId: string;
   /** Layer commands wait while the engine is not ready. */
   ready: boolean;

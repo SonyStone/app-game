@@ -4,21 +4,29 @@ import { compressTile, restoreTile } from './tileCodec';
 import { packTile, TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
 /**
- * Portable binary drawing, version 4: the drawing's tiles, each stored once however many layers share it and
+ * Portable binary drawing, version 5: the drawing's tiles, each stored once however many layers share it and
  * compressed by `compressTile`, then the metadata with an index of the tiles, then a trailer locating the metadata.
- * Tiles are read one at a time through `read`; each Blob part holds one tile, so no whole-document buffer is built.
+ * The metadata is a version 4 document (`SavedDocument`): its `layers` are the layer tree's nodes, raster layers
+ * listing their tiles by index and folders listing none. Version 4 files had the same layout with a flat list of raster
+ * layers. Tiles are read one at a time through `read`; each Blob part holds one tile, so no whole-document buffer is
+ * built.
  */
 export async function writePaintFile(
   snapshot: SavedDocument,
   read: (data: TileData) => Promise<Uint8Array>
 ): Promise<Blob> {
-  const parts: BlobPart[] = [MAGIC_V4];
+  const parts: BlobPart[] = [MAGIC_V5];
   const index: { offset: number; length: number; byteLength: number }[] = [];
   /** Index entries by tile version: a stored reference's id, or the packed pixels themselves. */
   const entries = new Map<unknown, number>();
-  let offset = MAGIC_V4.byteLength;
+  let offset = MAGIC_V5.byteLength;
   const layers = [];
   for (const layer of snapshot.layers) {
+    if (layer.kind === 'group') {
+      layers.push(layer);
+      continue;
+    }
+
     const tiles = [];
     for (const tile of layer.tiles) {
       const identity = tile.pixels instanceof Uint8Array ? tile.pixels : tile.pixels.storageId;
@@ -39,7 +47,7 @@ export async function writePaintFile(
     layers.push({ ...layer, tiles });
   }
 
-  const header = new TextEncoder().encode(JSON.stringify({ ...snapshot, version: 4, layers, tiles: index }));
+  const header = new TextEncoder().encode(JSON.stringify({ ...snapshot, version: 5, layers, tiles: index }));
   if (header.byteLength > MAX_HEADER) {
     throw new Error('Drawing metadata is too large to export.');
   }
@@ -63,8 +71,13 @@ export async function readPaintFile(
   capture: (pixels: Uint8Array) => Promise<TileData> = async (pixels) => pixels
 ): Promise<ReturnType<typeof restoreDocument>> {
   const prefix = new Uint8Array(await file.slice(0, 12).arrayBuffer());
-  if (MAGIC_V4.every((byte, index) => prefix[index] === byte)) {
-    return readVersion4(file, capture);
+  for (const [version, magic] of [
+    [4, MAGIC_V4],
+    [5, MAGIC_V5]
+  ] as const) {
+    if (magic.every((byte, index) => prefix[index] === byte)) {
+      return readIndexed(file, version, capture);
+    }
   }
 
   if (!MAGIC_V3.every((byte, index) => prefix[index] === byte)) {
@@ -94,8 +107,11 @@ export async function readPaintFile(
   return drawing;
 }
 
-/** Reads a version 4 drawing: the trailer, the metadata and its tile index, then each indexed tile once. */
-async function readVersion4(file: Blob, capture: (pixels: Uint8Array) => Promise<TileData>) {
+/**
+ * Reads a version 4 or 5 drawing: the trailer, the metadata and its tile index, then each indexed tile once. Version
+ * 4 metadata is a flat version 3 document, version 5 a version 4 one with folders.
+ */
+async function readIndexed(file: Blob, version: 4 | 5, capture: (pixels: Uint8Array) => Promise<TileData>) {
   if (file.size < MAGIC_V4.byteLength + TRAILER_BYTES) throw new Error('Truncated drawing.');
   const trailer = new DataView(await file.slice(file.size - TRAILER_BYTES).arrayBuffer());
   const end = new Uint8Array(trailer.buffer, 12, 4);
@@ -106,6 +122,7 @@ async function readVersion4(file: Blob, capture: (pixels: Uint8Array) => Promise
     throw new Error('Invalid drawing header size.');
   const value: unknown = JSON.parse(await file.slice(offset, offset + length).text());
   const indexed = indexSchema.parse(value);
+  if (indexed.version !== version) throw new Error('Unsupported binary drawing version.');
   for (const [entry, tile] of indexed.tiles.entries()) {
     const previous = indexed.tiles[entry - 1];
     if (
@@ -115,22 +132,29 @@ async function readVersion4(file: Blob, capture: (pixels: Uint8Array) => Promise
       throw new Error('Truncated or oversized drawing payload.');
   }
 
-  // Validated as a version 3 checkpoint whose tiles are references, then filled in from the index.
+  // Validated as a checkpoint whose tiles are references, then filled in from the index.
+  const saved = (value as { layers: { id?: unknown }[] }).layers;
   const drawing = restoreDocument({
     ...(value as object),
-    version: 3,
+    version: version === 4 ? 3 : 4,
     layers: indexed.layers.map((layer, index) => ({
-      ...(value as { layers: object[] }).layers[index],
-      tiles: layer.tiles.map(({ key, tile }) => ({
-        key,
-        pixels: { storageId: PLACEHOLDER_ID, byteLength: indexed.tiles[tile]!.byteLength }
-      }))
+      ...saved[index],
+      ...(layer.tiles
+        ? {
+            tiles: layer.tiles.map(({ key, tile }) => ({
+              key,
+              pixels: { storageId: PLACEHOLDER_ID, byteLength: indexed.tiles[tile]!.byteLength }
+            }))
+          }
+        : {})
     }))
   });
+  // Restoring puts the nodes in canonical order, so the index is matched by id, which it has checked are unique.
+  const tilesOf = new Map(indexed.layers.map((layer, index) => [saved[index]!.id, layer.tiles ?? []]));
   const readRange = createRangeReader(file, offset);
   const captured = new Map<number, TileData>();
-  for (const [index, layer] of drawing.layers.entries())
-    for (const { key, tile } of indexed.layers[index]!.tiles) {
+  for (const layer of drawing.layers)
+    for (const { key, tile } of tilesOf.get(layer.id)!) {
       let pixels = captured.get(tile);
       if (!pixels) {
         const { offset: start, length: size, byteLength } = indexed.tiles[tile]!;
@@ -167,10 +191,13 @@ function createRangeReader(file: Blob, limit: number) {
   };
 }
 
-/** The version 4 tile index and the layers' references into it; the rest is validated by `restoreDocument`. */
+/**
+ * The version 4 or 5 tile index and the layers' references into it; the rest is validated by `restoreDocument`. A
+ * folder of version 5 has no `tiles`.
+ */
 const indexSchema = z
   .object({
-    version: z.literal(4),
+    version: z.union([z.literal(4), z.literal(5)]),
     tiles: z.array(
       z.object({
         offset: z.number().int().nonnegative(),
@@ -178,14 +205,20 @@ const indexSchema = z
         byteLength: z.number().int().min(8).max(TILE_BYTES)
       })
     ),
-    layers: z.array(z.object({ tiles: z.array(z.object({ key: z.string(), tile: z.number().int().nonnegative() })) }))
+    layers: z.array(
+      z.object({ tiles: z.array(z.object({ key: z.string(), tile: z.number().int().nonnegative() })).optional() })
+    )
   })
-  .refine(({ tiles, layers }) => layers.every((layer) => layer.tiles.every(({ tile }) => tile < tiles.length)), {
-    message: 'A layer refers to a missing tile.'
-  });
+  .refine(
+    ({ tiles, layers }) => layers.every((layer) => (layer.tiles ?? []).every(({ tile }) => tile < tiles.length)),
+    {
+      message: 'A layer refers to a missing tile.'
+    }
+  );
 
 const MAGIC_V3 = new TextEncoder().encode('PAINT3\r\n');
 const MAGIC_V4 = new TextEncoder().encode('PAINT4\r\n');
+const MAGIC_V5 = new TextEncoder().encode('PAINT5\r\n');
 /** The metadata's offset (64 bits), its length (32 bits), then this end marker. */
 const TRAILER_MAGIC = new TextEncoder().encode('P4IX');
 const TRAILER_BYTES = 16;

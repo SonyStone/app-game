@@ -1,4 +1,4 @@
-import type { BlendMode, LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { BlendMode, LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { createSignal, For, Show } from 'solid-js';
 import { InfiniteIcon, type InfiniteIconName } from './icons';
 import styles from './LayerOptions.module.css';
@@ -13,7 +13,7 @@ import theme from './theme.module.css';
  * Paint's layers do not have.
  */
 export function LayerOptions(props: {
-  layer: LayerInfo;
+  layer: RasterInfo;
   /** The layer is the bottom one, so it has nothing to merge into. */
   bottom: boolean;
   /** The drawing has only this layer, which cannot be deleted. */

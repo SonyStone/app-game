@@ -1,4 +1,4 @@
-import type { LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { createSignal, For, Show } from 'solid-js';
 import { InfiniteIcon } from './icons';
 import { blendName, LayerOptions } from './LayerOptions';
@@ -24,7 +24,7 @@ import theme from './theme.module.css';
  */
 export function LayerPanel(props: {
   /** The layers, bottom first, as the engine reports them. */
-  layers: readonly LayerInfo[];
+  layers: readonly RasterInfo[];
   activeId: string;
   /** A thumbnail image of layer `id`, such as an object URL; the tile stays blank without one. */
   thumbnail?: (id: string) => string | undefined;

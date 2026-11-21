@@ -1,4 +1,4 @@
-import { createDocument, type LayerAction, type LayerInfo } from '@app-game/paint-core/document';
+import { createDocument, type LayerAction, type RasterInfo } from '@app-game/paint-core/document';
 import type { JSX } from '@solidjs/web';
 import { createSignal, untrack } from 'solid-js';
 import type { DocumentState } from '../features/layers';
@@ -37,7 +37,7 @@ export function SeededLayers(props: {
 }
 
 /** A layer of the test data, bottom first, as a paint-core layer without its id. */
-export type LayerSeed = Pick<LayerInfo, 'name'> & Partial<Pick<LayerInfo, 'visible' | 'alphaLock' | 'clipping'>>;
+export type LayerSeed = Pick<RasterInfo, 'name'> & Partial<Pick<RasterInfo, 'visible' | 'alphaLock' | 'clipping'>>;
 
 /** A paint-core document holding `layers`, bottom first, with the top one selected. */
 export function seededDocument(layers: readonly LayerSeed[]) {

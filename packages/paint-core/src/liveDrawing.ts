@@ -1,5 +1,5 @@
 import { TILE_SIZE } from './brush';
-import type { Layer, LayerInfo, TileChange } from './document';
+import type { Layer, RasterInfo, TileChange } from './document';
 import type { DocumentRect } from './layersInView';
 import { compressTile, restoreTile } from './tileCodec';
 import type { TileData, TileReference } from './tilePixels';
@@ -10,7 +10,7 @@ import type { TileData, TileReference } from './tilePixels';
  * author sends viewers only versions they lack, read with {@link readLiveTiles}.
  */
 export type LiveListing = {
-  layers: LayerInfo[];
+  layers: RasterInfo[];
   activeId: string;
   linearBlending: boolean;
   /** The tiles in the region, nearest to its center first. */
@@ -30,7 +30,7 @@ export type LiveTileBytes = { version: string; bytes: Uint8Array };
  * for a tile that was cleared. Tiles not listed stay as the viewer has them.
  */
 export type LiveState = {
-  layers: LayerInfo[];
+  layers: RasterInfo[];
   activeId: string;
   linearBlending: boolean;
   tiles: { layerId: string; key: string; bytes: Uint8Array | null }[];
@@ -38,6 +38,8 @@ export type LiveState = {
 
 /**
  * Lists `layers` and their tiles that touch `region`, at most `limit` of them, nearest to the region's center first.
+ * Folders are not shared: `layers` are the raster layers as they show (see `createDocument`'s `layers`), listed at
+ * the root, so a viewer gets a flat drawing that looks the same.
  * `capture` names each tile's pixels, as storage does (`PaintStorage.capture`). Returns the listing and the tile data
  * by version, for reading them.
  */
@@ -74,7 +76,7 @@ export function listLiveTiles(
   const kept = found.slice(0, limit);
   return {
     listing: {
-      layers: document.layers.map(({ tiles: _tiles, ...info }) => info),
+      layers: document.layers.map(({ tiles: _tiles, parentId: _parentId, ...info }) => info),
       activeId: document.activeId,
       linearBlending: document.linearBlending,
       tiles: kept.map(({ layerId, key, version }) => ({ layerId, key, version })),

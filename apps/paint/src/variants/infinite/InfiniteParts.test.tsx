@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import type { LayerAction, LayerInfo } from '@app-game/paint-core/document';
+import type { LayerAction, RasterInfo } from '@app-game/paint-core/document';
 import { render } from '@solidjs/web';
 import { createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -75,7 +75,7 @@ it('shows the tools menu with the entries Paint lacks disabled and runs the othe
 });
 
 it('selects a layer with a tap, opens the active one’s options with another and shows its badges', () => {
-  const layers: LayerInfo[] = [
+  const layers: RasterInfo[] = [
     { id: 'a', name: 'Paper texture', visible: true, opacity: 1, blend: 'normal' },
     { id: 'b', name: 'Shadows', visible: true, opacity: 0.59, blend: 'multiply', clipping: true }
   ];

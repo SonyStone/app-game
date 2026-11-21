@@ -9,7 +9,9 @@ import { packTile, unpackTile, type TileData } from './tilePixels';
 
 /**
  * Exports `layers` as a layered Photoshop document of `region`, or of the bounds of everything drawn when it is
- * omitted. Every layer, hidden ones too, is cropped to its pixels within the canvas. The composite strictly renders
+ * omitted. `layers` are raster layers as they show, as `createDocument`'s `layers` has them: a drawing's folders are
+ * written flat, without section dividers, each layer inside a hidden folder hidden, which composites the same as the
+ * folders do (they are Pass Through at full strength). Every layer, hidden ones too, is cropped to its pixels within the canvas. The composite strictly renders
  * the serialized layers with Photoshop's byte opacity and the document's `linearBlending` setting. Photoshop's
  * application preference must match that setting when recompositing the file. A canvas
  * over 30,000 pixels on a side is written as PSB. Throws when there is nothing to export or the canvas is larger than a
@@ -118,15 +120,17 @@ export async function isPsdFile(file: Blob) {
 }
 
 /**
- * Reads a Photoshop document as a drawing: its layers in order, the canvas's top-left corner at the document origin,
- * the top layer active, and a camera that fits the canvas into `view`. `capture` stores each tile, as for
- * `readPaintFile`. Throws `readPsd`'s errors for documents it cannot open.
+ * Reads a Photoshop document as a drawing: its raster layers in order, flat at the root, the canvas's top-left corner
+ * at the document origin, the top layer active, and a camera that fits the canvas into `view`. `capture` stores each
+ * tile, as for `readPaintFile`. Throws `readPsd`'s errors for documents it cannot open.
  */
 export async function readPsdFile(
   file: Blob,
   view: ViewSize,
   capture: (pixels: Uint8Array) => Promise<TileData> = async (pixels) => pixels
 ): Promise<{
+  /** The layer tree: `layers` at the root, as Photoshop groups do not open as folders yet. */
+  nodes: Layer[];
   layers: Layer[];
   activeId: string;
   camera: Camera;
@@ -157,6 +161,7 @@ export async function readPsdFile(
 
   const zoom = Math.max(0.05, Math.min(1, (0.9 * view.width) / psd.width, (0.9 * view.height) / psd.height));
   return {
+    nodes: layers,
     layers,
     activeId: layers.at(-1)!.id,
     camera: { x: psd.width / 2, y: psd.height / 2, zoom, angle: 0, mirrored: false },
