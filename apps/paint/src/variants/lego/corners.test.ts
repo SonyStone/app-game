@@ -88,18 +88,13 @@ it('scales every corner alike for squircles, after the distances are taken off a
 });
 
 /** The LEGO stylesheets. */
-const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase', 'OptionsSheet'];
+const sheets = ['LegoStudio', 'LayerParts', 'FloatingGrip', 'FileMenu', 'PartsShowcase', 'OptionsSheet', 'PartsTray'];
 
 it('leaves no fixed corner radius in the LEGO stylesheets but circles and pills', () => {
   const fixed = sheets
     .map(stylesheet)
     .flatMap((css) => [...css.matchAll(/border-radius:\s*([^;]+);/g)].map((match) => match[1]!))
-    .filter(
-      (value) =>
-        !/var\(--lego-r|var\(--studio-row-|inherit|^50%$|^999px$|^0$|^2px$|calc\(18px \/ var\(--card-scale\)\)/.test(
-          value
-        )
-    );
+    .filter((value) => !/var\(--lego-r|var\(--studio-row-|inherit|^50%$|^999px$|^0$|^2px$/.test(value));
 
   expect(fixed).toEqual([]);
 });

@@ -1,7 +1,9 @@
 import { createEventListener } from '@solid-primitives/event-listener';
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, untrack } from 'solid-js';
 import type { PaintSession } from '../../features/session';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import {
   cellGap,
   findPart,
@@ -33,8 +35,6 @@ import {
   type Span
 } from './board';
 import type { createBoard } from './createBoard';
-import type { createSheet } from './createSheet';
-import { createTwoFingerSheet } from './createTwoFingerSheet';
 import { FloatingGrip } from './FloatingGrip';
 import { joinsAttribute, panelEdges, partEdges, partJoins, sameCells } from './fusion';
 import { useGrid } from './grid';
@@ -50,63 +50,57 @@ import { SpawnMenu } from './SpawnMenu';
 import { canDropParts, openChain, visiblePanels } from './windows';
 
 /**
- * The board over the drawing: its panels, and in edit mode the studs, the box of parts and kits, and the drags that
- * change them. While editing the drawing takes no strokes. The box is a sheet pulled up from the bottom (see
- * `PartsTray`), the drawing shrinking to a card above it, but whatever is carried off it is placed at full size: the
- * sheet sinks to a put-away strip and the card springs back while it lasts, and a part taken from the box and placed
- * on the board closes it, as Android's widget picker does; held over the strip a while, the sheet rises again. What
- * is carried from the board leaves an open sheet as it is, to drop it on the kits or the parts; a board panel carried
- * onto the sheet becomes the block of its parts. Dropped on the box's kits, a part, group or panel from the board is
- * kept as a kit and stays where it was.
+ * The board over the drawing, always at 1:1 scale: its panels, and in edit mode the studs, the floating draggable
+ * Edit bar, the modal Parts catalog, and the drags that arrange them. While editing, the drawing takes no strokes.
  *
- * While editing, a part dragged anywhere lifts and follows the pointer: over a panel, or touching one by an edge, it
- * takes the nearest cell and pushes the parts in its way aside, which also grows the panel; panels keep still on
- * screen until the drag ends, even at the view's edge. Over the bare drawing it starts a panel of its own; over the
- * box it is put away. A kit from the box lands the same way, as one block of its parts.
- * A tap selects a part; the one selected part alone shows a finger-sized handle on its corner, which sizes it in whole
- * cells, pushing neighbours right and down. Dragging across the bare drawing draws a band to select parts on the
- * board. A bar over any selection puts it away, duplicates it, keeps it as a kit and, for one part with several looks,
- * opens their chooser. A panel dragged by its rim moves freely.
+ * Outside edit mode, holding still on any LEGO panel or part for `editLongPress` enters edit mode without interfering
+ * with drags on sliders, pickers, or floating panel grips. While editing, a compact `[ ⠿  ＋ Parts  Done ]` bar is
+ * placed via `freeSpot` so it covers no existing panel and can be dragged freely by its grip.
  *
- * A swatch owns a panel of its own, which lies beside it while open, like an Android folder: a tap opens and closes
- * it, while editing too, and a press elsewhere closes it (while editing, only a press on the bare drawing does, so
- * parts can be carried into it). Parts are carried into and out of it as into any panel; a new swatch comes with
- * the default one. Each drag shows its result while it lasts and is kept on lift. Outside edit mode parts simply work.
+ * Opening `Parts` shows the Sidebar catalog (`PartsTray`): dragging a part or kit out slides the catalog away via
+ * `data-away` to reveal the live 1:1 board with studs, and dropping it onto the board closes the catalog (cancelling
+ * or dropping on the top discard capsule brings the catalog back). Dragging an existing board part onto the top red
+ * "Drop to put away" capsule removes it from the board; `SelectionBar` also puts selections away, duplicates them,
+ * keeps them as kits, or chooses looks.
  *
- * A long press on the bare drawing or on a panel's free cells (or a right click) opens the `SpawnMenu` there; a part
- * tapped in it lands at the press, as if dropped there.
- *
- * Other surfaces lift new parts onto the board through `ref`'s `lift`, as the brush studio's rows do, in edit mode or
- * not. The board follows every drag with listeners on the window's capture phase, so a drag that began in a layer
- * keeping its pointer events to itself, as the studio's modal dialog does, is followed all the same; while a lifted
- * part is carried the plates show their studs.
+ * A long press on the bare drawing or a panel's free cells (or a right click) opens `SpawnMenu` there; a part tapped
+ * in it lands at the press. Other surfaces (such as the brush studio) lift new parts onto the board through `ref`'s
+ * `lift`, in edit mode or not.
  */
 export function BoardView(props: {
   board: ReturnType<typeof createBoard>;
   kits: ReturnType<typeof createKits>;
   session: Pick<PaintSession, 'size' | 'library' | 'brush'>;
   editing: boolean;
+  /** Whether the modal Parts catalog is open. */
+  partsOpen: boolean;
+  onPartsOpen: (open: boolean) => void;
+  /** Enters layout edit mode (e.g. from a long press on any live panel or part). */
+  onEnterEdit: () => void;
+  /** Exits layout edit mode (from the floating Edit bar's Done button). */
+  onExitEdit: () => void;
   /** The swatch whose panel is open; the panels of the swatches it lies in show too. */
   openPanel: string | undefined;
   onOpenPanel: (owner: string | undefined) => void;
   onPopup: (anchor: Element, popup: Popup) => void;
-  /** The box of parts' sheet; this sinks it while something is carried and closes it once a part is taken. */
-  sheet: ReturnType<typeof createSheet>;
   /** Receives the board's commands for other surfaces once it is made, and `undefined` when it is disposed. */
   ref?: (controls: BoardControls | undefined) => void;
 }) {
   const grid = useGrid();
   const [layer, setLayer] = createSignal<HTMLElement>();
-  const [box, setBox] = createSignal<HTMLElement>();
+  const [discardZone, setDiscardZone] = createSignal<HTMLElement>();
+  const [editBar, setEditBar] = createSignal<HTMLElement>();
+  const editBarMeasured = createElementSize(editBar);
   const [drag, setDrag] = createSignal<Drag>();
-  /** The kits shelf in the box, where a part, group or panel from the board is dropped to be kept as a kit. */
-  const [kitShelf, setKitShelf] = createSignal<HTMLElement>();
   /** The kit just kept, or the one a kept part or group already matched, lit for a moment; see `keepKit`. */
   const [flashKit, setFlashKit] = createSignal<string>();
   let flashTimer: ReturnType<typeof setTimeout> | undefined;
   onCleanup(() => clearTimeout(flashTimer));
-  /** The selected parts on the board, to carry together or keep as a kit. */
-  const [selected, setSelected] = createSignal<ReadonlySet<string>>(new Set());
+  /** The selected parts on the board, reset when leaving edit mode. */
+  const [selected, setSelected] = createSignal<ReadonlySet<string>>(() => {
+    void props.editing;
+    return new Set<string>();
+  });
   /** Whether the edit mode's hint still shows; it goes for good once something is selected. */
   const [hinted, setHinted] = createSignal(readHinted());
   createEffect(
@@ -123,28 +117,41 @@ export function BoardView(props: {
     }
   );
   /** The open spawn menu: where it was opened, and the pointer of the press while it is held. */
-  const [spawn, setSpawn] = createSignal<{ at: Point; held?: number }>();
+  const [spawn, setSpawn] = createSignal<{ at: Point; held?: number } | undefined>(() => {
+    void props.editing;
+    return undefined;
+  });
 
-  /**
-   * The view's size, which the board covers, where it lies on the page and how much it is scaled down there; the
-   * board's own pixels are the view's, unscaled.
-   */
+  /** The view's size, always 1:1 with the drawing, and where the board lies on the page. */
   const view = () => {
     const { width, height } = props.session.size();
     const rect = layer()?.getBoundingClientRect();
-    const scale = rect && width > 0 ? rect.width / width : 1;
-    return { left: rect?.left ?? 0, top: rect?.top ?? 0, width, height, scale };
+    return { left: rect?.left ?? 0, top: rect?.top ?? 0, width, height };
   };
-  /** `point` on the page in the view's pixels. */
+  /** `point` on the page in the board's 1:1 pixels. */
   const toView = (point: Point) => {
-    const { left, top, scale } = view();
-    return { x: (point.x - left) / scale, y: (point.y - top) / scale };
+    const { left, top } = view();
+    return { x: point.x - left, y: point.y - top };
   };
-  /** Where the layer the ghost, the box and the menu lie in starts on the page. */
+  /** Where the layer the ghost, edit bar and menus lie in starts on the page. */
   const overlay = () => {
     const rect = layer()?.parentElement?.getBoundingClientRect();
     return { x: rect?.left ?? 0, y: rect?.top ?? 0 };
   };
+  const editBarSize = () => ({
+    width: editBarMeasured.width || defaultEditBarWidth,
+    height: editBarMeasured.height || defaultEditBarHeight
+  });
+  /**
+   * Position of the floating Edit bar in view pixels. Computed once via `freeSpot` when entering edit mode so it
+   * overlaps no existing panel, and freely movable by dragging its grip.
+   */
+  const [editBarPos, setEditBarPos] = createSignal<Point | undefined>(() =>
+    props.editing ? untrack(initialEditBarSpot) : undefined
+  );
+  let stopBarDrag: (() => void) | undefined;
+  onCleanup(() => stopBarDrag?.());
+
   const shown = createMemo(() => {
     const current = drag();
     if (!current) {
@@ -239,14 +246,6 @@ export function BoardView(props: {
   };
   onCleanup(stopWaiting);
 
-  /** The wait of a part held over the sunk sheet's strip before the sheet rises again; see `followSheet`. */
-  let spring: ReturnType<typeof setTimeout> | undefined;
-  const stopSpring = () => {
-    clearTimeout(spring);
-    spring = undefined;
-  };
-  onCleanup(stopSpring);
-
   /** A press waiting to become long enough to open the spawn menu; see `armLongPress`. */
   let press: { pointer: number; start: Point; timer: ReturnType<typeof setTimeout> } | undefined;
   const stopPress = () => {
@@ -254,6 +253,34 @@ export function BoardView(props: {
     press = undefined;
   };
   onCleanup(stopPress);
+
+  /** A still press on a live panel/part waiting to enter edit mode; any drag movement cancels it. */
+  let editPress: { pointer: number; start: Point; timer: ReturnType<typeof setTimeout> } | undefined;
+  const stopEditPress = () => {
+    clearTimeout(editPress?.timer);
+    editPress = undefined;
+  };
+  onCleanup(stopEditPress);
+
+  /** Suppresses the synthetic click/contextmenu fired after a long press enters edit mode. */
+  let suppressClick = false;
+  let suppressTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearSuppress = () => {
+    suppressClick = false;
+    clearTimeout(suppressTimer);
+    suppressTimer = undefined;
+  };
+  onCleanup(clearSuppress);
+
+  createEffect(
+    () => props.editing,
+    (isEditing) => {
+      if (isEditing) {
+        stopEditPress();
+      }
+    }
+  );
+
   const lifted = () => {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
@@ -267,35 +294,59 @@ export function BoardView(props: {
     return current?.carried ? [current.id, ...(current.block?.parts.map((part) => part.id) ?? [])].join('\n') : '';
   });
 
-  // Two fingers pull the box up or down while editing; the second one landing drops what the first one began.
-  createTwoFingerSheet({
-    enabled: () => props.editing,
-    sheet: props.sheet,
-    onStart() {
-      stopWaiting();
-      stopSpring();
-      stopPress();
-      setSpawn(undefined);
-      if (drag()) {
-        setDrag(undefined);
-        props.sheet.setSunk(false);
-      }
-    }
-  });
-
-  // A press outside the open panels and their swatches closes them; while editing only one on the bare drawing.
+  // Closes open swatch panels on outside press, and arms live-mode long-press on any LEGO panel/part to enter Edit.
   createEventListener(
     window,
     'pointerdown',
     (event) => {
       const target = event.target instanceof Element ? event.target : undefined;
       const part = target?.closest<HTMLElement>('[data-part]')?.dataset.part;
-      if (!props.openPanel || target?.closest('[data-owned]') || (part && chain().has(part))) {
-        return;
+      if (props.openPanel && !target?.closest('[data-owned]') && !(part && chain().has(part))) {
+        if (!props.editing || !target?.closest('[data-keeps-panel]')) {
+          props.onOpenPanel(undefined);
+        }
       }
 
-      if (!props.editing || !target?.closest('[data-keeps-panel]')) {
-        props.onOpenPanel(undefined);
+      if (!props.editing) {
+        if (editPress) {
+          // A second pointer (e.g. pinch/zoom) cancels the pending long press.
+          stopEditPress();
+          return;
+        }
+
+        if (
+          event.button === 0 &&
+          target &&
+          layer()?.contains(target) &&
+          target.closest('[data-panel]') &&
+          !target.closest('input, select, textarea')
+        ) {
+          armEditLongPress(event);
+        }
+      }
+    },
+    { capture: true }
+  );
+
+  createEventListener(
+    window,
+    'click',
+    (event) => {
+      if (suppressClick) {
+        clearSuppress();
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    { capture: true }
+  );
+
+  createEventListener(
+    window,
+    'contextmenu',
+    (event) => {
+      if (suppressClick) {
+        event.preventDefault();
       }
     },
     { capture: true }
@@ -303,6 +354,12 @@ export function BoardView(props: {
 
   createEventListener(window, 'pointermove', followPointer, { capture: true });
   function followPointer(event: PointerEvent) {
+    if (editPress && event.pointerId === editPress.pointer) {
+      if (Math.hypot(event.clientX - editPress.start.x, event.clientY - editPress.start.y) >= tapDistance) {
+        stopEditPress();
+      }
+    }
+
     if (press && event.pointerId === press.pointer) {
       if (Math.hypot(event.clientX - press.start.x, event.clientY - press.start.y) >= tapDistance) {
         stopPress();
@@ -320,38 +377,18 @@ export function BoardView(props: {
       return;
     }
 
-    // A board panel carried into the open box becomes the block of its parts, for the kits or the parts to take as any
-    // group.
-    if (
-      current.type === 'panel' &&
-      !current.owned &&
-      !current.base.panels.find((panel) => panel.id === current.panel)?.floating &&
-      overSheet(point)
-    ) {
-      const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
-      if (panel) {
-        setDrag(panelAsBlock(current, panel, point));
-        return;
-      }
-    }
-
     if (current.type !== 'part') {
       setDrag({ ...current, point });
       return;
     }
 
-    // A swatch carried off closes its panel; a part carried off the spawn menu hides it.
+    // A swatch carried off closes its panel; a part carried off the catalog or spawn menu hides it.
     const moved = Math.hypot(point.x - current.start.x, point.y - current.start.y) >= tapDistance;
     if (moved && chain().has(current.id)) {
       props.onOpenPanel(findPart(props.board.board(), current.id)?.panel.owner);
     }
 
-    // Only what is carried out of the box sinks it, to show the board at full size; from the board, an open box stays
-    // to take it. A closed one shows its strip to put it away.
     const carried = current.carried || moved;
-    if (carried && props.editing && (current.fromSheet || props.sheet.height() <= 0)) {
-      followSheet(point);
-    }
 
     // A place with room shows at once; one that pushes parts aside waits until the part rests over it.
     const drop = partDrop(current, point);
@@ -377,8 +414,18 @@ export function BoardView(props: {
 
     setDrag({ ...current, point, carried });
   }
+
   // A lift drops where the part is, without waiting; a press that did not move is a tap.
   const finish = (event: PointerEvent) => {
+    if (editPress && event.pointerId === editPress.pointer) {
+      stopEditPress();
+    }
+
+    if (suppressClick) {
+      clearTimeout(suppressTimer);
+      suppressTimer = setTimeout(clearSuppress, 120);
+    }
+
     if (press && event.pointerId === press.pointer) {
       stopPress();
     }
@@ -389,7 +436,6 @@ export function BoardView(props: {
     }
 
     stopWaiting();
-    stopSpring();
     setDrag(undefined);
     let point = { x: event.clientX, y: event.clientY };
     if (current.type === 'select') {
@@ -436,7 +482,7 @@ export function BoardView(props: {
       return;
     }
 
-    // A part tapped in the spawn menu lands where the menu was opened; one tapped in the box stays there.
+    // A part tapped in the spawn menu lands where the menu was opened; one tapped in the catalog stays there.
     if (current.spawnAt) {
       setSpawn(undefined);
       point = tapped ? current.spawnAt : point;
@@ -445,14 +491,13 @@ export function BoardView(props: {
     }
 
     const drop = partDrop(current, point);
-    props.sheet.setSunk(false);
-    if (drop.where === 'kits') {
-      keepAsKit(current);
+    if (drop.where === 'discard' && current.fromBox) {
+      // Cancelled drag from the catalog: board stays unchanged and catalog returns.
       return;
     }
 
     if (current.fromBox && !current.spawnAt && drop.where === 'board') {
-      props.sheet.to('closed');
+      props.onPartsOpen(false);
     }
 
     let next = drop.board;
@@ -477,15 +522,17 @@ export function BoardView(props: {
     window,
     'pointercancel',
     (event) => {
+      if (event.pointerId === editPress?.pointer) {
+        stopEditPress();
+      }
+
       if (event.pointerId === press?.pointer) {
         stopPress();
       }
 
       if (event.pointerId === drag()?.pointer) {
         stopWaiting();
-        stopSpring();
         setDrag(undefined);
-        props.sheet.setSunk(false);
       }
     },
     { capture: true }
@@ -699,9 +746,9 @@ export function BoardView(props: {
           {(entry) => <PanelView entry={entry()} />}
         </For>
         <Show when={props.editing}>
-          <Show when={!hinted() && !drag()}>
+          <Show when={!hinted() && !drag() && !props.partsOpen}>
             <p class={styles.editHint} role="status">
-              Tap a part to select it · drag to move · two fingers up open the box
+              Tap a part to select it · drag to move · long press for quick menu
             </p>
           </Show>
           <Show when={band()}>
@@ -720,19 +767,63 @@ export function BoardView(props: {
         </Show>
       </div>
 
+      <Show when={props.editing && !props.partsOpen && !drag() && editBarPos()}>
+        {(pos) => (
+          <div
+            ref={setEditBar}
+            class={styles.editBar}
+            role="toolbar"
+            aria-label="Edit layout"
+            data-keeps-panel
+            style={{ left: `${pos().x}px`, top: `${pos().y}px` }}
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              class={styles.editBarGrip}
+              aria-label="Move edit bar"
+              onPointerDown={(event) => dragEditBar(event)}
+            >
+              <SketchIcon name="grip" size={16} />
+            </button>
+            <button type="button" class={styles.editBarParts} onClick={() => props.onPartsOpen(true)}>
+              <SketchIcon name="plus" size={16} />
+              Parts
+            </button>
+            <button type="button" class={styles.editBarDone} onClick={() => props.onExitEdit()}>
+              Done
+            </button>
+          </div>
+        )}
+      </Show>
+
+      <Show when={props.editing && lifted()?.carried && lifted()}>
+        {(current) => (
+          <div
+            ref={setDiscardZone}
+            class={styles.discardZone}
+            role="status"
+            data-over={overDiscard(current().point) ? '' : undefined}
+          >
+            <SketchIcon name={current().fromBox ? 'close' : 'trash'} size={16} />
+            <span>{current().fromBox ? 'Drop to cancel' : 'Drop to put away'}</span>
+          </div>
+        )}
+      </Show>
+
       <Show when={lifted()?.carried && lifted()}>
         {(current) => (
           <div
             class={[styles.ghost, current().block ? styles.ghostBlock : styles.part]}
-            data-discard={overBox(current().point) ? '' : undefined}
+            data-discard={overDiscard(current().point) ? '' : undefined}
             style={{
               left: `${current().point.x - overlay().x - current().grab.x}px`,
               top: `${current().point.y - overlay().y - current().grab.y}px`,
               width: `${grid.length(current().span.columns)}px`,
               height: `${grid.length(current().span.rows)}px`,
-              // As large as it will be on the board, held where it was taken.
+              // As large as it will be on the 1:1 board, held where it was taken.
               'transform-origin': `${current().grab.x}px ${current().grab.y}px`,
-              scale: `${view().scale * 1.06}`
+              scale: '1.06'
             }}
           >
             <PickerScale value={() => 1}>
@@ -759,22 +850,18 @@ export function BoardView(props: {
         )}
       </Show>
 
-      <Show when={props.editing}>
-        <PartsTray
-          ref={setBox}
-          presets={props.session.library.presets}
-          kits={props.kits}
-          sheet={props.sheet}
-          onBoard={onBoardKinds()}
-          kitsRef={setKitShelf}
-          flashKit={flashKit()}
-          overKits={keepsOverKits()}
-          over={lifted() !== undefined && overBox(lifted()!.point)}
-          onLift={(event, kind) => startNewPart(event, kind)}
-          onLiftKit={(event, kit) => startKitDrag(event, kit)}
-          onReset={() => props.board.reset()}
-        />
-      </Show>
+      <PartsTray
+        open={props.editing && props.partsOpen}
+        away={lifted()?.carried === true}
+        presets={props.session.library.presets}
+        kits={props.kits}
+        onBoard={onBoardKinds()}
+        flashKit={flashKit()}
+        onLift={(event, kind) => startNewPart(event, kind)}
+        onLiftKit={(event, kit) => startKitDrag(event, kit)}
+        onReset={() => props.board.reset()}
+        onClose={() => props.onPartsOpen(false)}
+      />
 
       <Show when={props.editing && spawn()}>
         {(open) => (
@@ -793,6 +880,93 @@ export function BoardView(props: {
       </Show>
     </>
   );
+
+  /** Finds an unoccupied spot for the Edit bar via `freeSpot` so it covers no existing panel. */
+  function initialEditBarSpot(): Point {
+    const size = view();
+    const bar = editBarSize();
+    const span = grid.minimumSpan(bar);
+    const at = freeSpot(grid.pitch(), props.board.latest(), size, span);
+    return clampEditBar({ x: at.x * size.width - panelPadding, y: at.y * size.height - panelPadding }, bar, size);
+  }
+
+  /** Moves the floating Edit bar freely while its grip is dragged. */
+  function dragEditBar(event: PointerEvent) {
+    if (event.button !== 0) {
+      return;
+    }
+
+    const origin = editBarPos();
+    if (!origin) {
+      return;
+    }
+
+    event.stopPropagation();
+    event.preventDefault();
+    stopBarDrag?.();
+    const element = event.currentTarget as Element;
+    try {
+      element.setPointerCapture(event.pointerId);
+    } catch {
+      // Unsupported in jsdom; window listeners still follow the pointer.
+    }
+
+    const pointer = event.pointerId;
+    const start = { x: event.clientX, y: event.clientY };
+    const move = (next: PointerEvent) => {
+      if (next.pointerId !== pointer) {
+        return;
+      }
+
+      setEditBarPos(
+        clampEditBar(
+          { x: origin.x + next.clientX - start.x, y: origin.y + next.clientY - start.y },
+          editBarSize(),
+          view()
+        )
+      );
+    };
+    const end = (next: PointerEvent) => {
+      if (next.pointerId !== pointer) {
+        return;
+      }
+
+      cleanup();
+    };
+    const cleanup = () => {
+      window.removeEventListener('pointermove', move, true);
+      window.removeEventListener('pointerup', end, true);
+      window.removeEventListener('pointercancel', end, true);
+      if (stopBarDrag === cleanup) {
+        stopBarDrag = undefined;
+      }
+    };
+    stopBarDrag = cleanup;
+    window.addEventListener('pointermove', move, true);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  }
+
+  /** Arms a still press on any live LEGO panel/part to enter edit mode after `editLongPress`. */
+  function armEditLongPress(event: PointerEvent) {
+    stopEditPress();
+    const pointer = event.pointerId;
+    const start = { x: event.clientX, y: event.clientY };
+    editPress = {
+      pointer,
+      start,
+      timer: setTimeout(() => {
+        editPress = undefined;
+        if (drag()?.pointer === pointer) {
+          stopWaiting();
+          setDrag(undefined);
+        }
+
+        suppressClick = true;
+        props.onEnterEdit();
+      }, editLongPress)
+    };
+  }
 
   /**
    * Waits for the press `event` on the bare drawing or a panel's free cells to last `longPress` without moving, then
@@ -838,7 +1012,7 @@ export function BoardView(props: {
     setSpawn({ at: { x: event.clientX, y: event.clientY }, held });
   }
 
-  /** Lifts a new part of `kind` from the box, or from the spawn menu opened at `spawnAt`. */
+  /** Lifts a new part of `kind` from the catalog, or from the spawn menu opened at `spawnAt`. */
   function startNewPart(event: PointerEvent, kind: string, spawnAt?: Point) {
     if (kind === 'floating') {
       startPartDrag(
@@ -862,7 +1036,7 @@ export function BoardView(props: {
     props.onOpenPanel(findPart(props.board.board(), id)?.panel.owner);
   }
 
-  /** Lifts a part from the board, or a new one or a kit's block from the box. */
+  /** Lifts a part from the board, or a new one or a kit's block from the catalog. */
   function startPartDrag(
     event: PointerEvent,
     part: Lifted,
@@ -883,9 +1057,7 @@ export function BoardView(props: {
     const rect = element.getBoundingClientRect();
     const board = props.board.latest();
     const point = { x: event.clientX, y: event.clientY };
-    // In the board's pixels: a part on the board is scaled with it; the box's and the menu's tiles are not.
-    const scale = from.fromBox ? 1 : view().scale;
-    const offset = { x: (event.clientX - rect.left) / scale, y: (event.clientY - rect.top) / scale };
+    const offset = { x: event.clientX - rect.left, y: event.clientY - rect.top };
     // A block, or a part from the menu, is held by the middle of its first cell, so it lands around the press.
     const grab =
       from.grab ??
@@ -904,7 +1076,6 @@ export function BoardView(props: {
       pinned: origins(board),
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
-      fromSheet: box()?.contains(element) === true,
       block: from.block,
       spawnAt: from.spawnAt,
       pressed: from.pressed,
@@ -913,7 +1084,7 @@ export function BoardView(props: {
     });
   }
 
-  /** Lifts a copy of `kit` from the box, or from the spawn menu opened at `spawnAt`. */
+  /** Lifts a copy of `kit` from the catalog, or from the spawn menu opened at `spawnAt`. */
   function startKitDrag(event: PointerEvent, kit: Kit, spawnAt?: Point) {
     const block = unpackKit(kit);
     const bounds = partsBounds(block.parts);
@@ -1010,7 +1181,7 @@ export function BoardView(props: {
 
   /**
    * Carries the selected parts on the board, from one panel or several, as one block held where the press is, laid
-   * out as they lie on screen in whole cells; they land as a panel, in a panel, or in the box.
+   * out as they lie on screen in whole cells; they land as a panel, in a panel, or in the discard capsule.
    */
   function startBoardSelectionDrag(event: PointerEvent, pressed?: string) {
     const block = boardSelectionBlock();
@@ -1108,35 +1279,6 @@ export function BoardView(props: {
     }
   }
 
-  /**
-   * Sinks the sheet while a carried part at `point` is above it, so the board shows at full size, and raises it again
-   * once the part rests on the strip it left for `springDelay`, opening a closed sheet to the middle.
-   */
-  function followSheet(point: Point) {
-    const rect = box()?.getBoundingClientRect();
-    const over = rect !== undefined && point.y >= rect.top;
-    if (!props.sheet.sunk()) {
-      if (!over) {
-        props.sheet.setSunk(true);
-      }
-
-      return;
-    }
-
-    if (!over) {
-      stopSpring();
-      return;
-    }
-
-    spring ??= setTimeout(() => {
-      spring = undefined;
-      props.sheet.setSunk(false);
-      if (props.sheet.height() <= 0) {
-        props.sheet.to('middle');
-      }
-    }, springDelay);
-  }
-
   /** Where each panel on screen has its cell (0, 0) now, to keep it there through a drag; see `frameAt`. */
   function origins(board: Board) {
     const frames = visiblePanels(grid.pitch(), board, props.openPanel, props.editing, view());
@@ -1154,8 +1296,8 @@ export function BoardView(props: {
       }
 
       const span = spanAfter(grid.pitch(), drag.span, {
-        x: (drag.point.x - drag.start.x) / size.scale,
-        y: (drag.point.y - drag.start.y) / size.scale
+        x: drag.point.x - drag.start.x,
+        y: drag.point.y - drag.start.y
       });
       return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, span) });
     }
@@ -1187,8 +1329,8 @@ export function BoardView(props: {
   }
 
   /**
-   * Where a lifted part or block held at `point` would land: the board with it there, `where` it lands (in the kits,
-   * put away in the box, or on the board), a `key` naming the spot, and whether it `pushes` other parts aside to fit.
+   * Where a lifted part or block held at `point` would land: the board with it there, `where` it lands (`discard` on
+   * the top capsule, or `board`), a `key` naming the spot, and whether it `pushes` other parts aside to fit.
    */
   function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
     const size = view();
@@ -1254,13 +1396,8 @@ export function BoardView(props: {
       ).entry;
     };
 
-    // Over the kits, something already on the board stays where it was, and is kept as a kit too.
-    if (overKits(point) && keepable(drag)) {
-      return { where: 'kits' as const, board: drag.before, key: 'kits', pushes: false };
-    }
-
-    if (overBox(point)) {
-      return { where: 'box' as const, board: drag.base, key: 'box', pushes: false };
+    if (overDiscard(point)) {
+      return { where: 'discard' as const, board: drag.base, key: 'discard', pushes: false };
     }
 
     // The lifted part's top-left corner, in view pixels.
@@ -1298,83 +1435,14 @@ export function BoardView(props: {
     };
   }
 
-  /** Whether `point` on the page is over the box, where a part is put away; the kits shelf in it is not. */
-  function overBox(point: Point) {
-    const rect = box()?.getBoundingClientRect();
-    return rect !== undefined && inside(point, rect) && !overKits(point);
-  }
+  /** Whether `point` on the page is over the top discard capsule while editing. */
+  function overDiscard(point: Point) {
+    if (!props.editing) {
+      return false;
+    }
 
-  /** Whether what is carried now, a part or group from the board, would be kept as a kit. */
-  function keepsOverKits() {
-    const current = drag();
-    return current?.type === 'part' && overKits(current.point) && keepable(current);
-  }
-
-  /** Whether `point` on the page is over the open sheet of the box. */
-  function overSheet(point: Point) {
-    const rect = box()?.getBoundingClientRect();
-    return !props.sheet.sunk() && props.sheet.height() > 0 && rect !== undefined && inside(point, rect);
-  }
-
-  /**
-   * Board panel drag `drag` of `panel`, now at `point`, as the carried block of the panel's parts, held where the
-   * panel was; the panel leaves the board until the block lands.
-   */
-  function panelAsBlock(drag: Extract<Drag, { type: 'panel' }>, panel: Panel, point: Point): Drag {
-    const bounds = partsBounds(panel.parts);
-    const parts = panel.parts.map((part) => ({
-      ...part,
-      cell: { column: part.cell.column - bounds.column, row: part.cell.row - bounds.row }
-    }));
-    return {
-      type: 'part',
-      pointer: drag.pointer,
-      point,
-      start: drag.start,
-      grab: { x: drag.grab.x - bounds.column * grid.pitch(), y: drag.grab.y - bounds.row * grid.pitch() },
-      settled: point,
-      base: replacePanel(drag.base, panel.id, { ...panel, parts: [] }),
-      before: drag.base,
-      pinned: origins(drag.base),
-      newPanel: panel.id,
-      fromBox: false,
-      fromSheet: false,
-      block: { parts, panels: [] },
-      carried: true,
-      id: newId('block'),
-      kind: 'kit',
-      span: { columns: bounds.columns, rows: bounds.rows }
-    };
-  }
-
-  /** Whether `point` on the page is over the box's kits while the sheet shows them. */
-  function overKits(point: Point) {
-    const rect = kitShelf()?.getBoundingClientRect();
-    return !props.sheet.sunk() && rect !== undefined && rect.height > 0 && inside(point, rect);
-  }
-
-  /** Whether carried `drag` was already on the board, rather than new from the box or a kit. */
-  function keepable(drag: Extract<Drag, { type: 'part' }>) {
-    const first = drag.block ? drag.block.parts[0]?.id : drag.id;
-    return first !== undefined && findPart(drag.before, first) !== undefined;
-  }
-
-  /**
-   * Keeps what `drag` carries as a new kit, with the panels of the swatches among it, named after what it holds; the
-   * board stays as it was.
-   */
-  function keepAsKit(drag: Extract<Drag, { type: 'part' }>) {
-    const parts = drag.block?.parts ?? [
-      {
-        id: drag.id,
-        kind: drag.kind,
-        span: drag.span,
-        looks: drag.looks,
-        [partData]: drag[partData],
-        cell: { column: 0, row: 0 }
-      }
-    ];
-    keepKit(drag.before, { id: 'kept', at: { x: 0, y: 0 }, parts });
+    const rect = discardZone()?.getBoundingClientRect();
+    return rect !== undefined && rect.width > 0 && rect.height > 0 && inside(point, rect);
   }
 
   /**
@@ -1398,6 +1466,15 @@ export function BoardView(props: {
     const label = (kind: string) => kindLabel(kind, props.session.library.presets());
     return props.kits.uniqueName(nameKit(parts, { label, color: props.session.brush().color }));
   }
+}
+
+/** Keeps the Edit bar inside `view` with a small edge margin. */
+function clampEditBar(point: Point, bar: { width: number; height: number }, view: { width: number; height: number }) {
+  const margin = 8;
+  return {
+    x: Math.max(margin, Math.min(point.x, Math.max(margin, view.width - bar.width - margin))),
+    y: Math.max(margin, Math.min(point.y, Math.max(margin, view.height - bar.height - margin)))
+  };
 }
 
 /** Whether the edit mode's hint was learned on this device. */
@@ -1486,12 +1563,13 @@ function inside(point: Point, rect: DOMRect) {
   return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom;
 }
 
-/** The board's commands for surfaces other than its own panels and box; see `BoardView`'s `ref`. */
+/** The board's commands for surfaces other than its own panels and catalog; see `BoardView`'s `ref`. */
 export type BoardControls = {
   /**
-   * Lifts a new part of `kind` and `span` (one cell by default) for the press `event`, as a part taken from the box:
-   * it follows the pointer and lands where it is let go, on a plate or as a new one, in edit mode or not. The press's
-   * `currentTarget` is where the part is held from. The caller keeps the pointer's events coming, as by capturing it.
+   * Lifts a new part of `kind` and `span` (one cell by default) for the press `event`, as a part taken from the
+   * catalog: it follows the pointer and lands where it is let go, on a plate or as a new one, in edit mode or not. The
+   * press's `currentTarget` is where the part is held from. The caller keeps the pointer's events coming, as by
+   * capturing it.
    */
   lift: (event: PointerEvent, kind: string, span?: Span) => void;
   /**
@@ -1520,12 +1598,10 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       pinned: ReadonlyMap<string, Point>;
       /** The id a new panel gets if the part lands on the bare drawing. */
       newPanel: string;
-      /** Whether it came out of the box rather than off the board. */
+      /** Whether it came out of the catalog or spawn menu rather than off the board. */
       fromBox: boolean;
-      /** The board as the drag began, which a drop on the kits leaves as it was. */
+      /** The board as the drag began. */
       before: Board;
-      /** Whether it was taken from the box, so carrying it off sinks the sheet. */
-      fromSheet: boolean;
       /** A kit's parts and owned panels, carried as one block of `span`. */
       block?: { parts: Part[]; panels: Panel[]; floating?: Panel['floating'] };
       /** Where the spawn menu it came from was opened, where a tap puts it. */
@@ -1561,8 +1637,12 @@ const flashTime = 1400;
 /** CSS pixels the selection's outline lies out from the selected parts. */
 const selectionPadding = 4;
 
-/** Milliseconds a carried part rests on the sunk sheet's strip before the sheet rises again. */
-const springDelay = 450;
+/** Fallback footprint in CSS pixels for placing the Edit bar before ResizeObserver measures it. */
+const defaultEditBarWidth = 210;
+const defaultEditBarHeight = 56;
+
+/** Milliseconds a still press on any live LEGO panel/part takes to enter layout edit mode. */
+const editLongPress = 450;
 
 /** Milliseconds a still press on the bare drawing or a panel's free cells takes to open the spawn menu. */
 const longPress = 420;

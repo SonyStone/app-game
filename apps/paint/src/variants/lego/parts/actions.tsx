@@ -32,6 +32,7 @@ export const actionParts = [
       png: f.command(s.files.png),
       psd: f.command(s.files.psd),
       place: f.command(s.files.place),
+      editLayout: f.command(s.options.editLayout),
       options: f.command(s.options.open),
       onDone: f.onDone
     }),

@@ -21,10 +21,11 @@ export function createLegoServices(
   openBrushStudio: () => void = () => {},
   openPen: (measure: boolean) => void = () => {},
   openAbr?: () => void,
-  options: { cell: () => number; setCell: (cell: number) => void; open: () => void } = {
+  options: { cell: () => number; setCell: (cell: number) => void; open: () => void; editLayout?: () => void } = {
     cell: deviceCell,
     setCell: () => {},
-    open: () => {}
+    open: () => {},
+    editLayout: () => {}
   }
 ) {
   const color = createMemo(() => session.brush().color);
@@ -189,7 +190,10 @@ export function createLegoServices(
       psd: () => session.edit({ type: 'psd' }),
       place: session.images.place
     },
-    options,
+    options: {
+      ...options,
+      editLayout: options.editLayout ?? (() => {})
+    },
     run: (command: () => unknown) => runPartCommand(session, command)
   };
 }

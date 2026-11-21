@@ -4,7 +4,6 @@ import { createMemo, createRoot, createSignal, flush, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi, type MockInstance } from 'vitest';
 import { builtInPresets } from '../../features/brush-library';
 import { StrokePreview } from '../../features/brush-library/StrokePreview';
-import { createSheet } from './createSheet';
 import { createGrid } from './grid';
 import { createKits } from './kits';
 import { LegoServicesContext } from './LegoServices';
@@ -324,23 +323,17 @@ it('keeps brush tile DOM identity when the library list gains a preset', () => {
   const initial = builtInPresets[0]!;
   const [presets, setPresets] = createSignal([initial]);
   services.presets.all = presets;
-  const sheet = owned(() => createSheet(() => 768));
   const kits = owned(createKits);
-  sheet.to('middle');
-  flush();
   mount(() => (
     <LegoServicesContext value={services}>
       <PartsTray
+        open={true}
         presets={presets}
-        sheet={sheet}
         kits={kits}
-        over={false}
         onLift={vi.fn()}
         onLiftKit={vi.fn()}
         onReset={vi.fn()}
-        ref={vi.fn()}
-        kitsRef={vi.fn()}
-        overKits={false}
+        onClose={vi.fn()}
         flashKit={undefined}
       />
     </LegoServicesContext>
@@ -448,7 +441,7 @@ it('imports a brush file and offers export only for the selected native preset',
   expect(button()).toBeUndefined();
 });
 
-it('gives FileMenu only the five file commands and Options, and closes it after each selection', () => {
+it('gives FileMenu only the five file commands, Edit layout and Options, and closes it after each selection', () => {
   const { services } = owned(createTestServices);
   const done = vi.fn();
   mount(() => (
@@ -461,6 +454,7 @@ it('gives FileMenu only the five file commands and Options, and closes it after 
     ['Save drawing', services.files.download],
     ['Export picture', services.files.png],
     ['Export layers', services.files.psd],
+    ['Edit layout', services.options.editLayout],
     ['Options', services.options.open]
   ] as const) {
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
@@ -476,7 +470,7 @@ it('gives FileMenu only the five file commands and Options, and closes it after 
     expect(command).toHaveBeenCalledWith(file);
     expect(input.value).toBe('');
   }
-  expect(done).toHaveBeenCalledTimes(6);
+  expect(done).toHaveBeenCalledTimes(7);
 });
 
 it('keeps FileMenu commands and completion inert in preview mode', () => {

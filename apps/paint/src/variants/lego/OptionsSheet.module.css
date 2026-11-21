@@ -170,3 +170,28 @@
   position: relative;
   color: var(--lego-ink);
 }
+
+.actionTile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  justify-self: start;
+  min-height: var(--lego-hit-size);
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--lego-r-tile);
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:hover {
+    filter: brightness(0.96);
+  }
+
+  &:active {
+    filter: brightness(0.92);
+  }
+}

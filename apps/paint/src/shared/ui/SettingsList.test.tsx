@@ -335,18 +335,19 @@ it("turns a split into two screens by the host's container query on its own widt
 
   // Each host sets the switch from the width of its own box, not the window's.
   const lego = readFileSync(join(__dirname, '../../variants/lego/LegoStudio.module.css'), 'utf8');
-  expect(lego).toMatch(/container: box-shelves \/ inline-size;/);
-  expect(lego).toMatch(/@container box-shelves \(width < 380px\) \{\s*\.trayBody \{\s*--settings-split: narrow;/);
   expect(lego).toMatch(/container: brush-library \/ inline-size;/);
   expect(lego).toMatch(
     /@container brush-library \(width < 400px\) \{\s*\.brushesCard > \* \{\s*--settings-split: narrow;/
   );
+  const parts = readFileSync(join(__dirname, '../../variants/lego/PartsTray.module.css'), 'utf8');
+  expect(parts).toMatch(/container: lego-parts \/ size;/);
+  expect(parts).toMatch(/@container lego-parts \(width < 560px\) \{[\s\S]*?\.sheet \{\s*--settings-split: narrow;/);
   const studio = readFileSync(join(__dirname, '../../features/brush-editor/BrushEditor.module.css'), 'utf8');
   expect(studio).toMatch(/@container brush-studio \(width < 520px\) \{\s*\.studioSheet \{\s*--settings-split: narrow;/);
   expect(studio).toMatch(
     /@container brush-studio \(orientation: landscape\) and \(700px <= width < 1000px\) \{\s*\.studioSheet \{\s*--settings-split: narrow;/
   );
-  for (const sheet of [css, lego, studio]) {
+  for (const sheet of [css, lego, parts, studio]) {
     expect(sheet).not.toMatch(/@media[^{]*width/);
   }
 });

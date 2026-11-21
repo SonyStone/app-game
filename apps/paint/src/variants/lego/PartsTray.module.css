@@ -1,0 +1,286 @@
+/*
+ * The Parts catalog over the whole viewport, matching OptionsSheet and BrushStudioDialog: a search bar and actions
+ * plate across the top, and under it one plate holding the categories sidebar beside the chosen category's grid
+ * (`SettingsSplit`), lying on paper. While a part or kit is carried off onto the 1:1 board (`data-away`), the dialog
+ * fades and slides out on the GPU without blocking pointer events.
+ */
+.dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #faf8f5;
+  color: var(--lego-ink);
+  transition:
+    opacity 160ms ease-out,
+    translate 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  &::backdrop {
+    background: transparent;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  /* Out of the way while a part or kit is carried onto the 1:1 board under it. */
+  &[data-away] {
+    opacity: 0;
+    translate: 0 32px;
+    pointer-events: none;
+  }
+}
+
+.frame {
+  container: lego-parts / size;
+  display: grid;
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  max-width: 1000px;
+  height: 100%;
+  margin-inline: auto;
+  padding: 8px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.searchPlate {
+  flex: 1;
+  min-width: 0;
+  padding: 4px;
+  border-radius: var(--lego-r-outline);
+  background: var(--lego-plate);
+}
+
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: var(--lego-hit-size);
+  padding: 0 12px;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: var(--lego-r-tile);
+  background: rgb(255 255 255 / 0.08);
+  color: rgb(255 255 255 / 0.62);
+
+  &:focus-within {
+    border-color: var(--lego-accent);
+    background: rgb(255 255 255 / 0.12);
+    color: #ffffff;
+  }
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+
+  &::placeholder {
+    color: rgb(255 255 255 / 0.48);
+  }
+
+  &::-webkit-search-cancel-button {
+    display: none;
+  }
+}
+
+.searchClear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  corner-shape: round;
+  background: rgb(255 255 255 / 0.14);
+  color: #ffffff;
+  cursor: pointer;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.24);
+  }
+}
+
+/* Reset board and Done on a plate, matching OptionsSheet's actions plate. */
+.actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--lego-r-outline);
+  background: var(--lego-plate);
+}
+
+.reset,
+.done {
+  min-height: var(--lego-hit-size);
+  border: 0;
+  border-radius: var(--lego-r-tile);
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.reset {
+  padding: 0 14px;
+  background: rgb(255 255 255 / 0.12);
+
+  &:hover {
+    background: rgb(255 255 255 / 0.18);
+  }
+}
+
+.done {
+  min-width: 72px;
+  padding: 0 16px;
+  background: var(--lego-accent);
+}
+
+/* The one plate under the categories sidebar and the chosen category's parts. */
+.sheet {
+  --settings-split-list: minmax(200px, 30%);
+  --settings-split-line: var(--lego-divider);
+  --settings-split-back: var(--lego-accent);
+
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--lego-r-plate);
+  background: var(--lego-plate);
+  color: #ffffff;
+}
+
+@container lego-parts (width < 560px) {
+  .header {
+    flex-wrap: wrap;
+  }
+
+  .searchPlate {
+    flex-basis: 100%;
+  }
+
+  .actions {
+    margin-inline-start: auto;
+  }
+
+  .sheet {
+    --settings-split: narrow;
+  }
+}
+
+.side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.name {
+  margin: 0;
+  padding: 14px 14px 6px;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list {
+  --settings-list-ink: #ffffff;
+  --settings-list-quiet: rgb(255 255 255 / 0.62);
+  --settings-list-icon: var(--lego-tile);
+  --settings-list-icon-ink: var(--lego-ink);
+  --settings-list-hover: rgb(255 255 255 / 0.07);
+  --settings-list-pressed: rgb(255 255 255 / 0.14);
+  --settings-list-selected: var(--lego-accent);
+  --settings-list-selected-ink: #ffffff;
+  --settings-list-focus: var(--lego-accent);
+  --settings-list-inset: 8px;
+
+  min-height: 0;
+  padding-block: 2px 16px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.pane {
+  display: grid;
+  align-content: start;
+  justify-items: stretch;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  padding: 14px 16px 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: #ffffff;
+  touch-action: pan-y;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+@container style(--settings-split: narrow) {
+  .title {
+    display: none;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  align-items: start;
+  gap: 10px;
+}
+
+.kitsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.groupHeading {
+  margin: 0;
+  color: rgb(255 255 255 / 0.62);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.empty {
+  margin: 0;
+  color: rgb(255 255 255 / 0.58);
+  font-size: 13px;
+}

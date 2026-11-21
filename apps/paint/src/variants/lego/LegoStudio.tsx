@@ -18,7 +18,6 @@ import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { besideRect, findPart, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
-import { createSheet } from './createSheet';
 import { FileApplicationControls } from './FileMenu';
 import { cellGap, createGrid, GridContext, plateRadius, referenceCell } from './grid';
 import { createKits } from './kits';
@@ -38,7 +37,7 @@ import { namedSliderSpan } from './parts/values';
 import { StudioSettingRow } from './StudioSettingRow';
 
 /**
- * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing, each a plate
+ * The Paint interface, a UI built like printed LEGO tiles: panels lie freely on the drawing at 1:1 scale, each a plate
  * of studs, and parts sit on the studs in any whole number of cells. A part shows more the larger it is, like an
  * Android widget: a brush is a stroke sample, then gets its name, then a large sample; a value is a knob that opens a
  * slider, then a slider itself. Parts never overlap; placing or growing one pushes the others aside, and that is how
@@ -46,10 +45,9 @@ import { StudioSettingRow } from './StudioSettingRow';
  * the one chosen for its size. A color swatch opens a panel of its own, built like any other; panels can be kept as
  * kits and placed again.
  *
- * "Edit" shows the studs and the handle of the box of parts in a strip along the bottom, the drawing shrinking to a
- * card above it; the box is a sheet pulled up by a wheel, its handle or two fingers anywhere, the card shrinking
- * further: drag parts and kits out of the box, between panels and back, size them by their corner and move panels by
- * their rim; a long press on a free spot offers the parts right there (see `BoardView`). The board is kept per device.
+ * Layout editing is entered by long-pressing any LEGO panel/part, or via File → Edit layout / Options → Interface.
+ * The drawing stays 1:1 throughout; a draggable Edit bar placed on a free spot opens the modal Parts catalog
+ * (`PartsTray`) and finishes editing (see `BoardView`). The board is kept per device.
  *
  * The "Brush settings" part opens the brush studio over everything, in the board's plates and tiles: each number
  * setting there is its value part itself, and the Pen page the pen pressure curve's part (`StudioSettingRow`); a
@@ -59,7 +57,7 @@ import { StudioSettingRow } from './StudioSettingRow';
  * there, drawn on the studio's pad.
  *
  * The "Options" part and the File menu's Options open the editor's own settings over everything (`OptionsSheet`),
- * among them the grid size, which every plate, part and sheet follows at once.
+ * among them the grid size, which every plate and part follows at once.
  */
 export function LegoStudio(
   props: PaintVariantProps & {
@@ -74,6 +72,8 @@ export function LegoStudio(
   }
 ) {
   const [editing, setEditing] = createSignal(false);
+  /** Whether the modal Parts catalog is open inside edit mode. */
+  const [partsOpen, setPartsOpen] = createSignal(false);
   /** The swatch whose panel is open; see `BoardView`. */
   const [openPanel, setOpenPanel] = createSignal<string>();
   const [popup, setPopup] = createSignal<{ popup: Popup; rect: DOMRect }>();
@@ -104,6 +104,21 @@ export function LegoStudio(
   /** Whether the studio's Pen page runs the calibration steps. */
   const [penMeasuring, setPenMeasuring] = createSignal(false);
   const [abrViewer, setAbrViewer] = createSignal<'open' | 'closed'>();
+
+  const enterEdit = () => {
+    setPopup(undefined);
+    setOpenPanel(undefined);
+    setOptionsOpen(false);
+    setPartsOpen(false);
+    setEditing(true);
+  };
+  const exitEdit = () => {
+    setPopup(undefined);
+    setOpenPanel(undefined);
+    setPartsOpen(false);
+    setEditing(false);
+  };
+
   const services = createLegoServices(
     session,
     () => {
@@ -130,7 +145,8 @@ export function LegoStudio(
       open: () => {
         setPopup(undefined);
         setOptionsOpen(true);
-      }
+      },
+      editLayout: enterEdit
     }
   );
   /** A setting's part as it leaves the studio: a slider with room for its full name and value. */
@@ -143,26 +159,10 @@ export function LegoStudio(
   const onBoard = (kind: string) =>
     board.board().panels.some((panel) => panel.parts.some((part) => currentKind(part.kind) === kind));
   const kits = createKits(reportSavingError);
-  /** The box of parts while editing; each edit starts with it closed. */
-  const sheet = createSheet(() => session.size().height);
-  /**
-   * How the drawing and the board shrink to a card above the sheet while editing: by how much of the way to its middle
-   * stop the sheet is up (`progress`), the most there, centered across and a margin down; a little above a closed
-   * sheet's strip, and at full size while the sheet is sunk.
-   */
-  const card = () => {
-    const { width, height } = session.size();
-    const middle = sheet.middle();
-    const up = editing() && !sheet.sunk() ? Math.max(grid.pitch(), sheet.height()) : 0;
-    const progress = middle > 0 ? Math.min(up, middle) / middle : 0;
-    const smallest = Math.max(0.3, (height - middle - cardMargin * 2) / height);
-    const scale = 1 - progress * (1 - smallest);
-    return { progress, scale, x: (width * (1 - scale)) / 2, y: cardMargin * progress };
-  };
 
   session.createShortcuts({
     closePanel() {
-      // Escape and the Android back gesture close a sheet first, keeping its changes, as Done does.
+      // Escape and the Android back gesture close a dialog first, keeping its changes, as Done does.
       if (optionsOpen()) {
         setOptionsOpen(false);
         return true;
@@ -183,12 +183,13 @@ export function LegoStudio(
         return true;
       }
 
-      if (editing() && sheet.back()) {
+      if (editing() && partsOpen()) {
+        setPartsOpen(false);
         return true;
       }
 
       if (editing()) {
-        setEditing(false);
+        exitEdit();
         return true;
       }
 
@@ -209,7 +210,7 @@ export function LegoStudio(
     { capture: true }
   );
 
-  // The library lists the user's presets for the board and the box.
+  // The library lists the user's presets for the board and the catalog.
   void session.library.loadAll();
 
   const popupPlace = () => {
@@ -227,17 +228,12 @@ export function LegoStudio(
       <LegoServicesContext value={services}>
         <PaintEditor
           session={session}
-          class={`${styles.editor} ${card().progress > 0 ? styles.carded : ''}`}
+          class={styles.editor}
           style={{
             '--lego-cell': `${grid.cell()}px`,
             '--lego-gap': `${cellGap}px`,
             '--lego-hit-size': `${referenceCell}px`,
-            '--lego-radius': `${plateRadius(grid.cell())}px`,
-            '--card-scale': `${card().scale}`,
-            '--card-x': `${card().x}px`,
-            '--card-y': `${card().y}px`,
-            // The card follows a wheel or a finger closely, and moves to a stop or springs back slower.
-            '--sheet-time': sheet.settling() ? '260ms' : '70ms'
+            '--lego-radius': `${plateRadius(grid.cell())}px`
           }}
         >
           <PaintStage session={session} class={styles.workspace}>
@@ -250,9 +246,12 @@ export function LegoStudio(
               kits={kits}
               session={session}
               editing={editing()}
+              partsOpen={partsOpen()}
+              onPartsOpen={setPartsOpen}
+              onEnterEdit={enterEdit}
+              onExitEdit={exitEdit}
               openPanel={openPanel()}
               onOpenPanel={setOpenPanel}
-              sheet={sheet}
               onPopup={(anchor, next) => setPopup({ popup: next, rect: anchor.getBoundingClientRect() })}
               ref={setBoardControls}
             />
@@ -326,19 +325,6 @@ export function LegoStudio(
               </Show>
               {/* TEMPORARY: the one-cell value trial's switch; goes once the user picks a treatment. */}
               <ValueFaceSwitch />
-              <button
-                type="button"
-                class={styles.editButton}
-                data-active={editing() ? '' : undefined}
-                onClick={() => {
-                  setPopup(undefined);
-                  setOpenPanel(undefined);
-                  sheet.to('closed');
-                  setEditing(!editing());
-                }}
-              >
-                {editing() ? 'Done' : 'Edit'}
-              </button>
             </div>
             <Show when={abrViewer() !== undefined}>
               <AbrViewerDialog
@@ -392,7 +378,7 @@ export function LegoStudio(
               />
             </Show>
             <Show when={optionsOpen()}>
-              <OptionsSheet onClose={() => setOptionsOpen(false)} />
+              <OptionsSheet onClose={() => setOptionsOpen(false)} onEditLayout={enterEdit} />
             </Show>
             <SessionNotices session={session} />
           </div>
@@ -406,9 +392,6 @@ export function LegoStudio(
 function validCell(cell: number | undefined) {
   return cell !== undefined && Number.isFinite(cell) && cell > 0 ? cell : undefined;
 }
-
-/** CSS pixels around the card the drawing shrinks to. */
-const cardMargin = 16;
 
 /**
  * The span a number's part shows at in its studio row, where it fills the row whatever its span: a slider one cell

@@ -13,9 +13,9 @@ export const FileApplicationControls = createContext<(() => JSX.Element) | null>
  * The drawing's file commands, which the File part opens beside itself: open a drawing (`.paint` or Photoshop), place
  * an image as a new layer, save the drawing, and export the visible canvas as PNG or every layer as PSD. Saved and
  * exported files are browser downloads, or land in Downloads/Paint in the Android app. Each command waits for the
- * engine; `onDone` closes the menu once one ran or a file was picked. After them, Options opens the editor's own
- * settings (`OptionsSheet`), which needs no engine. The commands are Settings rows
- * (`SettingsRows`), as every list of LEGO's panels.
+ * engine; `onDone` closes the menu once one ran or a file was picked. After them, Edit layout enters board edit mode
+ * and Options opens the editor's own settings (`OptionsSheet`), neither needing the engine. The commands are Settings
+ * rows (`SettingsRows`), as every list of LEGO's panels.
  */
 export function FileMenu(props: {
   ready: boolean;
@@ -24,6 +24,8 @@ export function FileMenu(props: {
   png: LegoServices['files']['png'];
   psd: LegoServices['files']['psd'];
   place: LegoServices['files']['place'];
+  /** Enters LEGO layout edit mode. */
+  editLayout: LegoServices['options']['editLayout'];
   /** Opens the Options sheet. */
   options: LegoServices['options']['open'];
   onDone: () => void;
@@ -82,6 +84,7 @@ export function FileMenu(props: {
       />
       <Item icon="scene" label="Export picture" detail="PNG" disabled={!ready()} onSelect={() => run(props.png)} />
       <Item icon="layers" label="Export layers" detail="PSD" disabled={!ready()} onSelect={() => run(props.psd)} />
+      <Item icon="edit" label="Edit layout" disabled={false} onSelect={() => run(props.editLayout)} />
       <Item icon="options" label="Options" disabled={false} onSelect={() => run(props.options)} />
       <Show when={applicationControls}>
         {(controls) => (

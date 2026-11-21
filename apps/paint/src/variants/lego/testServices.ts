@@ -96,7 +96,12 @@ export function createTestServices() {
       psd: vi.fn(),
       place: vi.fn()
     },
-    options: { cell: () => gridCell(), setCell: vi.fn((cell: number) => setGridCell(cell)), open: vi.fn() },
+    options: {
+      cell: () => gridCell(),
+      setCell: vi.fn((cell: number) => setGridCell(cell)),
+      open: vi.fn(),
+      editLayout: vi.fn()
+    },
     run: (command: () => unknown) => runPartCommand({ setError: errors }, command)
   };
   return { services, setBrush, brush, errors };

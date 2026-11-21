@@ -1,6 +1,7 @@
 import { editable } from '@app-game/paint-core/input';
-import { createEffect, createSignal, createUniqueId, Match, Switch } from 'solid-js';
+import { createEffect, createSignal, createUniqueId, Match, Show, Switch } from 'solid-js';
 import { SettingsBack, SettingsList, SettingsSplit, type SettingsListItem } from '../../shared/ui/SettingsList';
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import { partsBounds, type Part, type Span } from './board';
 import { useGrid } from './grid';
 import legoStyles from './LegoStudio.module.css';
@@ -23,6 +24,8 @@ import { BlockView } from './PartsTray';
  */
 export function OptionsSheet(props: {
   onClose: () => void;
+  /** Closes Options and enters layout edit mode when supplied. */
+  onEditLayout?: () => void;
   /** Added to the dialog's class. */
   class?: string;
 }) {
@@ -99,6 +102,14 @@ export function OptionsSheet(props: {
                   <PartFrame kind={gridSizeKind} span={settingSpan} look="slider" />
                 </div>
                 <GridSample />
+                <Show when={props.onEditLayout}>
+                  {(editLayout) => (
+                    <button type="button" class={styles.actionTile} onClick={() => editLayout()()}>
+                      <SketchIcon name="edit" size={18} />
+                      <span>Edit layout</span>
+                    </button>
+                  )}
+                </Show>
               </Match>
             </Switch>
           </section>

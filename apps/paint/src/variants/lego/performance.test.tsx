@@ -11,7 +11,6 @@ import { createPaintSession } from '../../features/session';
 import { BoardView } from './BoardView';
 import { createBoard } from './createBoard';
 import { attachCataloguePreview, createCatalogueFixture } from './createCatalogueFixture';
-import { createSheet } from './createSheet';
 import { createKits } from './kits';
 import { createLegoServices, LegoServicesContext } from './LegoServices';
 import { PartFrame } from './PartFrame';
@@ -135,7 +134,6 @@ it.each([undefined, true] as const)(
       })
     );
     const board = owned(createBoard);
-    const sheet = owned(() => createSheet(() => 900));
     const kits = owned(createKits);
     const specimens = catalogueSpecimens(fixture.presets[0]!.id).filter(
       (specimen) => !specimen.kind.startsWith('preset:')
@@ -153,6 +151,7 @@ it.each([undefined, true] as const)(
     ].map((part, index) => ({ ...part, cell: { column: (index % 12) * 7, row: Math.floor(index / 12) * 7 } }));
     board.set({ panels: [{ id: 'catalogue', at: { x: 0, y: 0 }, floating, parts }] });
     const [editing, setEditing] = createSignal(false);
+    const [partsOpen, setPartsOpen] = createSignal(false);
     disposers.push(
       render(
         () => (
@@ -171,7 +170,6 @@ it.each([undefined, true] as const)(
             >
               <BoardView
                 board={board}
-                sheet={sheet}
                 kits={kits}
                 session={{
                   size: () => ({ width: 1200, height: 900 }),
@@ -179,6 +177,13 @@ it.each([undefined, true] as const)(
                   brush: fixture.tools.brush
                 }}
                 editing={editing()}
+                partsOpen={partsOpen()}
+                onPartsOpen={setPartsOpen}
+                onEnterEdit={() => setEditing(true)}
+                onExitEdit={() => {
+                  setPartsOpen(false);
+                  setEditing(false);
+                }}
                 openPanel={undefined}
                 onOpenPanel={() => {}}
                 onPopup={() => {}}
@@ -310,17 +315,16 @@ it.each([undefined, true] as const)(
 
     setEditing(true);
     await drain();
-    const tray = document.querySelector('[aria-label="Box of parts"]')!;
-    expect(tray.hasAttribute('data-closed')).toBe(true);
-    expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
-    sheet.to('middle');
+    expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+    setPartsOpen(true);
     await drain();
     intersectAll();
     await drain();
-    expect(tray.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
-    sheet.to('closed');
+    const catalog = document.querySelector('dialog[aria-label="Parts"]')!;
+    expect(catalog.querySelectorAll('[data-mode="preview"]').length).toBeGreaterThan(0);
+    setPartsOpen(false);
     await drain();
-    expect(tray.querySelectorAll('[data-mode="preview"]')).toHaveLength(0);
+    expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
     expect(fixture.error()).toBeUndefined();
   }
 );

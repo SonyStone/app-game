@@ -158,7 +158,7 @@ export function createCatalogueFixture() {
       psd: () => {},
       place: async () => {}
     },
-    options: { cell: deviceCell, setCell: () => {}, open: () => {} },
+    options: { cell: deviceCell, setCell: () => {}, open: () => {}, editLayout: () => {} },
     run: (command) => runPartCommand({ setError }, command)
   };
 

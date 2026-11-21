@@ -165,12 +165,13 @@ it.each([
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(`${label} changes can't be saved`);
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('newer Paint version');
   expect(wiring.session!.error()).toMatchObject({ kind: 'lego', code: 'storage' });
-  click('Edit');
+  expect(button('Edit')).toBeUndefined();
+  enterEdit();
   expect(button('Done')).toBeDefined();
   click('Dismiss');
   expect(document.querySelector('[role="alert"]')).toBeNull();
   click('Done');
-  expect(button('Edit')).toBeDefined();
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
   expect(localStorage.getItem(key)).toBe(raw);
 });
 
@@ -179,7 +180,7 @@ it('keeps the app reactive with both future board and kit data', () => {
   localStorage.setItem('paint.lego.kits', '{"version":6}');
   mount();
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('newer Paint version');
-  click('Edit');
+  enterEdit();
   expect(button('Done')).toBeDefined();
 });
 
@@ -190,7 +191,7 @@ it('shows a notice and keeps Edit reactive when a corrupt board cannot be backed
   });
   mount();
   expect(document.querySelector('[role="alert"]')?.textContent).toContain("Board changes can't be saved");
-  click('Edit');
+  enterEdit();
   expect(button('Done')).toBeDefined();
   expect(localStorage.getItem('paint.lego')).toBe('{broken');
 });
@@ -227,8 +228,8 @@ it.each([
   const title = kind === 'canvas' ? 'Canvas paused' : 'Drawing engine stopped';
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(title);
   expect(button(action)).toBeDefined();
-  click('Edit');
-  openBox();
+  enterEdit();
+  openParts();
   click('Reset board');
   expect(wiring.session!.error()).toBe(failure);
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(title);
@@ -238,22 +239,23 @@ it.each([
   expect(wiring.session!.error()).toMatchObject({ kind: 'lego', code: 'storage' });
 });
 
-it('mounts no box content while closed, including after opening and closing it', () => {
+it('mounts no catalog content while closed, including after opening and closing it', () => {
   mount();
-  click('Edit');
-  expect(document.querySelector('[class*="trayContent"]')).toBeNull();
+  enterEdit();
+  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
   expect(document.querySelector('[class*="kitPreview"]')).toBeNull();
-  openBox();
+  openParts();
+  expect(document.querySelector('dialog[aria-label="Parts"]')).not.toBeNull();
   expect(button('Reset board')).toBeDefined();
-  openBox();
-  expect(document.querySelector('[class*="trayContent"]')).toBeNull();
+  click('Done');
+  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
   expect(button('Reset board')).toBeUndefined();
 });
 
 it('keeps a board part mounted through an edit tap', () => {
   storeParts(['color:pair']);
   mount();
-  click('Edit');
+  enterEdit();
   const mounted = wiring.partMounts;
   const part = document.querySelector<HTMLElement>('[data-part="test-0"]')!;
   part.getBoundingClientRect = () => new DOMRect(12, 12, 92, 44);
@@ -412,8 +414,7 @@ it.each(['file', 'brushes'])('records the actual %s part popup name', (name) => 
   document.querySelector<HTMLButtonElement>(`[data-part-kind="action:${name}"] button`)!.click();
   flush();
   expect(wiring.panel?.()).toBe(`action:${name}`);
-  button('Edit')!.click();
-  flush();
+  enterEdit();
   expect(wiring.panel?.()).toBeUndefined();
 });
 
@@ -493,7 +494,7 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   expect(landed.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
   expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('28px');
   expect(landed.querySelector('[role="slider"]')!.textContent).toMatch(/^Flow\d+%$/);
-  expect(button('Edit')).toBeDefined();
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
   expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
   expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
 });
@@ -1094,7 +1095,8 @@ it('opens Options from its part and from the File menu, and closes it with Done,
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
   flush();
   expect(optionsSheet()).toBeNull();
-  expect(button('Edit')).toBeDefined();
+  expect(button('Edit')).toBeUndefined();
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
 });
 
 it("lays the grid out anew at once as Options' grid size changes, and keeps the size on the device", () => {
@@ -1354,14 +1356,190 @@ function click(text: string) {
   flush();
 }
 
-/** Opens the sheet through its real tap gesture. */
-function openBox() {
-  const handle = document.querySelector<HTMLElement>('[aria-label="Box of parts"] > div')!;
-  handle.setPointerCapture = vi.fn();
-  handle.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
-  handle.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
+/** Enters layout edit mode through the studio's editLayout capability. */
+function enterEdit() {
+  wiring.services!.options.editLayout();
   flush();
 }
+
+/** Opens the modal Parts catalog through the floating Edit bar's Parts button. */
+function openParts() {
+  const parts = [...document.querySelectorAll<HTMLButtonElement>('[aria-label="Edit layout"] button')].find((el) =>
+    el.textContent?.includes('Parts')
+  );
+  expect(parts).toBeDefined();
+  parts!.click();
+  flush();
+  const dialog = document.querySelector<HTMLDialogElement>('dialog[aria-label="Parts"]');
+  expect(dialog).not.toBeNull();
+  return dialog!;
+}
+
+it('hides any permanent Edit button in live mode and enters Edit via File menu, Options, or long-pressing a panel', () => {
+  vi.useFakeTimers();
+  try {
+    storeParts(['action:file', 'action:options', 'action:undo']);
+    mount();
+
+    // No permanent Edit button in the corner controls in live mode.
+    expect(button('Edit')).toBeUndefined();
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+
+    // 1) Enter via File → Edit layout.
+    document.querySelector<HTMLButtonElement>('[data-part-kind="action:file"] button')!.click();
+    flush();
+    const fileItem = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === 'Edit layout'
+    )!;
+    fileItem.click();
+    flush();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
+    // Canvas stays 1:1 with no card scaling.
+    expect(document.querySelector('[class*="carded"]')).toBeNull();
+    click('Done');
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+
+    // 2) Enter via Options → Interface → Edit layout.
+    const sheet = openOptions();
+    const optionsButton = [...sheet.querySelectorAll<HTMLButtonElement>('button')].find(
+      (el) => el.textContent?.trim() === 'Edit layout'
+    )!;
+    optionsButton.click();
+    flush();
+    expect(optionsSheet()).toBeNull();
+    expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
+    click('Done');
+
+    // 3) Moving a press cancels the long-press timer (protects sliders/pickers/FloatingGrip).
+    const undoPart = document.querySelector<HTMLElement>('[data-part="test-2"]')!;
+    pointer(undoPart, 'pointerdown', 20, 20);
+    pointer(window, 'pointermove', 34, 20);
+    vi.advanceTimersByTime(600);
+    flush();
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+    pointer(window, 'pointerup', 34, 20);
+
+    // 4) Holding still (~450ms) on a LEGO panel/part enters Edit mode without firing the part.
+    pointer(undoPart, 'pointerdown', 20, 20);
+    vi.advanceTimersByTime(440);
+    flush();
+    expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+    vi.advanceTimersByTime(20);
+    flush();
+    expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
+    pointer(window, 'pointerup', 20, 20);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('places the floating Edit bar on a freeSpot clear of panels and lets its grip move it anywhere', () => {
+  localStorage.setItem(
+    'paint.lego',
+    JSON.stringify({
+      version: 5,
+      board: {
+        panels: [
+          {
+            id: 'top-left',
+            at: { x: 0, y: 0 },
+            parts: [{ id: 'p0', kind: 'action:undo', cell: { column: 0, row: 0 }, span: { columns: 4, rows: 3 } }]
+          }
+        ]
+      }
+    })
+  );
+  mount();
+  enterEdit();
+
+  const panel = document.querySelector<HTMLElement>('[data-panel="top-left"]')!;
+  const bar = document.querySelector<HTMLElement>('[aria-label="Edit layout"]')!;
+  const panelRect = {
+    left: parseFloat(panel.style.left),
+    top: parseFloat(panel.style.top),
+    width: parseFloat(panel.style.width),
+    height: parseFloat(panel.style.height)
+  };
+  const barLeft = parseFloat(bar.style.left);
+  const barTop = parseFloat(bar.style.top);
+  // Placed via freeSpot so it does not overlap the top-left panel.
+  const separated =
+    barLeft + 210 <= panelRect.left ||
+    panelRect.left + panelRect.width <= barLeft ||
+    barTop + 56 <= panelRect.top ||
+    panelRect.top + panelRect.height <= barTop;
+  expect(separated).toBe(true);
+
+  // Dragging by the grip moves the Edit bar freely.
+  const grip = bar.querySelector<HTMLButtonElement>('[aria-label="Move edit bar"]')!;
+  pointer(grip, 'pointerdown', 100, 100);
+  pointer(window, 'pointermove', 260, 220);
+  pointer(window, 'pointerup', 260, 220);
+  expect(parseFloat(bar.style.left)).toBe(barLeft + 160);
+  expect(parseFloat(bar.style.top)).toBe(barTop + 120);
+});
+
+it('opens the Sidebar Parts catalog, moves away on drag, places onto the 1:1 board, and supports top discard capsule', () => {
+  storeParts(['action:undo']);
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    if (this.getAttribute('role') === 'status' && this.textContent?.includes('Drop to')) {
+      return new DOMRect(400, 14, 220, 44);
+    }
+
+    return new DOMRect(0, 0, 1024, 768);
+  });
+  mount();
+  enterEdit();
+
+  const dialog = openParts();
+  // Floating Edit bar hides while Parts catalog is open.
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+  // Existing board part shows On board badge.
+  expect(dialog.querySelector('[title="Undo"]')!.closest('[data-on-board]')?.textContent).toContain('On board');
+
+  // Dragging a new part from Parts hides the dialog with data-away and closes it on board drop.
+  const redoTile = dialog.querySelector<HTMLElement>('[title="Redo"]')!;
+  pointer(redoTile, 'pointerdown', 120, 220);
+  expect(dialog.hasAttribute('data-away')).toBe(false);
+  pointer(window, 'pointermove', 500, 420);
+  expect(dialog.hasAttribute('data-away')).toBe(true);
+  expect(document.body.textContent).toContain('Drop to cancel');
+  pointer(window, 'pointerup', 500, 420);
+
+  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('[data-panel] [data-part-kind="action:redo"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
+
+  // Dragging a new part onto the top discard capsule cancels placement and returns the catalog.
+  const reopened = openParts();
+  const eraserTile = reopened.querySelector<HTMLElement>('[title="Eraser"]')!;
+  pointer(eraserTile, 'pointerdown', 120, 220);
+  pointer(window, 'pointermove', 480, 28);
+  expect(reopened.hasAttribute('data-away')).toBe(true);
+  pointer(window, 'pointerup', 480, 28);
+  expect(document.querySelector('dialog[aria-label="Parts"]')).toBe(reopened);
+  expect(reopened.hasAttribute('data-away')).toBe(false);
+  expect(document.querySelector('[data-panel] [data-part-kind="action:eraser"]')).toBeNull();
+
+  // Escape closes the catalog first, then exits Edit mode on the next Escape.
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  flush();
+  expect(document.querySelector('dialog[aria-label="Parts"]')).toBeNull();
+  expect(document.querySelector('[aria-label="Edit layout"]')).not.toBeNull();
+
+  // Dragging an existing board part onto the top red "Drop to put away" capsule removes it from the board.
+  const placedRedo = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="action:redo"]')!.closest<HTMLElement>('[data-part]')!;
+  pointer(placedRedo, 'pointerdown', 500, 420);
+  pointer(window, 'pointermove', 480, 28);
+  expect(document.body.textContent).toContain('Drop to put away');
+  pointer(window, 'pointerup', 480, 28);
+  expect(document.querySelector('[data-panel] [data-part-kind="action:redo"]')).toBeNull();
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  flush();
+  expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
+});
 
 it('relays a host cell change to mounted parts, captions and corners while keeping the stored board', () => {
   storeParts(['action:brush-editor']);

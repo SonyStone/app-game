@@ -683,17 +683,7 @@
   overflow: hidden;
 }
 
-/* The box of parts and the edit button */
-
-.boxButton {
-  flex: none;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: var(--lego-r-inner);
-  background: rgb(255 255 255 / 0.12);
-  color: #ffffff !important;
-  cursor: pointer;
-}
+/* Top-right chrome buttons (Exit, Fullscreen, trial switch) */
 
 .controls {
   position: absolute;
@@ -722,10 +712,6 @@
   place-items: center;
   width: calc(var(--lego-hit-size) - 8px);
   padding: 0;
-}
-
-.editButton[data-active] {
-  background: var(--lego-accent);
 }
 
 /* Looks */
@@ -1145,35 +1131,6 @@
   color: var(--lego-quiet);
 }
 
-/*
- * The card: as the box of parts' sheet rises, the drawing and the board shrink to a card above it, as Android's home
- * screen does while widgets are arranged. Both scale from their top-left corner, which BoardView measures to map
- * presses to cells; LegoStudio sets the scale and the offset.
- */
-.workspace,
-.board {
-  transform-origin: 0 0;
-  transition:
-    scale var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
-    translate var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
-    border-radius 260ms;
-}
-
-.carded {
-  background: #d6d3cc;
-
-  .workspace,
-  .board {
-    scale: var(--card-scale);
-    translate: var(--card-x) var(--card-y);
-  }
-
-  .workspace {
-    border-radius: calc(18px / var(--card-scale));
-    box-shadow: 0 16px 60px rgb(0 0 0 / 0.3);
-  }
-}
-
 /* The drawing under the board while editing: it takes no strokes, and a long press there opens the spawn menu. */
 .bare {
   position: absolute;
@@ -1183,297 +1140,102 @@
 }
 
 /*
- * The box of parts: a sheet risen from the bottom edge to the height BoardView's sheet gives, a short handle while
- * closed and a strip that puts things away while sunk. It holds the search header over the parts catalog and the kits
- * shelf beside it (under it when the view is narrow).
+ * The floating draggable Edit bar (`[ ⠿  ＋ Parts  Done ]`): placed on a free spot when entering edit mode so it
+ * covers no existing panel, and movable anywhere by its grip.
  */
-.tray {
+.editBar {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  /* Over the session's floating windows (900); popups and the carried part stay over it. */
-  z-index: 920;
-  /* Sized by its left and right edges and its height, set as it is pulled. */
-  container: parts-tray / size;
-  display: grid;
-  grid-template-rows: 24px minmax(0, 1fr);
-  overflow: hidden;
-  border-radius: var(--lego-r-plate) var(--lego-r-plate) 0 0;
-  /* Opaque: the white card behind would show through even a slightly clear sheet. */
-  background: rgb(20 21 25);
-  color: #ffffff;
-  box-shadow: 0 -8px 30px rgb(0 0 0 / 0.25);
-  transition:
-    height var(--sheet-time, 260ms) cubic-bezier(0.2, 0.8, 0.2, 1),
-    left 200ms,
-    right 200ms;
-
-  /* A tab in the strip the drawing leaves above the bottom edge: a grip with its name, to tap or pull. */
-  &[data-closed] {
-    right: calc(50% - 80px);
-    left: calc(50% - 80px);
-    grid-template-rows: minmax(0, 1fr);
-
-    .trayContent {
-      display: none;
-    }
-  }
-
-  &[data-sunk] {
-    grid-template-rows: minmax(0, 1fr) 0;
-
-    .trayContent {
-      visibility: hidden;
-    }
-  }
-
-  &[data-over] .trayBar {
-    background: rgb(230 70 60 / 0.55);
-  }
-}
-
-.trayBar {
-  position: relative;
+  z-index: 930;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: grab;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--lego-r-plate);
+  background: rgb(36 38 44 / 0.96);
+  color: #ffffff;
+  box-shadow: var(--lego-shadow);
   touch-action: none;
-  user-select: none;
-}
-
-.trayGrip {
-  position: absolute;
-  top: 9px;
-  left: 50%;
-  width: calc(var(--lego-hit-size) - 8px);
-  height: 4px;
-  translate: -50% 0;
-  border-radius: 2px;
-  corner-shape: round;
-  background: rgb(255 255 255 / 0.4);
-}
-
-.trayTitle {
-  margin-top: 8px;
-  color: rgb(255 255 255 / 0.85);
-  font-size: 13px;
-  font-weight: 600;
   white-space: nowrap;
 }
 
-/* Search header over the spacious parts catalog and kits shelf. */
-.trayContent {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px;
-  min-height: 0;
-  padding: 6px 14px 14px;
-}
-
-.trayHeader {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.traySearch {
-  position: relative;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: var(--lego-hit-size);
-  padding: 0 12px;
-  border: 1px solid rgb(255 255 255 / 0.14);
-  border-radius: var(--lego-r-plate);
-  background: rgb(255 255 255 / 0.06);
-  color: rgb(255 255 255 / 0.6);
-
-  &:focus-within {
-    border-color: var(--lego-accent);
-    background: rgb(255 255 255 / 0.09);
-    color: #ffffff;
-  }
-}
-
-.traySearchInput {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: none;
-  color: #ffffff;
-  font: inherit;
-  font-size: 13px;
-  outline: none;
-
-  &::placeholder {
-    color: rgb(255 255 255 / 0.45);
-  }
-
-  &::-webkit-search-cancel-button {
-    display: none;
-  }
-}
-
-.traySearchClear {
-  display: flex;
+.editBarGrip,
+.editBarParts,
+.editBarDone {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
+  gap: 6px;
+  min-height: var(--lego-hit-size);
   border: 0;
-  border-radius: 999px;
-  corner-shape: round;
-  background: rgb(255 255 255 / 0.12);
+  border-radius: var(--lego-r-bar-button);
   color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  touch-action: none;
+}
+
+.editBarGrip {
+  width: 32px;
+  padding: 0;
+  background: none;
+  color: rgb(255 255 255 / 0.65);
+  cursor: grab;
+
+  &:hover {
+    background: rgb(255 255 255 / 0.1);
+    color: #ffffff;
+  }
+
+  &:active {
+    cursor: grabbing;
+  }
+}
+
+.editBarParts {
+  padding: 0 12px;
+  background: rgb(255 255 255 / 0.12);
   cursor: pointer;
 
   &:hover {
-    background: rgb(255 255 255 / 0.22);
+    background: rgb(255 255 255 / 0.2);
   }
 }
 
-.trayMain {
-  container: box-main / inline-size;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 32%);
-  gap: 12px;
-  min-height: 0;
+.editBarDone {
+  padding: 0 14px;
+  background: var(--lego-accent);
+  cursor: pointer;
 }
 
-/* On narrow screens the kits shelf sits cleanly beneath the parts catalog. */
-@container parts-tray (width < 720px) {
-  .trayMain {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(112px, 34%);
-    gap: 10px;
-  }
-}
-
-.trayBody,
-.kitShelf {
-  display: grid;
-  align-content: start;
-  justify-items: start;
-  gap: 12px;
-  min-height: 0;
-  padding: 12px 14px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1.5px solid transparent;
-  border-radius: var(--lego-r-plate);
-  touch-action: pan-y;
-  transition:
-    background 120ms,
-    border-color 120ms;
-}
-
-.trayShelves {
-  container: box-shelves / inline-size;
-  display: grid;
-  min-height: 0;
-}
-
-/*
- * The parts: their families in a sidebar beside the chosen family's parts, on one plate with a hairline between them
- * (`SettingsSplit`), in the brush studio's colors. The list and the parts scroll on their own. Narrower than 380 px,
- * the families and a family's parts are two screens.
- */
-.trayBody {
-  position: relative;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
-  align-content: stretch;
-  justify-items: stretch;
-  gap: 0;
-  padding: 0;
-  overflow: hidden;
-  background: rgb(255 255 255 / 0.03);
-
-  &[data-over] {
-    border-color: rgb(230 70 60 / 0.9);
-    background: rgb(230 70 60 / 0.16);
-  }
-}
-
-/* What the parts do with a part dropped on them, over them while one is carried there. */
-.dropNote {
+/* Top red capsule shown while dragging in edit mode: far from Android's bottom gesture bar. */
+.discardZone {
   position: absolute;
-  bottom: 10px;
+  top: 14px;
   left: 50%;
-  z-index: 1;
+  z-index: 955;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--lego-hit-size);
+  padding: 0 18px;
   translate: -50% 0;
-  padding: 6px 10px;
+  border: 1.5px solid rgb(230 70 60 / 0.85);
   border-radius: 999px;
   corner-shape: round;
-  background: rgb(20 21 25 / 0.9);
+  background: rgb(180 42 36 / 0.92);
   color: #ffffff;
-  pointer-events: none;
+  font-weight: 600;
   white-space: nowrap;
-}
+  box-shadow: var(--lego-shadow);
+  pointer-events: none;
+  transition:
+    background 120ms,
+    scale 120ms;
 
-.boxSplit {
-  --settings-split-list: clamp(132px, 26%, 184px);
-  --settings-split-line: 1px solid var(--lego-divider);
-  --settings-split-back: var(--lego-accent);
-}
-
-@container box-shelves (width < 380px) {
-  .trayBody {
-    --settings-split: narrow;
+  &[data-over] {
+    background: rgb(224 56 48);
+    scale: 1.05;
   }
-}
-
-.boxFamilies {
-  --settings-list-ink: #ffffff;
-  --settings-list-quiet: rgb(255 255 255 / 0.62);
-  --settings-list-icon: var(--lego-tile);
-  --settings-list-icon-ink: var(--lego-ink);
-  --settings-list-hover: rgb(255 255 255 / 0.07);
-  --settings-list-pressed: rgb(255 255 255 / 0.14);
-  --settings-list-selected: var(--lego-accent);
-  --settings-list-selected-ink: #ffffff;
-  --settings-list-focus: var(--lego-accent);
-  --settings-list-inset: 6px;
-
-  min-height: 0;
-  padding-block: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
-
-.boxPane {
-  display: grid;
-  align-content: start;
-  justify-items: stretch;
-  gap: 14px;
-  min-height: 0;
-  padding: 12px 14px 14px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  color: #ffffff;
-  touch-action: pan-y;
-}
-
-.trayGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  align-items: start;
-  gap: 10px;
-}
-
-.traySearchGroup {
-  display: grid;
-  gap: 8px;
-}
-
-.trayEmpty {
-  margin: 0;
-  color: rgb(255 255 255 / 0.55);
-  font-size: 12px;
 }
 
 .trayOnBoard {
@@ -1485,26 +1247,6 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 1.4;
-}
-
-.kitShelf {
-  justify-items: stretch;
-  border-style: dashed;
-  border-color: rgb(61 126 255 / 0.45);
-  background: rgb(61 126 255 / 0.07);
-
-  &[data-over] {
-    border-color: var(--lego-accent);
-    background: rgb(61 126 255 / 0.22);
-  }
-}
-
-/* What a box holds or does with what is dropped on it, set as a Settings list's group heading. */
-.zoneLabel {
-  color: rgb(255 255 255 / 0.62);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
 }
 
 /* A kit just kept, or the one a kept group matched: it pulses once. */
@@ -1628,7 +1370,6 @@
   line-height: 1;
 }
 
-.tray h4,
 .spawnCard h4 {
   margin: 0 0 8px;
   color: rgb(255 255 255 / 0.62);
@@ -2663,8 +2404,8 @@
   .popup,
   .entryCard,
   .selectionBar,
-  .spawnCard,
-  .tray {
+  .editBar,
+  .spawnCard {
     outline: 1px solid #ffffff;
   }
 }
