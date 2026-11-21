@@ -5,6 +5,8 @@ import { createDocument, TILE_BYTES, type DocumentNode, type Layer } from './doc
 import { MAX_FOLDER_DEPTH, MAX_FOLDERS } from './layerTree';
 import { readPaintFile, writePaintFile } from './paintFile';
 import { writePsdFile } from './psdFile';
+import { createRegionHistory } from './regionHistory';
+import { wholeSelection } from './selectionMask';
 import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
 import { compressTile } from './tileCodec';
 import { unpackTile, type TileData } from './tilePixels';
@@ -332,6 +334,16 @@ describe('folders in the document', () => {
       'Group 2/Top',
       'Group 2'
     ]);
+  });
+
+  it('leaves folder steps out of a layer’s region history, as steps of other layers are', async () => {
+    const { doc, ids } = folderDocument();
+    doc.changeLayer({ type: 'group', ids: [ids.top] });
+    doc.changeLayer({ type: 'relocate', id: ids.top, parentId: ids.group, side: 'above' });
+    paint(doc, ids.top, '0,1', 5);
+    const history = createRegionHistory(async (pixels) => unpackTile(pixels as Uint8Array));
+    // Newest first: the new paint (0), relocate (1), group (2), then Top's first paint (3).
+    expect(await history.touching(doc.undoSteps(), ids.top, wholeSelection)).toEqual([0, 3]);
   });
 
   it('refuses to open a tree it cannot show', () => {
