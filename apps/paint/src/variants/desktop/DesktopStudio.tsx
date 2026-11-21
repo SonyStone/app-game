@@ -283,6 +283,7 @@ export function DesktopStudio(props: PaintVariantProps) {
                     body: (
                       <LayersPanel
                         layers={engine.state().layers}
+                        nodes={engine.state().nodes}
                         activeId={engine.state().activeId}
                         ready={session.ready()}
                         onAction={(action) => session.edit({ type: 'layer', action })}

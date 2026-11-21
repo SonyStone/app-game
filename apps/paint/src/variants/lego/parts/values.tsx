@@ -91,12 +91,21 @@ const channels = [
     unit: '%',
     min: 0,
     max: () => 100,
-    read: (s) => s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId)!.opacity * 100,
-    write: (s, value) =>
-      s.layers.action({ type: 'update', id: s.layers.state().activeId, patch: { opacity: value / 100 } }),
+    // A folder is at full strength and takes no opacity: it reads 100% and ignores changes.
+    read: (s) => (activeRaster(s)?.opacity ?? 1) * 100,
+    write: (s, value) => {
+      const layer = activeRaster(s);
+      if (layer) {
+        s.layers.action({ type: 'update', id: layer.id, patch: { opacity: value / 100 } });
+      }
+    },
     capture: (s) => {
-      const id = s.layers.state().activeId;
-      return (value) => s.layers.action({ type: 'update', id, patch: { opacity: value / 100 } });
+      const id = activeRaster(s)?.id;
+      return (value) => {
+        if (id) {
+          s.layers.action({ type: 'update', id, patch: { opacity: value / 100 } });
+        }
+      };
     },
     colored: false,
     deferred: true,
@@ -839,4 +848,9 @@ function gradient(stops: readonly string[]) {
 export function roundedValue(value: number, step = 1) {
   const decimals = (String(step).split('.')[1] ?? '').length;
   return Number((Math.round(value / step) * step).toFixed(decimals));
+}
+
+/** The active raster layer; undefined while a folder is active. */
+function activeRaster(s: LegoServices) {
+  return s.layers.state().layers.find((layer) => layer.id === s.layers.state().activeId);
 }

@@ -33,7 +33,7 @@ import { createFrames, frameRegion } from '../frames';
 import { arrivalStorageWaitMs, arrivedByMove, createFreshTab } from '../fresh-tab';
 import { createGpuWarmup } from '../gpu-warmup';
 import { createGradient } from '../gradient';
-import { createHiddenLayerGuard } from '../hidden-layer';
+import { createHiddenLayerGuard, paintTarget } from '../hidden-layer';
 import { createInkTrail } from '../ink-trail';
 import { createLayerThumbnails } from '../layer-thumbnails';
 import { createImagePlacement, createLayerFilter } from '../layers';
@@ -246,7 +246,7 @@ export function createPaintSession(options: {
   });
   const hiddenLayer = createHiddenLayerGuard({
     paints: () => tools.tool() === 'brush' || tools.tool() === 'eraser',
-    layer: () => engine.state().layers.find((layer) => layer.id === engine.state().activeId)
+    layer: () => paintTarget(engine.state())
   });
   const transform = createTransform({
     run: engine.runEdit,

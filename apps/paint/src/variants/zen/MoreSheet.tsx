@@ -1,6 +1,7 @@
 import type { LayerAction } from '@app-game/paint-core/document';
 import { For, Show } from 'solid-js';
 import type { DocumentState } from '../../features/layers';
+import { layerCommand } from '../../features/layers/LayerControls';
 import type { QuickShapePreferences } from '../../features/quickshape';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
 import type { Hand } from './createZenSettings';
@@ -52,7 +53,6 @@ export function MoreSheet(props: {
   };
   const topFirst = () => [...props.state.layers].reverse();
   const active = () => props.state.layers.find((layer) => layer.id === props.state.activeId);
-  const activeIndex = () => props.state.layers.findIndex((layer) => layer.id === props.state.activeId);
 
   return (
     <>
@@ -114,13 +114,13 @@ export function MoreSheet(props: {
               <LayerButton
                 icon="up"
                 label="Move up"
-                disabled={!props.ready || activeIndex() >= props.state.layers.length - 1}
+                disabled={layerCommand('up', props.state, props.ready).disabled}
                 onClick={() => props.onLayer({ type: 'move', id: layer().id, direction: 1 })}
               />
               <LayerButton
                 icon="down"
                 label="Move down"
-                disabled={!props.ready || activeIndex() <= 0}
+                disabled={layerCommand('down', props.state, props.ready).disabled}
                 onClick={() => props.onLayer({ type: 'move', id: layer().id, direction: -1 })}
               />
               <LayerButton
@@ -132,13 +132,13 @@ export function MoreSheet(props: {
               <LayerButton
                 icon="newLayer"
                 label="Merge down"
-                disabled={!props.ready || activeIndex() <= 0}
+                disabled={layerCommand('merge-down', props.state, props.ready).disabled}
                 onClick={() => props.onLayer({ type: 'merge-down', id: layer().id })}
               />
               <LayerButton
                 icon="trash"
                 label="Delete layer"
-                disabled={!props.ready || props.state.layers.length <= 1}
+                disabled={layerCommand('delete', props.state, props.ready).disabled}
                 onClick={() => props.onLayer({ type: 'delete', id: layer().id })}
               />
             </>

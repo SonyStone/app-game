@@ -163,3 +163,30 @@ it('locks and unlocks the transparent pixels of the selected layer as an undoabl
   flush();
   expect(lock.getAttribute('aria-pressed')).toBe('false');
 });
+
+it('lists only raster layers while a folder is active, renames the folder and leaves raster-only commands off', () => {
+  const drawing = createDocument();
+  drawing.changeLayer({ type: 'group', ids: [drawing.activeId] });
+  const folder = drawing.activeId;
+  const layer = vi.fn();
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(
+    () => <LayersPanel state={drawing.state()} ready onAction={layer} onLinearBlending={() => {}} />,
+    host
+  );
+  flush();
+
+  expect([...host.querySelectorAll('[aria-label^="Select "]')].map((row) => row.getAttribute('aria-label'))).toEqual([
+    'Select Layer 1'
+  ]);
+  expect(host.querySelector('[aria-current="true"]')).toBeNull();
+  expect(host.querySelector('[aria-label="Lock transparent pixels"]')).toBeNull();
+  const name = host.querySelector<HTMLInputElement>('input[aria-label="Layer name"]')!;
+  expect(name.value).toBe('Group 1');
+  name.value = 'Sketch';
+  name.dispatchEvent(new Event('change'));
+  expect(layer).toHaveBeenLastCalledWith({ type: 'update', id: folder, patch: { name: 'Sketch' } });
+  // The folder holds the drawing's only layer, so deleting it would leave none.
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="Delete layer"]')?.disabled ?? true).toBe(true);
+});

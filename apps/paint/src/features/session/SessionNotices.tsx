@@ -28,9 +28,12 @@ export function SessionNotices(props: { session: PaintSession }) {
         {(notice) => (
           <HiddenLayerNotice
             name={notice().name}
+            folder={notice().folder}
+            hiddenFolder={notice().hiddenFolder?.name}
             size={size()}
             onShow={() => {
-              edit({ type: 'layer', action: { type: 'update', id: notice().id, patch: { visible: true } } });
+              const id = notice().hiddenFolder?.id ?? notice().id;
+              edit({ type: 'layer', action: { type: 'update', id, patch: { visible: true } } });
               hiddenLayer.dismiss();
             }}
             onDismiss={hiddenLayer.dismiss}

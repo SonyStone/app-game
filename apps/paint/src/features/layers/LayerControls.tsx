@@ -1,4 +1,5 @@
 import type { LayerAction, RasterInfo } from '@app-game/paint-core/document';
+import { flatLayerMove, siblingBelow, subtreeIds } from '@app-game/paint-core/layerTree';
 import { closestCenter, createDragContext, createDraggable, createDroppable } from '@solid-primitives/drag-drop';
 import { createEffect, createMemo, For, Show, untrack } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../shared/ui/SketchIcon';
@@ -8,6 +9,9 @@ import styles from './LayersPanel.module.css';
 /**
  * Shared scrollable layer list. The host owns thumbnail demand and may supply its own classes and compact rows.
  * Selection and order changes reveal the active row after DOM updates; unrelated reports preserve manual scrolling.
+ *
+ * Lists the drawing's raster layers only, in compositing order, without its folders: a drag moves a layer next to the
+ * one it is dropped on, into that layer's folder (`flatLayerMove`). While a folder is active, no row is.
  */
 export function LayerList(props: {
   state: DocumentState;
@@ -30,8 +34,10 @@ export function LayerList(props: {
     collisionDetection: closestCenter,
     onDragEnd(item, over) {
       const index = props.state.layers.findIndex((layer) => layer.id === over?.id);
-      if (index >= 0 && over?.id !== item.id) {
-        props.onAction({ type: 'reorder', id: String(item.id), index });
+      const move =
+        index >= 0 && over?.id !== item.id ? flatLayerMove(props.state.nodes, String(item.id), index) : undefined;
+      if (move) {
+        props.onAction(move);
       }
     }
   });
@@ -60,8 +66,12 @@ export function LayerList(props: {
   );
 }
 
-/** Commits nonempty names on blur or Enter, preserving the original on empty input. */
-export function LayerName(props: { layer: RasterInfo; onAction: (action: LayerAction) => void; class?: string }) {
+/** Commits nonempty names on blur or Enter, preserving the original on empty input; a folder's name too. */
+export function LayerName(props: {
+  layer: { id: string; name: string };
+  onAction: (action: LayerAction) => void;
+  class?: string;
+}) {
   return (
     <input
       class={props.class ?? styles.layerName}
@@ -92,11 +102,21 @@ export function LayerName(props: { layer: RasterInfo; onAction: (action: LayerAc
 /** Shared command identifiers for both Classic and LEGO layer controls. */
 export type LayerCommand = 'add' | 'duplicate' | 'delete' | 'merge-down' | 'up' | 'down' | 'lock' | 'clip';
 
-/** Resolves a layer command's availability, toggle state and undoable action from the current document. */
+/**
+ * Resolves a layer command's availability, toggle state and undoable action from the current document. Commands act on
+ * the active node: duplicate, delete and moves on a folder take its contents along; merge down, lock and clip need a
+ * raster layer, and are disabled while a folder is active. Moves stay among the node's siblings.
+ */
 export function layerCommand(command: LayerCommand, state: DocumentState, ready: boolean) {
-  const index = state.layers.findIndex((layer) => layer.id === state.activeId);
-  const selected = state.layers[index]!;
-  const below = state.layers[index - 1];
+  /** The active raster layer; undefined while a folder is active. */
+  const selected = state.layers.find((layer) => layer.id === state.activeId);
+  const node = state.nodes.find((candidate) => candidate.id === state.activeId);
+  const siblings = state.nodes.filter((candidate) => candidate.parentId === node?.parentId);
+  const position = siblings.findIndex((candidate) => candidate.id === state.activeId);
+  /** The raster layer right below the active one in its folder, which Merge down merges into. */
+  const sibling = siblingBelow(state.nodes, state.activeId);
+  const below = state.layers.find((layer) => layer.id === sibling?.id);
+  const removed = new Set(subtreeIds(state.nodes, state.activeId));
   const details = {
     add: { label: 'Add layer', icon: 'plus', disabled: !ready, action: { type: 'add' } },
     duplicate: {
@@ -108,40 +128,41 @@ export function layerCommand(command: LayerCommand, state: DocumentState, ready:
     delete: {
       label: 'Delete layer',
       icon: 'trash',
-      disabled: !ready || state.layers.length <= 1,
+      // A drawing keeps a raster layer.
+      disabled: !ready || state.layers.every((layer) => removed.has(layer.id)),
       action: { type: 'delete', id: state.activeId }
     },
     'merge-down': {
       label: 'Merge down',
       icon: 'mergeDown',
-      disabled: !ready || !below?.visible || !selected.visible,
+      disabled: !ready || !selected?.visible || !below?.visible,
       action: { type: 'merge-down', id: state.activeId }
     },
     up: {
       label: 'Move layer up',
       icon: 'up',
-      disabled: !ready || index === state.layers.length - 1,
+      disabled: !ready || position < 0 || position === siblings.length - 1,
       action: { type: 'move', id: state.activeId, direction: 1 }
     },
     down: {
       label: 'Move layer down',
       icon: 'down',
-      disabled: !ready || index === 0,
+      disabled: !ready || position <= 0,
       action: { type: 'move', id: state.activeId, direction: -1 }
     },
     lock: {
       label: 'Lock transparent pixels',
-      icon: selected.alphaLock ? 'alphaLock' : 'alphaUnlock',
-      disabled: false,
-      pressed: !!selected.alphaLock,
-      action: { type: 'update', id: state.activeId, patch: { alphaLock: !selected.alphaLock } }
+      icon: selected?.alphaLock ? 'alphaLock' : 'alphaUnlock',
+      disabled: !selected,
+      pressed: !!selected?.alphaLock,
+      action: { type: 'update', id: state.activeId, patch: { alphaLock: !selected?.alphaLock } }
     },
     clip: {
       label: 'Clip to layer below',
       icon: 'clip',
-      disabled: false,
-      pressed: !!selected.clipping,
-      action: { type: 'update', id: state.activeId, patch: { clipping: !selected.clipping } }
+      disabled: !selected,
+      pressed: !!selected?.clipping,
+      action: { type: 'update', id: state.activeId, patch: { clipping: !selected?.clipping } }
     }
   } satisfies Record<
     LayerCommand,

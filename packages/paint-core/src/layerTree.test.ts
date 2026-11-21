@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentNode, Layer, LayerGroup } from './document';
-import { MAX_FOLDER_DEPTH, orderLayerTree, shownLayers, siblingBelow, subtreeIds } from './layerTree';
+import { flatLayerMove, MAX_FOLDER_DEPTH, orderLayerTree, shownLayers, siblingBelow, subtreeIds } from './layerTree';
 
 describe('layer tree', () => {
   it('puts every folder right after its children, keeping the order of siblings', () => {
@@ -119,3 +119,35 @@ function group(id: string, parentId?: string, extra: Partial<LayerGroup> = {}): 
     ...extra
   };
 }
+
+describe('moves in a flat list of raster layers', () => {
+  it('reorder without folders and relocate next to the new neighbour with them', () => {
+    const flat = [raster('a'), raster('b'), raster('c')];
+    expect(flatLayerMove(flat, 'a', 2)).toEqual({ type: 'reorder', id: 'a', index: 2 });
+    expect(flatLayerMove(flat, 'a', 0)).toBeUndefined();
+    expect(flatLayerMove(flat, 'a', 3)).toBeUndefined();
+
+    const nodes = orderLayerTree([raster('a'), group('g'), raster('b', 'g'), raster('c', 'g'), raster('d')]);
+    expect(flatLayerMove(nodes, 'a', 1)).toEqual({
+      type: 'relocate',
+      id: 'a',
+      parentId: 'g',
+      anchorId: 'c',
+      side: 'below'
+    });
+    expect(flatLayerMove(nodes, 'a', 3)).toEqual({
+      type: 'relocate',
+      id: 'a',
+      parentId: null,
+      anchorId: 'd',
+      side: 'above'
+    });
+    expect(flatLayerMove(nodes, 'd', 0)).toEqual({
+      type: 'relocate',
+      id: 'd',
+      parentId: null,
+      anchorId: 'a',
+      side: 'below'
+    });
+  });
+});

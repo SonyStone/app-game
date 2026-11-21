@@ -19,8 +19,8 @@ export const MAX_FOLDERS = 128;
  */
 export type LayerPlace = { parentId: string | null; anchorId?: string; side: 'above' | 'below' };
 
-/** What the tree reads of a node. */
-type TreeNode = { id: string; parentId?: string; kind?: 'raster' | 'group' };
+/** What the tree reads of a node: a document node, a saved one or one of the UI state's. */
+export type TreeNode = { id: string; parentId?: string; kind?: 'raster' | 'group' };
 
 /** Key of the root in a children index; never a node id, which is never empty. */
 const ROOT = '';
@@ -302,3 +302,34 @@ export function withParent<T extends { parentId?: string }>(node: T, parentId: s
   const { parentId: _previous, ...rest } = node;
   return (parentId === undefined ? rest : { ...rest, parentId }) as T;
 }
+
+/**
+ * The action that moves raster layer `id` to position `index` of the drawing's raster layers, bottom first, as a panel
+ * that lists only raster layers drags them: `reorder` in a drawing without folders; with folders, a `relocate` right
+ * below the layer that ends up above it, or right above the topmost layer, in that layer's folder. Undefined when the
+ * layer would not move or `index` is out of range.
+ */
+export function flatLayerMove(nodes: readonly TreeNode[], id: string, index: number): LayerMove | undefined {
+  const rasters = nodes.filter((node) => node.kind !== 'group');
+  const current = rasters.findIndex((node) => node.id === id);
+  if (current < 0 || index === current || !Number.isInteger(index) || index < 0 || index >= rasters.length) {
+    return undefined;
+  }
+
+  if (rasters.length === nodes.length) {
+    return { type: 'reorder', id, index };
+  }
+
+  const others = rasters.filter((node) => node.id !== id);
+  const anchor = others[Math.min(index, others.length - 1)]!;
+  return {
+    type: 'relocate',
+    id,
+    parentId: anchor.parentId ?? null,
+    anchorId: anchor.id,
+    side: index < others.length ? 'below' : 'above'
+  };
+}
+
+/** A move `flatLayerMove` returns; both are `LayerAction`s. */
+type LayerMove = { type: 'reorder'; id: string; index: number } | ({ type: 'relocate'; id: string } & LayerPlace);
