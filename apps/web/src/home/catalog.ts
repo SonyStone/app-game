@@ -4,7 +4,6 @@ import { mathRoutes } from '@app-game/math-examples/routes';
 import { oglRoutes } from '@app-game/ogl-examples/routes';
 import { paintRoutes } from '@app-game/paint-examples/routes';
 import { phaserRoutes } from '@app-game/phaser-examples/routes';
-import { tankiRoutes } from '@app-game/tanki/routes';
 import { threeRoutes } from '@app-game/three-examples';
 import { twglRoutes } from '@app-game/twgl-examples/routes';
 import { typegpuRoutes } from '@app-game/typegpu-examples/routes';
@@ -38,7 +37,6 @@ import scribbleIcon from '@tabler/icons/outline/scribble.svg?url';
 import sitemapIcon from '@tabler/icons/outline/sitemap.svg?url';
 import sparklesIcon from '@tabler/icons/outline/sparkles.svg?url';
 import swordIcon from '@tabler/icons/outline/sword.svg?url';
-import tankIcon from '@tabler/icons/outline/tank.svg?url';
 import topologyIcon from '@tabler/icons/outline/topology-star-3.svg?url';
 import triangleIcon from '@tabler/icons/outline/triangle.svg?url';
 import typographyIcon from '@tabler/icons/outline/typography.svg?url';
@@ -195,13 +193,6 @@ export const catalog: ProjectGroup[] = [
         sources: ['apps/night-defense'],
         icon: buildingCastleIcon,
         art: nightDefensePreview
-      },
-      {
-        href: String(tankiRoutes.path),
-        name: 'Tanki',
-        sources: ['apps/tanki'],
-        icon: tankIcon,
-        folder: tankiRoutes
       },
       {
         href: '/spector',
