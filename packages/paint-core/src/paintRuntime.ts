@@ -91,6 +91,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     /** How pixels show up close; a replacement renderer keeps it. */
     let pixelView = { smooth: true, grid: false };
+    /** Whether the red overlay of the mask being painted shows; see the `mask-overlay` command. */
+    let maskOverlay = false;
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -169,6 +171,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
+        maskOverlay,
         layersInView: inView.ids,
         layersInRegions: watched.layers,
         features: reportedFeatures(),
@@ -534,6 +537,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (!renderer || lost) return;
       // An edit preview describes the document it was made for; anything else that changed the document ends it.
       if (tilePreview && tilePreview.revision !== document.revision) dropPreview();
+      // The overlay follows the mask being painted, which edits replace with new objects.
+      renderer.setMaskOverlay(maskOverlay ? document.activeMask : undefined);
       const layers = shownLayers();
       const start = performance.now();
       if (primaryAttached) {
@@ -925,6 +930,12 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         warmGpu();
         return;
       }
+      if (command.type === 'mask-overlay') {
+        maskOverlay = command.enabled;
+        status();
+        scheduleDraw();
+        return;
+      }
       if (command.type === 'watch-regions') {
         watched = { regions: command.regions, revision: -1, layers: {} };
         status();
@@ -1209,8 +1220,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
               document.changeLayer(command.action);
             }
 
-            // Selection changes no pixels or composition. Other actions recomposite; only a deleted
-            // layer's resident tiles are released, and every other layer's GPU cache survives.
+            // A new mask is painted at once, with its red overlay.
+            if (command.action.type === 'add-mask') maskOverlay = true;
+            // Selection changes no pixels or composition, but may change the mask the overlay shows. Other actions
+            // recomposite; only a deleted layer's resident tiles are released, and every other layer's GPU cache
+            // survives.
             if (command.action.type !== 'select' && renderer) {
               const kept = new Set(document.layers.map((layer) => layer.id));
               for (const id of before) {

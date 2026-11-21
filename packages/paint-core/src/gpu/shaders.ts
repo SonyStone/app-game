@@ -220,3 +220,20 @@ export const maskApplyFragment = tgpu.fragmentFn({ in: { position: d.builtin.pos
   const k = maskFactor(std.textureLoad(maskApplyLayout.$.mask, pixel, 0), maskApplyLayout.$.settings.z > 0.5);
   return std.mul(std.textureLoad(maskApplyLayout.$.layer, pixel, 0), k);
 });
+
+/**
+ * The red overlay ("rubylith") of the mask being painted, drawn over presented frames only: red at `settings.y` times
+ * the hidden share of the effective coverage in `mask`, inverted when `settings.z` is set, premultiplied for blending
+ * over the presented image. Exports, captures and colour sampling read the composed image, which never has it.
+ */
+export const rubylithLayout = tgpu.bindGroupLayout({
+  mask: { texture: d.texture2d() },
+  settings: { uniform: d.vec4f }
+});
+export const rubylithFragment = tgpu.fragmentFn({ in: { position: d.builtin.position }, out: d.vec4f })((input) => {
+  'use gpu';
+  const texel = std.textureLoad(rubylithLayout.$.mask, d.vec2i(input.position.xy), 0);
+  const hidden = 1 - maskFactor(texel, rubylithLayout.$.settings.z > 0.5);
+  const alpha = rubylithLayout.$.settings.y * hidden;
+  return d.vec4f(alpha, 0, 0, alpha);
+});

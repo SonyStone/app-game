@@ -46,6 +46,11 @@ export function createFrameComposer(
     pixelGrid: () => boolean;
     /** Whether layers blend in linear light; see the composite shader's `settings.w`. */
     linearBlending: () => boolean;
+    /**
+     * The mask shown as the red overlay over presented frames, and its strength, 0–1, at full hiding; none without
+     * one. Read every frame.
+     */
+    overlay: () => { mask: LayerMask; strength: number } | undefined;
   },
   options: {
     cacheTiles?: number;
@@ -77,6 +82,17 @@ export function createFrameComposer(
       vertex: shader.fullscreenVertex,
       fragment: shader.presentFragment,
       targets: { format }
+    }),
+    rubylith: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.rubylithFragment,
+      targets: {
+        format,
+        blend: {
+          color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
+        }
+      }
     }),
     clear: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
@@ -145,7 +161,9 @@ export function createFrameComposer(
           : target.resize(width, height);
       const pages = target.pages();
       const cameraSignature = viewSignature(camera, size, width, height);
-      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}`;
+      // An exact render, for an export or a capture, never shows the overlay.
+      const overlay = exact ? undefined : deps.overlay();
+      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}${overlay ? `|overlay${maskSignature(overlay.mask)}` : ''}`;
       const plan = target.damage.plan(signature, camera, size, { width, height });
       const region = plan.region;
       stats.previewTileDraws = 0;
@@ -166,6 +184,16 @@ export function createFrameComposer(
         });
         pipelines.present.with(pass).with(view.present).draw(3);
         pass.end();
+        if (overlay) {
+          const { settings, binding } = view.overlay();
+          settings.write(d.vec4f(0, overlay.strength, overlay.mask.inverted ? 1 : 0, 0));
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{ view: swapchain, loadOp: 'load', storeOp: 'store' }]
+          });
+          pipelines.rubylith.with(pass).with(binding).draw(3);
+          pass.end();
+        }
+
         if (!exact) {
           if (deps.pixelGrid()) {
             grid.render(encoder, target, swapchain, camera, size, width, height);
@@ -313,6 +341,10 @@ export function createFrameComposer(
         const read = isFlatStack(layers)
           ? await composeFlat(frame, view, layers, region, drawLayer, drawMask)
           : await composeFolders(frame, view, layers, region, drawLayer, drawMask);
+        if (overlay) {
+          // The overlay keeps its own copy of the mask, updated where the view changed, for presenting.
+          copyRegion(frame, await drawMask(overlay.mask), view.overlay().image, region);
+        }
 
         pages?.end();
         // Keep the last brush preview until its updated overview is resident; navigation remains immediate.

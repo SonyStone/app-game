@@ -171,7 +171,7 @@ function createTargetView(
       // Two rgba16float composition textures, those of folders that composite on their own, three rgba8unorm images
       // and, once a mask has been composited, the rgba8unorm mask texture.
       const levels = 2 + (this.view?.scratchCount() ?? 0);
-      const images = 3 + (this.view?.hasMask() ? 1 : 0);
+      const images = 3 + (this.view?.hasMask() ? 1 : 0) + (this.view?.hasOverlay() ? 1 : 0);
       return (this.fallback?.bytes() ?? 0) + pixels * (8 * levels + 4 * images + swapChainBytesPerPixel);
     },
 
@@ -228,6 +228,7 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
   const entries = { a: entry(a), b: entry(b), layer: entry(layer), clip: entry(clip), composed: entry(composed) };
   const scratch: ViewTexture[] = [];
   let mask: ViewTexture | undefined;
+  let overlay: { image: ViewTexture; settings: TgpuBuffer<d.Vec4f> & UniformFlag; binding: TgpuBindGroup } | undefined;
   const resolves = new Map<number, TgpuBindGroup>();
   return {
     width,
@@ -284,6 +285,25 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
     },
     /** Whether `mask` has made its texture. */
     hasMask: () => !!mask,
+    /**
+     * The red overlay's own texture, made on first use: the overlaid mask's coverage over the whole view, kept between
+     * frames like `composed` and updated in damaged regions, with its binding and settings for `rubylithFragment`.
+     */
+    overlay() {
+      if (!overlay) {
+        const image = entry(texture('rgba8unorm'));
+        const settings = root.createBuffer(d.vec4f).$usage('uniform');
+        overlay = {
+          image,
+          settings,
+          binding: root.createBindGroup(shader.rubylithLayout, { mask: image.texture, settings })
+        };
+      }
+
+      return overlay;
+    },
+    /** Whether `overlay` has made its texture. */
+    hasOverlay: () => !!overlay,
     /**
      * The `slot`-th settings buffer bound for a masked pass: `maskedCompositeFragment` reading `base`, `source`, `clip`
      * and `mask`, `maskedFadeFragment` reading `base`, `source` and `mask`, or `maskApplyFragment` reading `source` and
@@ -381,6 +401,8 @@ function createViewTextures(root: TgpuRoot, width: number, height: number) {
       }
 
       mask?.texture.destroy();
+      overlay?.image.texture.destroy();
+      overlay?.settings.destroy();
 
       for (const slot of slots) {
         slot.settings.destroy();

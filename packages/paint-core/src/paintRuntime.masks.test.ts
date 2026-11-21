@@ -103,6 +103,26 @@ it('refuses a stroke a mask cannot take with an error, and ignores one on a hidd
   await stop(context);
 });
 
+it('turns the red overlay on with a new mask, shows it only while the mask is painted, and toggles it', async () => {
+  const context = await start();
+  const { runtime, renderer, events, waitFor, layerId } = context;
+  const overlaid = () => renderer.setMaskOverlay.mock.lastCall?.[0];
+  expect(events.findLast((event) => event.type === 'state')).toMatchObject({ maskOverlay: false });
+  runtime.send({ type: 'layer', action: { type: 'add-mask', id: layerId } });
+  await waitFor(() => overlaid() !== undefined);
+  expect(events.findLast((event) => event.type === 'state')).toMatchObject({ maskOverlay: true });
+  expect(overlaid()).toMatchObject({ outside: 255, enabled: true });
+
+  runtime.send({ type: 'layer', action: { type: 'select', id: layerId } });
+  await waitFor(() => overlaid() === undefined);
+  runtime.send({ type: 'layer', action: { type: 'select', id: layerId, target: 'mask' } });
+  await waitFor(() => overlaid() !== undefined);
+  runtime.send({ type: 'mask-overlay', enabled: false });
+  await waitFor(() => overlaid() === undefined);
+  expect(events.findLast((event) => event.type === 'state')).toMatchObject({ maskOverlay: false });
+  await stop(context);
+});
+
 function sample(x: number) {
   return { x, y: 1, pressure: 1, time: x };
 }

@@ -95,10 +95,74 @@ export async function verifyMaskPainting(report: (message: string) => void) {
     }
   }
 
+  await verifyOverlay(report);
+
   for (const target of ['pixels', 'mask'] as const) {
     report(
       `Stroke in progress on the ${target}, 1920×1080, masked layer covering the view: ${(await strokeFrame(target)).toFixed(2)} ms per frame`
     );
+  }
+}
+
+/**
+ * The red overlay shows on the presented canvas, in proportion to what the mask hides, and never in the composed image
+ * that exports, captures and colour sampling read, nor in an exact render.
+ */
+async function verifyOverlay(report: (message: string) => void) {
+  const doc = maskedDrawing(255);
+  const mask = doc.activeMask!;
+  // Hide the left half of tile 0,0.
+  const coverage = new Uint8Array(MASK_TILE_PIXELS).fill(255);
+  for (let y = 0; y < 256; y++) {
+    coverage.fill(0, y * 256, y * 256 + 128);
+  }
+
+  doc.commit([{ layerId: mask.id, key: '0,0', before: undefined, after: coverage }]);
+  const canvas = new OffscreenCanvas(256, 256);
+  const errors: string[] = [];
+  const renderer = await createPaintRenderer(canvas, (message) => errors.push(message));
+  const camera = { x: 128, y: 128, zoom: 1, angle: 0, mirrored: false };
+  const size = { width: 256, height: 256 };
+  const shown = async () => {
+    const bitmap = await createImageBitmap(await canvas.convertToBlob());
+    const copy = new OffscreenCanvas(256, 256).getContext('2d')!;
+    copy.drawImage(bitmap, 0, 0);
+    return copy.getImageData(0, 0, 256, 256).data;
+  };
+  try {
+    await renderer.render(doc.layers, camera, size, 1);
+    const plain = await shown();
+    const composedPlain = (await renderer.readPresented()).data;
+    renderer.setMaskOverlay(doc.activeMask, 0.5);
+    await renderer.render(doc.layers, camera, size, 1);
+    const overlaid = await shown();
+    const composed = (await renderer.readPresented()).data;
+    await renderer.render(doc.layers, camera, size, 1, true);
+    const exact = await shown();
+    const at = (pixels: Uint8ClampedArray, x: number, y: number) => [
+      ...pixels.subarray((y * 256 + x) * 4, (y * 256 + x) * 4 + 3)
+    ];
+    const hiddenBefore = at(plain, 64, 64),
+      hiddenAfter = at(overlaid, 64, 64);
+    const shownBefore = at(plain, 192, 64),
+      shownAfter = at(overlaid, 192, 64);
+    const redder = hiddenAfter[0]! > hiddenBefore[0]! && hiddenAfter[1]! < hiddenBefore[1]!;
+    const same = (a: Uint8ClampedArray, b: Uint8ClampedArray) => a.every((value, index) => value === b[index]);
+    const failures = [
+      !redder && `hidden pixel ${hiddenBefore} → ${hiddenAfter}, not redder`,
+      shownAfter.join() !== shownBefore.join() && `revealed pixel ${shownBefore} → ${shownAfter}`,
+      !same(composed, composedPlain) && 'the composed image has the overlay',
+      !same(exact, plain) && 'an exact render has the overlay',
+      errors.length && errors.join('; ')
+    ].filter(Boolean);
+    report(
+      `Red overlay: hidden ${hiddenBefore} → ${hiddenAfter}, revealed ${shownAfter}; composed and exact images unchanged: ${failures.length ? 'no' : 'yes'}`
+    );
+    if (failures.length) {
+      throw new Error(`Red overlay: ${failures.join('; ')}`);
+    }
+  } finally {
+    renderer.destroy();
   }
 }
 

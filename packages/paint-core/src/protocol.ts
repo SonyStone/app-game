@@ -58,6 +58,12 @@ export type PaintCommand =
   /** How pixels show up close: smoothing and the pixel grid; see `PaintRenderer.setPixelView`. */
   | { type: 'pixel-view'; smooth: boolean; grid: boolean }
   /**
+   * Shows, or stops showing, the red overlay of the mask being painted over the view: red where the mask hides, in
+   * proportion. It shows only while a mask is the paint target, and never in exports, captures or colour sampling.
+   * A view setting outside the drawing and its history; adding a mask turns it on. See `setMaskOverlay`.
+   */
+  | { type: 'mask-overlay'; enabled: boolean }
+  /**
    * How the selection is outlined: whether its ants move, and the selection gesture in progress, if any, shown
    * before it applies; see `SelectionPreview`.
    */
@@ -179,6 +185,8 @@ export type PaintEvent =
       features?: Record<string, unknown>;
       document: ReturnType<ReturnType<typeof createDocument>['state']>;
       camera: Camera;
+      /** Whether the red overlay of the mask being painted is on; see the `mask-overlay` command. */
+      maskOverlay?: boolean;
       /** Ids of the layers with tiles in the primary view, in layer order; see `layersInView`. */
       layersInView?: string[];
       /** For each region named by `watch-regions`, the ids of the layers with tiles in it, in layer order. */

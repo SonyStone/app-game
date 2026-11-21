@@ -5,7 +5,7 @@ import { makeGpuResources, type KeepGpuResource } from '@app-game/solid-gpu/gpu/
 import { tgpu } from 'typegpu';
 import { TILE_SIZE, dabTiles, type Brush, type Dab } from '../brush';
 import type { Camera, Point, ViewSize } from '../camera';
-import type { Layer, TileChange } from '../document';
+import type { Layer, LayerMask, TileChange } from '../document';
 import type { ShownLayer } from '../layerTree';
 import { unpackTile, type TileData } from '../tilePixels';
 import { viewLod, type OverviewStorage } from '../virtualPages';
@@ -178,6 +178,8 @@ async function assemblePaintRenderer(
   let pixelGrid = false;
   /** Layers blend in linear light, as `setLinearBlending` says; in encoded sRGB until then. */
   let linearBlending = false;
+  /** The mask shown as the red overlay; see `setMaskOverlay`. */
+  let maskOverlay: { mask: LayerMask; strength: number } | undefined;
   const virtual = options.virtualTexture
     ? resources.keep(
         createVirtualTexture(
@@ -275,7 +277,8 @@ async function assemblePaintRenderer(
       animateSelection: () => animateSelection,
       smoothPixels: () => smoothPixels,
       pixelGrid: () => pixelGrid,
-      linearBlending: () => linearBlending
+      linearBlending: () => linearBlending,
+      overlay: () => maskOverlay
     },
     options
   );
@@ -349,6 +352,18 @@ async function assemblePaintRenderer(
     setLinearBlending(linear: boolean) {
       if (linear !== linearBlending) {
         linearBlending = linear;
+        targets.invalidate();
+      }
+    },
+    /**
+     * Shows `mask`'s hidden coverage as a red overlay over presented frames, `strength` (0–1, half by default) where it
+     * hides everything, or stops with `undefined`. Like the selection outline it is never composed, so exports,
+     * captures, colour sampling and thumbnails never show it. Redraws the views when it changes.
+     */
+    setMaskOverlay(mask: LayerMask | undefined, strength = 0.5) {
+      const same = maskOverlay?.mask === mask && (mask === undefined || maskOverlay?.strength === strength);
+      if (!same) {
+        maskOverlay = mask && { mask, strength };
         targets.invalidate();
       }
     },
