@@ -50,6 +50,33 @@
   color: var(--danger, #b3261e);
 }
 
+/* What the studio says for a brush it has nothing to edit of: the reason, and the way out. */
+.unavailable {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  flex: 1;
+  padding: 24px;
+  text-align: center;
+
+  p {
+    max-width: 420px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  button {
+    min-height: 40px;
+    padding: 0 24px;
+    border-radius: 10px;
+    background: var(--accent, #237aab);
+    color: #ffffff;
+    font-weight: 600;
+  }
+}
+
 /* The pad's wrapper, which the pen pressure probe watches; it adds no box of its own. */
 .padSurface {
   display: contents;

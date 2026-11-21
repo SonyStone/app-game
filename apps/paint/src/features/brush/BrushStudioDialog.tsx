@@ -137,6 +137,18 @@ export function BrushStudioDialog(props: {
           </p>
         )}
       </Show>
+      {/* A brush without a document, as one imported by an older version: say so rather than show nothing. */}
+      <Show when={!editor.view()}>
+        <div class={styles.unavailable} role="status">
+          <p>
+            “{library.find(preset())?.name ?? 'This brush'}” was saved by an older version of Paint and has no settings
+            to edit yet. It still draws as before. Import it again from its brush file to edit it.
+          </p>
+          <button type="button" onClick={() => props.onClose()}>
+            Done
+          </button>
+        </div>
+      </Show>
       <Show when={editor.view()}>
         {(view) => (
           <BrushStudio
