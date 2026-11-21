@@ -42,7 +42,10 @@ export function PenPressurePane(props: {
   );
 }
 
-/** The pen pressure entry's status: "Off" while the pen is not calibrated, otherwise how many points its curve has. */
+/**
+ * The pen pressure entry's status: "Linear" while the pen is not calibrated, its pressure reaching brushes as it is,
+ * otherwise how many points its curve has. Not "Off": pressure still works without a curve.
+ */
 export function penPressureStatus(curve: PressureCurve | undefined) {
-  return curve ? `${curve.points.length} points` : 'Off';
+  return curve ? `${curve.points.length} points` : 'Linear';
 }

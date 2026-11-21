@@ -51,9 +51,18 @@ export function BrushPreview(props: {
   /**
    * With `redraw`, whether a change of `brush`, `preset`, `color` or `mapPressure` draws the kept strokes again with
    * it; on by default. Off, each kept stroke keeps the brush it was drawn with: a change affects only later strokes,
-   * and only Undo, Redo and Clear draw the strokes again, each with its own brush. Fixed at mount.
+   * and only Undo, Redo and Clear draw the strokes again, each with its own brush. May change while mounted: turned
+   * off, the kept strokes keep the brush they show now; turned on, they are drawn again with the current brush.
    */
   restyle?: boolean;
+  /**
+   * With `redraw`, a hex color washed over the whole canvas under the kept strokes, on their layer, so that strokes
+   * that erase have paint to erase, as a pad tried with an eraser needs; none by default. A change draws the strokes
+   * again on the new wash, or without one.
+   */
+  backdrop?: string;
+  /** Receives the number of kept strokes, with `redraw`, whenever it changes: 0 at mount and after Clear. */
+  onStrokes?: (count: number) => void;
   /** Shows the Undo, Redo and Clear buttons and the status line under the canvas; on by default. */
   controls?: boolean;
   /**
@@ -76,7 +85,9 @@ export function BrushPreview(props: {
   if (![width, height].every(n => Number.isInteger(n) && n > 0 && n <= 8192))
     throw new Error('Preview dimensions must be integers between 1 and 8192.');
   const redrawing = untrack(() => !!props.redraw);
-  const restyling = untrack(() => props.restyle ?? true);
+  const restyling = () => props.restyle ?? true;
+  /** The wash under the kept strokes, as `backdrop` last asked for it. */
+  let backdrop: string | undefined;
   const recipe = untrack(() => props.recipe) ?? defaultRecipe;
   let canvas!: HTMLCanvasElement;
   let runtime: ReturnType<typeof createPaintApplication> | undefined;
@@ -145,7 +156,7 @@ export function BrushPreview(props: {
   function redraw() {
     // Effects call this after their tracked reads; the current brush and mapping are read here once.
     untrack(() => {
-      if (!runtime || !selected || !strokes.canRedraw()) return;
+      if (!runtime || !selected || !strokes.canRedraw(!!backdrop)) return;
       strokes.stage();
       runtime.send({ type: 'layer', action: { type: 'add' } });
     });
@@ -161,15 +172,31 @@ export function BrushPreview(props: {
     }
     const old = strokes.swap(staged);
     runtime.send({ type: 'layer', action: { type: 'update', id: staged, patch: { opacity: 0 } } });
+    if (backdrop) wash(backdrop);
+    const restyled = untrack(restyling);
     for (const stroke of strokes.kept()) {
       const [first, ...rest] = stroke.samples;
       if (!first) continue;
-      runtime.send({ ...stroke.begin, brush: restyling ? current() : stroke.begin.brush, samples: mapped([first]) });
+      runtime.send({ ...stroke.begin, brush: restyled ? current() : stroke.begin.brush, samples: mapped([first]) });
       if (rest.length) runtime.send({ type: 'samples', samples: mapped(rest) });
       runtime.send({ type: 'end' });
     }
     runtime.send({ type: 'layer', action: { type: 'update', id: staged, patch: { opacity: 1 } } });
     runtime.send({ type: 'layer', action: { type: 'delete', id: old } });
+  }
+  /** Paints the active layer over in `color` with a hard round brush, row by row, before the strokes go on it. */
+  function wash(color: string) {
+    const size = 256, step = size / 2;
+    const samples: Sample[] = [];
+    for (let row = 0, y = 0; y <= height + step; row++, y += step) {
+      for (let i = 0, x = 0; x <= width + step; i++, x += step / 2) {
+        samples.push({ x: row % 2 ? width - x : x, y, pressure: 1, time: samples.length });
+      }
+    }
+    runtime!.send({ type: 'begin', brush: { ...defaultBrush(), color, size, hardness: 1, opacity: 1, flow: 1,
+      spacing: 0.1 }, samples: samples.slice(0, 1) });
+    runtime!.send({ type: 'samples', samples: samples.slice(1) });
+    runtime!.send({ type: 'end' });
   }
   const updateView = () => runtime?.send({ type: 'view', camera: camera(), size: size(), dpr: devicePixelRatio });
   const resize = makeResizeObserver(updateView);
@@ -228,15 +255,29 @@ export function BrushPreview(props: {
             spacing: next.spacing, color: next.color ?? '#202020', backgroundColor: next.backgroundColor,
             flow: next.flow ?? 1, opacity: next.opacity ?? 1 };
           report('Ready');
-          if (redrawing && (restyling || strokes.flushPending())) redraw();
+          if (redrawing && (untrack(restyling) || backdrop || strokes.flushPending())) redraw();
         } catch (error) {
           if (version === generation) report(error instanceof Error ? error.message : String(error));
         }
       });
     });
   // Strokes are drawn again for each new pressure mapping and color.
-  createEffect(() => (redrawing && restyling ? [props.mapPressure, props.color, props.mixing] : undefined), (watched) => {
+  createEffect(() => (redrawing && restyling() ? [props.mapPressure, props.color, props.mixing] : undefined), (watched) => {
     if (watched) redraw();
+  });
+  // Restyling turned off keeps the strokes as they show now; turned on, it draws them again with the current brush.
+  createEffect(() => redrawing && restyling(), (on, was) => {
+    if (was === undefined || on === was) return;
+    if (on) redraw();
+    else untrack(() => selected && strokes.restyle(current()));
+  });
+  createEffect(() => (redrawing ? props.backdrop : undefined), (color) => {
+    if (color === backdrop) return;
+    backdrop = color;
+    redraw();
+  });
+  createEffect(kept, (count) => {
+    untrack(() => props.onStrokes?.(count));
   });
   onCleanup(() => {
     props.actions?.(undefined);
@@ -310,15 +351,19 @@ function createStrokeLog() {
     canDraw: () => !!layer && !staging,
     /**
      * Whether a redraw should start now: one is remembered while a stroke or the previous redraw is in progress, and
-     * none is needed while the layer holds no strokes.
+     * none is needed while the layer holds no strokes and is not `washed` over, and was neither before.
      */
-    canRedraw() {
+    canRedraw(washed: boolean) {
       wanted = true;
       if (!layer || staging || drawing) return false;
       wanted = false;
-      const needed = painted || strokes.length > 0;
-      painted = strokes.length > 0;
+      const needed = painted || washed || strokes.length > 0;
+      painted = washed || strokes.length > 0;
       return needed;
+    },
+    /** Gives every kept stroke, and every undone one, `brush`, as they would show if drawn again with it. */
+    restyle(brush: Brush) {
+      for (const stroke of [...strokes, ...undone]) stroke.begin = { ...stroke.begin, brush };
     },
     stage() { staging = true; },
     /**

@@ -1,5 +1,6 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import type { Brush } from '@app-game/paint-core/brush';
+import type { PressureCurve } from '@app-game/paint-core/pressureCurve';
 import { createEffect, createSignal, onSettled, Show, untrack, useContext } from 'solid-js';
 import { PreviewAttachment } from './previewAttachment';
 
@@ -13,6 +14,8 @@ export function StrokePreview(props: {
   background?: string;
   /** When supplied, overrides the preset's saved color. Other callers keep saved-color precedence. */
   colorOverride?: string;
+  /** The pen's pressure curve, which the sample's pressures go through as a calibrated pen's do; none by default. */
+  pressureCurve?: PressureCurve;
   class?: string;
   /** Loads all referenced tip, texture and dual resources, only while visible. */
   resources?: () => Promise<readonly BrushResource[]>;
@@ -21,6 +24,7 @@ export function StrokePreview(props: {
   const [warning, setWarning] = createSignal('');
   let canvas!: HTMLCanvasElement;
   let refresh = () => {};
+  // What the sample shows, compared by value: a new but equal brush, as a preset shown as drawn, draws nothing again.
   createEffect(
     () => [
       JSON.stringify(props.settings),
@@ -28,9 +32,14 @@ export function StrokePreview(props: {
       props.color,
       props.colorOverride,
       props.background,
-      props.resources
+      props.resources,
+      JSON.stringify(props.pressureCurve)
     ],
-    () => refresh()
+    (next, previous) => {
+      if (!previous || next.some((value, index) => value !== previous[index])) {
+        refresh();
+      }
+    }
   );
   onSettled(() => {
     const connection = attach(canvas);
@@ -67,6 +76,7 @@ export function StrokePreview(props: {
               height,
               dpr,
               background: props.background ?? '#333333',
+              ...(props.pressureCurve && { pressureCurve: props.pressureCurve }),
               thumbnail: true
             });
           })

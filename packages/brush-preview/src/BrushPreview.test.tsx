@@ -191,6 +191,73 @@ it('keeps each stroke as drawn without restyling, and redraws them with their ow
   expect(actions).toBeUndefined();
 });
 
+it('restyles kept strokes once restyling is turned on, and keeps them as they show once it is turned off', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  let setSize!: (value: number) => void, setRestyle!: (value: boolean) => void;
+  const counts: number[] = [];
+  const dispose = render(() => {
+    const [size, set] = createSignal(10, { ownedWrite: true }); setSize = set;
+    const [restyle, setOn] = createSignal(false, { ownedWrite: true }); setRestyle = setOn;
+    return <BrushPreview brush={{ ...defaultBrush(), size: size() }} redraw restyle={restyle()} controls={false}
+      onStrokes={(count) => counts.push(count)} />;
+  }, host);
+  try {
+    await vi.waitFor(() => { flush(); expect(sent().some((command) => command.type === 'layer')).toBe(true); });
+    state('background', 1); state('strokes', 2);
+    await vi.waitFor(() => { flush(); expect(mock.input?.ready()).toBe(true); });
+    mock.input!.send({ type: 'begin', brush: mock.input!.brush(), samples: [pen(0.5)] });
+    mock.input!.send({ type: 'end' });
+    flush();
+    expect(counts).toEqual([0, 1]);
+
+    // Turned on, the stroke drawn at size 10 is drawn again with the brush of size 40.
+    setSize(40); flush();
+    await vi.waitFor(() => { flush(); expect(mock.input?.brush().size).toBe(40); });
+    mock.send.mockClear();
+    setRestyle(true); flush();
+    state('strokes', 2); state('staged', 3);
+    expect(sent().filter((command) => command.type === 'begin')).toMatchObject([{ brush: { size: 40 } }]);
+
+    // Turned off, it keeps size 40 though the brush changes again.
+    setRestyle(false); flush();
+    setSize(5); flush();
+    await vi.waitFor(() => { flush(); expect(mock.input?.brush().size).toBe(5); });
+    mock.send.mockClear();
+    setRestyle(true); setRestyle(false); flush();
+    expect(sent().filter((command) => command.type === 'begin')).toEqual([]);
+  } finally { dispose(); }
+});
+
+it('washes the strokes\' layer in the backdrop color under the strokes, and draws them again without it', async () => {
+  const host = document.createElement('div'); document.body.append(host);
+  let setBackdrop!: (value: string | undefined) => void;
+  const dispose = render(() => {
+    const [backdrop, set] = createSignal<string | undefined>('#808080', { ownedWrite: true }); setBackdrop = set;
+    return <BrushPreview brush={{ ...defaultBrush(), tool: 'eraser' }} redraw backdrop={backdrop()} controls={false}
+      width={300} height={200} />;
+  }, host);
+  try {
+    await vi.waitFor(() => { flush(); expect(sent().some((command) => command.type === 'layer')).toBe(true); });
+    mock.send.mockClear();
+    state('background', 1); state('strokes', 2);
+    // Before any stroke, the wash is drawn on a fresh layer.
+    await vi.waitFor(() => { flush(); expect(sent()).toContainEqual({ type: 'layer', action: { type: 'add' } }); });
+    state('strokes', 2); state('staged', 3);
+    const wash = sent().find((command) => command.type === 'begin');
+    expect(wash).toMatchObject({ brush: { color: '#808080', hardness: 1, opacity: 1 } });
+    const covered = sent().filter((command) => command.type === 'begin' || command.type === 'samples')
+      .flatMap((command) => ('samples' in command ? command.samples ?? [] : []));
+    expect(Math.max(...covered.map((sample) => sample.x))).toBeGreaterThanOrEqual(300);
+    expect(Math.max(...covered.map((sample) => sample.y))).toBeGreaterThanOrEqual(200);
+
+    mock.send.mockClear();
+    setBackdrop(undefined); flush();
+    state('staged', 3); state('plain', 3);
+    expect(sent().filter((command) => command.type === 'begin')).toEqual([]);
+    expect(sent().at(-1)).toEqual({ type: 'layer', action: { type: 'delete', id: 'staged' } });
+  } finally { dispose(); }
+});
+
 function sent(): PaintRuntimeCommand[] {
   return mock.send.mock.calls.map(([command]) => command);
 }

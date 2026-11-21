@@ -6,6 +6,7 @@ import { createEffect, createSignal, Errored, Match, Show, Switch } from 'solid-
 import type { PaintVariantProps } from '..';
 import { AbrViewerDialog } from '../../features/abr';
 import { maxBrushSize } from '../../features/brush';
+import { drawnResources } from '../../features/brush-library/drawnResources';
 import {
   createPaintSession,
   PaintEditor,
@@ -462,8 +463,9 @@ export function ProcreateStudio(props: PaintVariantProps) {
                   <Match when={open.id === 'brush' || open.id === 'eraser'}>
                     <BrushLibrary
                       title="Brush Library"
-                      presets={library.presets()}
-                      resources={library.resources}
+                      presets={library.presets().map(tools.asDrawn)}
+                      resources={(preset) => drawnResources(library, tools.editedResources, preset)}
+                      modified={tools.modified}
                       recent={[tools.preset(), ...recentPresets.recent(7)]}
                       preset={open.id === 'eraser' && tools.eraserMode() === 'clear' ? '' : tools.preset()}
                       disabled={!ready() || uploads.busy()}

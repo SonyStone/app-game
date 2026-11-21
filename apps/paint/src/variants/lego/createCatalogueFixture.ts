@@ -104,7 +104,15 @@ export function createCatalogueFixture() {
         }
       }
     },
-    tools: { current: createMemo(tools.tool), preset: createMemo(tools.preset), toggle: () => true },
+    tools: {
+      current: createMemo(tools.tool),
+      preset: createMemo(tools.preset),
+      toggle: () => true,
+      eraserMode: tools.eraserMode,
+      canClear: tools.canClear,
+      erasesWithBrush: tools.erasesWithBrush,
+      setEraserMode: tools.setEraserMode
+    },
     history: { canUndo: createMemo(() => true), canRedo: createMemo(() => false), undo: () => {}, redo: () => {} },
     symmetry: {
       mode: createMemo(() => 'off' as const),
@@ -130,6 +138,8 @@ export function createCatalogueFixture() {
       all: () => presets,
       listed: () => presets,
       resources: library.resources,
+      drawn: tools.asDrawn,
+      modified: tools.modified,
       recent: () => presets.slice(0, 7).map((preset) => preset.id),
       use: () => {},
       own: { deleting: () => new Map(), rename: () => false, remove: () => false, undo: () => {} },

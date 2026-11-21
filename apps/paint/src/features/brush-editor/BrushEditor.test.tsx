@@ -297,18 +297,23 @@ it('leaves out a category with no rows for the brush, as Bristle for a generated
   }
 });
 
-it('shows no explanatory text in a category: only its title, status, headings, labels and values', () => {
+it('shows no explanatory text in a category: only its title, status, headings, labels, values and reasons', () => {
   for (const view of [roundBrushView(defaultBrush()), photoshop()]) {
     const { editor, click, categories: names, category } = mount(view);
     for (const name of names()) {
       click(category(name!));
       const pane = editor().querySelector('section[aria-labelledby]')!;
       expect(pane.querySelector('[aria-controls]'), name!).toBeNull();
-      // Paragraphs are prose; the pane's only one is its status, which the column shows where it has room.
+      // Paragraphs are prose; the pane's only one is its status, which the column shows where it has room, besides
+      // one short sentence or two on why rows are greyed, where they are.
+      const paragraphs = [...pane.querySelectorAll('p')];
       expect(
-        [...pane.querySelectorAll('p')].map((p) => p.textContent),
+        paragraphs.filter((p) => !p.hasAttribute('data-reason')).map((p) => p.textContent),
         name!
       ).toEqual([category(name!).querySelector('span:nth-child(2) > span:last-child')!.textContent]);
+      for (const reason of paragraphs.filter((p) => p.hasAttribute('data-reason'))) {
+        expect(reason.textContent!.length, name!).toBeLessThanOrEqual(160);
+      }
     }
     dispose?.();
     document.body.replaceChildren();
@@ -411,7 +416,11 @@ it('names each category button by its category and describes it by its status, a
     '32 px · 100%',
     'Soft round · 65%',
     'Pressure',
-    ...Array.from({ length: 7 }, () => 'Off')
+    'Off',
+    'Off',
+    // Texture cannot be switched on without a pattern, which is the reason to give rather than "Off".
+    'No embedded pattern',
+    ...Array.from({ length: 4 }, () => 'Off')
   ]);
   const icons = buttons.map((button) => button.querySelector('svg path')!.getAttribute('d'));
   expect(new Set(icons).size).toBe(icons.length);
@@ -527,3 +536,15 @@ function mount(
     menu
   };
 }
+
+it('says why Texture is greyed for a brush without a pattern, over its rows and in its status', () => {
+  const { editor, click, category } = mount();
+  expect(category('Texture').textContent).toContain('No embedded pattern');
+  click(category('Texture'));
+  const note = editor().querySelector('section[aria-labelledby] p[data-reason]');
+  expect(note?.getAttribute('role')).toBe('note');
+  expect(note?.textContent).toMatch(/no texture pattern/);
+  click(category('Brush tip'));
+  // Soft round's tip is round at full roundness, so Angle is greyed and says why.
+  expect(editor().querySelector('section[aria-labelledby] p[data-reason]')?.textContent).toMatch(/same at every angle/);
+});

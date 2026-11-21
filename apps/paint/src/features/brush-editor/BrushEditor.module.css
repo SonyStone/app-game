@@ -203,6 +203,22 @@
   font-size: 11px;
 }
 
+/* Why a category's rows are greyed, as Texture's without a pattern: over the rows, in the pane's quiet ink. */
+.paneNote {
+  margin: 4px 0 8px;
+  color: var(--studio-column-quiet, var(--muted-color));
+  font-size: var(--studio-small, 13px);
+  line-height: 1.4;
+}
+
+/* Why a greyed row has no effect now, under its group. */
+.rowReason {
+  margin: 2px 4px 6px;
+  color: var(--studio-column-quiet, var(--muted-color));
+  font-size: var(--studio-small, 13px);
+  line-height: 1.35;
+}
+
 .rows {
   display: grid;
   gap: 2px;
@@ -1261,6 +1277,26 @@
     padding: 0 12px;
     border-radius: var(--studio-menu-item-radius, 6px);
   }
+}
+
+/* The invitation in the middle of an empty pad: quiet, and letting every press through to the paper. */
+.padHint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: rgb(0 0 0 / 38%);
+  font-size: var(--studio-text, 16px);
+  font-weight: 500;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Where an option's check would be while it is off, so the labels stay aligned. */
+.padCheckSpace {
+  width: 18px;
+  flex: none;
 }
 
 .padStatus {

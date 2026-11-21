@@ -1,5 +1,7 @@
 import { createContext, createMemo, createSignal } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
+import { presetErases, type BrushPreset } from '../../features/brush-library';
+import { drawnResources } from '../../features/brush-library/drawnResources';
 import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
 import { createOwnBrushes } from '../../features/brush/createOwnBrushes';
 import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wheel';
@@ -104,7 +106,19 @@ export function createLegoServices(
         ...session.colorWheel
       }
     },
-    tools: { current: tool, preset, toggle: session.toggleTool },
+    tools: {
+      current: tool,
+      preset,
+      toggle: session.toggleTool,
+      /**
+       * The eraser's mode: erasing with the current brush (`clear`) or with its own preset (`preset`); see
+       * `createBrushTools`. `canClear` tells whether the brush can erase at all, and `erasesWithBrush` whether it does.
+       */
+      eraserMode: session.tools.eraserMode,
+      canClear: session.tools.canClear,
+      erasesWithBrush: session.tools.erasesWithBrush,
+      setEraserMode: session.tools.setEraserMode
+    },
     history: {
       canUndo: createMemo(() => session.engine.state().canUndo && session.ready()),
       canRedo: createMemo(() => session.engine.state().canRedo && session.ready()),
@@ -175,17 +189,28 @@ export function createLegoServices(
         const bytes = await exportPaintbrush(selected, images.value);
         downloadBlob(new Blob([new Uint8Array(bytes)], { type: 'application/zip' }), selected.name + '.paintbrush');
       },
-      resources: session.library.resources,
+      /** A preset's images for its sample as it draws now, the images of its edit in the studio included. */
+      resources: (preset: BrushPreset) => drawnResources(session.library, session.tools.editedResources, preset),
+      /** `preset` as it draws now, with its changes and its edit in the studio; see `asDrawn`. Reactive. */
+      drawn: session.tools.asDrawn,
+      /** Whether preset `id` differs from its saved state; reactive. */
+      modified: session.tools.modified,
       recent: () => [preset(), ...session.recentPresets.recent(7)],
       use: session.usePreset,
       /** Renaming and undoable deleting of the user's own brushes; see `createOwnBrushes`. */
       own,
+      /**
+       * Paints with preset `id` on the brush tool, choosing that tool; a preset that erases (`presetErases`) goes to the
+       * eraser tool instead, so the brush never turns into an eraser.
+       */
       async choose(id: string) {
-        if (tool() !== 'brush') {
-          session.chooseTool('brush');
+        const chosen = session.library.find(id);
+        const slot = chosen && presetErases(chosen) ? 'eraser' : 'brush';
+        if (tool() !== slot) {
+          session.chooseTool(slot);
         }
 
-        await session.choosePreset(id, 'brush');
+        await session.choosePreset(id, slot);
       }
     },
     /**

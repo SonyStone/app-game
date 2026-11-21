@@ -1,7 +1,7 @@
 import { createEventListener } from '@solid-primitives/event-listener';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { JSX } from '@solidjs/web';
-import { createEffect, createSignal, createUniqueId, For, Show } from 'solid-js';
+import { createEffect, createSignal, createUniqueId, For, Show, untrack } from 'solid-js';
 import styles from './SettingsList.module.css';
 import { SketchIcon, type SketchIconName } from './SketchIcon';
 
@@ -336,9 +336,10 @@ function createSelectionPill(
     shown = id;
   };
 
+  // The compute tracks what moves the pill; placing it only reads the DOM and those values as they are now.
   createEffect(
     () => [selected(), layout(), list(), pill()],
-    () => place(true)
+    () => untrack(() => place(true))
   );
   if (typeof ResizeObserver !== 'undefined') {
     createResizeObserver(list, () => place(false));
@@ -365,7 +366,10 @@ function createScrollFades(list: () => HTMLElement | undefined, layout: () => un
   };
 
   createEventListener(list, 'scroll', update, { passive: true });
-  createEffect(() => [list(), layout()], update);
+  createEffect(
+    () => [list(), layout()],
+    () => untrack(update)
+  );
   if (typeof ResizeObserver !== 'undefined') {
     createResizeObserver(list, update);
   }

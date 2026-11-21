@@ -28,6 +28,8 @@ import { PopoverHeader } from './Popover';
  * `--brush-library-row-radius` and `--brush-library-icon-radius` (the corners of a set's or brush's row and of a set's
  * icon tile); `--brush-library-sample-radius` rounds a brush's stroke sample, square by default.
  *
+ * With `modified`, a brush changed since it was saved carries a quiet "Modified" after its name.
+ *
  * With `own`, the brush in use, when it is one of the user's own (not built-in), shows Rename and Delete on its row,
  * beside its sample, drawn on `--brush-library-icon` tiles in `--brush-library-icon-ink`. Rename turns the name into a
  * text field with the name selected, Cancel and Confirm beside it: Enter confirms, Escape ends the renaming only, a
@@ -44,6 +46,11 @@ export function BrushLibrary(props: {
   recent: readonly string[];
   /** The preset the tool paints with. */
   preset: string;
+  /**
+   * Whether a brush differs from its saved state, as after an edit in the brush studio; such a brush's name is marked
+   * "Modified". Pass the presets as they draw now, so that their samples show the edits too. Omitted, none is marked.
+   */
+  modified?: (id: string) => boolean;
   /** Brushes cannot be chosen now, for example during a preset upload. */
   disabled: boolean;
   onChoose: (id: string) => void;
@@ -218,7 +225,14 @@ export function BrushLibrary(props: {
                             disabled={props.disabled}
                             onClick={() => props.onChoose(preset().id)}
                           >
-                            <span class={styles.brushName}>{preset().name}</span>
+                            <span class={styles.brushName}>
+                              {preset().name}
+                              <Show when={props.modified?.(preset().id)}>
+                                <span class={styles.modified} title="Changed, not saved">
+                                  Modified
+                                </span>
+                              </Show>
+                            </span>
                             {sample()}
                           </button>
                         }

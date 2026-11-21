@@ -1,3 +1,4 @@
+import { SketchIcon } from '../../shared/ui/SketchIcon';
 import type { Span } from './board';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
@@ -13,8 +14,11 @@ import { PartFrame } from './PartFrame';
  *
  * Only the grip lifts: a press on it calls `onLift` with the press, keeping the pointer captured by the grip so its
  * moves arrive while the studio is out of the way. Enter or Space on the focused grip calls `onPlace` instead, to put
- * the part on the board without dragging. `onBoard` marks the grip quietly, telling that a part of `kind` already
- * lies on the board.
+ * the part on the board without dragging. The grip shows a pin, for keeping the setting on the board, in the accent
+ * while a part of `kind` already lies there (`onBoard`), its title saying so.
+ *
+ * The part shows `name`, the setting's own short label under its section's heading, rather than its name on the
+ * board; the grip speaks the board's name, `label`.
  */
 export function StudioSettingRow(props: {
   kind: string;
@@ -25,6 +29,8 @@ export function StudioSettingRow(props: {
   tall?: boolean;
   /** The setting's name as a part on the board, which the grip's label speaks. */
   label: string;
+  /** The name the part shows in the row; its name on the board by default. */
+  name?: string;
   onBoard: boolean;
   onLift: (event: PointerEvent) => void;
   onPlace: () => void;
@@ -38,9 +44,13 @@ export function StudioSettingRow(props: {
       <button
         type="button"
         class={styles.studioGrip}
-        aria-label={`Drag ${props.label} onto the board${props.onBoard ? ' (on the board)' : ''}`}
+        aria-label={`Put ${props.label} on the board${props.onBoard ? ' (already on the board)' : ''}`}
         aria-keyshortcuts="Enter Space"
-        title={props.onBoard ? `${props.label} is on the board` : `Drag ${props.label} onto the board`}
+        title={
+          props.onBoard
+            ? `${props.label} is on the board. Drag to put another there`
+            : `Drag to keep ${props.label} on the board`
+        }
         onPointerDown={(event) => {
           if (event.button !== 0) {
             return;
@@ -56,10 +66,12 @@ export function StudioSettingRow(props: {
           }
         }}
       >
-        <span class={styles.studioGripDots} />
+        <span class={styles.studioGripPin}>
+          <SketchIcon name="pin" size={18} />
+        </span>
       </button>
       <div class={styles.studioTile}>
-        <PartFrame kind={props.kind} span={props.span} look={props.look} />
+        <PartFrame kind={props.kind} span={props.span} look={props.look} label={props.name} />
       </div>
     </div>
   );

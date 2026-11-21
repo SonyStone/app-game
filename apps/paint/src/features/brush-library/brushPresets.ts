@@ -1,3 +1,4 @@
+import { record } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
 
@@ -113,6 +114,19 @@ export function applyPreset(
   next.engine = preset.settings.engine;
   next.tool = preset.settings.tool ?? 'brush';
   return next;
+}
+
+/**
+ * Whether `preset` erases rather than paints: an eraser of Paint's own brushes, as the built-in Eraser, or a
+ * Photoshop Eraser Tool preset. Such a preset belongs to the eraser tool.
+ */
+export function presetErases(preset: Pick<BrushPreset, 'settings'>) {
+  if (preset.settings.tool === 'eraser') {
+    return true;
+  }
+
+  const engine = preset.settings.engine;
+  return engine?.id === 'abr' && record(record(record(engine.settings).values).tool).type === 'ErTl';
 }
 
 /** Presets that ship with Paint, before the user's own presets. */

@@ -319,10 +319,12 @@ describe('generated ABR settings', () => {
     expect(amount.read(again)).toBe(40);
   });
 
-  it('carries no explanatory text in any category', () => {
+  it('carries no explanatory text in any category but why a group needing an image is greyed', () => {
     for (const category of brushCategories) {
       expect(Object.keys(category), category.id).not.toContain('about');
-      expect(Object.keys(category), category.id).not.toContain('note');
+      if (!['texture', 'dualBrush'].includes(category.id)) {
+        expect(Object.keys(category), category.id).not.toContain('note');
+      }
       for (const row of category.settings) {
         if (row.kind === 'choice') {
           expect(

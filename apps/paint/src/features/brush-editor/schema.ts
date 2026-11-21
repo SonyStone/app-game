@@ -140,6 +140,8 @@ export type SettingBase = {
    * group cannot be switched on because the brush lacks the image it needs.
    */
   enabled: (view: BrushView) => boolean;
+  /** Why the row is greyed now, shown with it, where the reason is not plain from the rows around it; optional. */
+  disabledReason?: (view: BrushView) => string | undefined;
 };
 
 /** Numeric values use UI units. Writes round to the nearest step, then clamp to the current bounds. */
@@ -217,6 +219,11 @@ export type BrushCategory = {
   status: (view: BrushView) => string;
   /** False hides the whole category, as Bristle for a brush without bristles. */
   applies: (view: BrushView) => boolean;
+  /**
+   * A note over the category's rows, such as why they are all greyed: Texture without the pattern it needs. Optional;
+   * `undefined` shows none.
+   */
+  note?: (view: BrushView) => string | undefined;
 };
 
 /**

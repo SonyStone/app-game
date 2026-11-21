@@ -24,14 +24,10 @@ export function photoshopCategory(
     group,
     applies: (view) =>
       id === 'bristle' ? view.values.tipKind === 'dBrush' : id === 'erodible' ? view.values.tipKind === 'dTips' : true,
+    // A missing image explains the greyed rows better than "Off", which it also causes.
     status: (view) =>
-      feature && !view.values[feature]
-        ? 'Off'
-        : !gate(view)
-          ? id === 'texture'
-            ? 'No embedded pattern'
-            : 'No embedded second tip'
-          : statuses[id](view.values),
+      !gate(view) ? missingImage(id).status : feature && !view.values[feature] ? 'Off' : statuses[id](view.values),
+    ...(gate !== always && { note: (view: BrushView) => (gate(view) ? undefined : missingImage(id).note) }),
     settings: [
       ...(feature
         ? [
@@ -44,6 +40,22 @@ export function photoshopCategory(
       ...photoshopRows(id, undefined, (view) => gate(view) && (!feature || view.values[feature]))
     ]
   };
+}
+
+/**
+ * What a group gated on an image the brush lacks says instead of its settings: its sidebar status and the note over its
+ * greyed rows.
+ */
+function missingImage(id: string) {
+  return id === 'texture'
+    ? {
+        status: 'No embedded pattern',
+        note: 'This brush has no texture pattern of its own. Photoshop brushes with a texture bring theirs.'
+      }
+    : {
+        status: 'No embedded second tip',
+        note: 'This brush has no second tip image of its own. Photoshop brushes with a dual brush bring theirs.'
+      };
 }
 
 /**
@@ -77,7 +89,10 @@ export function photoshopSmoothingRow(key: keyof BrushFormValues['smoothing'], l
   return row('smoothing', key, settingGroups.smoothing[key], { label, section: 'Photoshop smoothing' });
 }
 
-/** The tip's own number field `key` of the form, as a Brush tip row. */
+/**
+ * The tip's own number field `key` of the form, as a Brush tip row. Angle is greyed while it has no effect: on a round
+ * (computed) tip at 100% roundness, saying so (`disabledReason`).
+ */
 export function photoshopTipRow(
   key: 'angle' | 'roundness',
   label: string,
@@ -85,6 +100,9 @@ export function photoshopTipRow(
   max: number,
   unit: string
 ): BrushSetting {
+  // A round tip at full roundness looks the same at every angle.
+  const turnsNothing = (view: BrushView) =>
+    key === 'angle' && view.values.tipKind === 'computedBrush' && view.values.roundness >= 100;
   return {
     id: `abr-tip-${key}`,
     label,
@@ -94,7 +112,11 @@ export function photoshopTipRow(
     max: () => max,
     step: 1,
     applies: always,
-    enabled: always,
+    enabled: (view) => !turnsNothing(view),
+    ...(key === 'angle' && {
+      disabledReason: (view: BrushView) =>
+        turnsNothing(view) ? 'A round tip looks the same at every angle. Lower Roundness to use Angle.' : undefined
+    }),
     read: (view) => view.values[key],
     write: (view, value) =>
       patchFormValues(view.text, {

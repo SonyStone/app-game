@@ -573,7 +573,7 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
   mount(28);
   const dialog = openStudio();
-  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Put Flow on the board"]')!;
   expect(document.querySelector('[data-panel] [data-part-kind="value:brush:flow"]')).toBeNull();
 
   pointer(grip, 'pointerdown', 20, 200);
@@ -591,8 +591,8 @@ it("lifts a part of the setting by its studio row's grip onto the board, out of 
   expect(landed.closest<HTMLElement>('[data-part]')!.style.height).toBe('28px');
   expect(landed.querySelector('[role="slider"]')!.textContent).toMatch(/^Flow\d+%$/);
   expect(document.querySelector('[aria-label="Edit layout"]')).toBeNull();
-  expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
-  expect(dialog.querySelector('[aria-label="Drag Opacity onto the board"]')).not.toBeNull();
+  expect(dialog.querySelector('[aria-label="Put Flow on the board (already on the board)"]')).not.toBeNull();
+  expect(dialog.querySelector('[aria-label="Put Opacity on the board"]')).not.toBeNull();
 });
 
 it("puts a studio row's grip inside its row, the setting's sliders fused into one group", () => {
@@ -600,13 +600,13 @@ it("puts a studio row's grip inside its row, the setting's sliders fused into on
   mount();
   const dialog = openStudio();
   const rows = ['Size', 'Opacity', 'Flow'].map(
-    (name) => dialog.querySelector<HTMLElement>(`[aria-label^="Drag ${name} onto the board"]`)!.parentElement!
+    (name) => dialog.querySelector<HTMLElement>(`[aria-label^="Put ${name} on the board"]`)!.parentElement!
   );
 
   // One element is the row's tile: the grip at its left end, then the part across the rest.
   for (const [at, row] of rows.entries()) {
     expect(row.children).toHaveLength(2);
-    expect(row.firstElementChild!.matches('button[aria-label^="Drag "]')).toBe(true);
+    expect(row.firstElementChild!.matches('button[aria-label^="Put "]')).toBe(true);
     expect(
       row.lastElementChild!.querySelector(
         `[data-part-kind="${['value:size', 'value:opacity', 'value:brush:flow'][at]}"]`
@@ -693,7 +693,8 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
   expect(calibration.calibration()).toBeUndefined();
   const dialog = openStudio();
   const entry = penEntry(dialog);
-  expect(entry.textContent).toContain('Off');
+  // Uncalibrated, pressure reaches brushes unchanged: a straight line, not "Off".
+  expect(entry.textContent).toContain('Linear');
   entry.click();
   flush();
   const studio = () => dialog.querySelector('[data-pen-pane] svg[aria-label="Pressure curve"]')!;
@@ -739,7 +740,9 @@ it("edits the pen's curve in the studio's Pen page and on the board as one, and 
   expect(board().querySelector('[data-point="1"]')!.getAttribute('aria-label')).toContain('brush 70%');
 
   // The page's grip knows the curve is on the board, and puts another there at six by six with 28 px cells.
-  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Pen pressure onto the board (on the board)"]')!;
+  const grip = dialog.querySelector<HTMLElement>(
+    '[aria-label="Put Pen pressure on the board (already on the board)"]'
+  )!;
   grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   flush();
   const placed = [...document.querySelectorAll<HTMLElement>('[data-panel] [data-part-kind="value:pen-pressure-curve"]')]
@@ -1136,14 +1139,14 @@ it("Enter on a studio row's grip puts the part on the board without dragging", (
   storeParts(['action:brush-editor']);
   mount(28);
   const dialog = openStudio();
-  const grip = dialog.querySelector<HTMLElement>('[aria-label="Drag Flow onto the board"]')!;
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Put Flow on the board"]')!;
   grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   flush();
   const placed = document.querySelector<HTMLElement>('[data-panel] [data-part-kind="value:brush:flow"]');
   expect(placed).not.toBeNull();
   expect(placed!.closest<HTMLElement>('[data-part]')!.style.width).toBe('156px');
   expect(placed!.closest('[data-panel]')!.getAttribute('data-panel')).not.toBe('test-panel');
-  expect(dialog.querySelector('[aria-label="Drag Flow onto the board (on the board)"]')).not.toBeNull();
+  expect(dialog.querySelector('[aria-label="Put Flow on the board (already on the board)"]')).not.toBeNull();
   expect(document.querySelector('dialog[aria-label="Brush studio"]')).toBe(dialog);
 });
 
@@ -2061,3 +2064,120 @@ const boardAt44 = (() => {
     ]
   };
 })();
+
+it('redraws a brush tile with the brush as edited in the studio, marked modified, after Done', async () => {
+  storeParts(['preset:builtin:soft-round', 'action:brush-editor']);
+  mount();
+  await vi.waitFor(() => expect(wiring.sampleUpdates).toHaveBeenCalled());
+  const tile = () => document.querySelector<HTMLElement>('[data-part-kind="preset:builtin:soft-round"] button')!;
+  expect(tile().getAttribute('aria-label')).toBe('Soft round');
+  const painted = wiring.sampleUpdates.mock.calls.length;
+
+  const dialog = openStudio();
+  const editor = wiring.services!.brushEditor;
+  expect(await editor.update(getBrushSetting('flow')!.write(editor.view()!, 20 as never))).toBe(true);
+  flush();
+  click('Done');
+  expect(dialog.isConnected).toBe(false);
+
+  await vi.waitFor(() => expect(wiring.sampleUpdates.mock.calls.length).toBeGreaterThan(painted));
+  const sample = wiring.sampleUpdates.mock.calls.at(-1)![0] as { brush: { flow: number } };
+  expect(sample.brush.flow).toBeCloseTo(0.2);
+  expect(tile().getAttribute('aria-label')).toBe('Soft round, modified');
+});
+
+it('titles the studio by the eraser and the brush it uses while the eraser erases with the brush', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  wiring.session!.chooseTool('eraser');
+  flush();
+  expect(openStudio().querySelector('h1')!.textContent).toBe('Eraser · uses Soft round');
+  click('Done');
+  wiring.session!.chooseTool('brush');
+  flush();
+  expect(openStudio().querySelector('h1')!.textContent).toBe('Soft round');
+});
+
+it('switches to the eraser for the Eraser brush chosen on the brush tool, rather than make the brush erase', () => {
+  mount();
+  const { session } = wiring;
+  expect(session!.tool()).toBe('brush');
+  session!.usePreset('builtin:eraser');
+  flush();
+  expect(session!.tool()).toBe('eraser');
+  expect(session!.tools.snapshot().slots.brush.preset).toBe('builtin:soft-round');
+  expect(session!.tools.brush().tool).toBe('eraser');
+});
+
+it('offers the eraser mode in the Brushes popup while the eraser is the tool', () => {
+  storeParts(['action:brushes']);
+  mount();
+  const open = () => {
+    document.querySelector<HTMLButtonElement>('[data-part-kind="action:brushes"] button')!.click();
+    flush();
+  };
+  const toggle = () => document.querySelector<HTMLButtonElement>('[role="switch"]');
+  open();
+  expect(document.querySelector('[aria-label="Brush sets"]')).not.toBeNull();
+  expect(toggle()).toBeNull();
+  wiring.session!.chooseTool('eraser');
+  flush();
+  open();
+  expect(toggle()!.textContent).toBe('Erase with the current brush');
+  expect(toggle()!.getAttribute('aria-checked')).toBe('true');
+  toggle()!.click();
+  flush();
+  expect(wiring.session!.tools.eraserMode()).toBe('preset');
+  expect(toggle()!.getAttribute('aria-checked')).toBe('false');
+  toggle()!.click();
+  flush();
+  expect(wiring.session!.tools.eraserMode()).toBe('clear');
+});
+
+it('tells how to keep a setting on the board until one has been put there from the studio', () => {
+  storeParts(['action:brush-editor']);
+  mount();
+  let dialog = openStudio();
+  const hint = () => dialog.querySelector('[data-pin-hint]');
+  expect(hint()!.textContent).toBe('Drag  to keep a setting on the board');
+  expect(hint()!.querySelector('svg')).not.toBeNull();
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Put Flow on the board"]')!;
+  expect(grip.querySelector('svg')).not.toBeNull();
+  expect(grip.title).toBe('Drag to keep Flow on the board');
+  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  flush();
+  expect(hint()).toBeNull();
+  expect(localStorage.getItem('paint.lego.studioPinHinted')).toBe('1');
+
+  click('Done');
+  dispose?.();
+  dispose = undefined;
+  mount();
+  dialog = openStudio();
+  expect(hint()).toBeNull();
+});
+
+it("names a studio row by the setting's own label under its section, and its part on the board by its full name", () => {
+  storeParts(['action:brush-editor']);
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1024, 768));
+  mount();
+  const dialog = openStudio();
+  category(dialog, 'Shape dynamics');
+  const row = dialog.querySelector<HTMLElement>('[data-part-kind="value:brush:abr-shapeDynamics-sizeJitter"]')!;
+  expect(row.textContent).toContain('Jitter');
+  expect(row.textContent).not.toContain('Size jitter');
+  const grip = dialog.querySelector<HTMLElement>('[aria-label="Put Size jitter on the board"]')!;
+  grip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  flush();
+  const placed = document.querySelector<HTMLElement>(
+    '[data-panel] [data-part-kind="value:brush:abr-shapeDynamics-sizeJitter"]'
+  )!;
+  expect(placed.textContent).toContain('Size jitter');
+});
+
+it('makes every studio row at least a finger high, and its grip as wide', () => {
+  const css = readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'LegoStudio.module.css'), 'utf8');
+  const rule = new RegExp(`^\\.studioSetting \\{([\\s\\S]*?)^\\}`, 'm').exec(css)![1]!;
+  expect(rule).toMatch(/grid-template-columns: var\(--lego-hit-size\) minmax\(0, 1fr\);/);
+  expect(rule).toMatch(/height: max\(var\(--lego-cell\), var\(--lego-hit-size\)\);/);
+});

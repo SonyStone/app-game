@@ -1,4 +1,4 @@
-import { For, merge, Show } from 'solid-js';
+import { For, merge, omit, Show } from 'solid-js';
 import { SketchIcon, type SketchIconName } from '../../../shared/ui/SketchIcon';
 import { BrushLibrary } from '../../procreate/BrushLibrary';
 import type { Span } from '../board';
@@ -63,8 +63,23 @@ export const actionParts = [
     () => ({}),
     {
       needs: (s, f) => ({
+        /** The brushes as they draw now, so a sample follows the brush's unsaved edits. */
         get presets() {
-          return s.presets.listed();
+          return s.presets.listed().map(s.presets.drawn);
+        },
+        resources: s.presets.resources,
+        modified: s.presets.modified,
+        eraser: {
+          get shown() {
+            return s.tools.current() === 'eraser';
+          },
+          get on() {
+            return s.tools.erasesWithBrush();
+          },
+          get disabled() {
+            return !s.tools.canClear();
+          },
+          toggle: f.command(() => s.tools.setEraserMode(s.tools.eraserMode() === 'clear' ? 'preset' : 'clear'))
         },
         own: {
           get deleting() {
@@ -77,8 +92,9 @@ export const actionParts = [
         get recent() {
           return s.presets.recent();
         },
+        /** No brush is marked while the eraser erases with the brush: the eraser then has no preset of its own. */
         get preset() {
-          return s.tools.preset();
+          return s.tools.current() === 'eraser' && s.tools.erasesWithBrush() ? '' : s.tools.preset();
         },
         get disabled() {
           return !s.layers.ready();
@@ -88,11 +104,18 @@ export const actionParts = [
         onExportFile: f.command(s.presets.exportFile),
         onChoose: f.command(s.presets.use)
       }),
-      View: (props) => (
-        <section class={styles.brushesCard}>
-          <BrushLibrary title="Brushes" sidebar {...props} />
-        </section>
-      )
+      View: (props) => {
+        const library = omit(props, 'eraser');
+        return (
+          <section class={styles.brushesCard}>
+            <BrushLibrary title="Brushes" sidebar {...library}>
+              <Show when={props.eraser.shown}>
+                <EraserMode on={props.eraser.on} disabled={props.eraser.disabled} onToggle={props.eraser.toggle} />
+              </Show>
+            </BrushLibrary>
+          </section>
+        );
+      }
     },
     { columns: 3, rows: 1 }
   ),
@@ -212,6 +235,27 @@ export const actionParts = [
     onPress: f.command(() => s.windows.toggle('palette'))
   }))
 ];
+
+/**
+ * The eraser's mode in the Brushes popup while the eraser is the tool: a switch "Erase with the current brush", on
+ * while the eraser erases with the brush's preset, off while it erases with its own. Choosing a brush in the popup for
+ * the eraser turns it off; this turns it back on. Disabled while the brush cannot erase, as a Mixer Brush.
+ */
+function EraserMode(props: { on: boolean; disabled: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      class={styles.eraserMode}
+      role="switch"
+      aria-checked={props.on ? 'true' : 'false'}
+      disabled={props.disabled}
+      onClick={() => props.onToggle()}
+    >
+      <span>Erase with the current brush</span>
+      <span class={styles.eraserSwitch} aria-hidden="true" />
+    </button>
+  );
+}
 
 /**
  * Controlled action look. Its callback owns command policy; the view only sizes and labels the button. Beside the

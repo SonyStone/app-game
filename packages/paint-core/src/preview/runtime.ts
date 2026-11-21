@@ -8,6 +8,7 @@ import type { BrushSession, PaintModules } from '../composition/contracts';
 import { createResourceSession } from '../composition/resourceSession';
 import type { Layer } from '../document';
 import { createPaintRenderer } from '../gpu/renderer';
+import { pressureMapping } from '../pressureCurve';
 import { polygonSelection } from '../selectionMask';
 import { retouchFixture } from './fixture';
 import { preparePreview } from './prepare';
@@ -124,7 +125,7 @@ export function createPreviewRuntime(rendererFactory = createPaintRenderer) {
         }
 
         const { configuration, layers } = current;
-        const points = job.action === 'sample' ? syntheticPath() : job.points;
+        const points = job.action === 'sample' ? samplePath(configuration) : job.points;
         let idle = !!session.idle;
         if (points.length) {
           await session.add(toSamples(points, configuration));
@@ -185,6 +186,17 @@ export function createPreviewRuntime(rendererFactory = createPaintRenderer) {
 
 const engines: PaintModules['engines'] = studioBrushRecipe.engines;
 
+/** The shared sample path, its pressures mapped through the configuration's pen pressure curve, if any. */
+export function samplePath(configuration: Pick<PreviewConfiguration, 'pressureCurve'>): PreviewPoint[] {
+  const path = syntheticPath();
+  if (!configuration.pressureCurve) {
+    return path;
+  }
+
+  const map = pressureMapping(configuration.pressureCurve);
+  return path.map((point) => ({ ...point, pressure: map(point.pressure) }));
+}
+
 function toSamples(points: readonly PreviewPoint[], configuration: PreviewConfiguration): Sample[] {
   return points.map((point) => ({
     ...point,
@@ -193,7 +205,11 @@ function toSamples(points: readonly PreviewPoint[], configuration: PreviewConfig
   }));
 }
 
-/** Real premultiplied document layers expose pickup, all-layer sampling, filters and history restoration. */
+/**
+ * Real premultiplied document layers expose pickup, all-layer sampling, filters and history restoration. A brush that
+ * erases (`previewErases`) erases from a mid-tone wash over a light checkerboard, so the erased shape shows whatever
+ * the paper's color.
+ */
 function previewLayers(
   configuration: PreviewConfiguration,
   id: number,
@@ -228,23 +244,28 @@ function previewLayers(
   }
   const paper = layerFrom(solid, 'background');
   const tool = configuration.kind === 'abr' ? configuration.input.values.tool : undefined;
-  const nativeEraser = brush.tool === 'eraser';
-  const erase = nativeEraser || tool?.type === 'ErTl';
-  let layer: Layer;
-  let historySource: Layer | undefined;
-  const layers = [paper];
-  if (erase) {
+  if (previewErases(brush, tool)) {
+    // A light checkerboard under a mid-tone wash: what the stroke erases shows as transparency on any paper.
     const checker = blank();
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const value = (Math.floor(x / 8) + Math.floor(y / 8)) % 2 ? 224 : 184;
+        const value = (Math.floor(x / 8) + Math.floor(y / 8)) % 2 ? 250 : 222;
         checker.set([value, value, value, 255], (y * width + x) * 4);
       }
     }
-    layers[0] = layerFrom(checker, 'checker');
-    layer = layerFrom(tool?.eraseToHistory ? blank() : solid, 'paint');
-    historySource = { ...layer, tiles: layerFrom(solid, 'history').tiles };
-  } else if (tool && ['MixB', 'SmTl', 'ShTl', 'BlTl'].includes(tool.type)) {
+    const wash = blank();
+    const tone = rgb.map((channel, index) => Math.round(channel * 0.3 + washTone[index]! * 0.7));
+    for (let i = 0; i < wash.length; i += 4) {
+      wash.set([...tone, 255], i);
+    }
+    const layer = layerFrom(tool?.eraseToHistory ? blank() : wash, 'paint');
+    const historySource = { ...layer, tiles: layerFrom(wash, 'history').tiles };
+    return { layers: [layerFrom(checker, 'checker'), layer], layer, historySource };
+  }
+
+  let layer: Layer;
+  const layers = [paper];
+  if (tool && ['MixB', 'SmTl', 'ShTl', 'BlTl'].includes(tool.type)) {
     const fixture = retouchFixture(width, height, 1);
     layers.push(layerFrom(fixture.below, 'below'));
     layer = layerFrom(fixture.layer, 'paint');
@@ -252,5 +273,17 @@ function previewLayers(
     layer = { id: `${prefix}-paint`, name: 'Stroke', opacity: 1, visible: true, blend: 'normal', tiles: new Map() };
   }
   layers.push(layer);
-  return { layers, layer, historySource };
+  return { layers, layer, historySource: undefined };
+}
+
+/** The mid-tone, as RGB, that an erasing preview's paint is mostly made of; see `previewLayers`. */
+const washTone = [120, 132, 146];
+
+/**
+ * Whether the previewed brush erases: Paint's eraser, a Photoshop Eraser Tool preset (`tool`), or any ABR brush in
+ * the Clear mode, as the eraser's version of a brush it erases with.
+ */
+export function previewErases(brush: ReturnType<typeof preparePreview>['brush'], tool: { type: string } | undefined) {
+  const settings = brush.engine?.settings as { blendMode?: unknown } | undefined;
+  return brush.tool === 'eraser' || tool?.type === 'ErTl' || settings?.blendMode === 'Cler';
 }

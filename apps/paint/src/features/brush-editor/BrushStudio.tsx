@@ -55,6 +55,8 @@ export function BrushStudio(props: {
   onChange: (text: string) => void;
   /** The host's rows for number settings; see `CategoryPane`. */
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
+  /** A line of the host's under each category's title, such as how to use its rows; see `CategoryPane`. */
+  paneHint?: JSX.Element;
   /** Leaves the studio: called by Done, and by Cancel once it has called `onCancel`. */
   onDone: () => void;
   /** Called by Cancel before `onDone`, for the host to restore the brush and what it changed outside it. */
@@ -138,6 +140,7 @@ export function BrushStudio(props: {
               <CategoryPane
                 category={chosen()}
                 hostRow={props.hostRow}
+                hint={props.paneHint}
                 brush={props.brush}
                 onChange={props.onChange}
                 onBack={() => setView('list')}
