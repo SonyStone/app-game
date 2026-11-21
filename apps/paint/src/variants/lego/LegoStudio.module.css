@@ -301,6 +301,21 @@
   overflow: hidden;
 }
 
+/* The brush glyph on a sample shown without its name (see `BrushMark`), on a badge of the tile's color. */
+.presetMark {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--lego-r-badge);
+  background: var(--lego-tile);
+  color: var(--lego-ink);
+  pointer-events: none;
+}
+
 /* Values */
 
 .knob {
@@ -326,103 +341,43 @@
   }
 
   /*
-   * TEMPORARY trial of one-cell faces (see `valueFaces.tsx`). A face that stacks a name or an icon over the number
-   * fills the part but for a 2 px ring of arc, in rows as `oneCellFace` measures them: 8 px for the name, 10 px for
-   * an icon and for the number, 2 px apart (an icon sits right on the number).
+   * A face that names its value (see `oneCellFace`): the part less the arc's ring on every side, the name over the
+   * number, each line as tall as its ink, centred together with `--face-gap` between them.
    */
   .stackFace {
     display: grid;
     place-items: center;
     align-content: center;
-    row-gap: 2px;
-    width: calc(100% - 4px);
-    height: calc(100% - 4px);
+    row-gap: var(--face-gap);
+    width: calc(100% - 2 * var(--face-ring));
+    height: calc(100% - 2 * var(--face-ring));
     border-radius: var(--lego-r-inner);
     background: var(--swatch, var(--lego-tile));
     color: var(--swatch-ink, var(--lego-ink));
 
-    &:has(.faceGlyph) {
-      row-gap: 0;
-    }
-  }
-
-  &[data-face='stack'] .faceNumber {
-    line-height: 10px;
-  }
-
-  /*
-   * A gauge: the arc sweeps 270° from the lower left, as a hardware knob's scale, and its opening at the bottom holds
-   * the name under the number.
-   */
-  &[data-face='gauge'] {
-    background: none;
-
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: conic-gradient(
-        from 225deg,
-        var(--lego-accent) var(--sweep),
-        var(--lego-track) 0 270deg,
-        transparent 0
-      );
-      mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px), #000 99%, transparent);
-    }
-
-    .knobFace {
-      position: relative;
-      width: min(32px, calc(var(--lego-cell) - 8px));
-      height: min(32px, calc(var(--lego-cell) - 8px));
-      background: var(--swatch, transparent);
-      box-shadow: none;
+    .faceName {
+      line-height: 7px;
     }
 
     .faceNumber {
-      translate: 0 -2px;
-    }
-
-    > .faceName {
-      position: absolute;
-      bottom: 1px;
-      left: 50%;
-      translate: -50% 0;
-      padding: 0 2px;
-      background: var(--lego-tile);
-      color: var(--lego-quiet);
-      border-radius: 2px;
-      corner-shape: round;
+      line-height: 9px;
     }
   }
 }
 
-/* A value's short name in a one-cell face, small capitals that read at a 28 px cell. */
+/* A value's short name in a one-cell face, small capitals that read at a 24 px cell. */
 .faceName {
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  line-height: 8px;
   white-space: nowrap;
   color: var(--swatch-ink, var(--lego-quiet));
   pointer-events: none;
 }
 
-/* A value's icon in a one-cell face: 10 px, its strokes thickened to a pixel. */
-.faceGlyph {
-  display: grid;
-  place-items: center;
-  height: 10px;
-  color: var(--swatch-ink, var(--lego-quiet));
-  pointer-events: none;
-
-  svg {
-    stroke-width: 2.4px;
-  }
-}
-
 /*
- * The full name of a one-cell value beside it while a pen hovers over it or it is pressed, in the top layer (see
- * `NameTag`): a small dark label like Edit's, never taking a press.
+ * The full name and value of a one-cell value beside it while a pen hovers over it or it is pressed, in the top layer
+ * (see `NameTag`): a small dark label like Edit's, never taking a press.
  */
 .nameTag {
   position: fixed;
@@ -449,13 +404,6 @@
     margin-left: 6px;
     font-variant-numeric: tabular-nums;
   }
-}
-
-/* TEMPORARY: the one-cell value trial's switch beside Edit (see `ValueFaceSwitch`). */
-.trialButton {
-  padding-inline: 10px;
-  font-size: 12px;
-  opacity: 0.85;
 }
 
 .slider {
@@ -973,9 +921,9 @@
 }
 
 .hex {
+  position: relative;
   display: grid;
   align-items: center;
-  container-type: inline-size;
   padding: 3px;
 
   input {
@@ -987,9 +935,35 @@
     border-radius: var(--lego-r-inner);
     background: #ffffff;
     font:
-      600 clamp(7px, 14cqi, 12px) ui-monospace,
+      600 12px ui-monospace,
       monospace;
   }
+}
+
+/*
+ * A field too narrow for the code (see `HexPart`): the color itself under a "#" until the field takes focus, when the
+ * code shows for typing.
+ */
+.hex[data-pictured] input:not(:focus) {
+  border-color: rgb(0 0 0 / 0.18);
+  background: var(--hex-color);
+  color: transparent;
+}
+
+.hexMark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--hex-mark);
+  font:
+    700 15px ui-monospace,
+    monospace;
+  pointer-events: none;
+}
+
+.hex:focus-within .hexMark {
+  display: none;
 }
 
 .chips {
@@ -1019,11 +993,20 @@
   corner-shape: round;
 }
 
-/* A place in the history no color has taken yet. */
+/* A place in the history no color has taken yet; the first shows a clock turned back while the history is empty. */
 .slot {
+  display: grid;
+  place-items: center;
   border: 1px dashed rgb(0 0 0 / 0.25);
   box-shadow: none;
+  color: var(--lego-quiet);
   cursor: default;
+}
+
+/* A one-chip palette's four hues, two by two (see `PalettePart`). */
+.smallChips {
+  gap: 2px;
+  padding: 4px;
 }
 
 .square {
@@ -1081,55 +1064,35 @@
     min-width: 0;
   }
 
-  /* TEMPORARY trial (see `valueFaces.tsx`): the name or icon over the field, which still takes the whole press. */
-  &[data-face] {
-    position: relative;
-
-    .faceName,
-    .faceGlyph {
-      position: absolute;
-      left: 0;
-      right: 0;
-      text-align: center;
-    }
-  }
-
   .numberDash {
     text-align: center;
   }
 
   /*
-   * The field's text moves 4 px off the name by a taller field, not by padding it: a field shorter than its line would
-   * clip the digits, and the part's tile clips what reaches past it, so the field keeps the whole press.
+   * A number look that names its value (see `oneCellFace`): the name over the field, which still takes the whole
+   * press. The field's digits move below the centre by a taller field rather than padding, since a field shorter than
+   * its line would clip them; the part's tile clips what reaches past it.
    */
-  &[data-face='stack'] {
-    .faceName,
-    .faceGlyph {
-      top: max(2px, calc(50% - 10px));
+  &[data-face] {
+    position: relative;
+
+    .faceName {
+      position: absolute;
+      top: calc(50% - var(--face-name-offset));
+      left: 0;
+      right: 0;
+      translate: 0 -50%;
+      line-height: 7px;
+      text-align: center;
     }
 
     input {
-      height: calc(100% + 8px);
+      height: calc(100% + 2 * var(--face-number-offset));
       align-self: start;
     }
 
     .numberDash {
-      padding-top: 8px;
-    }
-  }
-
-  &[data-face='below'] {
-    .faceName {
-      bottom: max(2px, calc(50% - 10px));
-    }
-
-    input {
-      height: calc(100% + 8px);
-      align-self: end;
-    }
-
-    .numberDash {
-      padding-bottom: 8px;
+      padding-top: calc(2 * var(--face-number-offset));
     }
   }
 }
@@ -1634,6 +1597,57 @@
   }
 }
 
+/*
+ * A list too narrow for its choice: the guide's glyph in the middle, the list laid invisibly over the whole part to
+ * take presses and keys, and the part ringed while the list has focus.
+ */
+.wheelField[data-pictured] {
+  position: relative;
+  place-items: center;
+
+  label {
+    position: absolute;
+    inset: 0;
+  }
+
+  select {
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  &:focus-within {
+    box-shadow: inset 0 0 0 2px var(--lego-accent);
+  }
+}
+
+/* A harmony or gamut mask drawn as the icons are (see `HarmonyGlyph`). */
+.guideGlyph {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.guideGlyph[data-unlit] {
+  color: var(--lego-quiet);
+}
+
+.guideDot {
+  fill: currentColor;
+  stroke: var(--lego-tile);
+  stroke-width: 1.2;
+}
+
+.guideShape {
+  fill: currentColor;
+  fill-opacity: 0.35;
+}
+
 .editor .brokenPart,
 .brokenPart {
   display: flex;
@@ -1771,9 +1785,7 @@
     display: none;
   }
 
-  .faceName,
-  .faceGlyph {
-    background: none;
+  .faceName {
     color: inherit;
   }
 
@@ -2324,6 +2336,14 @@
     stroke: currentColor;
     stroke-width: 2.5;
     stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .curveFrame {
+    fill: none;
+    stroke: var(--lego-quiet);
+    stroke-opacity: 0.6;
+    stroke-width: 1;
     vector-effect: non-scaling-stroke;
   }
 }

@@ -12,7 +12,7 @@ it('infers settings and snapshots them on selection and on stroke creation', () 
   const schema = z.object({ tipId: z.string(), dynamics: z.object({ jitter: z.number().finite() }) });
   let captured: z.infer<typeof schema> | undefined;
   const engine = defineBrushEngine({
-    id: 'textured',
+    id: 'custom-tip',
     parse: (input) => schema.parse(input),
     create({ settings }) {
       expectTypeOf(settings).toEqualTypeOf<z.infer<typeof schema>>();
@@ -22,7 +22,7 @@ it('infers settings and snapshots them on selection and on stroke creation', () 
   });
   const settings = { tipId: 'tip-1', dynamics: { jitter: 0.2 } };
   const selection = engine.select(settings);
-  expectTypeOf(selection.id).toEqualTypeOf<'textured'>();
+  expectTypeOf(selection.id).toEqualTypeOf<'custom-tip'>();
   settings.dynamics.jitter = 0.9;
   expect(selection.settings.dynamics.jitter).toBe(0.2);
   engine.engine(context(selection.settings));

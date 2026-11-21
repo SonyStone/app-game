@@ -13,7 +13,7 @@ import { fitText, textWidth, widestText, type TextStyle } from '../textFit';
 import { brushChannels } from './brushChannels';
 import { definePart, type PartBinding, type PartGroup } from './definition';
 import { LevelPicker, moveLevelFocus, NumberKeypad, unitSuffix, ValueEntryCard, type ValueLevel } from './ValueEntry';
-import { createNameTag, FaceGlyph, NameTag, oneCellFace, peekHold, valueFace } from './valueFaces';
+import { createNameTag, NameTag, oneCellFace, peekHold } from './valueFaces';
 
 /** Value kinds are derived from their static definitions; stored identifiers stay unchanged. */
 export type ValueKind = (typeof channels)[number]['id'] | `brush:${string}`;
@@ -258,10 +258,10 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
       widths: widths()
     })
   );
-  // A knob, and a number look without room for its caption, tell which value they are by the trial's treatment.
+  // A knob, and a number look without room for its caption, name their value on their face and in a tag.
   const face = createMemo(() =>
     props.look === 'knob' || (props.look === 'number' && captions().caption === undefined)
-      ? oneCellFace(valueFace(), props.look, { width: width(), height: height() }, props)
+      ? oneCellFace(props.look, { width: width(), height: height() }, props)
       : undefined
   );
   const tag = createNameTag();
@@ -290,14 +290,8 @@ function ValuePart(props: ReturnType<typeof valueNeeds>) {
         knobText={captions().bareKnob ? props.knobNumber : props.text}
         face={face()}
       />
-      <Show when={face()?.approach && tag.shown() && element()}>
-        {(anchor) => (
-          <NameTag
-            anchor={anchor()}
-            label={props.label}
-            value={tag.pressed() && props.active ? props.text : undefined}
-          />
-        )}
+      <Show when={face() && tag.shown() && element()}>
+        {(anchor) => <NameTag anchor={anchor()} label={props.label} value={props.text} />}
       </Show>
     </div>
   );
@@ -425,7 +419,7 @@ function ValueControl(
     chip: boolean;
     /** What the knob's face shows. */
     knobText: string;
-    /** What a knob or a captionless number look shows to tell which value it is; see `oneCellFace`. */
+    /** How a knob or a captionless number look names its value on its face; see `oneCellFace`. */
     face?: ReturnType<typeof oneCellFace>;
   }
 ) {
@@ -450,8 +444,8 @@ function ValueControl(
     end: props.onCommit,
     cancel: props.onCancel,
     tap: (press, event) => {
-      // With the name on approach, a press held without moving only shows the name.
-      if (!props.face?.approach || event.timeStamp - press.time < peekHold) {
+      // A press held without moving only shows the name tag.
+      if (event.timeStamp - press.time < peekHold) {
         props.onOpen(press.target);
       }
     }
@@ -515,12 +509,12 @@ function ValueControl(
           <div
             class={styles.number}
             data-compact={!props.caption ? '' : undefined}
-            data-face={props.face?.glyph || props.face?.name ? (props.face.below ? 'below' : 'stack') : undefined}
+            data-face={props.face?.name ? '' : undefined}
+            style={props.face?.name ? faceOffsets(props.face) : undefined}
           >
             <Show when={props.caption}>
               <span class={styles.numberCaption}>{props.caption}</span>
             </Show>
-            <Show when={props.face?.glyph}>{(glyph) => <FaceGlyph name={glyph()} />}</Show>
             <Show when={props.face?.name}>{(name) => <span class={styles.faceName}>{name()}</span>}</Show>
             <Show when={props.active} fallback={<span class={styles.numberDash}>—</span>}>
               <ScrubNumber
@@ -551,29 +545,19 @@ function ValueControl(
               aria-label={props.label}
               aria-valuenow={Math.round(props.fraction * 100)}
               aria-valuetext={props.text}
-              data-face={props.face?.gauge ? 'gauge' : props.face?.glyph || props.face?.name ? 'stack' : undefined}
+              data-face={props.face?.name ? '' : undefined}
               style={{
                 '--fraction': `${props.fraction * 360}deg`,
-                '--sweep': `${props.fraction * 270}deg`,
+                ...(props.face?.name ? faceOffsets(props.face) : {}),
                 '--swatch': props.color,
                 '--swatch-ink': props.color && luminance(props.color) < 0.4 ? '#ffffff' : undefined
               }}
               {...scrub}
             >
-              <span
-                class={
-                  props.face?.glyph || (props.face?.name && !props.face.gauge) ? styles.stackFace : styles.knobFace
-                }
-              >
-                <Show when={props.face?.glyph}>{(glyph) => <FaceGlyph name={glyph()} />}</Show>
-                <Show when={!props.face?.gauge && props.face?.name}>
-                  {(name) => <span class={styles.faceName}>{name()}</span>}
-                </Show>
+              <span class={props.face?.name ? styles.stackFace : styles.knobFace}>
+                <Show when={props.face?.name}>{(name) => <span class={styles.faceName}>{name()}</span>}</Show>
                 <span class={styles.faceNumber}>{props.knobText}</span>
               </span>
-              <Show when={props.face?.gauge && props.face.name}>
-                {(name) => <span class={styles.faceName}>{name()}</span>}
-              </Show>
             </div>
           }
         >
@@ -642,6 +626,16 @@ function ValueControl(
       </Show>
     </>
   );
+}
+
+/** The face's spacing as the CSS of `.stackFace` and a named `.number` reads it; see `oneCellFace`. */
+function faceOffsets(face: ReturnType<typeof oneCellFace>) {
+  return {
+    '--face-ring': `${face.ring}px`,
+    '--face-gap': `${face.gap}px`,
+    '--face-name-offset': `${face.nameOffset}px`,
+    '--face-number-offset': `${face.numberOffset}px`
+  };
 }
 
 /**

@@ -1,5 +1,6 @@
 import { createSignal, onSettled, Show } from 'solid-js';
 import { PresetStroke } from '../../../features/brush-library/PresetStroke';
+import { SketchIcon } from '../../../shared/ui/SketchIcon';
 import { useGrid } from '../grid';
 import type { LegoServices } from '../LegoServices';
 import styles from '../LegoStudio.module.css';
@@ -22,7 +23,7 @@ export const presetPart = definePart({
 /**
  * Controlled library sample. Its renderer owns only cacheable preview resources and releases them on disposal. From
  * `largePreset` pixels high the sample fills the part over the brush's name; lower, a one-cell sample stands beside
- * it. The name shows where it fits whole.
+ * it. The name shows where it fits whole; without it, a brush glyph marks the sample's corner.
  */
 function PresetPart(props: ReturnType<typeof presetNeeds>) {
   const { length } = useGrid();
@@ -72,13 +73,25 @@ function PresetPart(props: ReturnType<typeof presetNeeds>) {
                 overrideColor
               />
             </span>
-            <Show when={named()}>
+            <Show when={named()} fallback={<BrushMark />}>
               <span class={styles.name}>{preset().name}</span>
             </Show>
           </>
         )}
       </Show>
     </button>
+  );
+}
+
+/**
+ * The brush glyph in a corner of a sample shown without its name, so that a nameless one-cell sample reads as a brush
+ * rather than a swatch or a texture.
+ */
+function BrushMark() {
+  return (
+    <span class={styles.presetMark} aria-hidden="true">
+      <SketchIcon name="brush" size={12} />
+    </span>
   );
 }
 

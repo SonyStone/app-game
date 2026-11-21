@@ -128,9 +128,11 @@ export function createCatalogueFixture() {
       importFile: async () => {},
       exportFile: async () => {},
       all: () => presets,
+      listed: () => presets,
       resources: library.resources,
       recent: () => presets.slice(0, 7).map((preset) => preset.id),
       use: () => {},
+      own: { deleting: () => new Map(), rename: () => false, remove: () => false, undo: () => {} },
       choose: async (id) => {
         await tools.selectPreset(id, 'brush');
       }

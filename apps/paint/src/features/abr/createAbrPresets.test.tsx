@@ -6,6 +6,7 @@ import { createRoot, flush } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { PaintError } from '../../shared/errors';
 import { createBrushLibrary, type BrushPreset } from '../brush-library';
+import { sampledPreset } from '../../../tests/sampledPreset';
 import { createAbrPresets, type AbrPreset } from './createAbrPresets';
 
 const disposers: (() => void)[] = [];
@@ -24,7 +25,7 @@ it('imports a preset into the library once per viewer brush and chooses it', asy
     name: 'Ink',
     source: 'abr:1',
     settings: {
-      engine: { id: 'textured', settings: { tipId: 'tip' } },
+      engine: sampledPreset().engine,
       tool: 'brush',
       size: 40,
       spacing: 0.1,
@@ -34,8 +35,8 @@ it('imports a preset into the library once per viewer brush and chooses it', asy
   // Unset preset values are not part of the import, so the brush keeps its own.
   expect(chosen.settings).not.toHaveProperty('opacity');
   expect(chosen.settings).not.toHaveProperty('stroke');
-  expect(chosen.resourceIds).toEqual(['tip', 'pattern']);
-  expect((await library.resources(chosen))._unsafeUnwrap().map(({ id }) => id)).toEqual(['tip', 'pattern']);
+  expect(chosen.resourceIds).toEqual([sampledPreset().resource.id, 'pattern']);
+  expect((await library.resources(chosen))._unsafeUnwrap().map(({ id }) => id)).toEqual([sampledPreset().resource.id, 'pattern']);
 
   await presets.usePreset({ ...abrPreset(), name: 'Edited ink' }, 'abr:1');
   flush();
@@ -92,19 +93,12 @@ function setup(options: Partial<Parameters<typeof createAbrPresets>[0]>) {
 }
 
 function abrPreset(): AbrPreset {
-  const resource = (id: string) => ({
-    id,
-    width: 1,
-    height: 1,
-    format: 'r8unorm' as const,
-    pixels: new Uint8Array([255])
-  });
+  const preset = sampledPreset();
   return {
-    name: 'Ink',
-    engine: { id: 'textured', settings: { tipId: 'tip' } },
-    resources: [resource('tip'), resource('pattern')],
+    ...preset,
+    resources: [preset.resource, { ...preset.resource, id: 'pattern' }],
     size: 40,
     spacing: 0.1,
     color: '#123456'
-  } as unknown as AbrPreset;
+  };
 }

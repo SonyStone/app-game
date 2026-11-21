@@ -9,7 +9,8 @@
  * photoshop-formats, commit there, then run this script and commit the result here.
  *
  * The copy is the package's tracked files at `REF` (default `HEAD`) of the source repository, taken with `git archive`,
- * so uncommitted source changes are never copied and the recorded commit describes the copy exactly. Each package gets a
+ * so uncommitted source changes are never copied and the recorded commit describes the copy exactly. Files the source
+ * marks `export-ignore` are not in the archive and so are never copied. Each package gets a
  * `formats-sync.json` with that commit and the SHA-256 of every file. Before replacing a package the script compares it
  * with that record and stops if the copy was edited here, listing the files; `--force` overwrites them. `--check` only
  * reports edited and outdated copies and exits with 1 if there are any.
@@ -19,9 +20,9 @@
  */
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 /** Packages copied from photoshop-formats, as paths shared by both repositories. */
@@ -125,10 +126,11 @@ function copyPackage(source, commit, path) {
 
   try {
     execFileSync('sh', ['-c', 'git -C "$1" archive "$2" -- "$3" | tar -x -C "$4"', 'sh', source, commit, path, staging]);
-    const files = git(['-C', source, 'ls-tree', '-r', '--name-only', commit, '--', path])
-      .split('\n')
-      .filter(Boolean)
-      .map((file) => file.slice(path.length + 1));
+    // The archive's own content, not the commit's tree: the source keeps some files out with `export-ignore`.
+    const files = readdirSync(join(staging, path), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => relative(join(staging, path), join(entry.parentPath, entry.name)))
+      .sort();
     const target = join(repositoryRoot, path);
     const previous = readRecord(path)?.files ?? {};
     const manifestBefore = hashOrUndefined(join(target, 'package.json'));

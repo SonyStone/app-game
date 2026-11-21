@@ -46,7 +46,8 @@ export const roundBrush = defineBrushEngine({
 /** Compatible factory for existing application recipes; selection validation is shared with roundBrush.select. */
 export const roundBrushEngine = roundBrush.engine;
 
-const roundSettings = z
+/** Validates the optional overrides carried by stored round-engine selections. */
+export const roundSettings = z
   .object({
     hardness: z.number().finite().min(0).max(1).optional(),
     spacing: z.number().finite().min(0.01).max(1).optional()

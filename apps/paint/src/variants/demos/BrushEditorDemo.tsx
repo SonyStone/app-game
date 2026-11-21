@@ -43,7 +43,7 @@ export function BrushEditorDemo(props: PaintVariantProps) {
   const session = createPaintSession({ storageName: 'paint-demo-brush-editor' });
   const { camera, engine, ready, tools, brush, library, uploads, presets, mixer, colorPicker } = session;
   createDemoStart(session, {});
-  void addTexturedSample(library).catch((cause) => {
+  void addGrainSample(library).catch((cause) => {
     session.setError(brushError('invalid-preset', 'Could not load the grain sample: ' + String(cause), cause));
   });
   const [studioOpen, setStudioOpen] = createSignal(false);
@@ -242,10 +242,10 @@ function clampWidth(width: number) {
 }
 
 /**
- * Adds the textured sample preset to the demo's library unless an earlier visit added it: a grainy disc stamped
- * closely, which shows the textured tip's rows in the editor.
+ * Adds the sampled grain preset to the demo's library unless an earlier visit added it: a grainy disc stamped
+ * closely, which shows the tip settings in the editor.
  */
-async function addTexturedSample(library: BrushLibrary) {
+async function addGrainSample(library: BrushLibrary) {
   const source = 'demo:textured-grain';
   await library.loadAll();
   if (library.presets().some((preset) => preset.source === source)) {
@@ -253,16 +253,16 @@ async function addTexturedSample(library: BrushLibrary) {
   }
 
   const tip = grainTip(96);
-  const name = 'Grain (textured sample)';
-  const { convertSampled } = await import('../../features/brush-library/abrPresetDocument');
-  const sample = await convertSampled(
+  const name = 'Grain (sampled tip)';
+  const { prepareSampledPreset } = await import('../../features/brush-library/abrPresetDocument');
+  const sample = await prepareSampledPreset(
     {
       id: source,
       name,
       resourceIds: [tip.id],
-      settings: { tool: 'brush', size: 48, spacing: 0.15, engine: { id: 'textured', settings: { tipId: tip.id } } }
+      settings: { tool: 'brush', size: 48, spacing: 0.15 }
     },
-    [tip]
+    tip
   );
   await library.importPreset({ ...sample.preset, name, source }, sample.resources);
 }

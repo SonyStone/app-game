@@ -1,3 +1,4 @@
+import { equalDocuments } from './equalDocuments';
 import { unwrapResult } from '@app-game/paint-core/asyncResult';
 import { defaultBrush } from '@app-game/paint-core/brush';
 import { symmetryFeature } from '@app-game/paint-core/composition/symmetryFeature';
@@ -43,7 +44,7 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
         const loaded = await store.load();
         if (!loaded) throw new Error('Symmetry idle autosave did not publish a document.');
         published = await writePaintFile(
-          snapshotDocument(loaded.layers, loaded.activeId, loaded.camera, loaded.features),
+          snapshotDocument(loaded.layers, loaded.activeId, loaded.camera, loaded.features, loaded.linearBlending, loaded.psdIdentity),
           store.read
         );
       } finally {
@@ -91,8 +92,7 @@ export async function verifySymmetryPersistence(report: (message: string) => voi
 }
 
 async function equal(a: Blob, b: Blob) {
-  const first = new Uint8Array(await a.arrayBuffer()),
-    second = new Uint8Array(await b.arrayBuffer());
-  if (first.length !== second.length || first.some((byte, i) => byte !== second[i]))
+  if (!(await equalDocuments(a, b))) {
     throw new Error('Symmetry persistence changed document metadata or pixels.');
+  }
 }

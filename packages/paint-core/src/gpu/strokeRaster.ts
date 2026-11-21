@@ -1,10 +1,10 @@
+import { createPaintRoundPipelines } from '@app-game/abr-paint/gpu/paintRound';
 import { createAbrStamps, type AbrRasterSettings } from '@app-game/abr-paint/gpu/abrStamps';
 import { expandToRasterGrid } from '@app-game/abr-paint/gpu/brushBatchSize';
 import { createCanvasPickup, type PickupRegion } from '@app-game/abr-paint/gpu/canvasPickup';
 import { commandBatch } from '@app-game/abr-paint/gpu/commandBatch';
 import { createSmudgeDepositBatch, planSmudgeDeposits } from '@app-game/abr-paint/gpu/smudgeDepositBatch';
 import { directStampBounds, stampBounds } from '@app-game/abr-paint/gpu/stampBounds';
-import type { BrushResource } from '@app-game/abr-paint/resources';
 import { d, type TgpuRoot } from 'typegpu';
 import { dabIntersectsTile, dabTiles, TILE_SIZE, type Brush, type Dab } from '../brush';
 import type { Layer } from '../document';
@@ -15,7 +15,6 @@ import * as shader from './shaders';
 import type { StrokeClip } from './strokeClip';
 import type { StrokeData } from './strokeState';
 import type { TargetViews } from './targetView';
-import { createTexturedStamps } from './texturedStamps';
 import type { TileResidency } from './tileResidency';
 import {
   clearTransmittance,
@@ -29,13 +28,12 @@ import {
   tileBytes,
   tileCoordinates,
   tileId,
-  transmittanceBlend,
   type PaintTile,
   type StrokeScratch
 } from './tileTextures';
 
 /**
- * GPU rasterization of the current stroke: round, textured and ABR stamps into resident tiles, sampling-tool
+ * GPU rasterization of the current stroke: round and ABR stamps into resident tiles, sampling-tool
  * deposits, disposable preview tails, history-source tiles and canvas pickup for retouch tools.
  * Reads and updates the shared StrokeData; tile residency supplies destination tiles. Calls are serialized.
  */
@@ -66,25 +64,11 @@ export function createStrokeRaster(
 ) {
   const { stroke, residency, displayCache, targets, paintBounds, allowsTile } = deps;
   const device = root.device;
-  const pipelines = {
-    stamp: root.createRenderPipeline({
-      attribs: { stamp: shader.stampLayout.attrib },
-      vertex: shader.stampVertex,
-      fragment: shader.stampFragment,
-      targets: { format: 'r16float', blend: transmittanceBlend }
-    }),
-    stroke: root.createRenderPipeline({
-      vertex: shader.fullscreenVertex,
-      fragment: shader.strokeFragment,
-      targets: { format: 'rgba8unorm' }
-    })
-  };
+  const pipelines = createPaintRoundPipelines(root);
   const brushBuffer = root.createBuffer(shader.brushLayout.entries.settings.uniform).$usage('uniform');
   const brushGroup = root.createBindGroup(shader.brushLayout, { settings: brushBuffer });
   // writeBuffer copies at call time, so one staging array serves every round-brush stamp upload.
   const stampData = new Float32Array(STAMP_CAPACITY * 4);
-  let texturedStamps: ReturnType<typeof createTexturedStamps> | undefined;
-  let texturedPipeline: ReturnType<ReturnType<typeof createTexturedStamps>['prepare']> | undefined;
   let abrStamps: ReturnType<typeof createAbrStamps> | undefined;
   let smudgeDeposits: ReturnType<typeof createSmudgeDepositBatch> | undefined;
   let pickup: ReturnType<typeof createCanvasPickup<Layer>> | undefined;
@@ -102,14 +86,7 @@ export function createStrokeRaster(
       return abrStamps;
     },
 
-    /** Selects a textured tip for the stroke, or round dabs without one. */
-    prepareTip(tip: { resource: BrushResource; angle: number } | undefined) {
-      texturedPipeline = tip
-        ? (texturedStamps ??= createTexturedStamps(root)).prepare(tip.resource, tip.angle)
-        : undefined;
-    },
-
-    /** Writes the round/textured brush uniform: color, alpha lock, hardness, opacity, eraser and linear mixing. */
+    /** Writes the round brush uniform: color, alpha lock, hardness, opacity, eraser and linear mixing. */
     prepareBrush(brush: Brush, alphaLock = false) {
       const rgb = hexColor(brush.color);
       brushBuffer.write({
@@ -135,9 +112,8 @@ export function createStrokeRaster(
 
     stats() {
       return {
-        brushTextures: stroke.abr ? abrStamps?.stats() : texturedStamps?.stats(),
+        brushTextures: abrStamps?.stats(),
         bytes:
-          (texturedStamps?.stats().bytes ?? 0) +
           (abrStamps?.stats().bytes ?? 0) +
           (pickup?.bytes() ?? 0) +
           (historyTiles.size + spareHistoryTiles.length) * TILE_SIZE * TILE_SIZE * 4 +
@@ -156,8 +132,6 @@ export function createStrokeRaster(
       historyTiles.clear();
       spareHistoryTiles.length = 0;
       pickup?.destroy();
-      texturedStamps?.destroy();
-      texturedPipeline = undefined;
       smudgeDeposits?.destroy();
       for (const tile of tailPool) {
         destroyTile(tile);
@@ -481,7 +455,7 @@ export function createStrokeRaster(
     return temporary;
   }
 
-  /** Accumulates round or textured stamps into a tile's transmittance. The instance buffer is rewritten, so callers
+  /** Accumulates round stamps into a tile's transmittance. The instance buffer is rewritten, so callers
    * submit before drawing the same scratch again.
    */
   function drawRoundStamps(
@@ -503,11 +477,7 @@ export function createStrokeRaster(
     const pass = commands.encoder().beginRenderPass({
       colorAttachments: [{ view: scratch.transmittanceRender, loadOp: 'load', storeOp: 'store' }]
     });
-    if (texturedPipeline) {
-      texturedPipeline.with(pass).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-    } else {
-      pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
-    }
+    pipelines.stamp.with(pass).with(brushGroup).with(shader.stampLayout, scratch.stamps).draw(6, stamps.length);
 
     pass.end();
   }

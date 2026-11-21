@@ -64,7 +64,15 @@ export const actionParts = [
     {
       needs: (s, f) => ({
         get presets() {
-          return s.presets.all();
+          return s.presets.listed();
+        },
+        own: {
+          get deleting() {
+            return s.presets.own.deleting();
+          },
+          rename: f.command(s.presets.own.rename),
+          remove: f.command(s.presets.own.remove),
+          undo: f.command(s.presets.own.undo)
         },
         get recent() {
           return s.presets.recent();
@@ -166,7 +174,7 @@ export const actionParts = [
     onPress: f.command(s.history.redo)
   })),
   tool('local-undo', 'Local undo', 'localUndo', { columns: 3, rows: 1 }),
-  action('mixing', 'colors', 'Mixing', 'picker', (s, f) => ({
+  action('mixing', 'colors', 'Mixing', 'mixing', (s, f) => ({
     get active() {
       return s.windows.isOpen('palette');
     },

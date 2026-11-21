@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { legacySampledId } from '../brush-library/nativeDocument';
 import { createStrokeSampler, defaultBrush, type Brush } from '@app-game/paint-core/brush';
 import 'fake-indexeddb/auto';
 import { createRoot, flush } from 'solid-js';
@@ -344,7 +345,7 @@ it('restores the sampled slot document on the second load and retains its legacy
   try {
     const name = crypto.randomUUID();
     const first = await setup(name);
-    const legacy = { ...defaultBrush(), size: 9, engine: { id: 'textured', settings: { tipId: 'mask' } } };
+    const legacy = { ...defaultBrush(), size: 9, engine: { id: legacySampledId, settings: { tipId: 'mask' } } };
     await first.storage.putPreset(
       {
         id: 'nib',

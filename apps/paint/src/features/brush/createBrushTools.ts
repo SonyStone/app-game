@@ -1,3 +1,4 @@
+import { legacySampledId } from '../brush-library/nativeDocument';
 import type { AbrBrushSettings } from '@app-game/abr-paint/engine';
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { defaultBrush, type Brush } from '@app-game/paint-core/brush';
@@ -42,7 +43,7 @@ export function createBrushTools(options: {
   storage?: Pick<BrushStorage, 'readState' | 'writeState'>;
   /**
    * The erasing version of a brush, with the same tip and dynamics; `undefined` when its engine cannot erase with it.
-   * Default {@link clearRoundBrush}, for the round and textured engines.
+   * Default {@link clearRoundBrush}, for the round engines.
    */
   clear?: (brush: Brush) => Brush | undefined;
 }) {
@@ -125,7 +126,7 @@ export function createBrushTools(options: {
      */
     selectPreset(id: string, slot: BrushSlot) {
       const preset = options.library.find(id);
-      if (!preset) {
+      if (!preset || preset.unavailable) {
         return;
       }
 
@@ -527,7 +528,7 @@ export function createBrushTools(options: {
       isRecord(old) &&
       isRecord(old.brush) &&
       isRecord(old.brush.engine) &&
-      old.brush.engine.id === 'textured' &&
+      old.brush.engine.id === legacySampledId &&
       entry.brush.engine?.id === 'abr' &&
       options.library.assets
     ) {
@@ -582,7 +583,7 @@ type DocumentEdit = {
   resources: readonly BrushResource[];
 };
 
-/** The erasing version of a round or textured brush: the same tip, erasing with `tool: 'eraser'`. */
+/** The erasing version of a round brush: the same tip, erasing with `tool: 'eraser'`. */
 export function clearRoundBrush(brush: Brush): Brush {
   return { ...brush, tool: 'eraser' };
 }

@@ -49,7 +49,7 @@ export function createPresetUploads<Slot extends string>(options: {
      * known and have no images, so a new engine becomes ready immediately.
      */
     restore(): Promise<Result<void, PaintError>> | undefined {
-      if (settled && options.inUse().every((preset) => preset.resourceIds.length === 0)) {
+      if (settled && options.inUse().every((preset) => !preset.unavailable && preset.resourceIds.length === 0)) {
         return undefined;
       }
 
@@ -70,6 +70,9 @@ export function createPresetUploads<Slot extends string>(options: {
    * nothing, while another upload, stroke, selection edit or brush command is running.
    */
   async function choose(preset: BrushPreset, slot: Slot): Promise<Result<void, PaintError>> {
+    if (preset.unavailable) {
+      return err(brushError('invalid-preset', preset.unavailable));
+    }
     if (preset.resourceIds.length === 0) {
       options.select(preset.id, slot);
       return ok();

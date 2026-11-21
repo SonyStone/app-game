@@ -1,6 +1,7 @@
 import { createContext, createMemo, createSignal } from 'solid-js';
 import { maxBrushSize } from '../../features/brush';
 import { createBrushSettingsEditor } from '../../features/brush/createBrushSettingsEditor';
+import { createOwnBrushes } from '../../features/brush/createOwnBrushes';
 import { hexToWheel, wheelToHex, type WheelColor } from '../../features/color-wheel';
 import { hexToHsv, hsvToHex, type Hsv } from '../../features/color/hsv';
 import type { PaintSession } from '../../features/session';
@@ -70,6 +71,7 @@ export function createLegoServices(
 
   const settings = createBrushSettingsEditor(session);
   const layersPrototype = createMockLayers();
+  const own = createOwnBrushes({ library: session.library, tools: session.tools, choose: session.usePreset });
 
   return {
     brushEditor: { ...settings, open: openBrushStudio },
@@ -139,7 +141,10 @@ export function createLegoServices(
     },
     presets: {
       ...(openAbr && { openAbr }),
-      all: session.library.presets,
+      /** The brushes that can be chosen: the library's, less those being deleted. */
+      all: () => session.library.presets().filter((preset) => !own.deleting().has(preset.id)),
+      /** The library's brushes, those being deleted included, as the brush library lists them. */
+      listed: session.library.presets,
       async importFile(file: File) {
         const { importPaintbrush } = await import('../../features/brush-library/paintbrushFile');
         const rejected = await importPaintbrush(new Uint8Array(await file.arrayBuffer()), session.library);
@@ -165,6 +170,8 @@ export function createLegoServices(
       resources: session.library.resources,
       recent: () => [preset(), ...session.recentPresets.recent(7)],
       use: session.usePreset,
+      /** Renaming and undoable deleting of the user's own brushes; see `createOwnBrushes`. */
+      own,
       async choose(id: string) {
         if (tool() !== 'brush') {
           session.chooseTool('brush');

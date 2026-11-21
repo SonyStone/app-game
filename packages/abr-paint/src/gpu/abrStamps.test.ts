@@ -80,7 +80,7 @@ it('resolves every ABR shader entry point with named uniform lanes', () => {
   expect(paramsOffsets.maskColor * 4 + 16).toBe(d.sizeOf(Params));
 });
 
-function roundSettings(): AbrRasterSettings<string> {
+function roundSettings() {
   const preset = prepareAbrBrush({
     id: 'round',
     name: 'Round',
@@ -92,7 +92,7 @@ function roundSettings(): AbrRasterSettings<string> {
     resources: [],
     source: { format: 'photoshop-abr/v1' as const, bytes: new Uint8Array() }
   });
-  return { values: preset.engine.settings.values, tip: preset.resource, size: 16, mixing: 'linear' };
+  return { values: preset.engine.settings.values, tip: preset.resource, size: 16, mixing: 'linear' } satisfies AbrRasterSettings<string>;
 }
 
 function resource(id: string, width: number, height: number): BrushResource {

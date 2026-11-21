@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`freezes ordered distance traces and default stamp records at size 1 1`] = `
+[
+  "0d3da9aae2d03c4302aaed601651a77ab86db67a4cbf34b1575e64890eeb1fb7",
+  "cf825947bffb5cfacf55864f1760abe76c095b1b634b31669dd6b79fe871dcfb",
+]
+`;
+
+exports[`freezes ordered distance traces and default stamp records at size 2 1`] = `
+[
+  "d0127b2b3bd7a0d208f27822b3b7d10a4e6c3b51836d018428ff0de025ca6067",
+  "68b4d0edff04df81d1bd192b94bf97cfc73e566d00ed02beb20776e10a6bc224",
+]
+`;
+
+exports[`freezes ordered distance traces and default stamp records at size 4 1`] = `
+[
+  "b484152e7f546061e1c048cd3c4ae9cfc28776dad1b68c508ab0a092114d7785",
+  "aae9cb520a0a55c06114e4db8d2840c54db439bf6b48c246ab2db01868ff2678",
+]
+`;
+
+exports[`freezes ordered distance traces and default stamp records at size 32 1`] = `
+[
+  "f097d63388b195c147fa46496a0682dfbe6d263901a0ada9aedd02437c768287",
+  "654ace19e86d71d9e718d9752c879afa1fc69b1a416257846f5557743c71539e",
+]
+`;

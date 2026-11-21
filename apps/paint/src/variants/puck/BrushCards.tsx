@@ -350,13 +350,6 @@ function BrushSettings(props: { session: PaintSession; onPreview: (kind: 'size' 
           onToggle={() => update({ pressureFlow: !brush().pressureFlow })}
         />
       </Show>
-      <Show when={brush().engine?.id === 'textured'}>
-        <PillScrubber
-          setting={spacingSetting}
-          value={Math.round(brush().spacing * 100)}
-          onChange={(spacing) => update({ spacing: spacing / 100 })}
-        />
-      </Show>
       <Segmented
         label="Smoothing"
         options={smoothingOptions}
@@ -492,14 +485,6 @@ const gapSetting: NumberSetting = {
   max: 16,
   unit: 'px',
   presets: [0, 1, 2, 3, 4, 6, 8, 12, 16]
-};
-const spacingSetting: NumberSetting = {
-  label: 'Spacing',
-  min: 1,
-  max: 1000,
-  unit: '%',
-  scale: 'log',
-  presets: [1, 2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 300, 500, 1000]
 };
 
 /** How long the pen rests before QuickShape makes a shape of the stroke. */

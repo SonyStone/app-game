@@ -1,6 +1,6 @@
 import type { BrushResource } from '@app-game/abr-paint/resources';
 import { readArchive, writeArchive } from '@app-game/paint-core/paintbrush/archive';
-import { assetId, encodePng } from '@app-game/paint-core/paintbrush/asset';
+import { encodePng } from '@app-game/paint-core/paintbrush/asset';
 import { compatibility } from '@app-game/paint-core/paintbrush/compatibility';
 import { singleManifest } from '@app-game/paint-core/paintbrush/document';
 import { photoshopExtensions } from './abrDocument';
@@ -21,6 +21,9 @@ export type RetainedBrush = {
 
 /** Exports saved preset fields. A retained preset changes only at addresses edited since import. */
 export async function exportPaintbrush(preset: BrushPreset, images: readonly BrushResource[]) {
+  if (preset.unavailable) {
+    throw new Error(preset.unavailable);
+  }
   const kept = preset.paintbrush;
   const envelope = preset.abrArchive ?? kept;
   const file = envelope?.file ?? 'brushes/brush.json';
@@ -39,22 +42,7 @@ export async function exportPaintbrush(preset: BrushPreset, images: readonly Bru
     }
     return writeArchive(manifest, new Map([[file, text]]), entries);
   }
-  const selected = preset.settings.engine;
-  let resources;
-  if (selected?.id === 'textured') {
-    const tipId = (selected.settings as { tipId: string }).tipId;
-    const image = images.find((candidate) => candidate.id === tipId);
-    if (!image) {
-      throw new Error('Missing native tip: ' + tipId);
-    }
-    const sha256 = await assetId(image);
-    const path = 'assets/' + sha256 + '.png';
-    if (!entries.has(path)) {
-      entries.set(path, encodePng(image));
-    }
-    resources = { tip: { format: 'r8', width: image.width, height: image.height, sha256 } };
-  }
-  const text = preset.nativeDocument ?? nativePresetText(preset, resources);
+  const text = preset.nativeDocument ?? nativePresetText(preset);
   return writeArchive(manifest, new Map([[file, text]]), entries);
 }
 

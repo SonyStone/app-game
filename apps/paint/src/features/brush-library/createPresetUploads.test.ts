@@ -49,6 +49,16 @@ it('selects a preset only after every resource upload succeeds, and restores the
   ]);
 });
 
+it('rejects an unavailable preset even when its list of resources is empty', async () => {
+  const select = vi.fn();
+  const upload = vi.fn();
+  const uploads = await setup({ upload, select, inUse: () => [] });
+  const missing = { ...preset('missing', []), unavailable: 'Missing native tip: old-tip' };
+  expect((await uploads.choose(missing, 'brush'))._unsafeUnwrapErr().message).toBe(missing.unavailable);
+  expect(select).not.toHaveBeenCalled();
+  expect(upload).not.toHaveBeenCalled();
+});
+
 it('keeps the brush after a failed upload and reports restore failures as restorable', async () => {
   const upload = vi.fn(async (): Promise<Result<void, PaintError>> => err(brushError('upload', 'No space')));
   const select = vi.fn();

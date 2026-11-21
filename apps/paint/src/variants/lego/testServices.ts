@@ -74,9 +74,16 @@ export function createTestServices() {
       importFile: vi.fn(async () => {}),
       exportFile: vi.fn(async () => {}),
       all: () => [],
+      listed: () => [],
       resources: vi.fn(async () => ok([])),
       recent: () => [],
       use: vi.fn(),
+      own: {
+        deleting: () => new Map(),
+        rename: vi.fn(() => true),
+        remove: vi.fn(() => true),
+        undo: vi.fn()
+      },
       choose: vi.fn(async () => {})
     },
     transform: { active: () => false, toggle: vi.fn() },

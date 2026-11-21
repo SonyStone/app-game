@@ -23,7 +23,8 @@ import {
 } from '@app-game/paint-core/paintbrush/document';
 
 import { hostExtension } from './abrHost';
-import { isPaintPressureBinding } from './nativeDocument';
+import { isPaintPressureBinding, sampledAngleDegrees } from './nativeDocument';
+import { paintSampledCoverage } from './sampledCoverage';
 
 type Definition = BrushDocument['definition'];
 
@@ -265,7 +266,12 @@ export async function resolveAbr(document: BrushDocument, assets: ReadonlyMap<st
   values.useTexture = source.textureEnabled === true;
   values.useDualBrush = dualBrush.enabled === true;
   const block = isBlockEraser(values.tool);
-  const primaryResource = sampled && !block ? sampled : { ...prepared.resource, id: await assetId(prepared.resource) };
+  const primaryResource =
+    sampled && !block
+      ? paintPlacement
+        ? paintSampledCoverage(sampled)
+        : sampled
+      : { ...prepared.resource, id: await assetId(prepared.resource) };
   let pattern: BrushResource | undefined;
   let dual: BrushResource | undefined;
   if (!block && values.useTexture) {
@@ -512,7 +518,7 @@ function descriptorFrom(d: Definition, primary: Definition['tips'][string]) {
     const native = record(d.extensions?.['paint.native-settings.v1']?.value);
     const angle = record(record(native.engine).settings).angle;
     if (primary.angleDeg === undefined && typeof angle === 'number') {
-      write('tip.angle', (angle * 180) / Math.PI);
+      write('tip.angle', sampledAngleDegrees(angle));
     }
   }
   return source;

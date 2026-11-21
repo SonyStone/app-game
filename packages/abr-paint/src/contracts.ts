@@ -59,6 +59,8 @@ export type AbrStrokeSession<Change> = {
 
 /** Renderer adapter for ABR tools. Owns tile allocation, persistence and presentation, outside the brush engine. */
 export type AbrStrokeRenderer<Layer, Change, Brush extends AbrBrushInput> = {
+  /** Host can draw nominal round dabs with the paint-round float pipelines, including preview and eviction. */
+  supportsPaintRound?: boolean;
   /** Starts transient output after all preset resources have been resolved. */
   begin(layer: Layer, brush: Brush, tip: undefined, settings: AbrRasterSettings<Layer>): void;
   /** Preserves dab order, including canvas pickup dependencies. May present progress without changing pixels. */

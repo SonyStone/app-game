@@ -55,7 +55,7 @@ export function prepareStroke(root: TgpuRoot, tile: PaintTile) {
 export type StrokeScratch = ReturnType<typeof createStrokeScratch>;
 
 /**
- * `transmittance` accumulates round and textured stamps as 1 − coverage in r16float: each stamp multiplies it by
+ * `transmittance` accumulates round stamps as 1 − coverage in r16float: each stamp multiplies it by
  * 1 − alpha, so low-flow build-up keeps relative precision instead of stalling where an 8-bit increment rounds to
  * zero. Every first touch, revisit and tail resets or restores it before stamping. `mask` is the 8-bit coverage that ABR tiles accumulate in, matching
  * Photoshop's 8-bit arithmetic.
@@ -114,11 +114,7 @@ export function clearAttachment(encoder: GPUCommandEncoder, view: GPUTextureView
   encoder.beginRenderPass({ colorAttachments: [{ view, loadOp: 'clear', storeOp: 'store' }] }).end();
 }
 
-/** Multiplies transmittance by 1 − stamp alpha, the complement of source-over coverage accumulation. */
-export const transmittanceBlend = {
-  color: { srcFactor: 'zero', dstFactor: 'one-minus-src-alpha' },
-  alpha: { srcFactor: 'zero', dstFactor: 'one-minus-src-alpha' }
-} as const satisfies GPUBlendState;
+export { transmittanceBlend } from '@app-game/abr-paint/gpu/paintRound';
 
 /** Resets round-brush transmittance to 1, meaning the stroke covers nothing yet. */
 export function clearTransmittance(encoder: GPUCommandEncoder, view: GPUTextureView) {

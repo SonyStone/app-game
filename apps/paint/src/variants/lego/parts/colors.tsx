@@ -91,7 +91,12 @@ export const colorParts = [
     section: 'Color',
     label: 'Hex',
     defaultSpan: { columns: 3, rows: 1 },
-    needs: colorInput,
+    needs: (s, f) =>
+      merge(colorInput(s, f), {
+        get span() {
+          return f.span;
+        }
+      }),
     View: HexPart
   }),
   definePart({

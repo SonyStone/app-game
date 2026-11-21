@@ -70,7 +70,7 @@ export const brushCategories: readonly BrushCategory[] = [
       view.family === 'photoshop'
         ? `${tipKinds[view.values.tipKind] ?? 'Tip'} · ${Math.round(view.brush.size)} px`
         : view.values.tipKind === 'sampledBrush'
-          ? `Textured tip · ${Math.round(view.brush.spacing * 100)}%`
+          ? `Sampled tip · ${Math.round(view.brush.spacing * 100)}%`
           : `Soft round · ${Math.round(view.brush.hardness * 100)}%`,
     settings: [
       { ...tipPercent('spacing', 'Spacing', 1, 1000), curve: () => brushSpacingCurve },
