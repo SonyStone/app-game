@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest';
 import {
+  canDock,
+  dockedFrames,
+  dockedLayout,
+  dockGap,
   frameAt,
   freeSpot,
   panelFrame,
@@ -10,7 +14,10 @@ import {
   placePart,
   pruneOwned,
   resizePart,
+  safeArea,
   spanAfter,
+  type Board,
+  type Panel,
   type Part
 } from './board';
 import { cellGap, referenceCell } from './grid';
@@ -139,4 +146,74 @@ it('finds a free spot for a new plate beside the panels, clear of them and of th
   expect(
     freeSpot(pitch, { panels: [{ id: 'b', owner: 'missing', at: { x: 0, y: 0 }, parts: [part('b1')] }] }, view, span)
   ).toEqual({ x: (16 + panelPadding) / 800, y: (16 + panelPadding) / 600 });
+});
+
+it('adapts docked stretch panels to portrait and landscape without mutating stored span and clamps tall undocked panels', () => {
+  const cell28Pitch = 28 + cellGap;
+  const portrait = { width: 1028, height: 1646 };
+  const landscape = { width: 1646, height: 1028 };
+  const dockedStrip: Panel = {
+    id: 'strip-panel',
+    at: { x: 0.9, y: 0.1 },
+    dock: 'right',
+    parts: [{ id: 's', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }]
+  };
+
+  const inPortrait = dockedLayout(cell28Pitch, dockedStrip, portrait);
+  const inLandscape = dockedLayout(cell28Pitch, dockedStrip, landscape);
+  expect(inPortrait.parts[0]!.span.rows).toBe(Math.floor((portrait.height - 2 * panelPadding + cellGap) / cell28Pitch));
+  expect(inLandscape.parts[0]!.span.rows).toBe(
+    Math.floor((landscape.height - 2 * panelPadding + cellGap) / cell28Pitch)
+  );
+  // Original stored span is never overwritten.
+  expect(dockedStrip.parts[0]!.span.rows).toBe(8);
+
+  // Undocked tall stretch panel (e.g. stretched to 36 rows in portrait) clamps cleanly in landscape without clipping.
+  const tallUndocked: Panel = {
+    id: 'tall',
+    at: { x: 0.8, y: 0.2 },
+    parts: [{ id: 's', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 36 } }]
+  };
+  const clamped = panelFrame(cell28Pitch, tallUndocked, landscape);
+  expect(clamped.rect.top).toBeGreaterThanOrEqual(0);
+  expect(clamped.rect.top + clamped.rect.height).toBeLessThanOrEqual(landscape.height);
+  expect(tallUndocked.parts[0]!.span.rows).toBe(36);
+});
+
+it('computes safeArea around docked sidebars, shifts overlapping panels without changing at, and enforces minimum room', () => {
+  const cell28Pitch = 28 + cellGap;
+  const view = { width: 1028, height: 1646 };
+  const dockedStrip: Panel = {
+    id: 'strip-panel',
+    at: { x: 0.9, y: 0.1 },
+    dock: 'right',
+    parts: [{ id: 's', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 2, rows: 8 } }]
+  };
+  const rightFree: Panel = {
+    id: 'stroke',
+    at: { x: 0.98, y: 0.5 },
+    parts: [part('size', 0, 0, 2, 5)]
+  };
+  const board: Board = { panels: [dockedStrip, rightFree] };
+
+  const frames = dockedFrames(cell28Pitch, board, view);
+  const dockedRect = frames.get('strip-panel')!.frame.rect;
+  expect(dockedRect.left + dockedRect.width).toBe(view.width);
+  expect(dockedRect.top).toBe(0);
+  expect(dockedRect.height).toBe(view.height);
+
+  const area = safeArea(cell28Pitch, board, view);
+  expect(area.left).toBe(0);
+  expect(area.width).toBe(view.width - dockedRect.width - dockGap);
+
+  const shifted = panelFrame(cell28Pitch, rightFree, view, true, area);
+  expect(shifted.rect.left + shifted.rect.width).toBeLessThanOrEqual(area.width);
+  // Stored `at` is untouched; undocking restores the panel to its original edge position.
+  expect(rightFree.at).toEqual({ x: 0.98, y: 0.5 });
+  const restored = panelFrame(cell28Pitch, rightFree, view, true);
+  expect(restored.rect.left + restored.rect.width).toBe(view.width);
+
+  // Refuses docking when remaining safeArea would be narrower than 6 * pitch.
+  const narrowView = { width: 7 * cell28Pitch, height: 800 };
+  expect(canDock(cell28Pitch, { panels: [dockedStrip] }, 'strip-panel', 'right', narrowView)).toBe(false);
 });

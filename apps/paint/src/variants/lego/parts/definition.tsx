@@ -92,6 +92,8 @@ export function definePart<N extends object, P extends object = N>(spec: {
   section: 'Tools' | 'Color' | 'Values' | 'Brushes' | 'Layers';
   /** Default cell span in the catalog preview and when newly placed on the board; defaults to 1×1. */
   defaultSpan?: Span;
+  /** When set to `'rows'`, the part stretches vertically to fill a docked edge panel and clamps cleanly on rotation. */
+  stretch?: 'rows';
   /** Composition supplied once when a new owner is taken from the box or spawn menu. */
   owned?: Pick<Panel, 'parts'>;
   /** The looks the part can take and the one it takes by itself in a part with `room`. */
@@ -132,6 +134,7 @@ export type PartDefinition = Pick<
   | 'icon'
   | 'section'
   | 'defaultSpan'
+  | 'stretch'
   | 'looks'
   | 'owned'
   | 'hasPopup'

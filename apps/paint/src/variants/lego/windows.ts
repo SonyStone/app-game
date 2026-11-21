@@ -1,20 +1,26 @@
 import {
   cellGap,
+  dockedFrames,
+  dockedLayout,
   findPart,
   frameAt,
   ownedFrame,
   ownedPanel,
   panelFrame,
+  safeArea,
   type Board,
   type Panel,
-  type Point
+  type Point,
+  type Rect,
+  type StretchResolver
 } from './board';
 
 /**
- * The panels of `board` on screen, in paint order, with where each lies: free panels including floating panels, then the
- * open swatch's panel and the panels of the swatches it lies in, outermost first. While editing, an open swatch
- * without a panel shows an empty one to drop parts into. The panels in `pinned` keep cell (0, 0) at their pinned
- * origin. Floating panels remain visible in every mode.
+ * The panels of `board` on screen, in paint order, with where each lies: free panels including docked and floating
+ * panels, then the open swatch's panel and the panels of the swatches it lies in, outermost first. While editing, an
+ * open swatch without a panel shows an empty one to drop parts into. The panels in `pinned` keep cell (0, 0) at their
+ * pinned origin. Docked panels occupy screen edges and shift overlapping free panels into `safeArea` without mutating
+ * their stored `at`.
  */
 export function visiblePanels(
   pitch: number,
@@ -22,7 +28,8 @@ export function visiblePanels(
   open: string | undefined,
   editing: boolean,
   view: { width: number; height: number },
-  pinned?: ReadonlyMap<string, Point>
+  pinned?: ReadonlyMap<string, Point>,
+  stretch?: StretchResolver
 ) {
   const chain = [...openChain(board, open)].reverse();
   const owned = chain
@@ -49,37 +56,54 @@ export function visiblePanels(
     return !!host && available(host, seen);
   };
   const panels = candidates.filter((panel) => available(panel));
+  const docked = dockedFrames(pitch, board, view, editing, stretch);
+  const area = safeArea(pitch, board, view, editing, stretch);
 
   const frames = new Map<string, ReturnType<typeof panelFrame>>();
+  const layouts = new Map<string, Panel>();
+  const layoutOf = (panel: Panel) => {
+    const known = layouts.get(panel.id);
+    if (known) {
+      return known;
+    }
+
+    const derived = docked.get(panel.id)?.panel ?? dockedLayout(pitch, panel, view, stretch);
+    layouts.set(panel.id, derived);
+    return derived;
+  };
   const frameOf = (panel: Panel, depth = 0): ReturnType<typeof panelFrame> => {
     const known = frames.get(panel.id);
     if (known) {
       return known;
     }
 
+    const derived = layoutOf(panel);
     const host = board.panels.find((other) => other.parts.some((part) => part.id === panel.owner));
     const anchor = host?.parts.find((part) => part.id === panel.owner);
     const pin = pinned?.get(panel.id);
-    let frame = pin ? frameAt(pitch, panel, pin, editing) : panelFrame(pitch, panel, view, editing);
+    let frame = pin
+      ? frameAt(pitch, derived, pin, editing)
+      : (docked.get(panel.id)?.frame ?? panelFrame(pitch, derived, view, editing, area, stretch));
     if (!pin && host && anchor && depth < 8) {
       const { origin } = frameOf(host, depth + 1);
       const at = { x: origin.x + anchor.cell.column * pitch, y: origin.y + anchor.cell.row * pitch };
-      // Where the user put it from its swatch, kept in view; otherwise beside the swatch where there is room.
+      // Where the user put it from its swatch, kept inside `safeArea`; otherwise beside the swatch where there is room.
       frame = panel.offset
         ? keptInView(
-            frameAt(pitch, panel, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }),
-            view
+            frameAt(pitch, derived, { x: at.x + panel.offset.column * pitch, y: at.y + panel.offset.row * pitch }),
+            area
           )
         : ownedFrame(
             pitch,
-            panel,
+            derived,
             {
               left: at.x,
               top: at.y,
               width: anchor.span.columns * pitch - cellGap,
               height: anchor.span.rows * pitch - cellGap
             },
-            view
+            view,
+            area
           );
     }
 
@@ -87,7 +111,7 @@ export function visiblePanels(
     return frame;
   };
 
-  return panels.map((panel) => ({ panel, frame: frameOf(panel) }));
+  return panels.map((panel) => ({ panel: layoutOf(panel), frame: frameOf(panel) }));
 }
 
 /** Refuses drops into any carried part's descendants, including blocks and malformed existing owner cycles. */
@@ -106,12 +130,13 @@ export function canDropParts(board: Board, panel: Panel, carried: ReadonlySet<st
   return true;
 }
 
-/** `frame` moved the least it takes to lie inside `view`, as far as it fits. */
-function keptInView(frame: ReturnType<typeof panelFrame>, view: { width: number; height: number }) {
+/** `frame` moved the least it takes to lie inside `bounds`, as far as it fits. */
+function keptInView(frame: ReturnType<typeof panelFrame>, bounds: Rect) {
   const { rect, origin } = frame;
-  const shift = (start: number, length: number, room: number) => Math.max(0, Math.min(start, room - length)) - start;
-  const x = shift(rect.left, rect.width, view.width);
-  const y = shift(rect.top, rect.height, view.height);
+  const shift = (start: number, length: number, min: number, room: number) =>
+    Math.max(min, Math.min(start, Math.max(min, min + room - length))) - start;
+  const x = shift(rect.left, rect.width, bounds.left, bounds.width);
+  const y = shift(rect.top, rect.height, bounds.top, bounds.height);
   return {
     origin: { x: origin.x + x, y: origin.y + y },
     rect: { ...rect, left: rect.left + x, top: rect.top + y }

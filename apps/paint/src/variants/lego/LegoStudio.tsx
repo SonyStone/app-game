@@ -15,7 +15,7 @@ import {
   StageOverlays
 } from '../../features/session';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
-import { besideRect, findPart, type Span } from './board';
+import { besideRect, findPart, safeArea, type Span } from './board';
 import { BoardView, type BoardControls } from './BoardView';
 import { createBoard } from './createBoard';
 import { FileApplicationControls } from './FileMenu';
@@ -212,8 +212,14 @@ export function LegoStudio(
       return undefined;
     }
 
-    // Placed by its measured size; it stays hidden until measured.
-    return besideRect(open.rect, { width: popupSize.width ?? 0, height: popupSize.height ?? 0 }, session.size());
+    // Placed by its measured size inside `safeArea`; it stays hidden until measured.
+    const size = session.size();
+    return besideRect(
+      open.rect,
+      { width: popupSize.width ?? 0, height: popupSize.height ?? 0 },
+      size,
+      safeArea(grid.pitch(), board.board(), size, editing())
+    );
   };
 
   return (

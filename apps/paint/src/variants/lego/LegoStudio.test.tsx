@@ -1765,6 +1765,76 @@ it('does not trigger board Edit Mode when holding still on a layer tile inside l
   }
 });
 
+it('carries a tall single-part panel past another panel without exploding it, docks at screen edge, and merges only after 550ms dwell', () => {
+  vi.useFakeTimers();
+  try {
+    const initialBoard = {
+      panels: [
+        {
+          id: 'tall-layers',
+          at: { x: 0.08, y: 0.05 },
+          parts: [{ id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 3, rows: 32 } }]
+        },
+        {
+          id: 'target-tools',
+          at: { x: 0.45, y: 0.35 },
+          parts: [{ id: 'undo', kind: 'action:undo', cell: { column: 0, row: 0 }, span: { columns: 4, rows: 2 } }]
+        }
+      ]
+    };
+    localStorage.setItem('paint.lego', JSON.stringify({ version: 5, board: initialBoard }));
+    mount(28);
+    enterEdit();
+
+    const stripPart = document.querySelector<HTMLElement>('[data-part="strip"]')!;
+    const targetPanelBefore = document.querySelector<HTMLElement>('[data-panel="target-tools"]')!;
+    const widthBefore = parseFloat(targetPanelBefore.style.width);
+    const heightBefore = parseFloat(targetPanelBefore.style.height);
+
+    // 1) Sweep the tall 3×32 strip straight across target-tools (around 490, 290) to the right edge (1010, 290).
+    pointer(stripPart, 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 490, 290);
+    // Target is highlighted for dwell, NOT exploded.
+    expect(document.querySelector('[data-panel="target-tools"]')?.hasAttribute('data-join-target')).toBe(true);
+    expect(parseFloat(document.querySelector<HTMLElement>('[data-panel="target-tools"]')!.style.width)).toBe(widthBefore);
+    expect(parseFloat(document.querySelector<HTMLElement>('[data-panel="target-tools"]')!.style.height)).toBe(heightBefore);
+
+    // Continue right edge without dwelling -> docks cleanly at right edge; target-tools untouched!
+    pointer(window, 'pointermove', 1000, 290);
+    expect(document.querySelector('[data-panel="tall-layers"]')?.getAttribute('data-dock')).toBe('right');
+    pointer(window, 'pointerup', 1000, 290);
+
+    const savedAfterDock = JSON.parse(localStorage.getItem('paint.lego')!).board;
+    expect(savedAfterDock.panels).toHaveLength(2);
+    expect(savedAfterDock.panels.find((p: { id: string }) => p.id === 'tall-layers').dock).toBe('right');
+    expect(savedAfterDock.panels.find((p: { id: string }) => p.id === 'target-tools').parts).toHaveLength(1);
+
+    // 2) Undock via SelectionBar Undock button -> returns original span and undocked state.
+    const dockedStrip = document.querySelector<HTMLElement>('[data-part="strip"]')!;
+    pointer(dockedStrip, 'pointerdown', 960, 120);
+    pointer(window, 'pointerup', 960, 120);
+    click('Undock');
+    const savedAfterUndock = JSON.parse(localStorage.getItem('paint.lego')!).board;
+    const undockedPanel = savedAfterUndock.panels.find((p: { id: string }) => p.id === 'tall-layers');
+    expect(undockedPanel.dock).toBeUndefined();
+    expect(undockedPanel.parts[0].span).toEqual({ columns: 3, rows: 32 });
+
+    // 3) Deliberate 600ms dwell over target-tools merges the strip into target-tools.
+    const undockedStrip = document.querySelector<HTMLElement>('[data-part="strip"]')!;
+    pointer(undockedStrip, 'pointerdown', 100, 100);
+    pointer(window, 'pointermove', 490, 290);
+    vi.advanceTimersByTime(600);
+    flush();
+    pointer(window, 'pointerup', 490, 290);
+
+    const savedAfterMerge = JSON.parse(localStorage.getItem('paint.lego')!).board;
+    expect(savedAfterMerge.panels).toHaveLength(1);
+    expect(savedAfterMerge.panels[0].parts).toHaveLength(2);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 /** Each part's text on the board, by its id. */
 function boardText() {
   return new Map(

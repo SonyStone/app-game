@@ -37,6 +37,7 @@ const boardSchema = z.looseObject({
       at: point,
       parts: z.array(storedPart),
       owner: z.string().optional(),
+      dock: z.enum(['left', 'right']).optional(),
       floating: z.literal(true).optional(),
       removeWhenEmpty: z.literal(true).optional(),
       offset: z.looseObject({ column: z.number().int(), row: z.number().int() }).optional(),

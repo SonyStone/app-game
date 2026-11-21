@@ -91,6 +91,11 @@ export function partLooks(kind: string) {
   return partDefinition(kind)?.looks;
 }
 
+/** Whether parts of `kind` stretch along rows when docked to a screen edge or clamp on rotation. */
+export function partStretch(kind: string) {
+  return partDefinition(kind)?.stretch;
+}
+
 /** The default cell span a new part of `kind` shows at in the catalog and lands with on the board. */
 export function partDefaultSpan(kind: string): Span {
   if (kind === 'floating') {

@@ -35,6 +35,7 @@ export const layerParts = [
     label: 'Layers strip',
     icon: 'layers',
     defaultSpan: { columns: 2, rows: 8 },
+    stretch: 'rows',
     looks: { looks: stripLooks, auto: (room) => (lookFits(stripLooks[1]!, room) ? 'wide' : 'strip') },
     needs: (s, f) => ({
       service: s.layersPrototype,
@@ -75,6 +76,7 @@ export const layerParts = [
     label: 'Layer list',
     icon: 'book',
     defaultSpan: { columns: 4, rows: 5 },
+    stretch: 'rows',
     looks: { looks: listLooks, auto: (room) => (lookFits(listLooks[1]!, room) ? 'wide' : 'narrow') },
     needs: (s, f) =>
       merge(layerNeeds(s, f), {

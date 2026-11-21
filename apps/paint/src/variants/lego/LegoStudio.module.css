@@ -134,6 +134,16 @@
   touch-action: none;
 }
 
+.panel[data-dock-preview] {
+  outline: 2px dashed var(--lego-accent);
+  outline-offset: -2px;
+}
+
+.panel[data-join-target] {
+  outline: 2px solid var(--lego-accent);
+  outline-offset: 2px;
+}
+
 /* While a part is carried, from the box or from the brush studio, the plates show their studs to drop it on. */
 .board[data-editing] .panel,
 .board[data-carrying] .panel {

@@ -5,8 +5,11 @@ import type { PaintSession } from '../../features/session';
 import { PickerScale } from '../../shared/ui/createPickerPixels';
 import { SketchIcon } from '../../shared/ui/SketchIcon';
 import {
+  canDock,
   cellGap,
+  dockedLayout,
   findPart,
+  floatingGripHeight,
   frameAt,
   freeSpot,
   nearestCell,
@@ -25,9 +28,11 @@ import {
   removePart,
   replacePanel,
   resizePart,
+  safeArea,
   spanAfter,
   type Board,
   type Cell,
+  type DockSide,
   type Panel,
   type Part,
   type Point,
@@ -42,7 +47,16 @@ import { nameKit } from './kitNames';
 import { kitOf, unpackKit, type createKits, type Kit } from './kits';
 import styles from './LegoStudio.module.css';
 import { PartFrame } from './PartFrame';
-import { currentKind, kindLabel, lookOf, partDefaultSpan, partDefinition, partGroup, partLooks } from './parts';
+import {
+  currentKind,
+  kindLabel,
+  lookOf,
+  partDefaultSpan,
+  partDefinition,
+  partGroup,
+  partLooks,
+  partStretch
+} from './parts';
 import type { Popup } from './parts/definition';
 import { BlockView, PartsTray, type CatalogTarget } from './PartsTray';
 import { SelectionBar } from './SelectionBar';
@@ -167,12 +181,22 @@ export function BoardView(props: {
       return props.board.board();
     }
 
-    return current.type === 'part' ? partDrop(current, current.settled).board : result(current);
+    if (current.type === 'part') {
+      return partDrop(current, current.settled, current.joinedTarget !== undefined).board;
+    }
+
+    if (current.type === 'panel' && current.joined) {
+      return current.joined.board;
+    }
+
+    return result(current);
   });
   /** The panels on screen, with where each lies; see `visiblePanels`. */
   const visible = createMemo(() =>
-    visiblePanels(grid.pitch(), shown(), props.openPanel, props.editing, view(), pinned(drag()))
+    visiblePanels(grid.pitch(), shown(), props.openPanel, props.editing, view(), pinned(drag()), partStretch)
   );
+  /** Remaining viewport inside docked sidebars, for SelectionBar and Edit bar clamping. */
+  const boardSafeArea = createMemo(() => safeArea(grid.pitch(), shown(), view(), props.editing, partStretch));
   /** Part kinds currently on the board, for the catalog's "On board" mark. */
   const onBoardKinds = createMemo(
     () => new Set(props.board.board().panels.flatMap((panel) => panel.parts.map((part) => currentKind(part.kind))))
@@ -239,8 +263,8 @@ export function BoardView(props: {
   };
   const chain = () => openChain(props.board.board(), props.openPanel);
 
-  /** The drop a lifted part waits on before the parts in its way move aside; see `reorderDelay`. */
-  let pending: { key: string; timer: ReturnType<typeof setTimeout> } | undefined;
+  /** The drop a lifted part or dragged panel waits on before pushing/merging; see `reorderDelay` / `joinDelay`. */
+  let pending: { key: string; origin: Point; timer: ReturnType<typeof setTimeout> } | undefined;
   const stopWaiting = () => {
     clearTimeout(pending?.timer);
     pending = undefined;
@@ -285,6 +309,19 @@ export function BoardView(props: {
   const lifted = () => {
     const current = drag();
     return current?.type === 'part' ? current : undefined;
+  };
+  const panelDrag = () => {
+    const current = drag();
+    return current?.type === 'panel' ? current : undefined;
+  };
+  /** The panel currently highlighted as an intentional merge target while waiting on `joinDelay`. */
+  const joinHoverId = () => {
+    const current = drag();
+    if (current?.type === 'part' || current?.type === 'panel') {
+      return current.hoverTarget;
+    }
+
+    return undefined;
   };
   /**
    * The ids of the carried parts, one per line: a string, so what reads it reruns when a carry starts or ends, not
@@ -378,8 +415,113 @@ export function BoardView(props: {
       return;
     }
 
-    if (current.type !== 'part') {
+    if (current.type === 'resize') {
       setDrag({ ...current, point });
+      return;
+    }
+
+    if (current.type === 'panel') {
+      const moved = Math.hypot(point.x - current.start.x, point.y - current.start.y) >= tapDistance;
+      const carried = current.carried || moved;
+      if (current.owned || !props.editing) {
+        setDrag({ ...current, point, carried });
+        return;
+      }
+
+      const panel = current.base.panels.find((candidate) => candidate.id === current.panel);
+      if (!panel) {
+        setDrag({ ...current, point, carried });
+        return;
+      }
+
+      if (overDiscard(point)) {
+        stopWaiting();
+        setDrag({ ...current, point, carried, dockPreview: undefined, hoverTarget: undefined, joined: undefined });
+        return;
+      }
+
+      const size = view();
+      const pitch = grid.pitch();
+      const pointer = toView(point);
+      const layout = dockedLayout(pitch, { ...panel, dock: undefined }, size, partStretch);
+      const rect = frameAt(pitch, layout, { x: 0, y: 0 }).rect;
+      const panelLeft = pointer.x - current.grab.x + rect.left;
+      const panelRight = panelLeft + rect.width;
+      const dockPreview = resolveDockPreview(current.dockPreview, panelLeft, panelRight, size.width, pitch, (side) =>
+        canDock(pitch, current.base, panel.id, side, size, partStretch)
+      );
+
+      if (dockPreview) {
+        stopWaiting();
+        setDrag({ ...current, point, carried, dockPreview, hoverTarget: undefined, joined: undefined });
+        return;
+      }
+
+      // Single-part / non-docked free panels can intentionally merge into another panel by dwelling 550ms over it.
+      const candidateTarget = carried && !panel.floating ? panelJoinTarget(current, panel, pointer) : undefined;
+      if (!candidateTarget) {
+        stopWaiting();
+        setDrag({ ...current, point, carried, dockPreview: undefined, hoverTarget: undefined, joined: undefined });
+        return;
+      }
+
+      if (current.joined?.targetId === candidateTarget.panel.id) {
+        const merged = mergePanelInto(current, panel, candidateTarget, pointer);
+        setDrag({
+          ...current,
+          point,
+          carried,
+          dockPreview: undefined,
+          hoverTarget: candidateTarget.panel.id,
+          joined: { targetId: candidateTarget.panel.id, board: merged }
+        });
+        return;
+      }
+
+      const dwellKey = `panel-join:${candidateTarget.panel.id}`;
+      const drifted = !pending || Math.hypot(point.x - pending.origin.x, point.y - pending.origin.y) >= pitch * 0.5;
+      if (pending?.key !== dwellKey || drifted) {
+        stopWaiting();
+        pending = {
+          key: dwellKey,
+          origin: point,
+          timer: setTimeout(() => {
+            pending = undefined;
+            const latest = drag();
+            if (latest?.type !== 'panel') {
+              return;
+            }
+
+            const host = latest.base.panels.find((candidate) => candidate.id === latest.panel);
+            if (!host) {
+              return;
+            }
+
+            const latestPointer = toView(latest.point);
+            const target = panelJoinTarget(latest, host, latestPointer);
+            if (!target || target.panel.id !== candidateTarget.panel.id) {
+              return;
+            }
+
+            const merged = mergePanelInto(latest, host, target, latestPointer);
+            setDrag({
+              ...latest,
+              dockPreview: undefined,
+              hoverTarget: target.panel.id,
+              joined: { targetId: target.panel.id, board: merged }
+            });
+          }, joinDelay)
+        };
+      }
+
+      setDrag({
+        ...current,
+        point,
+        carried,
+        dockPreview: undefined,
+        hoverTarget: candidateTarget.panel.id,
+        joined: undefined
+      });
       return;
     }
 
@@ -391,11 +533,55 @@ export function BoardView(props: {
 
     const carried = current.carried || moved;
 
-    // A place with room shows at once; one that pushes parts aside waits until the part rests over it.
-    const drop = partDrop(current, point);
+    // Evaluate what lies under the pointer; cross-panel merges that expand/push wait on `joinDelay` without moving parts.
+    const drop = partDrop(current, point, true);
+    const sameTargetJoined = drop.targetId !== undefined && current.joinedTarget === drop.targetId;
+    const needsJoinWait =
+      drop.targetId !== undefined &&
+      drop.targetId !== current.sourcePanel &&
+      (drop.pushes || drop.expands) &&
+      !sameTargetJoined;
+
+    if (needsJoinWait) {
+      const pitch = grid.pitch();
+      const dwellKey = `part-join:${drop.targetId}`;
+      const drifted = !pending || Math.hypot(point.x - pending.origin.x, point.y - pending.origin.y) >= pitch * 0.5;
+      if (pending?.key !== dwellKey || drifted) {
+        stopWaiting();
+        pending = {
+          key: dwellKey,
+          origin: point,
+          timer: setTimeout(() => {
+            pending = undefined;
+            const latest = drag();
+            if (latest?.type === 'part') {
+              setDrag({ ...latest, settled: latest.point, joinedTarget: drop.targetId, hoverTarget: undefined });
+            }
+          }, joinDelay)
+        };
+      }
+
+      setDrag({
+        ...current,
+        point,
+        settled: point,
+        carried,
+        joinedTarget: undefined,
+        hoverTarget: drop.targetId
+      });
+      return;
+    }
+
     if (!drop.pushes) {
       stopWaiting();
-      setDrag({ ...current, point, settled: point, carried });
+      setDrag({
+        ...current,
+        point,
+        settled: point,
+        carried,
+        joinedTarget: drop.targetId,
+        hoverTarget: undefined
+      });
       return;
     }
 
@@ -403,17 +589,18 @@ export function BoardView(props: {
       stopWaiting();
       pending = {
         key: drop.key,
+        origin: point,
         timer: setTimeout(() => {
           pending = undefined;
           const latest = drag();
           if (latest?.type === 'part') {
-            setDrag({ ...latest, settled: latest.point });
+            setDrag({ ...latest, settled: latest.point, joinedTarget: drop.targetId, hoverTarget: undefined });
           }
         }, reorderDelay)
       };
     }
 
-    setDrag({ ...current, point, carried });
+    setDrag({ ...current, point, carried, hoverTarget: undefined });
   }
 
   // A lift drops where the part is, without waiting; a press that did not move is a tap.
@@ -452,18 +639,54 @@ export function BoardView(props: {
       return;
     }
 
-    // A tap on a board panel's free studs closes a swatch's open panel, even one lying over its swatch.
-    if (current.type === 'panel' && !current.owned) {
-      if (Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance) {
-        props.onOpenPanel(undefined);
+    if (current.type === 'panel') {
+      const tapped = Math.hypot(point.x - current.start.x, point.y - current.start.y) < tapDistance;
+      if (tapped) {
+        if (current.tappedPartId !== undefined) {
+          const found = findPart(current.base, current.tappedPartId);
+          if (found) {
+            setSelected(new Set([current.tappedPartId]));
+          }
+
+          if (found && (ownedPanel(current.base, current.tappedPartId) || partDefinition(found.part.kind)?.owned)) {
+            toggle(current.tappedPartId);
+          }
+
+          return;
+        }
+
+        if (!current.owned) {
+          props.onOpenPanel(undefined);
+        }
+
         return;
       }
+
+      if (props.editing && !current.owned && overDiscard(point)) {
+        const next = pruneOwned({
+          ...current.base,
+          panels: current.base.panels.filter((panel) => panel.id !== current.panel)
+        });
+        props.board.set(next);
+        setSelected(new Set<string>());
+        return;
+      }
+
+      // WYSIWYG: commit the settled preview (merged only if `joinDelay` elapsed, else moved/docked panel).
+      if (current.joined) {
+        props.board.set(pruneOwned(pinPanels(grid.pitch(), current.joined.board, current.pinned, view())));
+        const kept = props.board.latest();
+        setSelected(new Set([...selected()].filter((id) => findPart(kept, id) !== undefined)));
+        return;
+      }
+
+      props.board.set(result({ ...current, point }));
+      return;
     }
 
-    if (current.type !== 'part') {
+    if (current.type === 'resize') {
       const ended = result({ ...current, point });
-
-      props.board.set(current.type === 'resize' ? pinPanels(grid.pitch(), ended, current.pinned, view()) : ended);
+      props.board.set(pinPanels(grid.pitch(), ended, current.pinned, view()));
       return;
     }
 
@@ -491,7 +714,9 @@ export function BoardView(props: {
       return;
     }
 
-    const drop = partDrop(current, point);
+    // WYSIWYG: drop commits the exact preview state (`settled` + whether dwell join unlocked).
+    const dropPoint = overDiscard(point) || (current.spawnAt && tapped) ? point : current.settled;
+    const drop = partDrop(current, dropPoint, current.joinedTarget !== undefined);
     if (drop.where === 'discard' && current.fromBox) {
       // Cancelled drag from the catalog: board stays unchanged and catalog returns.
       return;
@@ -571,10 +796,34 @@ export function BoardView(props: {
     );
     const joins = createMemo(() => partJoins(fusing(), partGroup));
     const edges = createMemo(() => panelEdges(frame().rect, view()));
+    const panelBounds = createMemo(() => partsBounds(panel().parts));
+    const isDockPreview = () => {
+      const current = panelDrag();
+      return current?.panel === panel().id && current.dockPreview !== undefined;
+    };
+    const partHeightPx = (part: Part) => {
+      const base = grid.length(part.span.rows);
+      if (!panel().dock || partStretch(part.kind) !== 'rows') {
+        return base;
+      }
+
+      const bounds = panelBounds();
+      const isBottommost = part.cell.row + part.span.rows === bounds.row + bounds.rows;
+      if (!isBottommost) {
+        return base;
+      }
+
+      const handle = panel().floating ? floatingGripHeight : 0;
+      const available = frame().rect.height - panelPadding * 2 - handle - (part.cell.row - bounds.row) * grid.pitch();
+      return Math.max(base, available);
+    };
     return (
       <div
         class={[styles.panel, panel().owner !== undefined && styles.owned]}
         data-panel={panel().id}
+        data-dock={panel().dock}
+        data-dock-preview={isDockPreview() ? '' : undefined}
+        data-join-target={joinHoverId() === panel().id ? '' : undefined}
         data-floating={panel().floating ? '' : undefined}
         data-empty={panel().parts.length === 0 ? '' : undefined}
         data-owned={panel().owner !== undefined ? '' : undefined}
@@ -607,7 +856,7 @@ export function BoardView(props: {
           }
         }}
       >
-        <Show when={panel().floating}>
+        <Show when={panel().floating && (!panel().dock || props.editing)}>
           <FloatingGrip onDrag={(event) => startPanelDrag(event, panel(), frame().origin)} />
         </Show>
         <Show when={props.editing && panel().parts.length === 0}>
@@ -641,7 +890,7 @@ export function BoardView(props: {
                     left: `${part().cell.column * grid.pitch()}px`,
                     top: `${part().cell.row * grid.pitch()}px`,
                     width: `${grid.length(part().span.columns)}px`,
-                    height: `${grid.length(part().span.rows)}px`
+                    height: `${partHeightPx(part())}px`
                   }}
                   onPointerDown={(event) => {
                     if (!props.editing) {
@@ -649,7 +898,18 @@ export function BoardView(props: {
                     }
 
                     if (selection().has(part().id)) {
+                      const whole = selectedWholePanel();
+                      if (whole && whole.id === panel().id) {
+                        startPanelDrag(event, panel(), frame().origin, part().id);
+                        return;
+                      }
+
                       startBoardSelectionDrag(event, part().id);
+                      return;
+                    }
+
+                    if (panel().parts.length === 1 && panel().owner === undefined) {
+                      startPanelDrag(event, panel(), frame().origin, part().id);
                       return;
                     }
 
@@ -703,17 +963,83 @@ export function BoardView(props: {
     );
   }
 
-  /** The selection's bar over its outline in the board's view. */
-  function Bar(barProps: { rect: Rect; area: { width: number; height: number } }) {
+  /** Returns the single non-owned panel whose parts exactly equal the current selection, if any. */
+  function selectedWholePanel() {
+    const ids = selection();
+    if (ids.size === 0) {
+      return undefined;
+    }
+
+    return props.board
+      .board()
+      .panels.find(
+        (panel) =>
+          panel.owner === undefined &&
+          panel.parts.length === ids.size &&
+          panel.parts.every((part) => ids.has(part.id))
+      );
+  }
+
+  /** Toggles screen-edge docking on `panel`: undocks if docked, else docks to the nearer edge if `canDock`. */
+  function toggleDockPanel(panel: Panel) {
+    const board = props.board.latest();
+    if (panel.dock) {
+      props.board.set(replacePanel(board, panel.id, { ...panel, dock: undefined }));
+      return;
+    }
+
+    const size = view();
+    const frame = visible().find((entry) => entry.panel.id === panel.id)?.frame;
+    const centerX = frame ? frame.rect.left + frame.rect.width / 2 : panel.at.x * size.width;
+    const preferred: DockSide = centerX <= size.width / 2 ? 'left' : 'right';
+    const fallback: DockSide = preferred === 'left' ? 'right' : 'left';
+    const side = canDock(grid.pitch(), board, panel.id, preferred, size, partStretch)
+      ? preferred
+      : canDock(grid.pitch(), board, panel.id, fallback, size, partStretch)
+        ? fallback
+        : undefined;
+    if (side) {
+      props.board.set(replacePanel(board, panel.id, { ...panel, dock: side }));
+    }
+  }
+
+  /** The selection's bar over its outline in the board's safe area. */
+  function Bar(barProps: { rect: Rect; area: Rect }) {
+    const whole = () => selectedWholePanel();
+    const dockAction = (): 'dock' | 'undock' | undefined => {
+      const host = whole();
+      if (!host) {
+        return undefined;
+      }
+
+      if (host.dock) {
+        return 'undock';
+      }
+
+      const board = props.board.board();
+      const size = view();
+      const fitsEither =
+        canDock(grid.pitch(), board, host.id, 'left', size, partStretch) ||
+        canDock(grid.pitch(), board, host.id, 'right', size, partStretch);
+      return fitsEither ? 'dock' : undefined;
+    };
+
     return (
       <SelectionBar
         rect={barProps.rect}
         area={barProps.area}
         looks={!sizable()?.part[partData]?.invalid && partLooks(sizable()?.part.kind ?? '') !== undefined}
+        dock={dockAction()}
         kept={flashKit() !== undefined}
         onPutAway={putAwaySelected}
         onDuplicate={duplicateSelected}
         onKeep={keepSelected}
+        onToggleDock={() => {
+          const host = whole();
+          if (host) {
+            toggleDockPanel(host);
+          }
+        }}
         onLooks={() => {
           const id = sizable()?.part.id;
           const element = id ? document.querySelector(`[data-part="${CSS.escape(id)}"]`) : undefined;
@@ -760,7 +1086,7 @@ export function BoardView(props: {
               <>
                 <div class={styles.selection} data-joins={sizableJoins()} style={rectStyle(rect())} />
                 <Show when={!drag()}>
-                  <Bar rect={rect()} area={view()} />
+                  <Bar rect={rect()} area={boardSafeArea()} />
                 </Show>
               </>
             )}
@@ -798,18 +1124,29 @@ export function BoardView(props: {
         )}
       </Show>
 
-      <Show when={(props.editing || props.catalog !== undefined) && lifted()?.carried && lifted()}>
-        {(current) => (
-          <div
-            ref={setDiscardZone}
-            class={styles.discardZone}
-            role="status"
-            data-over={overDiscard(current().point) ? '' : undefined}
-          >
-            <SketchIcon name={current().fromBox ? 'close' : 'trash'} size={16} />
-            <span>{current().fromBox ? 'Drop to cancel' : 'Drop to put away'}</span>
-          </div>
-        )}
+      <Show
+        when={
+          ((props.editing || props.catalog !== undefined) && lifted()?.carried && lifted()) ||
+          (props.editing && panelDrag()?.carried && !panelDrag()?.owned && panelDrag())
+        }
+      >
+        {(current) => {
+          const fromBox = () => {
+            const active = current();
+            return active.type === 'part' && active.fromBox;
+          };
+          return (
+            <div
+              ref={setDiscardZone}
+              class={styles.discardZone}
+              role="status"
+              data-over={overDiscard(current().point) ? '' : undefined}
+            >
+              <SketchIcon name={fromBox() ? 'close' : 'trash'} size={16} />
+              <span>{fromBox() ? 'Drop to cancel' : 'Drop to put away'}</span>
+            </div>
+          );
+        }}
       </Show>
 
       <Show when={lifted()?.carried && lifted()}>
@@ -884,13 +1221,14 @@ export function BoardView(props: {
     </>
   );
 
-  /** Finds an unoccupied spot for the Edit bar via `freeSpot` so it covers no existing panel. */
+  /** Finds an unoccupied spot for the Edit bar via `freeSpot` inside `safeArea` so it covers no existing panel. */
   function initialEditBarSpot(): Point {
     const size = view();
+    const area = safeArea(grid.pitch(), props.board.latest(), size, true, partStretch);
     const bar = editBarSize();
     const span = grid.minimumSpan(bar);
-    const at = freeSpot(grid.pitch(), props.board.latest(), size, span);
-    return clampEditBar({ x: at.x * size.width - panelPadding, y: at.y * size.height - panelPadding }, bar, size);
+    const at = freeSpot(grid.pitch(), props.board.latest(), size, span, 16, partStretch);
+    return clampEditBar({ x: at.x * size.width - panelPadding, y: at.y * size.height - panelPadding }, bar, area);
   }
 
   /** Moves the floating Edit bar freely while its grip is dragged. */
@@ -925,7 +1263,7 @@ export function BoardView(props: {
         clampEditBar(
           { x: origin.x + next.clientX - start.x, y: origin.y + next.clientY - start.y },
           editBarSize(),
-          view()
+          boardSafeArea()
         )
       );
     };
@@ -1089,6 +1427,7 @@ export function BoardView(props: {
       base: from.base ?? (findPart(board, part.id) ? removePart(board, part.id) : board),
       before: board,
       pinned: origins(board),
+      sourcePanel: findPart(board, part.id)?.panel.id,
       newPanel: newId('panel'),
       fromBox: from.fromBox ?? false,
       block: from.block,
@@ -1139,14 +1478,17 @@ export function BoardView(props: {
     }
 
     event.preventDefault();
+    const board = props.board.latest();
     setDrag({
       type: 'panel',
       pointer: event.pointerId,
       point,
       grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
-      base: props.board.latest(),
+      base: board,
+      pinned: origins(board),
       panel: panel.id,
       start: point,
+      carried: false,
       owned: {
         anchor: {
           x: host.frame.origin.x + anchor.cell.column * grid.pitch(),
@@ -1156,30 +1498,42 @@ export function BoardView(props: {
     });
   }
 
-  /** Moves a free plate from its grip in either mode, or from its rim in Edit. */
-  function startPanelDrag(event: PointerEvent, panel: Panel, origin: Point) {
+  /** Moves a free plate from its grip, from its rim, or when carrying a single-part / whole-panel selection in Edit. */
+  function startPanelDrag(event: PointerEvent, panel: Panel, origin: Point, tappedPartId?: string) {
     event.preventDefault();
     const point = { x: event.clientX, y: event.clientY };
     const pressed = toView(point);
+    const board = props.board.latest();
     setDrag({
       type: 'panel',
       pointer: event.pointerId,
       point,
       grab: { x: pressed.x - origin.x, y: pressed.y - origin.y },
-      base: props.board.latest(),
+      base: board,
+      pinned: origins(board),
       panel: panel.id,
-      start: point
+      start: point,
+      carried: false,
+      tappedPartId,
+      dockPreview: panel.dock
     });
   }
 
   /**
-   * A press on the bare drawing while editing: inside the board's selection it carries the selected parts, elsewhere
-   * it drags a band to select parts on the board with.
+   * A press on the bare drawing while editing: inside the board's selection it carries the selected parts (or moves
+   * the whole panel when the selection covers all parts of one free panel), elsewhere it drags a selection band.
    */
   function pressBoard(event: PointerEvent) {
     const at = toView({ x: event.clientX, y: event.clientY });
     const rect = boardSelectionRect();
     if (rect && overlap({ left: at.x, top: at.y, width: 1, height: 1 }, rect) > 0) {
+      const whole = selectedWholePanel();
+      const entry = whole ? visible().find((candidate) => candidate.panel.id === whole.id) : undefined;
+      if (whole && entry) {
+        startPanelDrag(event, whole, entry.frame.origin);
+        return;
+      }
+
       startBoardSelectionDrag(event);
       return;
     }
@@ -1332,23 +1686,60 @@ export function BoardView(props: {
     }
 
     const pointer = toView(drag.point);
-    const offset = frameAt(grid.pitch(), panel, { x: 0, y: 0 }).rect;
+    const undocked = dockedLayout(grid.pitch(), { ...panel, dock: undefined }, size, partStretch);
+    const offset = frameAt(grid.pitch(), undocked, { x: 0, y: 0 }).rect;
     const at = {
       x: (pointer.x - drag.grab.x + (panel.floating ? offset.left : 0)) / size.width,
       y: (pointer.y - drag.grab.y + (panel.floating ? offset.top : 0)) / size.height
     };
+    const nextDock = drag.dockPreview;
     return replacePanel(drag.base, panel.id, {
       ...panel,
-      at
+      at: nextDock ? panel.at : at,
+      dock: nextDock
     });
+  }
+
+  /** Finds another free/owned panel under `pointer` (with `0.5 * pitch` halo) that can accept `panel`'s parts. */
+  function panelJoinTarget(drag: Extract<Drag, { type: 'panel' }>, panel: Panel, pointer: Point) {
+    const size = view();
+    const pitch = grid.pitch();
+    const carried = new Set(panel.parts.map((part) => part.id));
+    const entries = visiblePanels(pitch, drag.base, props.openPanel, props.editing, size, drag.pinned, partStretch)
+      .filter(
+        (entry) =>
+          entry.panel.id !== panel.id &&
+          entry.panel.dock === undefined &&
+          canDropParts(drag.base, entry.panel, carried)
+      );
+    return pointerTarget(entries, pointer, pitch);
+  }
+
+  /** Merges `panel`'s parts as one block into `target` at `pointer` and removes the source panel. */
+  function mergePanelInto(
+    drag: Extract<Drag, { type: 'panel' }>,
+    panel: Panel,
+    target: ReturnType<typeof visiblePanels>[number],
+    pointer: Point
+  ): Board {
+    const pitch = grid.pitch();
+    const corner = { x: pointer.x - drag.grab.x, y: pointer.y - drag.grab.y };
+    const cell = nearestCell(pitch, target.frame.origin, corner);
+    const withoutSource: Board = {
+      ...drag.base,
+      panels: drag.base.panels.filter((candidate) => candidate.id !== panel.id)
+    };
+    const placed = placeBlock(target.panel.parts, fromOrigin(panel.parts), cell);
+    return putPanel(withoutSource, { ...target.panel, parts: placed });
   }
 
   /**
    * Where a lifted part or block held at `point` would land: the board with it there, `where` it lands (`discard` on
-   * the top capsule, or `board`), a `key` naming the spot, and whether it `pushes` other parts aside to fit.
+   * the top capsule, or `board`), a `key` naming the spot, target panel id, and whether it `pushes` or `expands`.
    */
-  function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point) {
+  function partDrop(drag: Extract<Drag, { type: 'part' }>, point: Point, allowJoin = true) {
     const size = view();
+    const pitch = grid.pitch();
     const carried = new Set(drag.block ? drag.block.parts.map((part) => part.id) : [drag.id]);
     const ancestry = { panels: [...drag.before.panels, ...(drag.block?.panels ?? [])] };
     const accepts = (panel: Panel) => canDropParts(ancestry, panel, carried);
@@ -1364,7 +1755,7 @@ export function BoardView(props: {
                   return panel;
                 }
 
-                const { rect } = ownedFrame(grid.pitch(), panel, anchor, size);
+                const { rect } = ownedFrame(pitch, panel, anchor, size, safeArea(pitch, board, size, true, partStretch));
                 return { ...panel, at: { x: rect.left / size.width, y: rect.top / size.height } };
               })
             ]
@@ -1372,47 +1763,44 @@ export function BoardView(props: {
         : board;
     /** `drag` placed on `panel` with its top-left at `cell`. */
     const placeOn = (panel: Panel, cell: Cell) => {
+      const prevBounds = panel.parts.length > 0 ? partsBounds(panel.parts) : undefined;
       const placed = drag.block
         ? placeBlock(panel.parts, drag.block.parts, cell)
         : placePart(panel.parts, { ...part, cell });
+      const nextBounds = partsBounds(placed);
+      const expands =
+        prevBounds !== undefined &&
+        (nextBounds.column < prevBounds.column ||
+          nextBounds.row < prevBounds.row ||
+          nextBounds.column + nextBounds.columns > prevBounds.column + prevBounds.columns ||
+          nextBounds.row + nextBounds.rows > prevBounds.row + prevBounds.rows);
       const before = new Map(panel.parts.map((other) => [other.id, other.cell]));
       const host = { ...panel, parts: placed };
-      const origin = drag.pinned.get(panel.id) ?? panelFrame(grid.pitch(), host, size).origin;
+      const origin = drag.pinned.get(panel.id) ?? panelFrame(pitch, host, size, true, undefined, partStretch).origin;
       const anchor = {
-        left: origin.x + cell.column * grid.pitch(),
-        top: origin.y + cell.row * grid.pitch(),
+        left: origin.x + cell.column * pitch,
+        top: origin.y + cell.row * pitch,
         width: grid.length(drag.span.columns),
         height: grid.length(drag.span.rows)
       };
       return {
         board: withOwned(putPanel(drag.base, host), anchor),
         key: `${panel.id}:${cell.column},${cell.row}`,
-        pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell)
+        targetId: panel.id,
+        pushes: placed.some((other) => before.has(other.id) && before.get(other.id) !== other.cell),
+        expands
       };
-    };
-
-    /**
-     * The panel among `entries` the part with its top-left at `corner` covers most of, counting half a cell around
-     * it, so a part, however long, joins a panel as soon as an edge of it touches; on a tie the top-most one.
-     */
-    const touched = (entries: ReturnType<typeof visiblePanels>, corner: Point) => {
-      const lifted = {
-        left: corner.x,
-        top: corner.y,
-        width: drag.span.columns * grid.pitch(),
-        height: drag.span.rows * grid.pitch()
-      };
-      return entries.reduce<{ entry?: (typeof entries)[number]; area: number }>(
-        (best, entry) => {
-          const area = overlap(lifted, grow(entry.frame.rect, grid.pitch() / 2));
-          return area > 0 && area >= best.area ? { entry, area } : best;
-        },
-        { area: 0 }
-      ).entry;
     };
 
     if (overDiscard(point)) {
-      return { where: 'discard' as const, board: drag.base, key: 'discard', pushes: false };
+      return {
+        where: 'discard' as const,
+        board: drag.base,
+        key: 'discard',
+        targetId: undefined,
+        pushes: false,
+        expands: false
+      };
     }
 
     // The lifted part's top-left corner, in view pixels.
@@ -1421,16 +1809,17 @@ export function BoardView(props: {
 
     const target = drag.block?.floating
       ? undefined
-      : touched(
-          visiblePanels(grid.pitch(), drag.base, props.openPanel, props.editing, size, drag.pinned).filter((entry) =>
-            accepts(entry.panel)
+      : pointerTarget(
+          visiblePanels(pitch, drag.base, props.openPanel, props.editing, size, drag.pinned, partStretch).filter(
+            (entry) => entry.panel.dock === undefined && accepts(entry.panel)
           ),
-          corner
+          pointer,
+          pitch
         );
-    if (target) {
+    if (target && allowJoin) {
       return {
         where: 'board' as const,
-        ...placeOn(target.panel, nearestCell(grid.pitch(), target.frame.origin, corner))
+        ...placeOn(target.panel, nearestCell(pitch, target.frame.origin, corner))
       };
     }
 
@@ -1443,10 +1832,19 @@ export function BoardView(props: {
           ...drag.base,
           panels: [...drag.base.panels, { id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating }]
         },
-        panelFrame(grid.pitch(), { id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating }, size).rect
+        panelFrame(
+          pitch,
+          { id: drag.newPanel, at: placedAt, parts, floating: drag.block?.floating },
+          size,
+          true,
+          undefined,
+          partStretch
+        ).rect
       ),
       key: 'new',
-      pushes: false
+      targetId: target?.panel.id,
+      pushes: false,
+      expands: false
     };
   }
 
@@ -1483,13 +1881,74 @@ export function BoardView(props: {
   }
 }
 
-/** Keeps the Edit bar inside `view` with a small edge margin. */
-function clampEditBar(point: Point, bar: { width: number; height: number }, view: { width: number; height: number }) {
+/** Keeps the Edit bar inside `bounds` (either full view or `safeArea`) with a small edge margin. */
+function clampEditBar(
+  point: Point,
+  bar: { width: number; height: number },
+  bounds: { left?: number; top?: number; width: number; height: number }
+) {
   const margin = 8;
+  const minX = (bounds.left ?? 0) + margin;
+  const minY = (bounds.top ?? 0) + margin;
+  const maxX = Math.max(minX, (bounds.left ?? 0) + bounds.width - bar.width - margin);
+  const maxY = Math.max(minY, (bounds.top ?? 0) + bounds.height - bar.height - margin);
   return {
-    x: Math.max(margin, Math.min(point.x, Math.max(margin, view.width - bar.width - margin))),
-    y: Math.max(margin, Math.min(point.y, Math.max(margin, view.height - bar.height - margin)))
+    x: Math.max(minX, Math.min(point.x, maxX)),
+    y: Math.max(minY, Math.min(point.y, maxY))
   };
+}
+
+/**
+ * Resolves the screen-edge dock preview with hysteresis: docks within `1 * pitch` of the edge (when `allowed`),
+ * and stays docked until pulled inward beyond `1.5 * pitch`.
+ */
+function resolveDockPreview(
+  current: DockSide | undefined,
+  panelLeft: number,
+  panelRight: number,
+  viewWidth: number,
+  pitch: number,
+  allowed: (side: DockSide) => boolean
+): DockSide | undefined {
+  if (current === 'left') {
+    return panelLeft <= 1.5 * pitch ? 'left' : undefined;
+  }
+
+  if (current === 'right') {
+    return viewWidth - panelRight <= 1.5 * pitch ? 'right' : undefined;
+  }
+
+  if (panelLeft < pitch && allowed('left')) {
+    return 'left';
+  }
+
+  if (viewWidth - panelRight < pitch && allowed('right')) {
+    return 'right';
+  }
+
+  return undefined;
+}
+
+/**
+ * Finds the top-most panel whose box (expanded by `0.5 * pitch`) contains the pointer point itself, rather than
+ * testing the entire footprint of a tall lifted part.
+ */
+function pointerTarget(entries: ReturnType<typeof visiblePanels>, pointer: Point, pitch: number) {
+  const halo = pitch / 2;
+  let found: (typeof entries)[number] | undefined;
+  for (const entry of entries) {
+    const rect = grow(entry.frame.rect, halo);
+    if (
+      pointer.x >= rect.left &&
+      pointer.x <= rect.left + rect.width &&
+      pointer.y >= rect.top &&
+      pointer.y <= rect.top + rect.height
+    ) {
+      found = entry;
+    }
+  }
+
+  return found;
 }
 
 /** Whether the edit mode's hint was learned on this device. */
@@ -1611,6 +2070,12 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       settled: Point;
       /** Where each panel had its cell (0, 0) as the drag began; panels keep still there while parts come and go. */
       pinned: ReadonlyMap<string, Point>;
+      /** The panel this part came from, if lifted off the board. */
+      sourcePanel?: string;
+      /** Target panel unlocked after dwelling `joinDelay` over a foreign panel. */
+      joinedTarget?: string;
+      /** Target panel highlighted while waiting on `joinDelay`. */
+      hoverTarget?: string;
       /** The id a new panel gets if the part lands on the bare drawing. */
       newPanel: string;
       /** Whether it came out of the catalog or spawn menu rather than off the board. */
@@ -1633,8 +2098,20 @@ type Drag = { pointer: number; point: Point; base: Board } & (
       type: 'panel';
       panel: string;
       grab: Point;
-      /** Where the press began, to tell a tap on free studs from a move. */
+      /** Where the press began, to tell a tap on free studs or a single part from a move. */
       start: Point;
+      /** Where each panel had its cell (0, 0) as the drag began. */
+      pinned: ReadonlyMap<string, Point>;
+      /** Whether it moved off where it was pressed. */
+      carried: boolean;
+      /** The part that received the press when dragging a single-part or whole-panel selection. */
+      tappedPartId?: string;
+      /** Screen edge previewed for docking while dragging near a border. */
+      dockPreview?: DockSide;
+      /** Target panel highlighted while waiting on `joinDelay`. */
+      hoverTarget?: string;
+      /** Settled merged board once `joinDelay` elapsed over a target panel. */
+      joined?: { targetId: string; board: Board };
       /** For a swatch's panel: where its swatch's top-left cell starts on the board. */
       owned?: { anchor: Point };
     }
@@ -1661,6 +2138,12 @@ const editLongPress = 450;
 
 /** Milliseconds a still press on the bare drawing or a panel's free cells takes to open the spawn menu. */
 const longPress = 420;
+
+/**
+ * Milliseconds a dragged panel or foreign part must dwell nearly still (< 0.5 * pitch) over another panel before
+ * merging into it, preventing accidental panel explosions while crossing the screen.
+ */
+const joinDelay = 550;
 
 /**
  * Milliseconds a lifted part must rest over a spot before the parts in its way move aside, after Android's launcher:

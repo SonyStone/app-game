@@ -12,10 +12,12 @@ import styles from './LegoStudio.module.css';
 export function SelectionBar(props: {
   /** The selection's outline, in the pixels of the place it lies in. */
   rect: Rect;
-  /** The size of the board's view. */
-  area: { width: number; height: number };
+  /** Safe area of the board's view (inside any docked sidebars). */
+  area: { left?: number; top?: number; width: number; height: number };
   /** Whether the one selected part has looks to choose from. */
   looks: boolean;
+  /** Whether the selection covers one whole non-owned panel that can be docked or undocked. */
+  dock?: 'dock' | 'undock';
   /** Whether the selection was just kept as a kit, which the bar tells for a moment. */
   kept: boolean;
   onPutAway: () => void;
@@ -23,6 +25,8 @@ export function SelectionBar(props: {
   onKeep: () => void;
   /** Opens the look chooser beside the selected part. */
   onLooks: () => void;
+  /** Docks or undocks the selected whole panel. */
+  onToggleDock?: () => void;
 }) {
   const [bar, setBar] = createSignal<HTMLElement>();
   const size = createElementSize(bar);
@@ -30,10 +34,20 @@ export function SelectionBar(props: {
     const width = size.width ?? 0;
     const height = size.height ?? 0;
     const { rect, area } = props;
-    const left = Math.max(barGap, Math.min(rect.left + rect.width / 2 - width / 2, area.width - width - barGap));
+    const areaLeft = area.left ?? 0;
+    const areaTop = area.top ?? 0;
+    const left = Math.max(
+      areaLeft + barGap,
+      Math.min(rect.left + rect.width / 2 - width / 2, areaLeft + area.width - width - barGap)
+    );
     const above = rect.top - height - barGap;
     const below = rect.top + rect.height + barGap;
-    const top = above >= barGap ? above : below + height <= area.height - barGap ? below : rect.top + barGap;
+    const top =
+      above >= areaTop + barGap
+        ? above
+        : below + height <= areaTop + area.height - barGap
+          ? below
+          : Math.max(areaTop + barGap, Math.min(rect.top + barGap, areaTop + area.height - height - barGap));
     return { left, top };
   };
 
@@ -63,6 +77,12 @@ export function SelectionBar(props: {
         <SketchIcon name={props.kept ? 'check' : 'tools'} size={18} />
         {props.kept ? 'Kept' : 'Keep as kit'}
       </button>
+      <Show when={props.dock && props.onToggleDock}>
+        <button type="button" onClick={() => props.onToggleDock?.()}>
+          <SketchIcon name="pin" size={18} />
+          {props.dock === 'undock' ? 'Undock' : 'Dock'}
+        </button>
+      </Show>
       <Show when={props.looks}>
         <button type="button" onClick={() => props.onLooks()}>
           <span class={styles.looksGlyph} aria-hidden="true">
