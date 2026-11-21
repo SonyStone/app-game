@@ -1,5 +1,6 @@
 import type { HistoryStep, Layer, RasterInfo, TileChange } from '../document';
 import type { FloatingPixels } from '../gpu/floatingPixels';
+import type { ShownLayer } from '../layerTree';
 import type { SelectionMask } from '../selectionMask';
 import type { TileData } from '../tilePixels';
 
@@ -60,10 +61,11 @@ export function editedLayer(context: Pick<DocumentEditContext, 'active'>): Layer
 /** What an edit reads: the document's layers and a reader for their tiles. */
 export type DocumentEditContext = {
   /**
-   * Current raster layers, bottom to top, as they show on the canvas (see `createDocument`'s `layers`). Tiles are
-   * immutable; replace them through the returned changes.
+   * Current raster layers, bottom to top, as they show on the canvas (see `createDocument`'s `layers`), with the
+   * folders around them that composite on their own; `composeStack` composites them. Tiles are immutable; replace
+   * them through the returned changes.
    */
-  layers: readonly Layer[];
+  layers: readonly ShownLayer[];
   /**
    * The selected layer, among `layers`; undefined while a folder is selected, which has no pixels: an edit that
    * changes or reads the active layer's pixels then throws, telling the user to select a layer.

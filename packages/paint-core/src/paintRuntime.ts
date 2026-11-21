@@ -15,7 +15,7 @@ import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
 import { readPaintFile, writePaintFile } from './paintFile';
-import { isPsdFile, readPsdFile, writePsdFile } from './psdFile';
+import { isPsdFile, psdExportLayers, readPsdFile, writePsdFile } from './psdFile';
 import srgbProfileUrl from './assets/sRGB.icc?url';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { mergeTilePixels } from './layerMerge';
@@ -1263,10 +1263,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             break;
           case 'live-list': {
             const result = await attempt(async () => {
-              // A viewer gets the drawing flat; while a folder is active, it sees the topmost layer active.
+              // While a folder is active, a viewer sees the topmost layer active.
               const listed = listLiveTiles(
                 {
                   layers: document.layers,
+                  nodes: document.nodes,
                   activeId: document.activeLayer?.id ?? document.layers.at(-1)!.id,
                   linearBlending: document.linearBlending()
                 },
@@ -1368,6 +1369,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
 
             const profile = new Uint8Array(await profileResponse.arrayBuffer());
             const identity = document.psdIdentity();
+            // A folder rasterized for the file is one layer there; it keeps the identity of its topmost layer.
+            const layers = await psdExportLayers(
+              document.layers,
+              (id) => document.node(id)?.name ?? 'Group',
+              tileStore.read,
+              document.linearBlending()
+            );
             const saveTime = new Date().toISOString().replace(/\.\d{3}Z$/, '+00:00');
             const context: PsdNewDocumentContext = {
               creation: identity.creation,
@@ -1402,15 +1410,15 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                 newCredentialsEnabled: false
               },
               profile,
-              layerIds: document.layers.map((layer) => identity.layers[layer.id]!.id),
-              layerTimes: document.layers.map((layer) => identity.layers[layer.id]!.time),
+              layerIds: layers.map((layer) => identity.layers[layer.sources.at(-1)!]!.id),
+              layerTimes: layers.map((layer) => Math.max(...layer.sources.map((id) => identity.layers[id]!.time))),
               globalAngle: 90,
               globalAltitude: 30,
               proofSetupName: 'Working CMYK'
             };
             post({
               type: 'download',
-              blob: await writePsdFile(document.layers, tileStore.read, command.region, document.linearBlending(), context),
+              blob: await writePsdFile(layers, tileStore.read, command.region, document.linearBlending(), context),
               name,
               requestId: command.requestId
             });

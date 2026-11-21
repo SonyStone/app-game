@@ -1,10 +1,14 @@
+import { openPsd } from '@app-game/psd/viewer';
 import { describe, expect, it } from 'vitest';
 import { defaultCamera } from './camera';
 import { createDocument, TILE_BYTES, type DocumentNode, type Layer } from './document';
 import { compositionSignature } from './gpu/frameComposer';
+import { mergeTilePixels } from './layerMerge';
 import { composeStack } from './layerStack';
 import { isFlatStack, type ShownLayer } from './layerTree';
+import { applyLiveState, listLiveTiles } from './liveDrawing';
 import { readPaintFile, writePaintFile } from './paintFile';
+import { psdExportLayers, writePsdFile } from './psdFile';
 import { decodeDocument, encodeDocument, restoreDocument, snapshotDocument } from './storage';
 import { unpackTile } from './tilePixels';
 
@@ -66,6 +70,9 @@ const encode = (value: number) => (value <= 0.0031308 ? value * 12.92 : 1.055 * 
 /** Backdrop and folder content of the composite cases: 0–255 values that are exact in RGBA8. */
 const B = [102, 204, 153];
 const C = [153, 255, 255];
+
+/** 0–255 values as 0–1 straight color. */
+const b3 = (rgb: number[]) => rgb.map((value) => value / 255) as [number, number, number];
 
 describe('folder properties', () => {
   it('take an opacity and any blend mode, Pass Through too, each as one undo step', () => {
@@ -353,7 +360,59 @@ describe('saved folder properties', () => {
   });
 });
 
+describe('live sharing with folders', () => {
+  it('shares the tree when folders composite on their own, so the viewer shows the same', async () => {
+    const { doc, base, group, inner } = grouped();
+    fill(doc, base, b3(B));
+    fill(doc, inner, b3(C), 0.6);
+    doc.changeLayer({ type: 'update', id: inner, patch: { blend: 'multiply' } });
+    const share = () =>
+      listLiveTiles(
+        { layers: doc.layers, nodes: doc.nodes, activeId: inner, linearBlending: false },
+        { left: 0, top: 0, width: 256, height: 256 },
+        (data) => ({ storageId: crypto.randomUUID(), byteLength: (data as Uint8Array).byteLength }),
+        10
+      );
+    // Pass Through at full strength: flat, at the root, as before.
+    expect(share().listing.layers.map((layer) => [layer.kind, layer.parentId])).toEqual([
+      [undefined, undefined],
+      [undefined, undefined]
+    ]);
+
+    doc.changeLayer({ type: 'update', id: group, patch: { blend: 'normal', opacity: 0.5 } });
+    const { listing, versions } = share();
+    expect(listing.layers.map((layer) => layer.kind ?? 'raster')).toEqual(['raster', 'raster', 'group']);
+    const viewer = createDocument();
+    const applied = await applyLiveState(viewer.layers, { ...listing, tiles: [] });
+    // The tiles as the viewer receives them, without the wire's compression.
+    for (const { layerId, key, version } of listing.tiles) {
+      (applied.layers.find((node) => node.id === layerId) as Layer).tiles.set(key, versions.get(version)!);
+    }
+
+    viewer.replace(applied.layers, listing.activeId, false);
+    expect(await composite(viewer, false)).toEqual(await composite(doc, false));
+  });
+});
+
 describe('merging down with folders', () => {
+  it('merges two layers inside an isolated folder without changing how the folder shows', async () => {
+    const { doc, base, group, inner } = grouped();
+    fill(doc, base, b3(B));
+    fill(doc, inner, [0.2, 0.6, 0.9], 0.8);
+    const upper = addLayer(doc, 'Upper', { type: 'add', place: { parentId: group, anchorId: inner, side: 'above' } });
+    fill(doc, upper, [0.9, 0.3, 0.1], 0.5);
+    doc.changeLayer({ type: 'update', id: upper, patch: { blend: 'multiply', opacity: 0.7 } });
+    doc.changeLayer({ type: 'update', id: group, patch: { blend: 'screen', opacity: 0.6 } });
+    const before = await composite(doc, false);
+    const lower = unpackTile(doc.layers.find(({ id }) => id === inner)!.tiles.get('0,0') as Uint8Array);
+    const top = unpackTile(doc.layers.find(({ id }) => id === upper)!.tiles.get('0,0') as Uint8Array);
+    doc.mergeDown(upper, new Map([['0,0', mergeTilePixels(lower, top, 'multiply', 0.7)]]));
+    expect(doc.nodes.map(({ id }) => id)).toEqual([base, inner, group]);
+    const after = await composite(doc, false);
+    // The folder composites its layers on their own, so the merge matches it up to 8-bit rounding.
+    expect(Math.max(...after.map((value, index) => Math.abs(value - before[index]!)))).toBeLessThan(1 / 255);
+  });
+
   it('merges only rasters that are siblings, keeping a layer clipped to a folder clipped to it', () => {
     const { doc, base, group, inner } = grouped();
     const first = addLayer(doc, 'First');
@@ -390,3 +449,109 @@ async function magic(saved: ReturnType<typeof snapshotDocument>) {
   const file = await writePaintFile(saved, async (data) => data as Uint8Array);
   return new TextDecoder().decode(new Uint8Array(await file.slice(0, 6).arrayBuffer()));
 }
+
+describe('PSD export with folders', () => {
+  /**
+   * Base opaque; an isolated Multiply folder at 60% over overlapping layers; a fading Pass Through folder with an
+   * Overlay layer; and a layer clipped to the isolated folder. Every tile holds a ramp, so many values are compared.
+   */
+  function drawing() {
+    const doc = createDocument();
+    const ramp = (layerId: string, rgb: [number, number, number], alpha: (x: number, y: number) => number) => {
+      const pixels = new Uint8Array(TILE_BYTES);
+      for (let y = 0; y < 256; y++) {
+        for (let x = 0; x < 256; x++) {
+          const a = alpha(x, y);
+          pixels.set([...rgb.map((channel) => Math.round((channel * a) / 255)), a], (y * 256 + x) * 4);
+        }
+      }
+
+      doc.commit([{ layerId, key: '0,0', before: undefined, after: pixels }]);
+    };
+    ramp(doc.activeId, [200, 180, 140], () => 255);
+    doc.changeLayer({ type: 'add-group' });
+    const isolated = doc.activeId;
+    doc.changeLayer({ type: 'update', id: isolated, patch: { blend: 'multiply', opacity: 0.6, name: 'Shade' } });
+    ramp(addLayer(doc, 'Blue', { type: 'add', place: { parentId: isolated, side: 'above' } }), [40, 80, 220], (x) => x);
+    const red = addLayer(doc, 'Red', { type: 'add', place: { parentId: isolated, side: 'above' } });
+    ramp(red, [230, 40, 40], (_x, y) => y);
+    const clipped = addLayer(doc, 'Clipped');
+    ramp(clipped, [30, 200, 60], (x, y) => (x + y) % 256);
+    // Screen and Overlay layers written as they are composite differently in the PSD viewer in linear light, even
+    // without folders; inside a rasterized folder they composite as Paint does.
+    doc.changeLayer({ type: 'update', id: clipped, patch: { clipping: true, opacity: 0.8 } });
+    doc.changeLayer({ type: 'add-group' });
+    const fading = doc.activeId;
+    doc.changeLayer({ type: 'update', id: fading, patch: { opacity: 0.5 } });
+    const light = addLayer(doc, 'Light', { type: 'add', place: { parentId: fading, side: 'above' } });
+    ramp(light, [250, 240, 120], (x) => 255 - x);
+    doc.changeLayer({ type: 'update', id: light, patch: { blend: 'overlay' } });
+    return { doc, isolated, fading, clipped };
+  }
+
+  it('rasterizes folders that composite on their own and bakes clipping to a folder', async () => {
+    const { doc, isolated, fading, clipped } = drawing();
+    const layers = await psdExportLayers(doc.layers, (id) => doc.node(id)!.name, readRaw, false);
+    expect(layers.map(({ name, blend, opacity, clipping }) => [name, blend, opacity, !!clipping])).toEqual([
+      ['Layer 1', 'normal', 1, false],
+      ['Shade', 'multiply', 0.6, false],
+      ['Clipped', 'normal', 0.8, false],
+      ['Group 2', 'normal', 1, false]
+    ]);
+    expect(layers[1]!.sources).toHaveLength(2);
+    expect(layers[2]!.sources).toEqual([clipped]);
+    expect(layers[3]!.id).toBe(fading);
+    expect(layers[1]!.id).toBe(isolated);
+  });
+
+  it.each([false, true])(
+    'writes a file whose composite is the drawing’s, linear blending %s',
+    async (linear) => {
+      const { doc } = drawing();
+      doc.setLinearBlending(linear);
+      const layers = await psdExportLayers(doc.layers, (id) => doc.node(id)!.name, readRaw, linear);
+      const file = await writePsdFile(layers, readRaw, { left: 0, top: 0, width: 256, height: 256 }, linear);
+      const opened = await openPsd(await file.arrayBuffer());
+      if (!opened.ok) {
+        throw new Error(opened.error.message);
+      }
+
+      try {
+        const rendered = opened.value.render({
+          linearBlending: linear,
+          approximate: false,
+          textGamma: 1.45,
+          vectorPaths: false,
+          typeLayers: false,
+          smartObjects: null
+        });
+        if (!rendered.ok) {
+          throw new Error(rendered.error.message);
+        }
+
+        try {
+          const expected = await composeStack(doc.layers, TILE_BYTES / 4, (layer) => tileOf(layer), linear);
+          let worst = 0,
+            far = 0;
+          for (let index = 0; index < expected.length; index++) {
+            const error = Math.abs(rendered.value.pixels[index]! - expected[index]! * 255);
+            worst = Math.max(worst, error);
+            far += Number(error > 2);
+          }
+
+          // The backdrop is opaque, so straight and premultiplied agree; rasterized layers round to 8 bits once more,
+          // which linear light magnifies in dark colors.
+          expect(worst).toBeLessThanOrEqual(linear ? 4 : 3);
+          expect(far / expected.length).toBeLessThan(0.005);
+        } finally {
+          rendered.value.dispose();
+        }
+      } finally {
+        opened.value.close();
+      }
+    },
+    60_000
+  );
+});
+
+const readRaw = async (data: unknown) => data as Uint8Array;

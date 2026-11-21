@@ -1,6 +1,7 @@
 import { TILE_SIZE } from './brush';
-import type { Layer, RasterInfo, TileChange } from './document';
+import type { DocumentNode, Layer, LayerGroup, RasterInfo, TileChange } from './document';
 import type { DocumentRect } from './layersInView';
+import { isFlatStack, type ShownLayer } from './layerTree';
 import { compressTile, restoreTile } from './tileCodec';
 import type { TileData, TileReference } from './tilePixels';
 
@@ -10,7 +11,8 @@ import type { TileData, TileReference } from './tilePixels';
  * author sends viewers only versions they lack, read with {@link readLiveTiles}.
  */
 export type LiveListing = {
-  layers: RasterInfo[];
+  /** The layers as a viewer shows them; see {@link listLiveTiles}. */
+  layers: LiveLayer[];
   activeId: string;
   linearBlending: boolean;
   /** The tiles in the region, nearest to its center first. */
@@ -18,6 +20,9 @@ export type LiveListing = {
   /** Whether the region held more tiles than were listed. */
   truncated: boolean;
 };
+
+/** A layer of a live drawing: a raster layer, at the root of a flat drawing or naming its folder, or a folder. */
+export type LiveLayer = RasterInfo | LayerGroup;
 
 /** A tile and the version of its pixels. */
 export type LiveTileVersion = { layerId: string; key: string; version: string };
@@ -30,7 +35,7 @@ export type LiveTileBytes = { version: string; bytes: Uint8Array };
  * for a tile that was cleared. Tiles not listed stay as the viewer has them.
  */
 export type LiveState = {
-  layers: RasterInfo[];
+  layers: LiveLayer[];
   activeId: string;
   linearBlending: boolean;
   tiles: { layerId: string; key: string; bytes: Uint8Array | null }[];
@@ -38,13 +43,20 @@ export type LiveState = {
 
 /**
  * Lists `layers` and their tiles that touch `region`, at most `limit` of them, nearest to the region's center first.
- * Folders are not shared: `layers` are the raster layers as they show (see `createDocument`'s `layers`), listed at
- * the root, so a viewer gets a flat drawing that looks the same.
+ * `layers` are the raster layers as they show (see `createDocument`'s `layers`). When they composite as a flat stack
+ * (`isFlatStack`), folders are not shared: the layers are listed at the root, as they show, so a viewer gets a flat
+ * drawing that looks the same. Otherwise a flat drawing cannot look the same, and the listing holds the layer tree,
+ * `nodes`, with every node's own properties, which the viewer composites as the author does.
  * `capture` names each tile's pixels, as storage does (`PaintStorage.capture`). Returns the listing and the tile data
  * by version, for reading them.
  */
 export function listLiveTiles(
-  document: { layers: readonly Layer[]; activeId: string; linearBlending: boolean },
+  document: {
+    layers: readonly ShownLayer[];
+    nodes: readonly DocumentNode[];
+    activeId: string;
+    linearBlending: boolean;
+  },
   region: DocumentRect,
   capture: (pixels: TileData) => TileReference,
   limit: number
@@ -76,7 +88,16 @@ export function listLiveTiles(
   const kept = found.slice(0, limit);
   return {
     listing: {
-      layers: document.layers.map(({ tiles: _tiles, parentId: _parentId, ...info }) => info),
+      layers: isFlatStack(document.layers)
+        ? document.layers.map(({ tiles: _tiles, parentId: _parentId, ...info }) => info)
+        : document.nodes.map((node) => {
+            if (node.kind === 'group') {
+              return { ...node };
+            }
+
+            const { tiles: _tiles, ...info } = node;
+            return info;
+          }),
       activeId: document.activeId,
       linearBlending: document.linearBlending,
       tiles: kept.map(({ layerId, key, version }) => ({ layerId, key, version })),
@@ -104,17 +125,20 @@ export async function readLiveTiles(
 }
 
 /**
- * The layers after applying `state` to `layers`: the author's layers in the author's order, each keeping the tiles it
- * had unless `state` changes them; layers the author no longer has are gone. Returns them with the tile changes, for
- * the renderer to reload, and the ids of removed layers, for it to release.
+ * The layers after applying `state` to `layers`: the author's layers, and folders when the author shares them, in the
+ * author's order, each raster keeping the tiles it had unless `state` changes them; layers the author no longer has
+ * are gone. Returns them with the tile changes, for the renderer to reload, and the ids of removed layers, for it to
+ * release.
  */
 export async function applyLiveState(
   layers: readonly Layer[],
   state: LiveState
-): Promise<{ layers: Layer[]; changes: TileChange[]; removed: string[] }> {
+): Promise<{ layers: DocumentNode[]; changes: TileChange[]; removed: string[] }> {
   const previous = new Map(layers.map((layer) => [layer.id, layer]));
-  const next = state.layers.map((info) => ({ ...info, tiles: new Map(previous.get(info.id)?.tiles) }));
-  const byId = new Map(next.map((layer) => [layer.id, layer]));
+  const next = state.layers.map((info): DocumentNode =>
+    info.kind === 'group' ? { ...info } : { ...info, tiles: new Map(previous.get(info.id)?.tiles) }
+  );
+  const byId = new Map(next.filter((node): node is Layer => node.kind !== 'group').map((layer) => [layer.id, layer]));
   const changes: TileChange[] = [];
   for (const tile of state.tiles) {
     const layer = byId.get(tile.layerId);
