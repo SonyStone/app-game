@@ -1,4 +1,5 @@
 import type { DocumentNode, GroupBlendMode, Layer, LayerGroup } from './document';
+import type { LayerMask } from './layerMask';
 
 /**
  * The layer tree of a drawing is one list of nodes, raster layers and folders, each naming the folder it is in by
@@ -107,9 +108,10 @@ export function parentKey(parentId: string | null | undefined): string {
  * raster that is the bottom one of its folder has no base: it shows as an ordinary layer and is the base of clipped
  * rasters above it, as a clipped bottom layer of a flat drawing always has.
  *
- * A folder that is Pass Through at full strength and no clipping base composites as its layers do flat, so it is left
- * out of `group`: a drawing whose folders are all such reads as a flat stack, with no `group` or `clipGroup` anywhere,
- * and composites exactly as it did before folders could blend (see {@link isFlatStack}).
+ * A folder that is Pass Through at full strength, without an enabled mask and no clipping base composites as its
+ * layers do flat, so it is left out of `group`: a drawing whose folders are all such reads as a flat stack, with no
+ * `group` or `clipGroup` anywhere, and composites exactly as it did before folders could blend (see
+ * {@link isFlatStack}).
  *
  * Without folders, returns `nodes` itself. Otherwise a raster that shows as it is stays the same object; one that
  * does not becomes a copy with the shown `visible` and `clipping` and its `group` and `clipGroup`, sharing its tiles.
@@ -157,6 +159,7 @@ export function shownLayers(nodes: readonly DocumentNode[]): readonly ShownLayer
               opacity: folder.opacity,
               blend: folder.blend,
               base: baseFolders.has(id),
+              ...(folder.mask?.enabled ? { mask: folder.mask } : {}),
               ...(parent ? { parent } : {})
             }
           : parent
@@ -212,23 +215,32 @@ export type CompositeGroup = {
   parent?: CompositeGroup;
   /**
    * Clipped siblings right above the folder use its coverage: the alpha of its layers composited on their own, after
-   * the folder's visibility, before its opacity.
+   * the folder's visibility, before its opacity, scaled by its mask.
    */
   base: boolean;
+  /** The folder's mask while it is enabled; it scales the folder's composite (see `LayerMask`). */
+  mask?: LayerMask;
 };
 
 /**
  * How folder `group` composites (see `LayerGroup`): `isolated`, blending its layers' composite into the backdrop once
- * with its blend mode and opacity, for any mode but Pass Through; `fade`, Pass Through below full opacity, which
- * interpolates between the backdrop it entered with and its layers composited onto that backdrop; or `pass-through`,
- * at full strength, which composites its layers as they are.
+ * with its blend mode and opacity, for any mode but Pass Through; `fade`, Pass Through below full opacity or with an
+ * enabled mask, which interpolates between the backdrop it entered with and its layers composited onto that backdrop
+ * by its opacity times the mask; or `pass-through`, at full strength, which composites its layers as they are.
  */
-export function groupMode(group: Pick<LayerGroup, 'opacity' | 'blend'>): 'isolated' | 'fade' | 'pass-through' {
+export function groupMode(
+  group: Pick<LayerGroup, 'opacity' | 'blend'> & { mask?: Pick<LayerMask, 'enabled'> }
+): 'isolated' | 'fade' | 'pass-through' {
   if (group.blend !== 'pass-through') {
     return 'isolated';
   }
 
-  return group.opacity < 1 ? 'fade' : 'pass-through';
+  return group.opacity < 1 || group.mask?.enabled ? 'fade' : 'pass-through';
+}
+
+/** The mask of `node` while it has an effect: enabled. Compositors read masks only through this. */
+export function shownMask(node: { mask?: LayerMask }): LayerMask | undefined {
+  return node.mask?.enabled ? node.mask : undefined;
 }
 
 /**

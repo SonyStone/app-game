@@ -1,5 +1,7 @@
-import type { BlendMode } from './document';
-import { TILE_BYTES } from './tilePixels';
+import type { BlendMode, Layer } from './document';
+import { maskCoverage, maskPixels, type LayerMask } from './layerMask';
+import { shownMask } from './layerTree';
+import { TILE_BYTES, unpackTile, type TileData } from './tilePixels';
 
 /**
  * Composites one tile of an upper layer onto the same tile of the layer below, as the display does
@@ -43,6 +45,100 @@ export function mergeTilePixels(
   }
 
   return covered ? result : undefined;
+}
+
+/**
+ * The lower layer's new tiles when raster `upper` merges down into raster `lower`, for `mergeDown` of the document.
+ * Each layer's enabled mask is baked into its pixels first (`maskPixels`), so the merged layer, which has no mask,
+ * looks as the two did; a disabled mask had no effect and is dropped. The upper layer is then composited with
+ * `mergeTilePixels`, clipped to the lower layer's masked pixels when `clipped`. Covers every tile of the upper layer
+ * and, when the lower layer has an enabled mask, every tile of the lower layer; `undefined` removes a tile. `read`
+ * loads a tile version that may be in storage.
+ */
+export async function mergeDownTiles(
+  upper: Pick<Layer, 'tiles' | 'blend' | 'opacity' | 'mask'>,
+  lower: Pick<Layer, 'tiles' | 'mask'>,
+  options: { clipped: boolean; linear: boolean; read: (data: TileData) => Promise<Uint8Array> }
+): Promise<Map<string, Uint8Array | undefined>> {
+  const keys = new Set(upper.tiles.keys());
+  if (shownMask(lower)) {
+    for (const key of lower.tiles.keys()) {
+      keys.add(key);
+    }
+  }
+
+  const merged = new Map<string, Uint8Array | undefined>();
+  for (const key of keys) {
+    const base = await maskedTile(lower, key, options.read);
+    const top = await maskedTile(upper, key, options.read);
+    merged.set(
+      key,
+      top
+        ? mergeTilePixels(base, top, upper.blend, upper.opacity, options.clipped ? { base } : undefined, options.linear)
+        : base
+    );
+  }
+
+  return merged;
+}
+
+/**
+ * The tiles of raster `layer` that change when its mask, enabled or not, is multiplied into its pixels, for
+ * `applyMask` of the document: each with the pixels `maskPixels` gives, `undefined` where nothing is left.
+ */
+export async function appliedMaskTiles(
+  layer: Pick<Layer, 'tiles'> & { mask: LayerMask },
+  read: (data: TileData) => Promise<Uint8Array>
+): Promise<Map<string, Uint8Array | undefined>> {
+  const result = new Map<string, Uint8Array | undefined>();
+  for (const [key, data] of layer.tiles) {
+    const pixels = unpackTile(await read(data));
+    const masked = maskPixels(pixels, await coverageAt(layer.mask, key, read), layer.mask.inverted);
+    if (masked.every((value, index) => value === pixels[index])) {
+      continue;
+    }
+
+    result.set(key, hasAlpha(masked) ? masked : undefined);
+  }
+
+  return result;
+}
+
+/** The pixels of `layer` at `key` with its enabled mask baked in, `undefined` where it has none left. */
+async function maskedTile(
+  layer: Pick<Layer, 'tiles' | 'mask'>,
+  key: string,
+  read: (data: TileData) => Promise<Uint8Array>
+): Promise<Uint8Array | undefined> {
+  const data = layer.tiles.get(key);
+  if (!data) {
+    return undefined;
+  }
+
+  const pixels = unpackTile(await read(data));
+  const mask = shownMask(layer);
+  if (!mask) {
+    return pixels;
+  }
+
+  const masked = maskPixels(pixels, await coverageAt(mask, key, read), mask.inverted);
+  return hasAlpha(masked) ? masked : undefined;
+}
+
+/** The stored coverage of `mask` at tile `key`. */
+async function coverageAt(mask: LayerMask, key: string, read: (data: TileData) => Promise<Uint8Array>) {
+  const data = mask.tiles.get(key);
+  return maskCoverage(data && (await read(data)), mask.outside);
+}
+
+function hasAlpha(pixels: Uint8Array) {
+  for (let index = 3; index < pixels.length; index += 4) {
+    if (pixels[index]) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /** Blend mode indices of the composite shader's `settings.y`; the renderer uploads the same indices. */

@@ -1,4 +1,4 @@
-import type { HistoryStep, Layer, RasterInfo, TileChange } from '../document';
+import type { HistoryStep, Layer, LayerMask, RasterInfo, TileChange } from '../document';
 import type { FloatingPixels } from '../gpu/floatingPixels';
 import type { ShownLayer } from '../layerTree';
 import type { SelectionMask } from '../selectionMask';
@@ -48,9 +48,14 @@ export function defineDocumentEdit<const Id extends string, Command>(definition:
 
 /**
  * The active layer of `context`, for an edit that changes or reads its pixels. Throws, asking the user to select a
- * layer, while a folder is active: a folder has no pixels of its own.
+ * layer, while a folder is active: a folder has no pixels of its own; and while a mask is the paint target, which an
+ * edit that reads this changes nothing of (an edit that can change a mask reads `context.mask` first).
  */
-export function editedLayer(context: Pick<DocumentEditContext, 'active'>): Layer {
+export function editedLayer(context: Pick<DocumentEditContext, 'active' | 'mask'>): Layer {
+  if (context.mask) {
+    throw new Error('This tool cannot change a mask yet. Tap the layer’s pixels to use it.');
+  }
+
   if (!context.active) {
     throw new Error('Select a layer: a folder has no pixels of its own to edit.');
   }
@@ -71,6 +76,12 @@ export type DocumentEditContext = {
    * changes or reads the active layer's pixels then throws, telling the user to select a layer.
    */
   active: Layer | undefined;
+  /**
+   * The active node's mask while it is the paint target, with its stored coverage tiles; see `LayerMask`. An edit that
+   * paints writes the mask's coverage then, through changes whose `layerId` is the mask's id; one that cannot change a
+   * mask refuses, as `editedLayer` does for it.
+   */
+  mask?: LayerMask;
   /** Unpacked premultiplied sRGB RGBA8 pixels of a tile, reading paged-out tiles from storage. */
   readTile: (pixels: TileData) => Promise<Uint8Array>;
   /** Whether the document blends its layers in linear light; see `mergeTilePixels`. */
