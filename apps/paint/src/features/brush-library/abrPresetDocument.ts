@@ -1,6 +1,8 @@
 import { brushFormSchema, formValuesToBrush } from '@app-game/abr-brush/form';
 import type { BrushAsset } from '@app-game/abr-brush/library';
+import { abrBrushSettings } from '@app-game/abr-paint/engine';
 import type { BrushResource } from '@app-game/abr-paint/resources';
+import { percent } from '@app-game/abr-parser';
 import { assetId, type Coverage } from '@app-game/paint-core/paintbrush/asset';
 import { brushSchema, parseDocument } from '@app-game/paint-core/paintbrush/document';
 import { abrDocument } from './abrDocument';
@@ -17,6 +19,67 @@ export async function convertAbr(asset: BrushAsset, saved?: BrushPreset['setting
   }
   const { document, assets } = await abrDocument(asset, saved);
   return prepareDocument(JSON.stringify(document), assets);
+}
+
+/** Rebuilds a prepared viewer preset from its form snapshot and already decoded sampler images. */
+export async function convertStoredAbr<T extends BrushPreset>(record: T, images: readonly BrushResource[]) {
+  const settings = abrBrushSettings.parse(record.settings.engine?.settings);
+  const { values } = settings;
+  const kind = values.tipKind === 'sampledBrush' ? 'sampled' : 'computed';
+  if (values.tipKind !== 'sampledBrush' && values.tipKind !== 'computedBrush') {
+    throw new Error('Unsupported stored ABR tip: ' + values.tipKind);
+  }
+  function image(id: string) {
+    const stored = images.find((candidate) => candidate.id === id);
+    if (!stored) {
+      throw new Error('Missing ABR image: ' + id);
+    }
+    return { ...stored, data: stored.pixels, depth: 8 as const, sourceDepth: 8 as const };
+  }
+  const tip = image(settings.tipId);
+  const asset = formValuesToBrush(
+    {
+      id: record.id,
+      name: values.name,
+      preset: {
+        kind: 'brush',
+        sourceId: record.source ?? record.id,
+        tip: { kind, hardness: percent(values.hardness), dtipsType: values.tipVariant },
+        dualBrush: { kind: 'dualBrush', tip: { kind: values.dualBrush.tipId ? 'sampled' : 'computed' } }
+      },
+      tipImage: tip,
+      resources: [],
+      source: { format: 'photoshop-abr/v1', bytes: new Uint8Array() }
+    },
+    values
+  );
+  const { document, assets } = await abrDocument(asset, record.settings, {
+    pattern: settings.patternId ? image(settings.patternId) : undefined,
+    dualTip: settings.dualId ? image(settings.dualId) : undefined
+  });
+  const item = await prepareDocument(JSON.stringify(document), assets);
+  // Document samplers use content hashes. Require identical coverage for each role and identical runtime controls.
+  const expected = { ...settings, tipId: await assetId(tip) };
+  for (const key of ['patternId', 'dualId'] as const) {
+    if (settings[key]) {
+      expected[key] = await assetId(image(settings[key]));
+    }
+  }
+  if (JSON.stringify(expected) !== JSON.stringify(abrBrushSettings.parse(item.preset.settings.engine?.settings))) {
+    throw new Error('The ABR document would change the stored brush settings or coverage');
+  }
+  return {
+    preset: syncAbrPreset(
+      {
+        ...record,
+        ...item.preset,
+        name: record.name,
+        settings: { ...record.settings, engine: item.preset.settings.engine }
+      },
+      true
+    ),
+    resources: item.resources
+  };
 }
 
 /** Separates active GPU resources from all coverage needed to edit and export this document. */
@@ -68,11 +131,7 @@ export async function resolveDraft(text: string, images: readonly BrushResource[
     // Keep editable slot settings sparse. The studio recipe resolves live controls at pen-down.
     return { engine: slot.settings.engine, resources: [] };
   }
-  const {
-    settings,
-    resources = [],
-    reasons
-  } = await resolveDocument(document, coverageMap(images));
+  const { settings, resources = [], reasons } = await resolveDocument(document, coverageMap(images));
   if (!settings) {
     throw new Error(reasons.join(', '));
   }
