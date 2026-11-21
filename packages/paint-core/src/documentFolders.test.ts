@@ -497,7 +497,10 @@ describe('saved folders', () => {
   });
 });
 
-/** The fields that decide how a raster composites, as `compositionSignature` reads them, and its tiles. */
+/**
+ * The fields that decide how a raster composites, as `compositionSignature` reads them, and its tile versions by
+ * identity: comparing the pixels themselves would walk every byte.
+ */
 function shownFields(layer: Layer) {
   return {
     id: layer.id,
@@ -505,8 +508,22 @@ function shownFields(layer: Layer) {
     opacity: layer.opacity,
     blend: layer.blend,
     clipping: !!layer.clipping,
-    tiles: layer.tiles
+    tiles: [...layer.tiles].map(([key, data]) => [key, versionNumber(data)])
   };
+}
+
+const versions = new WeakMap<TileData, number>();
+let versionCount = 0;
+
+/** A number naming tile version `data`, the same for the same object. */
+function versionNumber(data: TileData) {
+  const known = versions.get(data);
+  if (known !== undefined) {
+    return known;
+  }
+
+  versions.set(data, ++versionCount);
+  return versionCount;
 }
 
 /** A `.paint` file of version 4, as Paint wrote it before folders, of a version 2 document with inline pixels. */

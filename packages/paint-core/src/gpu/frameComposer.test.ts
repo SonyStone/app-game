@@ -72,7 +72,7 @@ it('composites layers in visible folders exactly as the same layers flat', () =>
   const { grouped, flat } = drawings();
   expect(compositionSignature(grouped.layers)).toBe(compositionSignature(flat.layers));
   for (const linear of [false, true]) {
-    expect(composite(grouped.layers, linear)).toEqual(composite(flat.layers, linear));
+    expect(sameBytes(composite(grouped.layers, linear), composite(flat.layers, linear))).toBe(true);
   }
 });
 
@@ -84,7 +84,7 @@ it('changes the composition when a folder is hidden, as hiding its layers does',
   flat.changeLayer({ type: 'update', id: ids.shade, patch: { visible: false } });
   expect(compositionSignature(grouped.layers)).not.toBe(shown);
   expect(compositionSignature(grouped.layers)).toBe(compositionSignature(flat.layers));
-  expect(composite(grouped.layers, true)).toEqual(composite(flat.layers, true));
+  expect(sameBytes(composite(grouped.layers, true), composite(flat.layers, true))).toBe(true);
 });
 
 it('shows a clipped layer right above a folder unclipped, in every path that reads the layers', () => {
@@ -93,7 +93,12 @@ it('shows a clipped layer right above a folder unclipped, in every path that rea
   // Clipping to a folder is not supported: Top shows as an ordinary layer, as it does flat and unclipped.
   expect(grouped.layers.at(-1)!.clipping).toBe(false);
   expect(compositionSignature(grouped.layers)).toBe(compositionSignature(flat.layers));
-  expect(composite(grouped.layers, true)).toEqual(composite(flat.layers, true));
+  expect(sameBytes(composite(grouped.layers, true), composite(flat.layers, true))).toBe(true);
   // Its own property is kept, so moving it above a raster layer clips it again.
   expect(grouped.state().layers.at(-1)!.clipping).toBe(true);
 });
+
+/** Whether two composited tiles hold the same bytes; a deep `toEqual` would walk them an element at a time. */
+function sameBytes(a: Uint8Array | undefined, b: Uint8Array | undefined) {
+  return !!a && !!b && Buffer.compare(a, b) === 0;
+}
