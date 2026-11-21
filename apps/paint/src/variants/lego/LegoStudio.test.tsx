@@ -1837,6 +1837,48 @@ it('carries a tall single-part panel past another panel without exploding it, do
   }
 });
 
+it('takes a docked panel off its edge when its resize corner is dragged up, and keeps its bar clear of the Edit bar', () => {
+  const docked = {
+    panels: [
+      {
+        id: 'tall-layers',
+        at: { x: 0, y: 0 },
+        dock: 'left',
+        parts: [{ id: 'strip', kind: 'layers:strip', cell: { column: 0, row: 0 }, span: { columns: 3, rows: 32 } }]
+      }
+    ]
+  };
+  localStorage.setItem('paint.lego', JSON.stringify({ version: 5, board: docked }));
+  mount(28);
+  enterEdit();
+
+  const strip = document.querySelector<HTMLElement>('[data-part="strip"]')!;
+  pointer(strip, 'pointerdown', 40, 120);
+  pointer(window, 'pointerup', 40, 120);
+
+  const bar = document.querySelector<HTMLElement>('[aria-label="Selected parts"]')!;
+  const editBar = document.querySelector<HTMLElement>('[aria-label="Edit layout"]')!;
+  expect(parseFloat(bar.style.top)).toBeGreaterThan(parseFloat(editBar.style.top));
+
+  // The handle sits on the corner the docked part shows, inside the view, not where its stored 32 rows would end.
+  const corner = document.querySelector<HTMLElement>('[aria-label="Resize"]')!;
+  const pitch = 28 + 4;
+  expect(parseFloat(corner.style.top)).toBe(parseFloat(strip.style.height));
+  expect(parseFloat(corner.style.top)).toBeLessThan(32 * pitch - 4);
+  pointer(corner, 'pointerdown', 90, 700);
+  pointer(window, 'pointermove', 90, 700 - pitch * 6);
+  expect(document.querySelector('[data-panel="tall-layers"]')?.hasAttribute('data-dock')).toBe(false);
+  pointer(window, 'pointerup', 90, 700 - pitch * 6);
+
+  const saved = JSON.parse(localStorage.getItem('paint.lego')!).board.panels[0];
+  expect(saved.dock).toBeUndefined();
+  expect(saved.parts[0].span.columns).toBe(3);
+  expect(saved.parts[0].span.rows).toBeLessThan(32);
+  const panel = document.querySelector<HTMLElement>('[data-panel="tall-layers"]')!;
+  expect(parseFloat(panel.style.left)).toBe(0);
+  expect(parseFloat(panel.style.top)).toBe(0);
+});
+
 /** Each part's text on the board, by its id. */
 function boardText() {
   return new Map(

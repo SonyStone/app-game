@@ -1,3 +1,11 @@
+/*
+ * Android Chrome draws the page's root background under the system gesture bar, below the layout viewport, where no
+ * element reaches. Without a color it is a white strip under the drawing.
+ */
+html:has(.editor) {
+  background: #faf8f4;
+}
+
 .editor {
   position: fixed;
   inset: 0;

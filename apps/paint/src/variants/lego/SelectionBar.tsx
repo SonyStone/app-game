@@ -14,6 +14,8 @@ export function SelectionBar(props: {
   rect: Rect;
   /** Safe area of the board's view (inside any docked sidebars). */
   area: { left?: number; top?: number; width: number; height: number };
+  /** A bar already lying in the place, such as the Edit bar, which this one moves under or over rather than behind. */
+  avoid?: Rect;
   /** Whether the one selected part has looks to choose from. */
   looks: boolean;
   /** Whether the selection covers one whole non-owned panel that can be docked or undocked. */
@@ -48,6 +50,18 @@ export function SelectionBar(props: {
         : below + height <= areaTop + area.height - barGap
           ? below
           : Math.max(areaTop + barGap, Math.min(rect.top + barGap, areaTop + area.height - height - barGap));
+    const avoid = props.avoid;
+    const covered =
+      avoid !== undefined &&
+      left < avoid.left + avoid.width &&
+      left + width > avoid.left &&
+      top < avoid.top + avoid.height &&
+      top + height > avoid.top;
+    if (avoid && covered) {
+      const under = avoid.top + avoid.height + barGap;
+      return { left, top: under + height <= areaTop + area.height - barGap ? under : avoid.top - height - barGap };
+    }
+
     return { left, top };
   };
 

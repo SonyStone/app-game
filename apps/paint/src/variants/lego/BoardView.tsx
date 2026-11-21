@@ -164,6 +164,17 @@ export function BoardView(props: {
   const [editBarPos, setEditBarPos] = createSignal<Point | undefined>(() =>
     props.editing ? untrack(initialEditBarSpot) : undefined
   );
+  /** The Edit bar's box in the board's pixels while it shows, for the selection's bar to keep clear of. */
+  const editBarRect = (): Rect | undefined => {
+    const pos = editBarPos();
+    if (!pos || !props.editing || props.catalog !== undefined) {
+      return undefined;
+    }
+
+    const shift = overlay();
+    const { left, top } = view();
+    return { left: pos.x + shift.x - left, top: pos.y + shift.y - top, ...editBarSize() };
+  };
   let stopBarDrag: (() => void) | undefined;
   onCleanup(() => stopBarDrag?.());
 
@@ -933,14 +944,23 @@ export function BoardView(props: {
             }}
           </For>
           {/* Outside the part, which clips its print, so the handle can be larger than a small part's corner. */}
-          <Show when={sizable()?.panel.id === panel().id && sizable()?.part}>
+          {/*
+           * The part as the panel shows it, not as it is stored: a docked or view-clamped part is shorter on screen
+           * than its stored span, and the handle must sit on the corner the user sees and resize from that size.
+           */}
+          <Show
+            when={
+              sizable()?.panel.id === panel().id &&
+              panel().parts.find((candidate) => candidate.id === sizable()?.part.id)
+            }
+          >
             {(part) => (
               <span
                 class={styles.corner}
                 aria-label="Resize"
                 style={{
                   left: `${(part().cell.column + part().span.columns) * grid.pitch() - cellGap}px`,
-                  top: `${(part().cell.row + part().span.rows) * grid.pitch() - cellGap}px`
+                  top: `${part().cell.row * grid.pitch() + partHeightPx(part())}px`
                 }}
                 onPointerDown={(event) => {
                   event.stopPropagation();
@@ -1028,6 +1048,7 @@ export function BoardView(props: {
       <SelectionBar
         rect={barProps.rect}
         area={barProps.area}
+        avoid={editBarRect()}
         looks={!sizable()?.part[partData]?.invalid && partLooks(sizable()?.part.kind ?? '') !== undefined}
         dock={dockAction()}
         kept={flashKit() !== undefined}
@@ -1668,6 +1689,22 @@ export function BoardView(props: {
         x: drag.point.x - drag.start.x,
         y: drag.point.y - drag.start.y
       });
+      const part = panel.parts.find((candidate) => candidate.id === drag.id);
+      if (panel.dock && part && partStretch(part.kind) === 'rows') {
+        // A docked part's rows follow the view. Dragging its corner up takes the panel off the edge at the dragged
+        // size, where it stood; otherwise only its columns change and the stored rows wait for an undock.
+        if (span.rows >= drag.span.rows) {
+          const columns = { columns: span.columns, rows: part.span.rows };
+          return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, columns) });
+        }
+
+        return replacePanel(drag.base, panel.id, {
+          ...panel,
+          dock: undefined,
+          parts: resizePart(panel.parts, drag.id, span)
+        });
+      }
+
       return replacePanel(drag.base, panel.id, { ...panel, parts: resizePart(panel.parts, drag.id, span) });
     }
 
