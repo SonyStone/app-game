@@ -1,4 +1,4 @@
-import { createEffect, type Accessor } from 'solid-js';
+import { createEffect, untrack, type Accessor } from 'solid-js';
 import { createImmediateSignal } from '../../shared/createImmediateSignal';
 
 /**
@@ -19,7 +19,7 @@ export function createRecentPresets(options: {
       return;
     }
 
-    const next = [id, ...latestIds().filter((candidate) => candidate !== id)].slice(0, limit);
+    const next = [id, ...untrack(latestIds).filter((candidate) => candidate !== id)].slice(0, limit);
     setIds(next);
     try {
       localStorage.setItem(key, JSON.stringify(next));
