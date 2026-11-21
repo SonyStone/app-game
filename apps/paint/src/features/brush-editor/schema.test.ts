@@ -114,13 +114,16 @@ describe('the brush studio registry', () => {
       'abr-tool-pressureOverridesOpacity',
       'abr-tool-pressureOverridesSize'
     ]);
-    expect(shown['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
+    // A round tip at full roundness looks the same at every angle, so Angle is greyed, saying why.
+    expect(shown['brush-tip']).toEqual(['spacing', '(abr-tip-angle)', 'abr-tip-roundness', 'hardness']);
+    expect(getBrushSetting('abr-tip-angle')!.disabledReason!(view)).toMatch(/same at every angle/);
     // Soft round's size follows pressure: Paint's pressure binding reads as Shape dynamics under Pen pressure.
     expect(view.values.useShapeDynamics).toBe(true);
     expect(view.values.shapeDynamics).toMatchObject({ sizeControl: 2, minimumDiameter: 4 });
     for (const id of switches) {
       const category = brushCategories.find((c) => c.id === id)!;
-      expect(category.status(view), id).toBe('Off');
+      // Texture says why it cannot be switched on: the round brush has no pattern.
+      expect(category.status(view), id).toBe(id === 'texture' ? 'No embedded pattern' : 'Off');
       expect(category.settings[0]!.read(view), id).toBe(false);
       expect(
         category.settings.slice(1).every((setting) => !setting.enabled(view)),
@@ -134,7 +137,15 @@ describe('the brush studio registry', () => {
     const view = await photoshop();
     const shown = rows(view);
     expect(shown.painting!.slice(0, 5)).toEqual(['size', 'abr-tool-mode', 'opacity', 'flow', 'color-mixing']);
-    expect(shown['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
+    // A computed round tip: Angle has no effect until Roundness is lowered.
+    expect(shown['brush-tip']).toEqual(['spacing', '(abr-tip-angle)', 'abr-tip-roundness', 'hardness']);
+    const oval = after(
+      view,
+      getBrushSetting('abr-tip-roundness')!.kind === 'number'
+        ? (getBrushSetting('abr-tip-roundness') as NumberSetting).write(view, 50)
+        : view.text
+    );
+    expect(rows(oval)['brush-tip']).toEqual(['spacing', 'abr-tip-angle', 'abr-tip-roundness', 'hardness']);
     expect(shown.dualBrush![0]).toBe('abr-dualBrush-useDualBrush');
     expect(shown.texture![0]).toBe('(abr-texture-useTexture)');
     expect(shown['stroke-correction']).toEqual(
@@ -196,7 +207,10 @@ describe('the brush studio registry', () => {
       expect(setting.enabled(view)).toBe(false);
       expect(setting.read(view)).toBe(false);
     }
-    expect(brushCategories.find((c) => c.id === 'texture')!.status(softRound())).toBe('Off');
+    // The missing pattern, not "Off", is why: the status and the note over the rows say so.
+    const texture = brushCategories.find((c) => c.id === 'texture')!;
+    expect(texture.status(softRound())).toBe('No embedded pattern');
+    expect(texture.note?.(softRound())).toMatch(/no texture pattern/);
   });
 
   it('switches on a dual brush without a stored second tip, which then draws a computed one', async () => {
@@ -321,10 +335,22 @@ describe('the brush studio registry', () => {
     });
   });
 
-  it('carries no explanatory text: no option, category or row has a description, an about or a note', () => {
+  it('carries no explanatory text but why rows are greyed: no option has a description, no category an about', () => {
     for (const category of brushCategories) {
-      expect(Object.keys(category).sort()).toEqual(['applies', 'group', 'id', 'label', 'settings', 'status']);
+      // Only the groups that need an image the brush may lack say so over their rows.
+      expect(Object.keys(category).sort()).toEqual(
+        [
+          'applies',
+          'group',
+          'id',
+          'label',
+          ...(['texture', 'dualBrush'].includes(category.id) ? ['note'] : []),
+          'settings',
+          'status'
+        ].sort()
+      );
       for (const setting of category.settings) {
+        expect(Object.keys(setting).includes('disabledReason'), setting.id).toBe(setting.id === 'abr-tip-angle');
         if (setting.kind === 'choice') {
           for (const option of setting.options) {
             expect(Object.keys(option).sort()).toEqual(['label', 'value']);

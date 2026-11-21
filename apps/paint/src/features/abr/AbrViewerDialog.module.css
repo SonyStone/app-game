@@ -25,10 +25,27 @@
   align-items: center;
   justify-content: space-between;
 
+  /* The close button: light ink on a dark round tile, plainly a button on the dark title bar. */
   button {
     display: grid;
     place-items: center;
     width: 40px;
     height: 40px;
+    padding: 0;
+    border: 1px solid #5a5a5a;
+    border-radius: 50%;
+    corner-shape: round;
+    background: #3a3a3a;
+    color: #f2f2f2;
+    cursor: pointer;
+
+    &:hover {
+      background: #4a4a4a;
+    }
+
+    &:focus-visible {
+      outline: 2px solid #4c9eff;
+      outline-offset: 2px;
+    }
   }
 }

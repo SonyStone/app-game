@@ -47,7 +47,16 @@ it('uses the registry’s ranges, units, curves and writes, for a round brush an
     expect(flow.read(services)).toBe(35);
     expect(brush().flow).toBeCloseTo(0.35);
 
+    // A round tip at full roundness looks the same at any angle: Angle takes edits once Roundness is lowered.
     const angle = brushChannels.find((s) => s.id === 'brush:abr-tip-angle')!;
+    expect(angle.active!(services)).toBe(false);
+    await angle.write(services, 45, hsv);
+    flush();
+    expect(services.brushEditor.view()!.values.angle).toBe(0);
+    expect(brush().engine).toBeUndefined();
+    const roundness = brushChannels.find((s) => s.id === 'brush:abr-tip-roundness')!;
+    await roundness.write(services, 50, hsv);
+    flush();
     expect(angle.active!(services)).toBe(true);
     expect(angle.minimum!(services)).toBe(-180);
     expect(angle.max(services)).toBe(180);
@@ -55,7 +64,6 @@ it('uses the registry’s ranges, units, curves and writes, for a round brush an
     await angle.write(services, 45, hsv);
     flush();
     expect(angle.read(services)).toBe(45);
-    expect(brush().engine).toBeUndefined();
 
     // A part of a switched-off group ignores writes until the group is on.
     const scatter = brushChannels.find((s) => s.id === 'brush:abr-scattering-scatter')!;

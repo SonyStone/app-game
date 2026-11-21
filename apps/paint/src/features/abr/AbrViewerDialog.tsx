@@ -52,7 +52,7 @@ export function AbrViewerDialog(props: {
     >
       <header class={styles.abrTitle}>
         <strong>ABR Brush · experimental</strong>
-        <button aria-label="Close ABR editor" onClick={() => props.close()}>
+        <button type="button" aria-label="Close ABR editor" title="Close" onClick={() => props.close()}>
           <SketchIcon name="close" />
         </button>
       </header>

@@ -197,6 +197,8 @@ export function CategoryPane(props: {
   onBack: () => void;
   /** Added to the pane's own class, for a presentation's layout. */
   class?: string;
+  /** A line of the host's under the title, such as how to use its rows; none by default. */
+  hint?: JSX.Element;
 }) {
   const titleId = createUniqueId();
 
@@ -210,6 +212,14 @@ export function CategoryPane(props: {
         {props.category.label}
       </h2>
       <p class={styles.paneStatus}>{props.category.status(props.brush)}</p>
+      {props.hint}
+      <Show when={props.category.note?.(props.brush)}>
+        {(note) => (
+          <p class={styles.paneNote} role="note" data-reason>
+            {note()}
+          </p>
+        )}
+      </Show>
       <Show when={props.category.id === 'stroke-correction'}>
         <StrokeCorrectionDemo brush={props.brush.brush} />
       </Show>
@@ -319,7 +329,10 @@ export function rowFamily(setting: BrushSetting) {
 /** A family of rows that may fuse into one group. */
 export type RowFamily = ReturnType<typeof rowFamily>;
 
-/** The rows of one run in their groups (`rowGroups`), each group a box of its own, named by its family. */
+/**
+ * The rows of one run in their groups (`rowGroups`), each group a box of its own, named by its family. Under a group,
+ * the reason each of its greyed rows gives (`disabledReason`).
+ */
 function RowGroups(props: {
   hostRow?: Parameters<typeof CategoryPane>[0]['hostRow'];
   category: BrushCategory;
@@ -332,19 +345,32 @@ function RowGroups(props: {
   return (
     <For each={groups()} keyed={(group) => group.key}>
       {(group) => (
-        <div class={styles.rowGroup} data-family={group().family}>
+        <>
+          <div class={styles.rowGroup} data-family={group().family}>
+            <For each={group().rows}>
+              {(setting) => (
+                <Row
+                  hostRow={props.hostRow}
+                  category={props.category}
+                  setting={setting}
+                  brush={props.brush}
+                  onChange={props.onChange}
+                />
+              )}
+            </For>
+          </div>
           <For each={group().rows}>
             {(setting) => (
-              <Row
-                hostRow={props.hostRow}
-                category={props.category}
-                setting={setting}
-                brush={props.brush}
-                onChange={props.onChange}
-              />
+              <Show when={!setting.enabled(props.brush) && setting.disabledReason?.(props.brush)}>
+                {(reason) => (
+                  <p class={styles.rowReason} data-reason>
+                    {reason()}
+                  </p>
+                )}
+              </Show>
             )}
           </For>
-        </div>
+        </>
       )}
     </For>
   );
