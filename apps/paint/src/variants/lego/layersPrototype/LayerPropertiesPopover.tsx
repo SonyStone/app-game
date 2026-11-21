@@ -171,6 +171,30 @@ export function LayerPropertiesPopover(props: {
   const hasQuickToggles = () => hasLock('alpha') || capabilities().clipping || !!model().masks;
   const hasNavigation = () => hasLocksPage() || capabilities().colorTags || capabilities().blendIf;
 
+  /** Adds a mask, or opens the Mask page of a node that has one; a folder has it too. Nothing without masks. */
+  const maskButton = () => (
+    <Show when={model().masks}>
+      {(masks) => (
+        <button
+          type="button"
+          class={styles.fusedBtn}
+          aria-label={layer().mask ? 'Open mask settings' : 'Add mask'}
+          aria-pressed={layer().mask ? 'true' : 'false'}
+          onClick={() => {
+            if (!layer().mask) {
+              masks().add(layer().id);
+            } else {
+              setPage('mask');
+            }
+          }}
+        >
+          <span aria-hidden="true">◐</span>
+          <span>{layer().mask ? 'Mask ›' : 'Mask'}</span>
+        </button>
+      )}
+    </Show>
+  );
+
   const locksSummary = () => {
     const active: string[] = [];
     if (layer().locks.alpha) {
@@ -282,6 +306,7 @@ export function LayerPropertiesPopover(props: {
                 <SketchIcon name={layer().visible ? 'eye' : 'hidden'} size={14} />
                 <span>{layer().visible ? 'Shown' : 'Hidden'}</span>
               </button>
+              {maskButton()}
             </div>
           </Show>
 
@@ -310,26 +335,7 @@ export function LayerPropertiesPopover(props: {
                   <span>Clip</span>
                 </button>
               </Show>
-              <Show when={model().masks}>
-                {(masks) => (
-                  <button
-                    type="button"
-                    class={styles.fusedBtn}
-                    aria-label={layer().mask ? 'Open mask settings' : 'Add mask'}
-                    aria-pressed={layer().mask ? 'true' : 'false'}
-                    onClick={() => {
-                      if (!layer().mask) {
-                        masks().add(layer().id);
-                      } else {
-                        setPage('mask');
-                      }
-                    }}
-                  >
-                    <span aria-hidden="true">◐</span>
-                    <span>{layer().mask ? 'Mask ›' : 'Mask'}</span>
-                  </button>
-                )}
-              </Show>
+              {maskButton()}
             </div>
           </Show>
 
@@ -596,8 +602,44 @@ export function LayerPropertiesPopover(props: {
               </button>
             </div>
 
+            <Show when={masks().toggleLinked || (masks().apply && masks().canApply?.(layer().id))}>
+              <div class={styles.lightToggleGrid}>
+                <Show when={masks().toggleLinked}>
+                  {(toggleLinked) => (
+                    <button
+                      type="button"
+                      class={styles.lightToggleTile}
+                      aria-pressed={layer().mask?.linked ? 'true' : 'false'}
+                      onClick={() => toggleLinked()(layer().id)}
+                    >
+                      Linked
+                    </button>
+                  )}
+                </Show>
+                <Show when={masks().canApply?.(layer().id) ? masks().apply : undefined}>
+                  {(apply) => (
+                    <button
+                      type="button"
+                      class={styles.lightToggleTile}
+                      onClick={() => {
+                        apply()(layer().id);
+                        setPage('main');
+                      }}
+                    >
+                      Apply mask
+                    </button>
+                  )}
+                </Show>
+              </div>
+            </Show>
+
             <div class={styles.lightToggleGrid}>
-              <button type="button" class={styles.lightToggleTile} onClick={() => masks().invert(layer().id)}>
+              <button
+                type="button"
+                class={styles.lightToggleTile}
+                aria-pressed={layer().mask?.inverted ? 'true' : 'false'}
+                onClick={() => masks().invert(layer().id)}
+              >
                 Invert mask
               </button>
               <button

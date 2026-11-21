@@ -10,7 +10,7 @@ import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { PreviewTile } from './composition/documentEdit';
 import { createReplacementProcessor } from './strokeProcessors';
-import type { Layer, TileChange } from './document';
+import { nodeShows, type Layer, type TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
@@ -18,7 +18,10 @@ import { readPaintFile, writePaintFile } from './paintFile';
 import { isPsdFile, psdExportLayers, readPsdFile, writePsdFile } from './psdFile';
 import srgbProfileUrl from './assets/sRGB.icc?url';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
-import { mergeTilePixels } from './layerMerge';
+import { coverageReader } from './layerMask';
+import { maskStrokeBrush, maskStrokeRefusal } from './maskStroke';
+import { maskPlane } from './gpu/maskPlane';
+import { appliedMaskTiles, mergeDownTiles } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
 import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
 import { createLayerThumbnailer } from './layerThumbnails';
@@ -34,7 +37,7 @@ import {
 import { decodeDocument, snapshotDocument, type EngineHandoff, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { withPrediction } from './strokePrediction';
-import type { Sample } from './brush';
+import type { Brush, Sample } from './brush';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
@@ -88,6 +91,10 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
     };
     /** How pixels show up close; a replacement renderer keeps it. */
     let pixelView = { smooth: true, grid: false };
+    /** Whether the red overlay of the mask being painted shows; see the `mask-overlay` command. */
+    let maskOverlay = false;
+    /** What strokes and fills on a mask paint; see the `mask-paint` command. */
+    let maskPaint: 'reveal' | 'hide' = 'reveal';
     let size = { width: 1, height: 1 },
       dpr = 1;
     let strokeSession: BrushSession | undefined;
@@ -166,6 +173,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         rasterDraws: { preview: stats?.previewTileDraws ?? 0, committed: stats?.sourceTileDraws ?? 0 },
         document: documentState,
         camera,
+        maskOverlay,
+        maskPaint,
         layersInView: inView.ids,
         layersInRegions: watched.layers,
         features: reportedFeatures(),
@@ -196,6 +205,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
      */
     const thumbnails = createLayerThumbnailer({
       layers: () => document.layers,
+      masks: () => document.nodes.flatMap((node) => (node.mask ? [node.mask] : [])),
       read: (data) => tileStore.read(data),
       storage: {
         read: (key) => tileStore.overviews.read(key),
@@ -218,7 +228,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       cancel();
       // A selection belongs to the drawing it was made in.
       changeSelection(emptySelection);
-      document.replace(next.nodes, next.activeId, next.linearBlending, next.psdIdentity);
+      document.replace(next.nodes, next.activeId, next.linearBlending, next.psdIdentity, next.maskTarget);
       syncBlending();
       camera = next.camera;
       featureData = restoreFeatureData(modules.features, next.features);
@@ -263,33 +273,65 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         lower = document.layers.find((layer) => layer.id === below?.id);
       if (!upper || !lower) throw new Error('There is no layer below to merge into.');
       if (!upper.visible || !lower.visible) throw new Error('Show both layers before merging them.');
-      const read = async (pixels: TileData | undefined) =>
-        pixels && unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels));
       // Layers clipped to the same base merge unclipped; the merged layer stays clipped to that base.
-      const clipsToLower = !!upper.clipping && !lower.clipping;
-      const merged = new Map<string, Uint8Array | undefined>();
-      for (const [key, pixels] of upper.tiles) {
-        const base = await read(lower.tiles.get(key));
-        merged.set(
-          key,
-          mergeTilePixels(
-            base,
-            (await read(pixels))!,
-            upper.blend,
-            upper.opacity,
-            clipsToLower ? { base } : undefined,
-            document.linearBlending()
-          )
-        );
+      const merged = await mergeDownTiles(upper, lower, {
+        clipped: !!upper.clipping && !lower.clipping,
+        linear: document.linearBlending(),
+        read: loadTile
+      });
+      const masks = [upper.mask, lower.mask].flatMap((mask) => (mask ? [mask] : []));
+      document.mergeDown(upperId, merged);
+      return [
+        ...[...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined })),
+        ...masks.flatMap((mask) =>
+          [...mask.tiles.keys()].map((key) => ({ layerId: mask.id, key, before: undefined, after: undefined }))
+        )
+      ];
+    };
+    /** A tile version's bytes, read from storage when it is there. */
+    const loadTile = async (data: TileData) => (data instanceof Uint8Array ? data : await tileStore.read(data));
+    /**
+     * Multiplies the mask of raster layer `id` into its pixels and removes the mask, as one undo step. Returns the
+     * changed tiles, of the pixels and of the mask, for `renderer.restore`.
+     */
+    const applyMask = async (id: string) => {
+      const layer = document.node(id);
+      if (!layer || layer.kind === 'group' || !layer.mask) {
+        throw new Error('Only a raster layer with a mask can apply it.');
       }
 
-      document.mergeDown(upperId, merged);
-      return [...merged.keys()].map((key) => ({ layerId: lower.id, key, before: undefined, after: undefined }));
+      const mask = layer.mask;
+      const masked = await appliedMaskTiles({ tiles: layer.tiles, mask }, loadTile);
+      document.applyMask(id, masked);
+      return [
+        ...[...masked.keys()].map((key) => ({ layerId: id, key, before: undefined, after: undefined })),
+        ...[...mask.tiles.keys()].map((key) => ({ layerId: mask.id, key, before: undefined, after: undefined }))
+      ];
+    };
+    /**
+     * What a stroke beginning now paints, pinned for the whole stroke: the active raster layer's pixels with `brush` as
+     * it is, or the active mask's plane (`maskPlane`) with `brush` painting the `mask-paint` goal, Reveal or Hide (see
+     * `maskStrokeBrush`). Undefined when the target does not show or nothing can be painted; throws, changing nothing,
+     * for a tool that cannot paint a mask (`maskStrokeRefusal`).
+     */
+    const strokeTarget = (brush: Brush, modifiers: Extract<PaintRuntimeCommand, { type: 'begin' }>['modifiers']) => {
+      const target = document.activeTarget;
+      if (target.type === 'pixels') {
+        const layer = document.activeLayer;
+        return layer?.visible ? { layer: layer as Layer, brush } : undefined;
+      }
+
+      const mask = document.activeMask;
+      if (target.type !== 'mask' || !mask || !nodeShows(document.nodes, document.activeId)) return undefined;
+      const refusal = maskStrokeRefusal(brush, modifiers, modules.selectEngine(brush));
+      if (refusal) throw new Error(refusal);
+      return { layer: maskPlane(mask) as Layer, brush: maskStrokeBrush(brush, mask, maskPaint === 'reveal' ? 255 : 0) };
     };
     /** The active raster layer, for a command that edits its pixels; throws while a folder is active. */
     const paintTarget = () => {
       const layer = document.activeLayer;
       if (!layer) throw new Error('Select a layer to edit its pixels: a folder has none of its own.');
+      if (document.activeTarget.type === 'mask') throw new Error(maskRefusal);
       return layer;
     };
     /** Data that each document edit keeps between its commands; see `DocumentEditContext.state`. */
@@ -389,8 +431,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           {
             layers: document.layers,
             active: document.activeLayer,
+            mask: document.activeMask,
+            maskGoal: maskPaint === 'reveal' ? 255 : 0,
             readTile: async (pixels) =>
               unpackTile(pixels instanceof Uint8Array ? pixels : await tileStore.read(pixels)),
+            readCoverage: coverageReader(loadTile),
             linearBlending: document.linearBlending(),
             selection,
             state: { get: () => editStates.get(edit.id), set: (value) => editStates.set(edit.id, value) },
@@ -496,6 +541,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       if (!renderer || lost) return;
       // An edit preview describes the document it was made for; anything else that changed the document ends it.
       if (tilePreview && tilePreview.revision !== document.revision) dropPreview();
+      // The overlay follows the mask being painted, which edits replace with new objects.
+      renderer.setMaskOverlay(maskOverlay ? document.activeMask : undefined);
       const layers = shownLayers();
       const start = performance.now();
       if (primaryAttached) {
@@ -607,7 +654,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             camera,
             featureData,
             document.linearBlending(),
-            document.psdIdentity()
+            document.psdIdentity(),
+            document.activeTarget.type === 'mask'
           ),
           await handoff?.()
         );
@@ -844,7 +892,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           camera,
           featureData,
           document.linearBlending(),
-          document.psdIdentity()
+          document.psdIdentity(),
+          document.activeTarget.type === 'mask'
         )
       );
     };
@@ -883,6 +932,17 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
       }
       if (command.type === 'warm') {
         warmGpu();
+        return;
+      }
+      if (command.type === 'mask-overlay') {
+        maskOverlay = command.enabled;
+        status();
+        scheduleDraw();
+        return;
+      }
+      if (command.type === 'mask-paint') {
+        maskPaint = command.paint;
+        status();
         return;
       }
       if (command.type === 'watch-regions') {
@@ -952,7 +1012,13 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             tileStore = lockedStorage(await modules.storage(storageName), lock.held);
             const previous = await tileStore.load();
             if (previous) {
-              document.replace(previous.nodes, previous.activeId, previous.linearBlending, previous.psdIdentity);
+              document.replace(
+                previous.nodes,
+                previous.activeId,
+                previous.linearBlending,
+                previous.psdIdentity,
+                previous.maskTarget
+              );
               camera = previous.camera;
               featureData = restoreFeatureData(modules.features, previous.features);
               document.persist(tileStore.capture);
@@ -1061,15 +1127,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'begin': {
             processedInputTime = undefined;
             prediction = [];
-            // A stroke needs a raster layer that shows; otherwise it is ignored, and the editor reads why from
-            // `activePaintable`.
-            const target = document.activeLayer;
-            if (!renderer || lost || !target?.visible) return;
+            // A stroke needs a target that shows, a raster layer's pixels or a mask; otherwise it is ignored, and the
+            // editor reads why from `activePaintable`. A tool that cannot paint a mask throws, telling the user.
+            const resolved = renderer && !lost ? strokeTarget(command.brush, command.modifiers) : undefined;
+            if (!renderer || !resolved) return;
+            const { layer: target, brush } = resolved;
             await end();
             // Strokes paint over the layer's own resident tiles.
             dropPreview();
-            const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
-            const processorId = modules.selectProcessor(command.brush);
+            const engineId = brush.engine?.id ?? modules.selectEngine(brush);
+            const processorId = modules.selectProcessor(brush);
             const engine = Object.hasOwn(modules.engines, engineId) ? modules.engines[engineId] : undefined;
             const processor = Object.hasOwn(modules.processors, processorId)
               ? modules.processors[processorId]
@@ -1080,12 +1147,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             renderer.clipStroke(isSelected(selection) ? selection : undefined);
             const strokeRenderer = modules.features.reduce(
               (decorated, feature) =>
-                feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??
+                feature.decorateStroke?.({ data: featureData[feature.id], brush, renderer: decorated }) ??
                 decorated,
               renderer
             );
-            const brush = command.brush,
-              zoom = command.zoom ?? camera.zoom;
+            const zoom = command.zoom ?? camera.zoom;
             strokeStart = {
               engine,
               context: {
@@ -1153,10 +1219,21 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'layer': {
             await end();
             const before = document.layers.map((layer) => layer.id);
-            const merged = command.action.type === 'merge-down' ? await mergeDown(command.action.id) : undefined;
-            if (command.action.type !== 'merge-down') document.changeLayer(command.action);
-            // Selection changes no pixels or composition. Other actions recomposite; only a deleted
-            // layer's resident tiles are released, and every other layer's GPU cache survives.
+            const merged =
+              command.action.type === 'merge-down'
+                ? await mergeDown(command.action.id)
+                : command.action.type === 'apply-mask'
+                  ? await applyMask(command.action.id)
+                  : undefined;
+            if (command.action.type !== 'merge-down' && command.action.type !== 'apply-mask') {
+              document.changeLayer(command.action);
+            }
+
+            // A new mask is painted at once, with its red overlay.
+            if (command.action.type === 'add-mask') maskOverlay = true;
+            // Selection changes no pixels or composition, but may change the mask the overlay shows. Other actions
+            // recomposite; only a deleted layer's resident tiles are released, and every other layer's GPU cache
+            // survives.
             if (command.action.type !== 'select' && renderer) {
               const kept = new Set(document.layers.map((layer) => layer.id));
               for (const id of before) {
@@ -1253,7 +1330,8 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
                   camera,
                   featureData,
                   document.linearBlending(),
-                  document.psdIdentity()
+                  document.psdIdentity(),
+                  document.activeTarget.type === 'mask'
                 ),
                 tileStore.read
               ),
@@ -1296,7 +1374,7 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           }
           case 'live-apply': {
             await end();
-            const applied = await applyLiveState(document.layers, command.state);
+            const applied = await applyLiveState(document.nodes, command.state);
             document.replace(applied.layers, command.state.activeId, command.state.linearBlending, document.psdIdentity());
             syncBlending();
             if (renderer && !lost) {
@@ -1613,6 +1691,9 @@ function rendererFailureMessage(code: GpuError['code'], message: string) {
 
   return message;
 }
+
+/** Why a command that changes pixels refuses while a mask is the paint target. */
+const maskRefusal = 'This tool cannot change a mask yet. Tap the layer’s pixels to use it, or paint the mask with a brush.';
 
 /** At most 60 intermediate redraws per second; first contact and packet completion still present immediately. */
 const progressFrameInterval = 16;

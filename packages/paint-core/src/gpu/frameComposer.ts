@@ -3,11 +3,13 @@ import { d, type TgpuRoot } from 'typegpu';
 import { TILE_SIZE } from '../brush';
 import { screenToWorld, type Camera, type ViewSize } from '../camera';
 import type { BlendMode, Layer } from '../document';
+import { maskCoverage, type LayerMask } from '../layerMask';
 import { blendModes } from '../layerMerge';
 import { stackItems, walkStack } from '../layerStack';
-import { isFlatStack, type ShownLayer } from '../layerTree';
+import { isFlatStack, shownMask, type ShownLayer } from '../layerTree';
 import type { createDisplayCache } from './displayCache';
 import type { FloatingPixelsState } from './floatingPixels';
+import { isMaskPlane, maskPlane, type MaskPlane } from './maskPlane';
 import { createPixelGrid } from './pixelGrid';
 import * as shader from './shaders';
 import type { StrokeRaster } from './strokeRaster';
@@ -44,6 +46,11 @@ export function createFrameComposer(
     pixelGrid: () => boolean;
     /** Whether layers blend in linear light; see the composite shader's `settings.w`. */
     linearBlending: () => boolean;
+    /**
+     * The mask shown as the red overlay over presented frames, and its strength, 0–1, at full hiding; none without
+     * one. Read every frame.
+     */
+    overlay: () => { mask: LayerMask; strength: number } | undefined;
   },
   options: {
     cacheTiles?: number;
@@ -76,6 +83,17 @@ export function createFrameComposer(
       fragment: shader.presentFragment,
       targets: { format }
     }),
+    rubylith: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.rubylithFragment,
+      targets: {
+        format,
+        blend: {
+          color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
+          alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }
+        }
+      }
+    }),
     clear: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
       fragment: shader.clearFragment,
@@ -84,6 +102,28 @@ export function createFrameComposer(
     fade: root.createRenderPipeline({
       vertex: shader.fullscreenVertex,
       fragment: shader.fadeFragment,
+      targets: { format: compositionFormat }
+    }),
+    maskedComposite: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.maskedCompositeFragment,
+      targets: { format: compositionFormat }
+    }),
+    maskedFade: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.maskedFadeFragment,
+      targets: { format: compositionFormat }
+    }),
+    /** A masked clipping base into the 8-bit `clip` texture. */
+    maskApply8: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.maskApplyFragment,
+      targets: { format: 'rgba8unorm' }
+    }),
+    /** A masked folder's coverage into a composition texture. */
+    maskApply16: root.createRenderPipeline({
+      vertex: shader.fullscreenVertex,
+      fragment: shader.maskApplyFragment,
       targets: { format: compositionFormat }
     })
   };
@@ -121,7 +161,9 @@ export function createFrameComposer(
           : target.resize(width, height);
       const pages = target.pages();
       const cameraSignature = viewSignature(camera, size, width, height);
-      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}`;
+      // An exact render, for an export or a capture, never shows the overlay.
+      const overlay = exact ? undefined : deps.overlay();
+      const signature = `${exact}|${virtual?.uploadedBytes() ?? ''}|${cameraSignature}|${compositionSignature(layers)}${overlay ? `|overlay${maskSignature(overlay.mask)}` : ''}`;
       const plan = target.damage.plan(signature, camera, size, { width, height });
       const region = plan.region;
       stats.previewTileDraws = 0;
@@ -142,6 +184,16 @@ export function createFrameComposer(
         });
         pipelines.present.with(pass).with(view.present).draw(3);
         pass.end();
+        if (overlay) {
+          const { settings, binding } = view.overlay();
+          settings.write(d.vec4f(0, overlay.strength, overlay.mask.inverted ? 1 : 0, 0));
+          const pass = encoder.beginRenderPass({
+            colorAttachments: [{ view: swapchain, loadOp: 'load', storeOp: 'store' }]
+          });
+          pipelines.rubylith.with(pass).with(binding).draw(3);
+          pass.end();
+        }
+
         if (!exact) {
           if (deps.pixelGrid()) {
             grid.render(encoder, target, swapchain, camera, size, width, height);
@@ -253,9 +305,46 @@ export function createFrameComposer(
 
           return true;
         };
+        /**
+         * Draws `mask`'s coverage in the damaged region into `view.mask()`: its tiles, including the active stroke's
+         * output when the stroke paints the mask, over its `outside` coverage everywhere else.
+         */
+        const drawMask = async (mask: LayerMask) => {
+          const target = view.mask();
+          const plane = maskPlane(mask);
+          const outside = mask.outside / 255;
+          const clearValue = { r: outside, g: outside, b: outside, a: 1 };
+          const active = stroke.current?.layer.id === plane.id;
+          const area = { width, height, region, bounds };
+          const drawn = await drawTiles(
+            frame,
+            target.render,
+            plane,
+            active,
+            false,
+            exact,
+            camera,
+            size,
+            scale,
+            area,
+            clearValue
+          );
+          if (!drawn) {
+            const pass = frame.encoder().beginRenderPass({
+              colorAttachments: [{ view: target.render, loadOp: 'clear', clearValue, storeOp: 'store' }]
+            });
+            pass.end();
+          }
+
+          return target;
+        };
         const read = isFlatStack(layers)
-          ? await composeFlat(frame, view, layers, region, drawLayer)
-          : await composeFolders(frame, view, layers, region, drawLayer);
+          ? await composeFlat(frame, view, layers, region, drawLayer, drawMask)
+          : await composeFolders(frame, view, layers, region, drawLayer, drawMask);
+        if (overlay) {
+          // The overlay keeps its own copy of the mask, updated where the view changed, for presenting.
+          copyRegion(frame, await drawMask(overlay.mask), view.overlay().image, region);
+        }
 
         pages?.end();
         // Keep the last brush preview until its updated overview is resident; navigation remains immediate.
@@ -308,11 +397,13 @@ export function createFrameComposer(
     view: ViewTextures,
     layers: readonly ShownLayer[],
     region: Region,
-    drawLayer: (layer: Layer) => Promise<boolean>
+    drawLayer: (layer: Layer) => Promise<boolean>,
+    drawMask: (mask: LayerMask) => Promise<ViewTexture>
   ): Promise<ViewTexture> {
     let read = view.a,
       write = view.b;
     let slot = 0;
+    const linear = deps.linearBlending() ? 1 : 0;
     /**
      * The clipping base for clipped layers that follow: none before the first unclipped layer, hidden when the
      * base is not drawn, so its clipped layers are not either, and ready once its pixels are in `view.clip`.
@@ -341,31 +432,77 @@ export function createFrameComposer(
         continue;
       }
 
+      const mask = shownMask(layer);
+      const maskTexture = mask && (await drawMask(mask));
       if (!clipped) {
         clipBase = 'ready';
         if (layers[index + 1]?.clipping) {
-          copyRegion(frame, view.entries.layer, view.entries.clip, region);
+          // Layers clipped to a masked base see its masked shape.
+          if (mask) {
+            applyMask(frame, view, slot++, view.entries.layer, maskTexture!, view.entries.clip, mask, region);
+          } else {
+            copyRegion(frame, view.entries.layer, view.entries.clip, region);
+          }
         }
       }
 
-      // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
-      const composite = view.composite(slot++);
-      composite.settings.write(
-        d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, deps.linearBlending() ? 1 : 0)
-      );
       const pass = frame.encoder().beginRenderPass({
         colorAttachments: [{ view: write === view.a ? view.aRender : view.bRender, loadOp: 'clear', storeOp: 'store' }]
       });
       pass.setScissorRect(region.x, region.y, region.width, region.height);
-      pipelines.composite
-        .with(pass)
-        .with(read === view.a ? composite.fromA : composite.fromB)
-        .draw(3);
+      if (mask) {
+        const bound = view.bindMasked(slot++, 'composite', {
+          base: read === view.a ? view.entries.a : view.entries.b,
+          source: view.entries.layer,
+          clip: view.entries.clip,
+          mask: maskTexture!
+        });
+        bound.settings.write(
+          d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), (clipped ? 1 : 0) + (mask.inverted ? 2 : 0), linear)
+        );
+        pipelines.maskedComposite.with(pass).with(bound.binding).draw(3);
+      } else {
+        // Each composited layer owns a settings slot, so every composite pass can share the frame encoder.
+        const composite = view.composite(slot++);
+        composite.settings.write(d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clipped ? 1 : 0, linear));
+        pipelines.composite
+          .with(pass)
+          .with(read === view.a ? composite.fromA : composite.fromB)
+          .draw(3);
+      }
+
       pass.end();
       [read, write] = [write, read];
     }
 
     return read === view.a ? view.entries.a : view.entries.b;
+  }
+
+  /**
+   * Writes `source` scaled by the coverage of `mask`, drawn into `maskTexture`, into `target` in `region`, with the
+   * frame's `slot`-th settings: the masked shape of a clipping base, or of a folder's coverage.
+   */
+  function applyMask(
+    frame: ReturnType<typeof commandBatch>,
+    view: ViewTextures,
+    slot: number,
+    source: ViewTexture,
+    maskTexture: ViewTexture,
+    target: ViewTexture,
+    mask: LayerMask,
+    region: Region
+  ) {
+    const bound = view.bindMasked(slot, 'apply', { source, mask: maskTexture });
+    bound.settings.write(d.vec4f(0, 0, mask.inverted ? 1 : 0, 0));
+    const pass = frame.encoder().beginRenderPass({
+      colorAttachments: [{ view: target.render, loadOp: 'load', storeOp: 'store' }]
+    });
+    pass.setScissorRect(region.x, region.y, region.width, region.height);
+    (target === view.entries.clip ? pipelines.maskApply8 : pipelines.maskApply16)
+      .with(pass)
+      .with(bound.binding)
+      .draw(3);
+    pass.end();
   }
 
   /**
@@ -380,7 +517,8 @@ export function createFrameComposer(
     view: ViewTextures,
     layers: readonly ShownLayer[],
     region: Region,
-    drawLayer: (layer: Layer) => Promise<boolean>
+    drawLayer: (layer: Layer) => Promise<boolean>,
+    drawMask: (mask: LayerMask) => Promise<ViewTexture>
   ): Promise<ViewTexture> {
     const linear = deps.linearBlending() ? 1 : 0;
     const free: ViewTexture[] = [view.entries.b];
@@ -394,20 +532,45 @@ export function createFrameComposer(
     };
     /** Each level's result so far, and the folder coverage it keeps for clipped layers right above that folder. */
     const levels: { image: ViewTexture; kept?: ViewTexture }[] = [{ image: view.entries.a }];
-    /** Writes the `fade`, or the composite, of `source` onto the top level's result, with `settings`. */
-    const blendOnto = (source: ViewTexture, mask: ViewTexture, settings: d.v4f, fade: boolean) => {
+    /**
+     * Writes the `fade`, or the composite, of `source` onto the top level's result, with `settings`; `clip` is the
+     * clipping base a composite reads. With `masked`, a mask drawn into that texture scales the source, or the fade.
+     */
+    const blendOnto = (
+      source: ViewTexture,
+      clip: ViewTexture,
+      settings: d.v4f,
+      fade: boolean,
+      masked?: ViewTexture
+    ) => {
       const level = levels.at(-1)!;
       const target = take();
-      const bound = view.bindComposite(slot++, level.image, source, mask, fade);
+      const bound = masked
+        ? view.bindMasked(slot++, fade ? 'fade' : 'composite', { base: level.image, source, clip, mask: masked })
+        : view.bindComposite(slot++, level.image, source, clip, fade);
       bound.settings.write(settings);
       const pass = frame.encoder().beginRenderPass({
         colorAttachments: [{ view: target.render, loadOp: 'clear', storeOp: 'store' }]
       });
       pass.setScissorRect(region.x, region.y, region.width, region.height);
-      (fade ? pipelines.fade : pipelines.composite).with(pass).with(bound.binding).draw(3);
+      const pipeline = masked
+        ? fade
+          ? pipelines.maskedFade
+          : pipelines.maskedComposite
+        : fade
+          ? pipelines.fade
+          : pipelines.composite;
+      pipeline.with(pass).with(bound.binding).draw(3);
       pass.end();
       release(level.image);
       level.image = target;
+    };
+    /** `image` scaled by `mask`, drawn into `masked`, in a texture of its own; `image` is released. */
+    const maskedCopy = (image: ViewTexture, masked: ViewTexture, mask: LayerMask) => {
+      const target = take();
+      applyMask(frame, view, slot++, image, masked, target, mask, region);
+      release(image);
+      return target;
     };
     const dropKept = (level: (typeof levels)[number]) => {
       release(level.kept);
@@ -425,16 +588,25 @@ export function createFrameComposer(
           return false;
         }
 
+        const mask = shownMask(layer);
+        const masked = mask && (await drawMask(mask));
         if (!clip && base) {
-          copyRegion(frame, view.entries.layer, view.entries.clip, region);
+          // Layers clipped to a masked base see its masked shape.
+          if (mask) {
+            applyMask(frame, view, slot++, view.entries.layer, masked!, view.entries.clip, mask, region);
+          } else {
+            copyRegion(frame, view.entries.layer, view.entries.clip, region);
+          }
         }
 
-        const mask = clip?.type === 'group' ? level.kept! : view.entries.clip;
+        const clipTexture = clip?.type === 'group' ? level.kept! : view.entries.clip;
+        const flags = (clip ? 1 : 0) + (mask?.inverted ? 2 : 0);
         blendOnto(
           view.entries.layer,
-          mask,
-          d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), clip ? 1 : 0, linear),
-          false
+          clipTexture,
+          d.vec4f(layer.opacity, blendModes.indexOf(layer.blend), flags, linear),
+          false,
+          masked
         );
         return true;
       },
@@ -456,18 +628,22 @@ export function createFrameComposer(
         levels.push({ image });
         stats.folderLevels = Math.max(stats.folderLevels, levels.length - 1);
       },
-      leave(group, mode, drew, keep) {
+      async leave(group, mode, drew, keep) {
         const { image } = levels.pop()!;
+        const mask = group.mask;
+        // The folder's mask scales its composite, or how far its fade goes, and its coverage for clipped layers.
+        const masked = mask && (drew || keep) ? await drawMask(mask) : undefined;
+        const inverted = mask?.inverted ? 1 : 0;
         if (drew && mode === 'isolated') {
-          const settings = d.vec4f(group.opacity, blendModes.indexOf(group.blend as BlendMode), 0, linear);
-          blendOnto(image, view.entries.clip, settings, false);
+          const blend = blendModes.indexOf(group.blend as BlendMode);
+          blendOnto(image, view.entries.clip, d.vec4f(group.opacity, blend, inverted * 2, linear), false, masked);
         } else if (drew && mode === 'fade') {
-          blendOnto(image, view.entries.clip, d.vec4f(group.opacity, 0, 0, linear), true);
+          blendOnto(image, view.entries.clip, d.vec4f(group.opacity, 0, inverted, linear), true, masked);
         }
 
         const level = levels.at(-1)!;
         if (keep) {
-          level.kept = image;
+          level.kept = masked ? maskedCopy(image, masked, mask!) : image;
         } else {
           release(image);
         }
@@ -507,7 +683,9 @@ export function createFrameComposer(
       height: number;
       region: { x: number; y: number; width: number; height: number };
       bounds: { minX: number; maxX: number; minY: number; maxY: number };
-    }
+    },
+    /** What the first batch clears `layerTarget` to: transparent, or a mask's `outside` coverage. */
+    clearValue?: GPUColor
   ) {
     const { region } = area;
     // Committed pixels already come from the pyramid. Only the active stroke's output
@@ -546,11 +724,24 @@ export function createFrameComposer(
 
         const source = snapshot?.output ?? layer.tiles.get(key)!;
         const tail = active && !exact ? stroke.tail.get(key) : undefined;
+        // Stroke output shows as it was read back; a mask plane's committed tiles show their coverage, one channel.
+        const coverage = isMaskPlane(layer) && !snapshot?.output;
+        const pixels = async () =>
+          coverage
+            ? maskCoverage(await residency.readTile(source), (layer as MaskPlane).maskOf.outside)
+            : (await residency.readTile(source))!;
         let tile =
           tail || residency.has(id) || options.displayCache === false
             ? await residency.ensure(layer, key, frame, pinned)
             : (displayCache.find(id, source, camera.zoom * scale, frame.flush) ??
-              displayCache.get(id, (await residency.readTile(source))!, camera.zoom * scale, source, frame.flush));
+              displayCache.get(
+                id,
+                await pixels(),
+                camera.zoom * scale,
+                source,
+                frame.flush,
+                coverage ? 'r8unorm' : 'rgba8unorm'
+              ));
         pinned.add(id);
         if (tail) {
           // prepareTail submits its own copies: encoded source clears must run first, and earlier
@@ -589,7 +780,12 @@ export function createFrameComposer(
 
       const pass = frame.encoder().beginRenderPass({
         colorAttachments: [
-          { view: layerTarget, loadOp: offset === 0 && !streamed ? 'clear' : 'load', storeOp: 'store' }
+          {
+            view: layerTarget,
+            loadOp: offset === 0 && !streamed ? 'clear' : 'load',
+            ...(clearValue ? { clearValue } : {}),
+            storeOp: 'store'
+          }
         ]
       });
       pass.setScissorRect(region.x, region.y, region.width, region.height);
@@ -638,14 +834,17 @@ function viewSignature(camera: Camera, size: ViewSize, width: number, height: nu
  * changes what the canvas shows: wrapping layers in a visible folder changes nothing, hiding it changes the layers'
  * visibility, and a folder that composites on its own adds itself, its settings and the folders around it to each of
  * its layers, as a folder a layer is clipped to adds itself. A flat stack's signature is what it was before folders
- * could blend.
+ * could blend. An enabled mask adds its id, `outside` and inversion to its layer or folder; its tiles damage the view
+ * as they change, as a layer's do.
  */
 export function compositionSignature(layers: readonly ShownLayer[]) {
   let signature = '';
-  for (const { id, visible, opacity, blend, clipping, group, clipGroup } of layers) {
-    signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping}`;
+  for (const layer of layers) {
+    const { id, visible, opacity, blend, clipping, group, clipGroup } = layer;
+    signature += `${id.length}:${id},${visible},${opacity},${blend},${!!clipping}${maskSignature(shownMask(layer))}`;
     for (let folder = group; folder; folder = folder.parent) {
       signature += `/${folder.id.length}:${folder.id},${folder.visible},${folder.opacity},${folder.blend},${folder.base}`;
+      signature += maskSignature(folder.mask);
     }
 
     if (clipGroup) {
@@ -656,4 +855,9 @@ export function compositionSignature(layers: readonly ShownLayer[]) {
   }
 
   return signature;
+}
+
+/** What an enabled mask adds to `compositionSignature`; nothing without one, so a drawing without masks keeps its own. */
+function maskSignature(mask: LayerMask | undefined) {
+  return mask ? `#${mask.id.length}:${mask.id},${mask.outside},${mask.inverted}` : '';
 }

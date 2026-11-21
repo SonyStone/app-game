@@ -26,6 +26,9 @@ import { maxWarpCells, warpCells, warpNumbers, warpTriangles, type Warp } from '
  * renderer draws each frame, and replies with their bounds; each `update` only moves the floating pixels, so the
  * document stays unchanged until `end` draws the result into the layer, and `cancel` leaves it untouched. The result
  * is resampled bicubically in premultiplied color, or takes the nearest pixel for pixel art. Runs in the engine's realm.
+ *
+ * It does not move masks yet: it refuses while a mask is the paint target (see `editedLayer`) and on a layer whose mask
+ * is linked to its pixels, which would be left behind.
  */
 export const transformEdit = defineDocumentEdit({
   id: 'transform',
@@ -131,6 +134,14 @@ async function begin(context: DocumentEditContext): Promise<TransformSession> {
   const layer = editedLayer(context);
   if (!layer.visible) {
     throw new Error('Show the active layer before transforming it.');
+  }
+
+  // A linked mask moves with its pixels, and the transform cannot move a mask yet: it refuses rather than leave the
+  // mask behind.
+  if (layer.mask?.linked) {
+    throw new Error(
+      'This layer’s mask is linked to its pixels and cannot move yet. Unlink the mask to move the pixels.'
+    );
   }
 
   const selection = isSelected(context.selection) ? context.selection : undefined;

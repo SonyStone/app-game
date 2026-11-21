@@ -1,5 +1,11 @@
-import { defineDocumentEdit, editedLayer } from '@app-game/paint-core/composition/documentEdit';
-import type { TileChange } from '@app-game/paint-core/document';
+import { TILE_SIZE } from '@app-game/paint-core/brush';
+import {
+  defineDocumentEdit,
+  editedLayer,
+  type DocumentEditContext
+} from '@app-game/paint-core/composition/documentEdit';
+import type { LayerMask, TileChange } from '@app-game/paint-core/document';
+import { effectiveCoverage, maskRgba, storedGoal } from '@app-game/paint-core/layerMask';
 import { areaCoverage, isSelected } from '@app-game/paint-core/selectionMask';
 import { z } from 'zod';
 import { areaTiles, expandMask, fillTile, floodMask, smoothMask } from '../../shared/floodFill';
@@ -12,13 +18,17 @@ import { areaAround, reachesLimit, sampleArea } from '../../shared/sampleArea';
  * proportion to its coverage. At most {@link maxFillSide} pixels
  * around the point on each side are examined: a fill that would continue past that limit inside the view is refused
  * rather than cut off. Runs in the drawing engine's realm.
+ *
+ * While a mask is the paint target, the fill paints Reveal or Hide into the mask (`maskGoal`) instead of its colour,
+ * moving each pixel's coverage by the fill's coverage times its opacity; `layer` decides similar pixels on the mask's
+ * own coverage.
  */
 export const fillEdit = defineDocumentEdit({
   id: 'fill',
   parse: (input: unknown) => fillCommandSchema.parse(input),
   async run(context, command) {
-    const layer = editedLayer(context);
-    if (!layer.visible) {
+    const layer = context.mask ? undefined : editedLayer(context);
+    if (context.active?.visible === false || layer?.visible === false) {
       throw new Error('Show the active layer before filling it.');
     }
 
@@ -28,7 +38,10 @@ export const fillEdit = defineDocumentEdit({
       return { changes: [] };
     }
 
-    const sampled = await sampleArea(context, area, command.source);
+    const sampled =
+      context.mask && command.source === 'layer'
+        ? await coverageArea(context, context.mask, area)
+        : await sampleArea(context, area, command.source);
     const allowed = isSelected(context.selection) ? areaCoverage(context.selection, area) : undefined;
     const flooded = floodMask(area, sampled, point, command.tolerance, allowed, command.gap);
     if (reachesLimit(flooded, area, command.area)) {
@@ -45,10 +58,14 @@ export const fillEdit = defineDocumentEdit({
         }
       });
     }
+    if (context.mask) {
+      return { changes: await fillCoverage(context, context.mask, area, mask, command.opacity) };
+    }
+
     const color = parseColor(command.color);
     const changes: TileChange[] = [];
     for (const key of areaTiles(area)) {
-      const before = layer.tiles.get(key);
+      const before = layer!.tiles.get(key);
       const after = fillTile(
         key,
         before && (await context.readTile(before)),
@@ -56,16 +73,71 @@ export const fillEdit = defineDocumentEdit({
         area,
         color,
         command.opacity,
-        layer.alphaLock
+        layer!.alphaLock
       );
       if (after) {
-        changes.push({ layerId: layer.id, key, before, after });
+        changes.push({ layerId: layer!.id, key, before, after });
       }
     }
 
     return { changes };
   }
 });
+
+/** The effective coverage of `mask` in the tiles of `area` as opaque grey pixels, for deciding similar pixels. */
+async function coverageArea(context: DocumentEditContext, mask: LayerMask, area: Parameters<typeof areaTiles>[0]) {
+  const tiles = new Map<string, Uint8Array>();
+  for (const key of areaTiles(area)) {
+    const stored = await context.readCoverage(mask, key);
+    tiles.set(key, maskRgba(mask.inverted ? stored.map((value) => effectiveCoverage(value, true)) : stored));
+  }
+
+  return tiles;
+}
+
+/**
+ * The changes of `mask`'s coverage tiles that fill `area` where `fill` is set (1 full, 2–255 partial, as `fillTile`
+ * reads it): each pixel moves by the fill's coverage times `opacity` towards the context's `maskGoal`, stored reversed
+ * for an inverted mask.
+ */
+async function fillCoverage(
+  context: DocumentEditContext,
+  mask: LayerMask,
+  area: Parameters<typeof areaTiles>[0],
+  fill: Uint8Array,
+  opacity: number
+): Promise<TileChange[]> {
+  const goal = storedGoal(context.maskGoal ?? 255, mask.inverted);
+  const changes: TileChange[] = [];
+  for (const key of areaTiles(area)) {
+    const [tx, ty] = key.split(',').map(Number) as [number, number];
+    const coverage = new Uint8Array(await context.readCoverage(mask, key));
+    let touched = false;
+    const top = ty * TILE_SIZE,
+      left = tx * TILE_SIZE;
+    for (let y = Math.max(area.top, top); y < Math.min(area.top + area.height, top + TILE_SIZE); y++) {
+      for (let x = Math.max(area.left, left); x < Math.min(area.left + area.width, left + TILE_SIZE); x++) {
+        const value = fill[(y - area.top) * area.width + (x - area.left)]!;
+        if (!value) {
+          continue;
+        }
+
+        const amount = value === 1 ? opacity : (opacity * value) / 255;
+        const index = (y - top) * TILE_SIZE + (x - left);
+        const old = coverage[index]!;
+        const next = Math.round(old + (goal - old) * amount);
+        touched ||= next !== old;
+        coverage[index] = next;
+      }
+    }
+
+    if (touched) {
+      changes.push({ layerId: mask.id, key, before: mask.tiles.get(key), after: coverage });
+    }
+  }
+
+  return changes;
+}
 
 /** A fill at `point` in document pixels within `area`, the view's bounds in document pixels. */
 export type FillCommand = z.infer<typeof fillCommandSchema>;

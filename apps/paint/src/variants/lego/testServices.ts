@@ -120,7 +120,9 @@ export function createTestServices() {
       state: createMemo(createDocument().state),
       ready: createMemo(() => true),
       action: vi.fn(),
-      blending: vi.fn()
+      blending: vi.fn(),
+      maskView: createMemo(() => ({ overlay: false, paint: 'reveal' as const })),
+      maskCommand: vi.fn()
     },
     layersPrototype: createMockLayers(),
     files: {

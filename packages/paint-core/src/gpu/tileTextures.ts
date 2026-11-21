@@ -178,7 +178,8 @@ export function createMipmapEnsurer(generate: ReturnType<typeof createTileMipmap
       return;
     }
 
-    if (generate) {
+    // The batched generator renders RGBA8; one-channel mask entries use TypeGPU's helper.
+    if (generate && tile.texture.props.format === 'rgba8unorm') {
       generate(tile.texture, tile.mipLevelReady, last, encoder);
     } else {
       tile.texture.generateMipmaps(tile.mipLevelReady, last - tile.mipLevelReady + 1);

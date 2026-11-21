@@ -1,5 +1,6 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
+import { coverageReader } from '@app-game/paint-core/layerMask';
 import { emptySelection, polygonSelection, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { expect, it } from 'vitest';
 import { gradientEdit, gradientPosition, type GradientCommand } from './gradientEdit';
@@ -161,6 +162,7 @@ async function run(command: GradientCommand, target = layer(), selection: Select
     layers: [target],
     active: target,
     readTile: async (pixels) => pixels as Uint8Array,
+    readCoverage: coverageReader((data) => data as Uint8Array),
     linearBlending: false,
     selection,
     state: { get: () => undefined, set: () => {} },

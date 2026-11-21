@@ -1,5 +1,16 @@
 import type { PsdNewDocumentContext } from '@app-game/psd';
 import {
+  coverageTile,
+  isMaskTile,
+  MASK_TILE_PIXELS,
+  maskInfo,
+  newMask,
+  unpackMaskTile,
+  type LayerMask,
+  type MaskInfo,
+  type MaskPatch
+} from './layerMask';
+import {
   editLayerTree,
   MAX_FOLDERS,
   orderLayerTree,
@@ -11,6 +22,7 @@ import {
   type ShownLayer
 } from './layerTree';
 import { packTile, type TileData } from './tilePixels';
+export type { LayerMask, MaskInfo, MaskPatch } from './layerMask';
 export { TILE_BYTES } from './tilePixels';
 
 /** A raster layer. Immutable tiles store raw or losslessly packed premultiplied sRGB RGBA8. */
@@ -32,6 +44,8 @@ export type Layer = {
    * clipped layer with no layer below shows as an ordinary layer.
    */
   clipping?: boolean;
+  /** The layer's raster mask, if it has one; see `LayerMask`. */
+  mask?: LayerMask;
   tiles: Map<string, TileData>;
 };
 /**
@@ -61,16 +75,27 @@ export type LayerGroup = {
   blend: GroupBlendMode;
   /** Always absent: a folder cannot be clipped. */
   clipping?: boolean;
+  /**
+   * The folder's raster mask, if it has one; it scales the folder's composite (see `LayerMask`). A Pass Through folder
+   * with an enabled mask fades, by its opacity times the mask (see `groupMode`).
+   */
+  mask?: LayerMask;
 };
 /** How a folder blends: Pass Through, or one of the raster blend modes, which isolates it; see {@link LayerGroup}. */
 export type GroupBlendMode = 'pass-through' | BlendMode;
 /** A node of the layer tree: a raster layer or a folder. */
 export type DocumentNode = Layer | LayerGroup;
-/** The serializable user-visible properties of a raster layer. */
-export type RasterInfo = Omit<Layer, 'tiles'>;
+/** The serializable user-visible properties of a raster layer, its mask's without the mask's tiles. */
+export type RasterInfo = Omit<Layer, 'tiles' | 'mask'> & { mask?: MaskInfo };
+/** The serializable user-visible properties of a folder, its mask's without the mask's tiles. */
+export type GroupInfo = Omit<LayerGroup, 'mask'> & { mask?: MaskInfo };
 /** The serializable user-visible properties of a node: a raster layer's or a folder's. */
-export type LayerInfo = RasterInfo | LayerGroup;
-/** Before/after tile snapshots for one user action. Undefined means the tile did not exist. */
+export type LayerInfo = RasterInfo | GroupInfo;
+/**
+ * Before/after tile snapshots for one user action. Undefined means the tile did not exist. `layerId` names the plane
+ * the tile belongs to: a raster layer's id for its colour pixels (premultiplied RGBA8, `packTile`), or a mask's id for
+ * that mask's stored coverage (`packMaskTile`). Mask ids never collide with node ids.
+ */
 export type TileChange = {
   layerId: string;
   key: string;
@@ -85,6 +110,9 @@ type HistoryEntry = {
   after: LayerInfo[];
   activeBefore: string;
   activeAfter: string;
+  /** Whether the active node's mask was the paint target before and after; absent in older handoffs, read as false. */
+  maskBefore?: boolean;
+  maskAfter?: boolean;
   tiles: TileChange[];
   bytes: number;
 };
@@ -109,6 +137,8 @@ export type PsdDocumentIdentity = {
 export function createDocument(options: { paged?: boolean } = {}) {
   let nodes: DocumentNode[] = [newLayer('layer-1', 'Layer 1')];
   let active = 'layer-1';
+  /** Whether strokes and pixel edits change the active node's mask rather than its pixels; see `activeTarget`. */
+  let maskTarget = false;
   let psdIdentity = newPsdIdentity();
   /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB, for every blend mode. */
   let linearBlending = true;
@@ -131,14 +161,15 @@ export function createDocument(options: { paged?: boolean } = {}) {
   const info = (): LayerInfo[] => nodes.map(nodeInfo);
   const apply = (entry: HistoryEntry, direction: 'before' | 'after') => {
     nodes = withTiles(entry[direction], nodes);
-    const byId = new Map(rasters(nodes).map((layer) => [layer.id, layer]));
+    const byPlane = planes(nodes);
     for (const change of entry.tiles) {
-      const layer = byId.get(change.layerId);
+      const tiles = byPlane.get(change.layerId);
       const pixels = change[direction];
-      if (pixels) layer?.tiles.set(change.key, pixels);
-      else layer?.tiles.delete(change.key);
+      if (pixels) tiles?.set(change.key, pixels);
+      else tiles?.delete(change.key);
     }
     active = direction === 'before' ? entry.activeBefore : entry.activeAfter;
+    maskTarget = !!(direction === 'before' ? entry.maskBefore : entry.maskAfter) && !!node(active)?.mask;
     touchPsdLayers(psdIdentity, entry);
   };
   const record = (value: Omit<HistoryEntry, 'id'>) => {
@@ -160,8 +191,33 @@ export function createDocument(options: { paged?: boolean } = {}) {
   /** The topmost raster layer, which becomes active when the active node goes. */
   const topLayer = () => rasters(nodes).at(-1)!.id;
   const pixelBytes = () =>
-    rasters(nodes).reduce((n, l) => n + [...l.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0), 0);
-  const tileCount = () => rasters(nodes).reduce((n, layer) => n + layer.tiles.size, 0);
+    [...planes(nodes).values()].reduce(
+      (n, tiles) => n + [...tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
+      0
+    );
+  const tileCount = () => [...planes(nodes).values()].reduce((n, tiles) => n + tiles.size, 0);
+  /** The paint target; see `activeTarget`. */
+  const target = (): ActiveTarget => {
+    const current = node(active);
+    if (maskTarget && current?.mask) {
+      return { type: 'mask', id: current.mask.id };
+    }
+
+    return current?.kind === 'group' ? { type: 'none' } : { type: 'pixels' };
+  };
+  /** Records a change of the tree whose infos were `before`, the active node `activeBefore`, and its tile changes. */
+  const recordChange = (before: LayerInfo[], activeBefore: string, maskBefore: boolean, tiles: TileChange[]) => {
+    record({
+      before,
+      after: info(),
+      activeBefore,
+      activeAfter: active,
+      maskBefore,
+      maskAfter: maskTarget,
+      tiles,
+      bytes: tileBytes(tiles)
+    });
+  };
   return {
     /** Selects a retained history state without changing current pixels or undo/redo position.
      * Selected immutable versions stay pinned even if their undo entry is pruned or branched away.
@@ -196,8 +252,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
     },
     /** Replaces resident snapshots with immutable disk references, including history. */
     persist(capture: (pixels: TileData) => TileData) {
-      for (const layer of [...rasters(nodes), ...historySource.layers])
-        for (const [key, pixels] of layer.tiles) layer.tiles.set(key, capture(pixels));
+      for (const tiles of [...planes(nodes).values(), ...historySource.layers.map((layer) => layer.tiles)])
+        for (const [key, pixels] of tiles) tiles.set(key, capture(pixels));
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
           if (tile.before) tile.before = capture(tile.before);
@@ -206,7 +262,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
     },
     /** Current, undoable and selected-source versions that must survive storage garbage collection. */
     *snapshots(): Generator<TileData> {
-      for (const layer of [...rasters(nodes), ...historySource.layers]) yield* layer.tiles.values();
+      for (const tiles of [...planes(nodes).values(), ...historySource.layers.map((layer) => layer.tiles)])
+        yield* tiles.values();
       for (const entry of [...undo, ...redo])
         for (const tile of entry.tiles) {
           if (tile.before) yield tile.before;
@@ -246,6 +303,18 @@ export function createDocument(options: { paged?: boolean } = {}) {
       return activeLayer();
     },
     /**
+     * What strokes and pixel edits change: the active raster layer's `pixels`, the active node's `mask` (by mask id),
+     * or `none` while a folder without its mask as the target is active. `select` with a `target` chooses it; a node
+     * that loses its mask goes back to its pixels.
+     */
+    get activeTarget(): ActiveTarget {
+      return target();
+    },
+    /** The active node's mask while it is the paint target (see `activeTarget`), with its tiles. */
+    get activeMask(): LayerMask | undefined {
+      return maskTarget ? node(active)?.mask : undefined;
+    },
+    /**
      * The active raster layer as it shows (see `layers`). Throws while a folder is active: code that may run then
      * reads `activeLayer`.
      */
@@ -274,16 +343,25 @@ export function createDocument(options: { paged?: boolean } = {}) {
          * The raster layers bottom to top, in compositing order, each with its own properties, `parentId` naming its
          * folder; `tileCount` is the number of tiles holding paint, 0 for an empty layer. Folders are in `nodes`.
          */
-        layers: rasters(nodes).map(({ tiles, ...layer }) => ({ ...layer, tileCount: tiles.size })),
-        /** The layer tree in canonical order (see `layerTree`): raster layers and folders, told apart by `kind`. */
+        layers: rasters(nodes).map((raster) => {
+          const { kind: _kind, ...state } = nodeState(raster) as RasterState;
+          return state;
+        }),
+        /**
+         * The layer tree in canonical order (see `layerTree`): raster layers and folders, told apart by `kind`. A node
+         * with a mask carries its properties and `tileCount`, never its tiles.
+         */
         nodes: nodes.map(nodeState),
         /** The active node: a raster layer, or a folder, which strokes and pixel edits cannot change. */
         activeId: active,
+        /** What strokes and pixel edits change; see the document's `activeTarget`. */
+        activeTarget: target(),
         /**
-         * Whether strokes and pixel edits can change the active node: it is a raster layer that shows, itself and
-         * every folder it is in visible. Strokes on anything else are ignored, and pixel edits refused.
+         * Whether strokes and pixel edits can change the paint target: the pixels of a raster layer that shows, itself
+         * and every folder it is in visible, or the mask of a node that shows. Strokes on anything else are ignored,
+         * and pixel edits refused.
          */
-        activePaintable: !!layer?.visible,
+        activePaintable: maskTarget ? nodeShows(nodes, active) : !!layer?.visible,
         /** Layers blend in linear light ("Smooth color") rather than in encoded sRGB; see `setLinearBlending`. */
         linearBlending,
         canUndo: undo.length > 0,
@@ -300,10 +378,18 @@ export function createDocument(options: { paged?: boolean } = {}) {
       if (!tiles.length) return;
       if (addedLayer && (rasters(nodes).length >= MAX_LAYERS || node(addedLayer.id)))
         throw new Error('Cannot add this layer. A drawing can contain at most 128 unique layers.');
-      tiles = tiles.map((tile) => ({
-        ...tile,
-        after: tile.after instanceof Uint8Array ? packTile(tile.after) : tile.after
-      }));
+      const masks = maskOwners(nodes);
+      tiles = tiles.map((tile) => {
+        const mask = masks.get(tile.layerId)?.mask;
+        return {
+          ...tile,
+          after: mask
+            ? maskTile(tile.after, mask.outside)
+            : tile.after instanceof Uint8Array
+              ? packTile(tile.after)
+              : tile.after
+        };
+      });
       const bytes =
         pixelBytes() + tiles.reduce((n, tile) => n + (tile.after?.byteLength ?? 0) - (tile.before?.byteLength ?? 0), 0);
       const count =
@@ -317,15 +403,19 @@ export function createDocument(options: { paged?: boolean } = {}) {
         after: info(),
         activeBefore: active,
         activeAfter: active,
+        maskBefore: maskTarget,
+        maskAfter: maskTarget,
         tiles,
         bytes: tileBytes(tiles)
       };
       if (addedLayer) {
         const anchor = node(active)!;
         const tree = editLayerTree(entry.after);
-        tree.insert(addedLayer, { parentId: anchor.parentId ?? null, anchorId: anchor.id, side: 'above' });
+        const { mask: _mask, ...added } = addedLayer;
+        tree.insert(added, { parentId: anchor.parentId ?? null, anchorId: anchor.id, side: 'above' });
         entry.after = tree.result();
         entry.activeAfter = addedLayer.id;
+        entry.maskAfter = false;
       }
       apply({ ...entry, id: nextHistoryId + 1 }, 'after');
       record(entry);
@@ -337,14 +427,17 @@ export function createDocument(options: { paged?: boolean } = {}) {
      */
     changeLayer(action: LayerAction) {
       if (action.type === 'select') {
-        if (node(action.id)) {
+        const selected = node(action.id);
+        if (selected) {
           active = action.id;
+          maskTarget = action.target === 'mask' && !!selected.mask;
           revision++;
         }
         return;
       }
       const before = info(),
-        activeBefore = active;
+        activeBefore = active,
+        maskBefore = maskTarget;
       const tiles: TileChange[] = [];
       let next: DocumentNode[] = nodes;
       switch (action.type) {
@@ -375,9 +468,10 @@ export function createDocument(options: { paged?: boolean } = {}) {
           if (!ids.length) return;
           const copied = ids.map((id) => node(id)!);
           checkCapacity(nodes, rasters(copied).length, folders(copied).length);
-          const copiedTiles = rasters(copied).reduce((n, layer) => n + layer.tiles.size, 0);
-          const copiedBytes = rasters(copied).reduce(
-            (n, layer) => n + [...layer.tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
+          const copiedPlanes = [...planes(copied).values()];
+          const copiedTiles = copiedPlanes.reduce((n, tiles) => n + tiles.size, 0);
+          const copiedBytes = copiedPlanes.reduce(
+            (n, tiles) => n + [...tiles.values()].reduce((sum, p) => sum + p.byteLength, 0),
             0
           );
           if (
@@ -393,10 +487,12 @@ export function createDocument(options: { paged?: boolean } = {}) {
               { ...source, id: fresh.get(source.id)!, name: top ? `${source.name} copy` : source.name },
               top ? source.parentId : fresh.get(source.parentId!)
             );
-            return placed.kind === 'group' ? placed : { ...placed, tiles: new Map(placed.tiles) };
+            const mask = placed.mask && { ...placed.mask, id: crypto.randomUUID(), tiles: new Map(placed.mask.tiles) };
+            const copy = mask ? { ...placed, mask } : placed;
+            return copy.kind === 'group' ? copy : { ...copy, tiles: new Map(copy.tiles) };
           });
-          for (const layer of rasters(copies))
-            for (const [key, after] of layer.tiles) tiles.push({ layerId: layer.id, key, before: undefined, after });
+          for (const [layerId, planeTiles] of planes(copies))
+            for (const [key, after] of planeTiles) tiles.push({ layerId, key, before: undefined, after });
           // Right after the source's subtree, which ends with the source, the copy is its sibling right above it.
           const end = nodes.findIndex((node) => node.id === action.id) + 1;
           next = [...nodes.slice(0, end), ...copies, ...nodes.slice(end)];
@@ -467,6 +563,8 @@ export function createDocument(options: { paged?: boolean } = {}) {
             tree.move(id, { parentId: group.parentId ?? null, anchorId: group.id, side: 'below' });
           tree.remove(group.id);
           next = tree.result();
+          // The folder's mask goes with it; its tiles stay in the step, so undo brings it back.
+          if (group.mask) removedTiles(group.mask.id, group.mask.tiles, tiles);
           if (active === group.id) active = children.at(-1) ?? '';
           break;
         }
@@ -476,21 +574,83 @@ export function createDocument(options: { paged?: boolean } = {}) {
           next = nodes.filter((node) => !removed.has(node.id));
           // A drawing keeps at least one raster layer.
           if (!removed.size || !rasters(next).length) return;
-          for (const layer of rasters(nodes.filter((node) => removed.has(node.id))))
-            for (const [key, before] of layer.tiles) tiles.push({ layerId: layer.id, key, before, after: undefined });
+          for (const [layerId, planeTiles] of planes(nodes.filter((node) => removed.has(node.id))))
+            removedTiles(layerId, planeTiles, tiles);
           break;
         }
+        case 'add-mask': {
+          const current = node(action.id);
+          if (!current) return;
+          if (current.mask) throw new Error('This layer already has a mask.');
+          const mask = newMask(crypto.randomUUID());
+          next = nodes.map((node) => (node.id === action.id ? ({ ...node, mask } as DocumentNode) : node));
+          active = action.id;
+          maskTarget = true;
+          break;
+        }
+        case 'update-mask': {
+          const current = node(action.id);
+          if (!current?.mask) throw new Error('This layer has no mask.');
+          checkMaskPatch(action.patch);
+          const mask = { ...current.mask, ...action.patch };
+          next = nodes.map((node) => (node.id === action.id ? ({ ...node, mask } as DocumentNode) : node));
+          break;
+        }
+        case 'delete-mask': {
+          const current = node(action.id);
+          if (!current?.mask) return;
+          removedTiles(current.mask.id, current.mask.tiles, tiles);
+          next = nodes.map((node) => (node.id === action.id ? withoutMask(node) : node));
+          break;
+        }
+        case 'apply-mask':
+          throw new Error('Apply a mask through the runtime, which reads its pixels.');
       }
-      if (next === nodes || sameNodes(next, nodes)) return;
+      if (next === nodes || sameNodes(next, nodes)) {
+        maskTarget = maskBefore;
+        active = activeBefore;
+        return;
+      }
       nodes = next;
       if (!node(active)) active = topLayer();
-      record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
+      if (!node(active)?.mask) maskTarget = false;
+      recordChange(before, activeBefore, maskBefore, tiles);
+    },
+    /**
+     * Applies the mask of raster layer `id` as one undoable change: `masked` holds the layer's new pixels for every
+     * tile whose pixels the mask changes (`maskPixels`; `undefined` removes the tile), and the mask is removed. The
+     * layer stays active and goes back to painting its pixels. Throws for a folder or a layer without a mask.
+     */
+    applyMask(id: string, masked: ReadonlyMap<string, Uint8Array | undefined>) {
+      const layer = node(id);
+      if (layer?.kind === 'group' || !layer?.mask) throw new Error('Only a raster layer with a mask can apply it.');
+      const before = info(),
+        activeBefore = active,
+        maskBefore = maskTarget;
+      const tiles: TileChange[] = [];
+      for (const [key, pixels] of masked) {
+        tiles.push({ layerId: id, key, before: layer.tiles.get(key), after: pixels && packTile(pixels) });
+      }
+
+      removedTiles(layer.mask.id, layer.mask.tiles, tiles);
+      for (const change of tiles) {
+        if (change.layerId !== id) continue;
+        if (change.after) layer.tiles.set(change.key, change.after);
+        else layer.tiles.delete(change.key);
+      }
+
+      nodes = nodes.map((node) => (node.id === id ? withoutMask(node) : node));
+      if (active === id) maskTarget = false;
+      recordChange(before, activeBefore, maskBefore, tiles);
     },
     /**
      * Merges the raster layer `upperId` into the raster layer right below it in the same folder as one undoable
-     * change. `merged` holds the lower layer's new pixels for every tile the upper layer covers (`mergeTilePixels`;
-     * `undefined` removes the tile). The lower layer keeps its name, visibility, opacity and blend mode, and becomes
-     * active. Throws when no raster sibling is right below, as for the bottom layer of a folder or a folder below.
+     * change. `merged` holds the lower layer's new pixels for every tile that changes (`mergeTilePixels`; `undefined`
+     * removes the tile): every tile the upper layer covers and, when the lower layer has an enabled mask, every tile of
+     * the lower layer, since the merge bakes enabled masks into the pixels. Both layers' masks go, enabled or not; their
+     * tiles stay in the step for undo. The lower layer keeps its name, visibility, opacity and blend mode, and becomes
+     * active, painting its pixels. Throws when no raster sibling is right below, as for the bottom layer of a folder or
+     * a folder below.
      */
     mergeDown(upperId: string, merged: ReadonlyMap<string, Uint8Array | undefined>) {
       const upper = node(upperId),
@@ -498,22 +658,28 @@ export function createDocument(options: { paged?: boolean } = {}) {
       if (!upper || upper.kind === 'group' || !lower || lower.kind === 'group')
         throw new Error('There is no layer below to merge into.');
       const before = info(),
-        activeBefore = active;
+        activeBefore = active,
+        maskBefore = maskTarget;
       const tiles: TileChange[] = [];
       for (const [key, pixels] of merged) {
         tiles.push({ layerId: lower.id, key, before: lower.tiles.get(key), after: pixels && packTile(pixels) });
       }
 
       for (const [key, pixels] of upper.tiles) tiles.push({ layerId: upper.id, key, before: pixels, after: undefined });
+      if (upper.mask) removedTiles(upper.mask.id, upper.mask.tiles, tiles);
+      if (lower.mask) removedTiles(lower.mask.id, lower.mask.tiles, tiles);
       for (const change of tiles) {
         if (change.layerId !== lower.id) continue;
         if (change.after) lower.tiles.set(change.key, change.after);
         else lower.tiles.delete(change.key);
       }
 
-      nodes = nodes.filter((node) => node.id !== upperId);
+      nodes = nodes
+        .filter((node) => node.id !== upperId)
+        .map((node) => (node.id === lower.id ? withoutMask(node) : node));
       active = lower.id;
-      record({ before, after: info(), activeBefore, activeAfter: active, tiles, bytes: tileBytes(tiles) });
+      maskTarget = false;
+      recordChange(before, activeBefore, maskBefore, tiles);
     },
     /** Restores exact snapshots, avoiding nondeterministic GPU replay during undo.
      * Returns the replaced tiles so pixel caches can reload only those, or undefined when nothing was undone.
@@ -595,19 +761,28 @@ export function createDocument(options: { paged?: boolean } = {}) {
       }
     },
     /**
-     * Replaces the drawing with `next`, a validated one whose node `selected` becomes active, and clears undo history.
-     * Missing identity starts new Paint creation facts. Throws, changing nothing, for a tree `orderLayerTree` refuses,
-     * one without a raster layer, or a `selected` it does not have; puts the nodes in canonical order.
+     * Replaces the drawing with `next`, a validated one whose node `selected` becomes active, painting its mask with
+     * `paintMask` when it has one, and clears undo history. Missing identity starts new Paint creation facts. Throws,
+     * changing nothing, for a tree `orderLayerTree` refuses, one without a raster layer, a `selected` it does not have,
+     * or masks `checkMasks` refuses; puts the nodes in canonical order.
      */
-    replace(next: readonly DocumentNode[], selected: string, linear = true, identity?: PsdDocumentIdentity) {
+    replace(
+      next: readonly DocumentNode[],
+      selected: string,
+      linear = true,
+      identity?: PsdDocumentIdentity,
+      paintMask = false
+    ) {
       const ordered = orderLayerTree(next);
       if (!rasters(ordered).length || !ordered.some((node) => node.id === selected)) {
         throw new Error('Invalid layer identifiers.');
       }
 
+      checkMasks(ordered);
       nodes = ordered;
       psdIdentity = identity ? structuredClone(identity) : newPsdIdentity();
       active = selected;
+      maskTarget = paintMask && !!node(selected)?.mask;
       linearBlending = linear;
       undo.length = redo.length = 0;
       historyBytes = 0;
@@ -638,7 +813,13 @@ export function createDocument(options: { paged?: boolean } = {}) {
     restoreHistory(next: DocumentHistory) {
       const latest = next.undo.at(-1);
       const ids = (infos: readonly { id: string }[]) => infos.map((layer) => layer.id).join('\n');
-      if (latest && (ids(latest.after) !== ids(nodes) || latest.activeAfter !== active)) {
+      if (
+        latest &&
+        (ids(latest.after) !== ids(nodes) ||
+          latest.activeAfter !== active ||
+          ids(latest.after.flatMap((node) => (node.mask ? [node.mask] : []))) !==
+            ids(nodes.flatMap((node) => (node.mask ? [node.mask] : []))))
+      ) {
         throw new Error('This history belongs to another drawing.');
       }
 
@@ -680,7 +861,25 @@ export type LayerAction =
    * in its place, in their order, and removes it. `merge-down` needs the layers' pixels, so the runtime computes it
    * and applies it with `mergeDown`; `changeLayer` rejects it.
    */
-  | { type: 'select' | 'delete' | 'duplicate' | 'merge-down' | 'ungroup'; id: string }
+  | { type: 'delete' | 'duplicate' | 'merge-down' | 'ungroup'; id: string }
+  /**
+   * Makes node `id` active, a folder too, and its `target` the paint target: its pixels (the default; none for a
+   * folder) or its mask, when it has one.
+   */
+  | { type: 'select'; id: string; target?: 'pixels' | 'mask' }
+  /**
+   * `add-mask` gives a raster layer or folder a new mask, Reveal all (see `newMask`), and makes the node active with
+   * the mask as the paint target; it throws when the node has a mask. `delete-mask` removes the mask, and does nothing
+   * for a node without one. `apply-mask` multiplies a raster layer's mask into its pixels and removes it; it needs the
+   * pixels, so the runtime computes it and applies it with `applyMask`, and `changeLayer` rejects it. A node that
+   * loses the mask it painted goes back to painting its pixels.
+   */
+  | { type: 'add-mask' | 'delete-mask' | 'apply-mask'; id: string }
+  /**
+   * Changes the mask of node `id`: `enabled` (a disabled mask has no effect), `linked` (it moves with the pixels in a
+   * whole-layer transform) and `inverted`. Throws for a node without a mask or a patch with other values.
+   */
+  | { type: 'update-mask'; id: string; patch: MaskPatch }
   /** Deletes several nodes and everything inside them at once; ids inside other deleted folders are skipped. */
   | { type: 'delete'; ids: readonly string[] }
   /**
@@ -722,6 +921,9 @@ export type LayerAction =
       };
     };
 
+/** What strokes and pixel edits change; see `activeTarget` of {@link createDocument}. */
+export type ActiveTarget = { type: 'pixels' } | { type: 'mask'; id: string } | { type: 'none' };
+
 /** A drawing holds at most this many raster layers. */
 export const MAX_LAYERS = 128;
 
@@ -743,32 +945,159 @@ function folders<T extends { kind?: string }>(nodes: readonly T[]): Extract<T, {
   return nodes.filter((node): node is Extract<T, { kind: 'group' }> => node.kind === 'group');
 }
 
-/** A node's properties without its pixels. */
+/** A node's properties without its pixels, its mask's without the mask's tiles. */
 function nodeInfo(node: DocumentNode): LayerInfo {
+  const mask = node.mask && maskInfo(node.mask);
   if (node.kind === 'group') {
-    return { ...node };
+    return mask ? { ...node, mask } : { ...node };
   }
 
   const { tiles: _tiles, ...info } = node;
-  return info;
+  return mask ? { ...info, mask } : (info as RasterInfo);
 }
 
-/** A node as the UI state has it: a raster with its `kind` and the number of tiles it paints, or a folder. */
-function nodeState(node: DocumentNode) {
+/** A mask as the UI state has it: its properties and the number of tiles it stores. */
+export type MaskState = MaskInfo & { tileCount: number };
+
+/** A raster as the UI state has it; see {@link nodeState}. */
+type RasterState = Omit<RasterInfo, 'kind' | 'mask'> & { kind: 'raster'; tileCount: number; mask?: MaskState };
+
+/**
+ * A node as the UI state has it: a raster with its `kind` and the number of tiles it paints, or a folder; a mask with
+ * its properties and tile count, never its tiles.
+ */
+function nodeState(node: DocumentNode): RasterState | (Omit<GroupInfo, 'mask'> & { mask?: MaskState }) {
+  const mask = node.mask && { ...maskInfo(node.mask), tileCount: node.mask.tiles.size };
   if (node.kind === 'group') {
-    return { ...node };
+    return mask ? { ...node, mask } : { ...(node as Omit<LayerGroup, 'mask'>) };
   }
 
-  const { tiles, ...layer } = node;
-  return { ...layer, kind: 'raster' as const, tileCount: tiles.size };
+  const { tiles, mask: _mask, ...layer } = node;
+  return { ...layer, kind: 'raster' as const, tileCount: tiles.size, ...(mask ? { mask } : {}) };
 }
 
-/** Nodes for `infos`, each raster keeping the tiles map it has among `current`, or an empty one. */
+/**
+ * Nodes for `infos`, each raster keeping the tiles map it has among `current`, or an empty one, and each mask the
+ * tiles map of the mask with its id among `current`.
+ */
 function withTiles(infos: readonly LayerInfo[], current: readonly DocumentNode[]): DocumentNode[] {
-  const tiles = new Map(rasters(current).map((layer) => [layer.id, layer.tiles]));
-  return infos.map((info) =>
-    info.kind === 'group' ? { ...info } : { ...info, tiles: tiles.get(info.id) ?? new Map<string, TileData>() }
-  );
+  const tiles = planes(current);
+  return infos.map((info) => {
+    const mask = info.mask && { ...info.mask, tiles: tiles.get(info.mask.id) ?? new Map<string, TileData>() };
+    const node = mask ? { ...info, mask } : { ...info };
+    return info.kind === 'group'
+      ? (node as LayerGroup)
+      : ({ ...node, tiles: tiles.get(info.id) ?? new Map<string, TileData>() } as Layer);
+  });
+}
+
+/**
+ * The tile maps of every plane of `nodes` by plane id (see `TileChange`): each raster layer's pixels, and each mask's
+ * coverage, a folder's too.
+ */
+export function planes(nodes: readonly DocumentNode[]): Map<string, Map<string, TileData>> {
+  const result = new Map<string, Map<string, TileData>>();
+  for (const node of nodes) {
+    if (node.kind !== 'group') {
+      result.set(node.id, node.tiles);
+    }
+
+    if (node.mask) {
+      result.set(node.mask.id, node.mask.tiles);
+    }
+  }
+
+  return result;
+}
+
+/** The nodes of `nodes` that have a mask, by mask id. */
+export function maskOwners<T extends { mask?: { id: string } }>(
+  nodes: readonly T[]
+): Map<string, T & { mask: NonNullable<T['mask']> }> {
+  const owners = new Map<string, T & { mask: NonNullable<T['mask']> }>();
+  for (const node of nodes) {
+    if (node.mask) {
+      owners.set(node.mask.id, node as T & { mask: NonNullable<T['mask']> });
+    }
+  }
+
+  return owners;
+}
+
+/**
+ * Throws, naming the problem, for masks of `nodes` that a drawing cannot hold: an empty id or one that is used twice
+ * among the node and mask ids, or an `outside` that is not an integer from 0 to 255.
+ */
+export function checkMasks(nodes: readonly { id: string; mask?: Pick<MaskInfo, 'id' | 'outside'> }[]) {
+  const ids = new Set(nodes.map((node) => node.id));
+  for (const node of nodes) {
+    if (!node.mask) {
+      continue;
+    }
+
+    if (!node.mask.id || ids.has(node.mask.id)) {
+      throw new Error('Invalid mask identifiers.');
+    }
+
+    ids.add(node.mask.id);
+    if (!Number.isInteger(node.mask.outside) || node.mask.outside < 0 || node.mask.outside > 255) {
+      throw new Error('A mask covers from 0 to 255.');
+    }
+  }
+}
+
+/**
+ * A mask tile as a commit stores it: `after` packed (`packMaskTile`), from raw coverage or as it is, or undefined when
+ * it is uniformly `outside`, which needs no tile. Throws for RGBA pixels.
+ */
+function maskTile(after: TileData | undefined, outside: number): TileData | undefined {
+  if (!(after instanceof Uint8Array)) {
+    return after;
+  }
+
+  if (after.byteLength === MASK_TILE_PIXELS) {
+    return coverageTile(after, outside);
+  }
+
+  if (!isMaskTile(after)) {
+    throw new Error('A mask tile holds one byte per pixel.');
+  }
+
+  return coverageTile(unpackMaskTile(after), outside) && after;
+}
+
+/** Appends, to `changes`, the removal of every tile of plane `layerId`, so undo can bring them back. */
+function removedTiles(layerId: string, tiles: ReadonlyMap<string, TileData>, changes: TileChange[]) {
+  for (const [key, before] of tiles) {
+    changes.push({ layerId, key, before, after: undefined });
+  }
+}
+
+/** `node` without its mask. */
+function withoutMask(node: DocumentNode): DocumentNode {
+  const { mask: _mask, ...rest } = node;
+  return rest as DocumentNode;
+}
+
+/** Throws for a mask patch with other than boolean values. */
+function checkMaskPatch(patch: MaskPatch) {
+  for (const key of ['enabled', 'linked', 'inverted'] as const) {
+    if (patch[key] !== undefined && typeof patch[key] !== 'boolean') {
+      throw new Error(`A mask is ${key} or not.`);
+    }
+  }
+}
+
+/** Whether node `id` of `nodes` shows: it and every folder it is in are visible. */
+export function nodeShows(nodes: readonly DocumentNode[], id: string): boolean {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  for (let current = byId.get(id); current; current = current.parentId ? byId.get(current.parentId) : undefined) {
+    if (!current.visible) {
+      return false;
+    }
+  }
+
+  return byId.has(id);
 }
 
 /** Whether two node lists have the same nodes, order and properties; tiles are not compared. */
@@ -857,8 +1186,9 @@ export const MAX_DOCUMENT_TILES = 65_536;
 /** Session-only history source. Maps share immutable tile versions; they never alias live layer maps. */
 export type HistorySource = { id: number; label: string; layers: Layer[] };
 
+/** Copies of `layers` with their own tile maps; masks are left out, as the history source reads pixels only. */
 function cloneLayers(layers: readonly Layer[]): Layer[] {
-  return layers.map((layer) => ({ ...layer, tiles: new Map(layer.tiles) }));
+  return layers.map(({ mask: _mask, ...layer }) => ({ ...layer, tiles: new Map(layer.tiles) }));
 }
 
 /**
@@ -866,7 +1196,14 @@ function cloneLayers(layers: readonly Layer[]): Layer[] {
  * folders are not PSD layers of their own (see `writePsdFile`).
  */
 function touchPsdLayers(identity: PsdDocumentIdentity, entry: Pick<HistoryEntry, 'before' | 'after' | 'tiles'>) {
-  const changed = new Set(entry.tiles.map((tile) => tile.layerId));
+  // A raster's mask is part of the PSD layer it is written as; a folder's mask belongs to no layer of its own.
+  const masks = maskOwners([...entry.before, ...entry.after]);
+  const changed = new Set(
+    entry.tiles.flatMap(({ layerId }) => {
+      const owner = masks.get(layerId);
+      return owner ? (owner.kind === 'group' ? [] : [owner.id]) : [layerId];
+    })
+  );
   const before = new Map(entry.before.map((layer) => [layer.id, layer]));
   for (const layer of rasters(entry.after)) {
     if (JSON.stringify(before.get(layer.id)) !== JSON.stringify(layer)) {
@@ -897,7 +1234,7 @@ function historyLayers(nodes: readonly DocumentNode[]): Layer[] {
  */
 function projectHistory(layers: Layer[], entry: HistoryEntry, direction: 'before' | 'after'): Layer[] {
   const old = new Map(layers.map((layer) => [layer.id, layer]));
-  const next = rasters(entry[direction]).map((info) => ({
+  const next = rasters(entry[direction]).map(({ mask: _mask, ...info }) => ({
     ...info,
     tiles: old.get(info.id)?.tiles ?? new Map<string, TileData>()
   }));

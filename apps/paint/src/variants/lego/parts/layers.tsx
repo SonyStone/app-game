@@ -388,6 +388,7 @@ function documentLayersModel(services: LegoServices, frame: PartBinding) {
   return createDocumentLayers({
     layers: services.layers,
     send: frame.command(services.layers.action),
+    view: frame.command(services.layers.maskCommand),
     thumbnails: () => frame.mode !== 'preview'
   });
 }

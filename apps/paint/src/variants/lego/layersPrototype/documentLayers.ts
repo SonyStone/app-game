@@ -24,9 +24,12 @@ import {
  * and can be the clipping base of the layers right above them, but cannot be clipped, locked or merged
  * (`groups.blendOnly`). So this model offers groups (enter a folder in the narrow strip, expand it in the wide tree,
  * add, group, ungroup, drag into and out of folders, drop a layer clipped onto a layer or folder), and multi-selection
- * for grouping and deleting several layers, each one engine action and one undo step. It offers no masks, adjustment
- * layers, fill, Blend If, colour tags, Reference, other locks, Paper or clearing, and no Solo: the engine has no
- * action that shows one layer alone, so hiding the others would take one undo step each.
+ * for grouping and deleting several layers, each one engine action and one undo step. Raster layers and folders take
+ * a mask each (`masks`): adding one, switching the paint target between a node's pixels and its mask, enabling,
+ * linking, inverting, applying (rasters only) and deleting it are one engine action and one undo step each; Reveal and
+ * Hide and the red overlay are view settings of the engine (`view`). It offers no adjustment layers, fill, Blend If,
+ * colour tags, Reference, other locks, Paper or clearing, and no Solo: the engine has no action that shows one layer
+ * alone, so hiding the others would take one undo step each.
  *
  * `send` is the part's guarded command (`frame.command(layers.action)`), so previews never edit. Thumbnails are read
  * only while `thumbnails()` holds (never in a catalog preview); the view that shows them asks for them through
@@ -35,11 +38,13 @@ import {
  * view.
  */
 export function createDocumentLayers(options: {
-  layers: Pick<LegoServices['layers'], 'state' | 'ready' | 'wantThumbnails' | 'thumbnail'>;
+  layers: Pick<LegoServices['layers'], 'state' | 'ready' | 'wantThumbnails' | 'thumbnail' | 'maskView'>;
   send: (action: LayerAction) => void;
+  /** Sends how masks are painted, the red overlay or Reveal and Hide: the part's guarded `maskCommand`. */
+  view: LegoServices['layers']['maskCommand'];
   thumbnails: () => boolean;
 }): LayersModel {
-  const { layers: document, send } = options;
+  const { layers: document, send, view } = options;
   /** The engine's layer tree in canonical order: every folder right after its children, siblings bottom first. */
   const engineNodes = () => document.state().nodes;
   const byId = createMemo(() => new Map(engineNodes().map((node) => [node.id, node])));
@@ -48,6 +53,7 @@ export function createDocumentLayers(options: {
     const shown = options.thumbnails();
     return layerTree(engineNodes(), (id) => (shown ? document.thumbnail(id) : undefined));
   });
+
   const activeId = createMemo(() => document.state().activeId);
 
   const [entered, setEntered] = createSignal<readonly string[]>([]);
@@ -110,9 +116,18 @@ export function createDocumentLayers(options: {
       send({ type: 'relocate', id, ...place });
     }
   };
+  /** Whether the active node's mask is the paint target. */
+  const paintsMask = () => document.state().activeTarget.type === 'mask';
   const select = (id: string) => {
-    if (id !== activeId() && find(id)) {
+    if ((id !== activeId() || paintsMask()) && find(id)) {
       send({ type: 'select', id });
+    }
+  };
+  /** Sends a mask action for node `id` when it has a mask. */
+  const withMask = (id: string, action: (mask: NonNullable<DocumentNode['mask']>) => LayerAction) => {
+    const mask = find(id)?.mask;
+    if (mask) {
+      send(action(mask));
     }
   };
 
@@ -196,6 +211,44 @@ export function createDocumentLayers(options: {
         setPicked([]);
       }
     },
+    masks: {
+      target: () => (paintsMask() ? 'mask' : 'layer'),
+      overlay: () => document.maskView().overlay,
+      brush: () => document.maskView().paint,
+      setTarget(id, target) {
+        const node = find(id);
+        const mask = target === 'mask';
+        if (node && (!mask || node.mask) && (id !== activeId() || mask !== paintsMask())) {
+          send({ type: 'select', id, target: mask ? 'mask' : 'pixels' });
+        }
+      },
+      exit() {
+        if (paintsMask()) {
+          send({ type: 'select', id: activeId(), target: 'pixels' });
+        }
+      },
+      add(id) {
+        if (find(id) && !find(id)!.mask) {
+          send({ type: 'add-mask', id });
+        }
+      },
+      toggleEnabled: (id) => withMask(id, (mask) => ({ type: 'update-mask', id, patch: { enabled: !mask.enabled } })),
+      invert: (id) => withMask(id, (mask) => ({ type: 'update-mask', id, patch: { inverted: !mask.inverted } })),
+      toggleLinked: (id) => withMask(id, (mask) => ({ type: 'update-mask', id, patch: { linked: !mask.linked } })),
+      remove: (id) => withMask(id, () => ({ type: 'delete-mask', id })),
+      canApply: (id) => find(id)?.kind === 'raster' && !!find(id)!.mask,
+      apply(id) {
+        if (find(id)?.kind === 'raster') {
+          withMask(id, () => ({ type: 'apply-mask', id }));
+        }
+      },
+      toggleOverlay: () => view({ type: 'mask-overlay', enabled: !document.maskView().overlay }),
+      setBrush(brush) {
+        if (brush !== document.maskView().paint) {
+          view({ type: 'mask-paint', paint: brush });
+        }
+      }
+    },
     groups: {
       blendOnly: true,
       stack,
@@ -264,7 +317,8 @@ type DocumentFolder = Extract<DocumentNode, { kind: 'group' }>;
 
 /**
  * The engine's nodes, in canonical order, as the layers UI's tree: top first in every folder, a folder's children
- * under it. `thumb` gives a raster layer's thumbnail; folders have none.
+ * under it. `thumb` gives a raster layer's thumbnail by its id and a mask's by the mask's id; folders have none of
+ * their own.
  */
 export function layerTree(
   nodes: readonly DocumentNode[],
@@ -279,7 +333,7 @@ export function layerTree(
   const build = (key: string): LayerNode[] =>
     (siblings.get(key) ?? [])
       .toReversed()
-      .map((node) => (node.kind === 'group' ? folderNode(node, build(node.id)) : layerNode(node, thumb(node.id))));
+      .map((node) => (node.kind === 'group' ? folderNode(node, build(node.id), thumb) : layerNode(node, thumb)));
   return build('');
 }
 
@@ -317,7 +371,7 @@ function placed(nodes: readonly DocumentNode[], id: string, place: LayerPlace): 
 }
 
 /** An engine raster layer as the layers UI shows it; what the engine does not keep holds its default. */
-function layerNode(layer: DocumentLayer, thumb: string | undefined): LayerNode {
+function layerNode(layer: DocumentLayer, thumb: (id: string) => string | undefined): LayerNode {
   return {
     id: layer.id,
     name: layer.name,
@@ -330,13 +384,26 @@ function layerNode(layer: DocumentLayer, thumb: string | undefined): LayerNode {
     reference: false,
     locks: { ...emptyLocks(), alpha: !!layer.alphaLock },
     colorTag: 'none',
-    thumb,
+    thumb: thumb(layer.id),
+    ...maskNode(layer, thumb),
     blendIf: defaultBlendIf()
   };
 }
 
-/** An engine folder as the layers UI shows it, with its blend mode and opacity, without a thumbnail. */
-function folderNode(folder: DocumentFolder, children: readonly LayerNode[]): LayerNode {
+/** The mask of `node` as the layers UI shows it, with its thumbnail, `thumb` of its id; nothing without one. */
+function maskNode(node: DocumentNode, thumb: (id: string) => string | undefined): Pick<LayerNode, 'mask'> {
+  const mask = node.mask;
+  return mask
+    ? { mask: { thumb: thumb(mask.id), enabled: mask.enabled, linked: mask.linked, inverted: mask.inverted } }
+    : {};
+}
+
+/** An engine folder as the layers UI shows it, with its blend mode, opacity and mask, without a thumbnail. */
+function folderNode(
+  folder: DocumentFolder,
+  children: readonly LayerNode[],
+  thumb: (id: string) => string | undefined
+): LayerNode {
   return {
     id: folder.id,
     name: folder.name,
@@ -350,6 +417,7 @@ function folderNode(folder: DocumentFolder, children: readonly LayerNode[]): Lay
     locks: emptyLocks(),
     colorTag: 'none',
     thumb: undefined,
+    ...maskNode(folder, thumb),
     blendIf: defaultBlendIf(),
     children
   };

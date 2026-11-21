@@ -1,5 +1,6 @@
 import { TILE_SIZE } from './brush';
-import type { DocumentNode, Layer, LayerGroup, RasterInfo, TileChange } from './document';
+import { planes, type DocumentNode, type GroupInfo, type Layer, type RasterInfo, type TileChange } from './document';
+import { coverageTile, unpackMaskTile } from './layerMask';
 import type { DocumentRect } from './layersInView';
 import { isFlatStack, type ShownLayer } from './layerTree';
 import { compressTile, restoreTile } from './tileCodec';
@@ -21,10 +22,13 @@ export type LiveListing = {
   truncated: boolean;
 };
 
-/** A layer of a live drawing: a raster layer, at the root of a flat drawing or naming its folder, or a folder. */
-export type LiveLayer = RasterInfo | LayerGroup;
+/**
+ * A layer of a live drawing: a raster layer, at the root of a flat drawing or naming its folder, or a folder; either
+ * with its mask's properties, whose tiles are listed by mask id.
+ */
+export type LiveLayer = RasterInfo | GroupInfo;
 
-/** A tile and the version of its pixels. */
+/** A tile of a plane, a layer's pixels or a mask's coverage (see `TileChange`), and the version of its pixels. */
 export type LiveTileVersion = { layerId: string; key: string; version: string };
 
 /** A version's pixels, compressed for the wire as storage keeps them (`compressTile`). */
@@ -67,15 +71,17 @@ export function listLiveTiles(
     bottom = Math.floor((region.top + region.height) / TILE_SIZE);
   const center = { x: (left + right) / 2, y: (top + bottom) / 2 };
   const found: (LiveTileVersion & { distance: number; data: TileData })[] = [];
-  for (const layer of document.layers) {
-    for (const [key, data] of layer.tiles) {
+  const flat = isFlatStack(document.layers);
+  // A flat listing shares only the rasters' masks; a tree shares the folders' too.
+  for (const [layerId, tiles] of planes(flat ? document.layers : document.nodes)) {
+    for (const [key, data] of tiles) {
       const [x, y] = key.split(',').map(Number) as [number, number];
       if (x < left || x > right || y < top || y > bottom) {
         continue;
       }
 
       found.push({
-        layerId: layer.id,
+        layerId,
         key,
         version: capture(data).storageId,
         distance: Math.hypot(x - center.x, y - center.y),
@@ -88,15 +94,20 @@ export function listLiveTiles(
   const kept = found.slice(0, limit);
   return {
     listing: {
-      layers: isFlatStack(document.layers)
-        ? document.layers.map(({ tiles: _tiles, parentId: _parentId, ...info }) => info)
+      layers: flat
+        ? document.layers.map(
+            ({ tiles: _tiles, parentId: _parentId, group: _group, clipGroup: _clip, mask, ...info }) =>
+              mask ? { ...info, mask: liveMask(mask) } : info
+          )
         : document.nodes.map((node) => {
+            const mask = node.mask && liveMask(node.mask);
             if (node.kind === 'group') {
-              return { ...node };
+              const { mask: _mask, ...group } = node;
+              return mask ? { ...group, mask } : group;
             }
 
-            const { tiles: _tiles, ...info } = node;
-            return info;
+            const { tiles: _tiles, mask: _mask, ...info } = node;
+            return mask ? { ...info, mask } : info;
           }),
       activeId: document.activeId,
       linearBlending: document.linearBlending,
@@ -125,37 +136,56 @@ export async function readLiveTiles(
 }
 
 /**
- * The layers after applying `state` to `layers`: the author's layers, and folders when the author shares them, in the
- * author's order, each raster keeping the tiles it had unless `state` changes them; layers the author no longer has
- * are gone. Returns them with the tile changes, for the renderer to reload, and the ids of removed layers, for it to
+ * The layers after applying `state` to `layers`, the viewer's nodes: the author's layers, and folders when the author
+ * shares them, in the author's order, each raster and mask keeping the tiles it had unless `state` changes them;
+ * layers the author no longer has are gone. Returns them with the tile changes, for the renderer to reload, and the ids of removed layers, for it to
  * release.
  */
 export async function applyLiveState(
-  layers: readonly Layer[],
+  layers: readonly DocumentNode[],
   state: LiveState
 ): Promise<{ layers: DocumentNode[]; changes: TileChange[]; removed: string[] }> {
-  const previous = new Map(layers.map((layer) => [layer.id, layer]));
-  const next = state.layers.map((info): DocumentNode =>
-    info.kind === 'group' ? { ...info } : { ...info, tiles: new Map(previous.get(info.id)?.tiles) }
-  );
-  const byId = new Map(next.filter((node): node is Layer => node.kind !== 'group').map((layer) => [layer.id, layer]));
+  const previous = planes(layers);
+  const next = state.layers.map((info): DocumentNode => {
+    const mask = info.mask && { ...info.mask, tiles: new Map(previous.get(info.mask.id)) };
+    const node = mask ? { ...info, mask } : { ...info, mask: undefined };
+    if (!mask) {
+      delete node.mask;
+    }
+
+    return info.kind === 'group'
+      ? (node as DocumentNode)
+      : ({ ...node, tiles: new Map(previous.get(info.id)) } as DocumentNode);
+  });
+  const byPlane = planes(next);
+  const outsides = new Map(next.flatMap((node) => (node.mask ? [[node.mask.id, node.mask.outside] as const] : [])));
   const changes: TileChange[] = [];
   for (const tile of state.tiles) {
-    const layer = byId.get(tile.layerId);
-    if (!layer) {
+    const tiles = byPlane.get(tile.layerId);
+    if (!tiles) {
       continue;
     }
 
-    const before = layer.tiles.get(tile.key);
-    const after = tile.bytes ? await restoreTile(tile.bytes) : undefined;
+    const before = tiles.get(tile.key);
+    const outside = outsides.get(tile.layerId);
+    const restored = tile.bytes ? await restoreTile(tile.bytes) : undefined;
+    // Coverage of a mask is validated as one; a tile of only `outside` coverage needs none.
+    const after = restored && outside !== undefined ? coverageTile(unpackMaskTile(restored), outside) : restored;
     if (after) {
-      layer.tiles.set(tile.key, after);
+      tiles.set(tile.key, after);
     } else {
-      layer.tiles.delete(tile.key);
+      tiles.delete(tile.key);
     }
 
-    changes.push({ layerId: layer.id, key: tile.key, before, after });
+    changes.push({ layerId: tile.layerId, key: tile.key, before, after });
   }
 
-  return { layers: next, changes, removed: layers.filter((layer) => !byId.has(layer.id)).map(({ id }) => id) };
+  const kept = new Set(next.filter((node) => node.kind !== 'group').map(({ id }) => id));
+  const removed = layers.filter((layer) => layer.kind !== 'group' && !kept.has(layer.id)).map(({ id }) => id);
+  return { layers: next, changes, removed };
+}
+
+/** A mask's properties as a live listing shares them. */
+function liveMask({ tiles: _tiles, ...mask }: NonNullable<Layer['mask']>) {
+  return mask;
 }

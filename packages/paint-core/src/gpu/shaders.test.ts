@@ -28,7 +28,10 @@ describe('GPU shader compilation', () => {
     'tileVertex',
     'tileFragment',
     'compositeFragment',
-    'presentFragment'
+    'presentFragment',
+    'maskedCompositeFragment',
+    'maskedFadeFragment',
+    'maskApplyFragment'
   ] as const) {
     it(`resolves ${name} to WGSL with the installed TypeGPU compiler`, () => {
       const wgsl = tgpu.resolve([shaders[name]]);

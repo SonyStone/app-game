@@ -168,7 +168,9 @@ export function createCatalogueFixture() {
       blending: (linear) => {
         drawing.setLinearBlending(linear);
         setState(drawing.state());
-      }
+      },
+      maskView: createMemo(() => ({ overlay: false, paint: 'reveal' as const })),
+      maskCommand: () => {}
     },
     layersPrototype: createMockLayers(),
     files: {

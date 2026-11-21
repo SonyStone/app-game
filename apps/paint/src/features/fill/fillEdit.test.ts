@@ -1,4 +1,5 @@
 import type { Layer } from '@app-game/paint-core/document';
+import { coverageReader, MASK_TILE_PIXELS, newMask } from '@app-game/paint-core/layerMask';
 import { emptySelection, featherSelection, polygonSelection, type SelectionMask } from '@app-game/paint-core/selectionMask';
 import { expect, it } from 'vitest';
 import { fillEdit, type FillCommand } from './fillEdit';
@@ -87,7 +88,12 @@ it('fills the active layer by the active layer or all visible layers, over its e
   const read = async (pixels: unknown) => pixels as Uint8Array;
   const state = { get: () => undefined, set: () => {} };
   const floating = { show: () => {}, move: () => {}, clear: async () => {} };
-  const edits = { history: [], revision: 0, preview: { show: () => {}, clear: () => {} } };
+  const edits = {
+    history: [],
+    revision: 0,
+    preview: { show: () => {}, clear: () => {} },
+    readCoverage: coverageReader((data) => data as Uint8Array)
+  };
   const fill = (command: Partial<FillCommand>) =>
     fillEdit.run(
       { layers: [paint, lines], active: paint, readTile: read, linearBlending: false, selection: emptySelection, state, floating, ...edits },
@@ -148,6 +154,7 @@ it('stays inside the selection, also when it grows under edges, fades across a f
         layers: [paint],
         active: paint,
         readTile: async (pixels) => pixels as Uint8Array,
+        readCoverage: coverageReader((data) => data as Uint8Array),
         linearBlending: false,
         selection,
         state: { get: () => undefined, set: () => {} },
@@ -237,3 +244,52 @@ function alphaMask(tile: Uint8Array) {
 function index(x: number, y: number) {
   return (y * 256 + x) * 4;
 }
+
+it('fills a mask with Reveal or Hide through the selection, whatever its colour, reversed for an inverted mask', async () => {
+  const paint: Layer = layer('paint', new Map());
+  const mask = { ...newMask('m'), outside: 0 };
+  const run = (
+    command: Partial<FillCommand>,
+    target: typeof mask,
+    selection: SelectionMask = emptySelection,
+    maskGoal = 255
+  ) =>
+    fillEdit.run(
+      {
+        layers: [paint],
+        active: paint,
+        mask: target,
+        maskGoal,
+        readTile: async (pixels) => pixels as Uint8Array,
+        readCoverage: coverageReader((data) => data as Uint8Array),
+        linearBlending: false,
+        selection,
+        state: { get: () => undefined, set: () => {} },
+        floating: { show: () => {}, move: () => {}, clear: async () => {} },
+        history: [],
+        revision: 0,
+        preview: { show: () => {}, clear: () => {} }
+      },
+      { ...fillCommand(), source: 'layer', area: { left: 0, top: 0, width: 64, height: 64 }, ...command }
+    );
+  const square = polygonSelection([
+    { x: 2, y: 2 },
+    { x: 12, y: 2 },
+    { x: 12, y: 8 },
+    { x: 2, y: 8 }
+  ]);
+
+  // Reveal at half opacity reveals half way inside the selection: 0 + 0.5 × (255 − 0), rounded.
+  const revealed = await run({ point: { x: 5, y: 5 }, color: '#ff0000', opacity: 0.5 }, mask, square);
+  expect(revealed.changes.map(({ layerId }) => layerId)).toEqual(['m']);
+  const coverage = revealed.changes[0]!.after as Uint8Array;
+  expect(coverage.byteLength).toBe(MASK_TILE_PIXELS);
+  expect([coverage[5 * 256 + 5], coverage[0], coverage[5 * 256 + 20]]).toEqual([128, 0, 0]);
+
+  // Hide on an inverted mask stores white: hiding there means raising the stored coverage.
+  const inverted = await run({ point: { x: 5, y: 5 }, opacity: 1 }, { ...mask, inverted: true }, emptySelection, 0);
+  expect((inverted.changes[0]!.after as Uint8Array)[5 * 256 + 5]).toBe(255);
+
+  // A fill that changes nothing commits nothing.
+  expect((await run({ point: { x: 5, y: 5 }, opacity: 1 }, mask, emptySelection, 0)).changes).toEqual([]);
+});

@@ -1,13 +1,17 @@
 import { TILE_SIZE } from './brush';
 import type { Layer } from './document';
+import { effectiveCoverage, isMaskTile, maskRgba, unpackMaskTile, type LayerMask } from './layerMask';
 import type { DocumentRect } from './layersInView';
+import { shownMask } from './layerTree';
 import { createPageWork, ObsoletePageError } from './pageWork';
 import type { TileData } from './tilePixels';
 import { createVirtualPages, MAX_LEVEL, type OverviewStorage } from './virtualPages';
 
 /**
  * Makes small images of every layer's own pixels for layer panels, all showing the same document rectangle (see
- * `thumbnailFrame`), so they line up. Off until `resize` gives a size; then each update re-renders only the layers
+ * `thumbnailFrame`), so they line up. A layer with an enabled mask shows its pixels with the mask applied, and every
+ * mask of `masks` gets an image of its own, keyed by the mask's id: opaque grey, its effective coverage, white where
+ * it reveals. Off until `resize` gives a size; then each update re-renders only the layers
  * whose pixels under that rectangle, or the rectangle itself, changed, and posts their images in one batch.
  *
  * Thumbnails come from a sparse overview pyramid of their own (`createVirtualPages`): the level just finer than the
@@ -22,6 +26,8 @@ import { createVirtualPages, MAX_LEVEL, type OverviewStorage } from './virtualPa
 export function createLayerThumbnailer(options: {
   /** The document's layers, bottom to top; read when an update starts. */
   layers: () => readonly Layer[];
+  /** Every mask of the drawing, of layers and folders, enabled or not; read when an update starts. */
+  masks?: () => readonly LayerMask[];
   /** Reads the packed pixels of a tile version kept in storage. */
   read: (data: TileData) => Promise<Uint8Array>;
   /** Derived overview pages, shared with the renderer; this thumbnailer never calls `retain`. */
@@ -40,7 +46,16 @@ export function createLayerThumbnailer(options: {
   const { delayMs = 400, encode = encodeThumbnailPng } = options;
   // A smaller CPU slice than the renderer's: a pen-down arriving mid-update waits for at most one slice.
   const work = createPageWork({ cpuMs: 2 });
-  const pages = createVirtualPages(options.read, pyramidBudget, options.storage, work);
+  // Mask tiles enter the pyramid as opaque grey, their stored coverage; see `coverageImage`.
+  const pages = createVirtualPages(
+    async (data) => {
+      const bytes = await options.read(data);
+      return isMaskTile(bytes) ? maskRgba(unpackMaskTile(bytes)) : bytes;
+    },
+    pyramidBudget,
+    options.storage,
+    work
+  );
   /** Longer side of the thumbnails in pixels; undefined while off. */
   let size: number | undefined;
   /** The latest rendered image of each layer and what it shows, posted or not. */
@@ -145,32 +160,48 @@ export function createLayerThumbnailer(options: {
   /** Renders the layers whose pixels or frame changed and posts them with the frame and the current layer order. */
   async function refresh(target: number, valid: () => boolean) {
     const layers = options.layers();
+    const masks = options.masks?.() ?? [];
+    const planes = [...layers, ...masks.map(maskLayer)];
     pages.invalidate();
-    pages.sync(layers as Layer[]);
+    pages.sync(planes);
     const frame = thumbnailFrame(layers);
     const shape = thumbnailShape(frame, target);
     const layout = `${frame.left},${frame.top},${frame.width},${frame.height}/${shape.width}x${shape.height}`;
     const covering = coveringPages(frame, shape.level);
+    const versionsOf = (id: string) =>
+      covering.map(({ x, y }) => pages.pageVersion({ layerId: id, level: shape.level, x, y })).join(',');
+    const maskSignature = (mask: LayerMask) => `${versionsOf(mask.id)}|${mask.outside},${mask.inverted}`;
+    /** Effective coverage of each mask's thumbnail made in this update, one byte per thumbnail pixel. */
+    const coverages = new Map<string, Promise<Uint8Array>>();
+    const coverageOf = (mask: LayerMask) => {
+      let coverage = coverages.get(mask.id);
+      if (!coverage) {
+        coverage = renderLayer(mask.id, frame, shape, covering, valid).then((pixels) => coverageImage(pixels, mask));
+        coverages.set(mask.id, coverage);
+      }
+
+      return coverage;
+    };
     for (const layer of layers) {
-      const versions = covering.map(({ x, y }) => pages.pageVersion({ layerId: layer.id, level: shape.level, x, y }));
-      const signature = `${layout}|${versions.join(',')}`;
+      const mask = shownMask(layer);
+      const signature = `${layout}|${versionsOf(layer.id)}${mask ? `|${maskSignature(mask)}` : ''}`;
       if (rendered.get(layer.id)?.signature === signature) {
         continue;
       }
 
-      const pixels = await renderLayer(layer.id, frame, shape, covering, valid);
-      const image = await encode(unpremultiply(pixels), shape.width, shape.height);
-      if (!valid()) {
-        throw new ObsoletePageError();
-      }
-
-      rendered.set(layer.id, {
-        signature,
-        image: { layerId: layer.id, width: shape.width, height: shape.height, image }
-      });
+      const own = await renderLayer(layer.id, frame, shape, covering, valid);
+      const pixels = mask ? scaledByCoverage(own, await coverageOf(mask)) : own;
+      await keep(layer.id, signature, unpremultiply(pixels), shape, valid);
     }
 
-    const ids = new Set(layers.map((layer) => layer.id));
+    for (const mask of masks) {
+      const signature = `${layout}|${maskSignature(mask)}`;
+      if (rendered.get(mask.id)?.signature !== signature) {
+        await keep(mask.id, signature, greyImage(await coverageOf(mask)), shape, valid);
+      }
+    }
+
+    const ids = new Set(planes.map((layer) => layer.id));
     for (const id of [...rendered.keys()]) {
       if (!ids.has(id)) {
         rendered.delete(id);
@@ -178,7 +209,7 @@ export function createLayerThumbnailer(options: {
       }
     }
 
-    const fresh = layers.flatMap((layer) => {
+    const fresh = planes.flatMap((layer) => {
       const entry = rendered.get(layer.id)!;
       return sent.get(layer.id) === entry.signature ? [] : [entry];
     });
@@ -193,6 +224,22 @@ export function createLayerThumbnailer(options: {
 
     sentLayout = order;
     options.post({ frame, layerIds: [...ids], thumbnails: fresh.map((entry) => entry.image) });
+  }
+
+  /** Encodes `pixels`, the new image of plane `id` that `signature` describes, and keeps it for posting. */
+  async function keep(
+    id: string,
+    signature: string,
+    pixels: Uint8ClampedArray<ArrayBuffer>,
+    shape: ThumbnailShape,
+    valid: () => boolean
+  ) {
+    const image = await encode(pixels, shape.width, shape.height);
+    if (!valid()) {
+      throw new ObsoletePageError();
+    }
+
+    rendered.set(id, { signature, image: { layerId: id, width: shape.width, height: shape.height, image } });
   }
 
   /** Premultiplied RGBA pixels of one layer's thumbnail, resampled in bounded bands of rows. */
@@ -236,14 +283,20 @@ export type LayerThumbnailsUpdate = {
    * layers; see `thumbnailFrame`. Images posted earlier for another frame are replaced in the same batch.
    */
   frame: DocumentRect;
-  /** Ids of every layer, bottom to top; thumbnails of other ids belong to deleted layers. */
+  /**
+   * Ids of every layer, bottom to top, then of every mask; thumbnails of other ids belong to deleted layers and masks.
+   */
   layerIds: string[];
   /** Images of the layers whose pixels or frame changed since the previous batch; empty layers get transparent ones. */
   thumbnails: LayerThumbnailImage[];
 };
 
-/** One layer's thumbnail: its own pixels, regardless of visibility, opacity or blend mode. */
+/**
+ * One layer's thumbnail: its own pixels with its enabled mask applied, regardless of visibility, opacity or blend
+ * mode; or one mask's, keyed by the mask's id.
+ */
 export type LayerThumbnailImage = {
+  /** The layer's id, or the mask's for a mask's thumbnail. */
   layerId: string;
   /** Image size in pixels; the frame's aspect, with `size` pixels on the longer side. */
   width: number;
@@ -450,6 +503,46 @@ function unpremultiply(pixels: Uint8Array): Uint8ClampedArray<ArrayBuffer> {
   }
 
   return straight;
+}
+
+/** `mask` as a layer of the thumbnail pyramid: its coverage tiles under its id. */
+function maskLayer(mask: LayerMask): Layer {
+  return { id: mask.id, name: '', visible: true, opacity: 1, blend: 'normal', tiles: mask.tiles };
+}
+
+/**
+ * The effective coverage of `mask` in each thumbnail pixel, from the thumbnail of its tiles (premultiplied opaque grey
+ * where it has tiles, transparent elsewhere): the grey over `outside`, reversed when inverted.
+ */
+function coverageImage(pixels: Uint8Array, mask: LayerMask): Uint8Array {
+  const coverage = new Uint8Array(pixels.length / 4);
+  for (let index = 0; index < coverage.length; index++) {
+    const stored = pixels[index * 4]! + ((255 - pixels[index * 4 + 3]!) * mask.outside) / 255;
+    coverage[index] = effectiveCoverage(Math.round(stored), mask.inverted);
+  }
+
+  return coverage;
+}
+
+/** Premultiplied `pixels` with every pixel scaled by `coverage`, one byte per pixel. */
+function scaledByCoverage(pixels: Uint8Array, coverage: Uint8Array): Uint8Array {
+  const out = new Uint8Array(pixels.length);
+  for (let index = 0; index < pixels.length; index++) {
+    out[index] = Math.round((pixels[index]! * coverage[index >> 2]!) / 255);
+  }
+
+  return out;
+}
+
+/** `coverage`, one byte per pixel, as opaque grey pixels. */
+function greyImage(coverage: Uint8Array): Uint8ClampedArray<ArrayBuffer> {
+  const pixels = new Uint8ClampedArray(coverage.length * 4);
+  for (let index = 0; index < coverage.length; index++) {
+    pixels.fill(coverage[index]!, index * 4, index * 4 + 3);
+    pixels[index * 4 + 3] = 255;
+  }
+
+  return pixels;
 }
 
 /** Bytes of overview pages the thumbnailer keeps in RAM; older ones are read again from `storage` when needed. */

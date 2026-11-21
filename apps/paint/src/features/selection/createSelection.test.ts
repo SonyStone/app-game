@@ -1,3 +1,4 @@
+import { coverageReader } from '@app-game/paint-core/layerMask';
 import type { PaintCommand } from '@app-game/paint-core/protocol';
 import {
   emptySelection,
@@ -224,6 +225,7 @@ function setup() {
             layers: [],
             active: { id: 'layer-1', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles: new Map() },
             readTile: async () => new Uint8Array(),
+            readCoverage: coverageReader((data) => data as Uint8Array),
             linearBlending: false,
             selection: mask,
             state: { get: () => undefined, set: () => {} },

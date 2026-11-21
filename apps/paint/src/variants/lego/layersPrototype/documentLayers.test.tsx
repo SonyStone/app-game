@@ -4,6 +4,7 @@ import { render } from '@solidjs/web';
 import { createMemo, createRoot, createSignal, flush } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fourLayers, seededDocument } from '../../../component-canvas/seededLayers';
+import type { MaskView } from '../../../features/engine/createPaintEngine';
 import type { LegoServices } from '../LegoServices';
 import { LegoServicesContext } from '../LegoServices';
 import { PartFrame } from '../PartFrame';
@@ -11,7 +12,7 @@ import { partDefinition } from '../parts';
 import type { PartMode } from '../parts/definition';
 import { createTestServices } from '../testServices';
 import { createDocumentLayers } from './documentLayers';
-import type { LayersModel } from './layersModel';
+import { findNode, type LayersModel } from './layersModel';
 import { LayersStripPart } from './LayersStripPart';
 
 const disposers: (() => void)[] = [];
@@ -82,10 +83,11 @@ describe('createDocumentLayers', () => {
       reference: false,
       dropZones: ['before', 'after', 'into', 'clip']
     });
-    // Folders that blend but are no layers otherwise, and several layers selected for grouping and deleting.
+    // Folders that blend but are no layers otherwise, masks, and several layers selected for grouping and deleting.
     expect(model.groups).toMatchObject({ blendOnly: true });
     expect(model.selection).toBeDefined();
-    for (const feature of ['masks', 'solo', 'paper', 'favoriteBlends', 'clear', 'localUndo'] as const) {
+    expect(model.masks).toBeDefined();
+    for (const feature of ['solo', 'paper', 'favoriteBlends', 'clear', 'localUndo'] as const) {
       expect(model[feature], feature).toBeUndefined();
     }
   });
@@ -269,8 +271,8 @@ describe('layers:strip over the drawing', () => {
     const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Ink"]')!;
     expect(popover).not.toBeNull();
     const labels = [...popover.querySelectorAll('button')].map((button) => button.textContent?.trim());
-    expect(labels).toEqual(expect.arrayContaining(['αLock', '↳Clip', 'Dup', 'Group', 'Merge', 'Delete']));
-    for (const absent of ['◐Mask', 'Ungroup', 'Clear']) {
+    expect(labels).toEqual(expect.arrayContaining(['αLock', '↳Clip', '◐Mask', 'Dup', 'Group', 'Merge', 'Delete']));
+    for (const absent of ['Ungroup', 'Clear']) {
       expect(labels).not.toContain(absent);
     }
     expect(popover.querySelector('[aria-label="More layer settings"]')).toBeNull();
@@ -603,7 +605,7 @@ describe('folders on the drawing', () => {
     expect(model.groups!.expandedIds()).not.toContain(folder);
   });
 
-  it('offers a folder its name, blending, visibility, Dup, Group, Ungroup and Delete, and still no masks', () => {
+  it('offers a folder its name, blending, visibility, a mask, Dup, Group, Ungroup and Delete', () => {
     const { model, layers, folder } = withFolder();
     mountStrip(model);
     document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Group 1"]')!.click();
@@ -611,7 +613,16 @@ describe('folders on the drawing', () => {
 
     const popover = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Group 1"]')!;
     const labels = [...popover.querySelectorAll('button')].map((button) => button.textContent?.trim());
-    expect(labels).toEqual(['Group 1', 'Blend modePass Through ›', 'Shown', 'Dup', 'Group', 'Ungroup', 'Delete']);
+    expect(labels).toEqual([
+      'Group 1',
+      'Blend modePass Through ›',
+      'Shown',
+      '◐Mask',
+      'Dup',
+      'Group',
+      'Ungroup',
+      'Delete'
+    ]);
     expect(popover.querySelectorAll('[role="slider"]')).toHaveLength(1);
     expect(document.querySelector('[aria-label^="Toggle mask target"]')).toBeNull();
 
@@ -625,6 +636,185 @@ describe('folders on the drawing', () => {
     flush();
     expect(layers.action).toHaveBeenLastCalledWith({ type: 'ungroup', id: folder });
     expect(tiles()).toEqual(['Sketch', 'Ink', 'Shadows', 'Flat colors']);
+  });
+});
+
+describe('masks on the drawing', () => {
+  /** The drawing with a mask on `Ink`, the paint target, its red overlay on. */
+  function masked() {
+    const seededModel = owned(() => seeded(fourLayers, () => true));
+    seededModel.model.masks!.add(seededModel.ids.ink);
+    flush();
+    return seededModel;
+  }
+
+  it('adds a mask in one action, paints it at once with its red overlay, and shows it on the tile', () => {
+    const { model, layers, ids } = masked();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'add-mask', id: ids.ink });
+    const ink = findNode(model.layers(), ids.ink)!;
+    const maskId = layers.state().nodes.find((node) => node.id === ids.ink)!.mask!.id;
+    expect(ink.mask).toEqual({ thumb: `blob:${maskId}`, enabled: true, linked: true, inverted: false });
+    expect(model.activeId()).toBe(ids.ink);
+    expect(model.masks!.target()).toBe('mask');
+    expect(model.masks!.overlay()).toBe(true);
+    // A node that has a mask gets no second one.
+    vi.mocked(layers.action).mockClear();
+    model.masks!.add(ids.ink);
+    flush();
+    expect(layers.action).not.toHaveBeenCalled();
+  });
+
+  it('switches the paint target between pixels and mask, and leaves the mask', () => {
+    const { model, layers, ids } = masked();
+    const action = vi.mocked(layers.action);
+    model.masks!.setTarget(ids.ink, 'layer');
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink, target: 'pixels' });
+    expect(model.masks!.target()).toBe('layer');
+    model.masks!.setTarget(ids.ink, 'mask');
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink, target: 'mask' });
+    // Already there, or a node without a mask: nothing.
+    action.mockClear();
+    model.masks!.setTarget(ids.ink, 'mask');
+    flush();
+    model.masks!.setTarget(ids.flat, 'mask');
+    flush();
+    expect(action).not.toHaveBeenCalled();
+    model.masks!.exit();
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink, target: 'pixels' });
+    // Selecting another layer paints its pixels.
+    model.masks!.setTarget(ids.ink, 'mask');
+    flush();
+    model.select(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink });
+    expect(model.masks!.target()).toBe('layer');
+  });
+
+  it('enables, links, inverts, applies and deletes the mask, one action and one undo step each', () => {
+    const { model, layers, ids } = masked();
+    const action = vi.mocked(layers.action);
+    const steps = () => layers.state().historyStates.length;
+    const before = steps();
+    model.masks!.toggleEnabled(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'update-mask', id: ids.ink, patch: { enabled: false } });
+    model.masks!.toggleLinked!(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'update-mask', id: ids.ink, patch: { linked: false } });
+    model.masks!.invert(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'update-mask', id: ids.ink, patch: { inverted: true } });
+    expect(findNode(model.layers(), ids.ink)!.mask).toMatchObject({ enabled: false, linked: false, inverted: true });
+    expect(steps()).toBe(before + 3);
+    expect(model.masks!.canApply!(ids.ink)).toBe(true);
+    model.masks!.apply!(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'apply-mask', id: ids.ink });
+    model.masks!.remove(ids.ink);
+    flush();
+    expect(action).toHaveBeenLastCalledWith({ type: 'delete-mask', id: ids.ink });
+    expect(findNode(model.layers(), ids.ink)!.mask).toBeUndefined();
+    expect(model.masks!.target()).toBe('layer');
+  });
+
+  it('gives a folder a mask, which it cannot apply', () => {
+    const { model, layers } = owned(() => seeded(fourLayers, () => true));
+    model.groups!.add();
+    flush();
+    const folder = layers.state().nodes.find((node) => node.kind === 'group')!.id;
+    model.masks!.add(folder);
+    flush();
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'add-mask', id: folder });
+    expect(findNode(model.layers(), folder)!.mask).toMatchObject({ enabled: true });
+    expect(model.masks!.canApply!(folder)).toBe(false);
+    vi.mocked(layers.action).mockClear();
+    model.masks!.apply!(folder);
+    flush();
+    expect(layers.action).not.toHaveBeenCalled();
+  });
+
+  it('sends Reveal and Hide and the red overlay as view settings, outside the history', () => {
+    const { model, layers } = masked();
+    const view = vi.mocked(layers.maskCommand);
+    const steps = layers.state().historyStates.length;
+    model.masks!.setBrush('hide');
+    flush();
+    expect(view).toHaveBeenLastCalledWith({ type: 'mask-paint', paint: 'hide' });
+    expect(model.masks!.brush()).toBe('hide');
+    view.mockClear();
+    model.masks!.setBrush('hide');
+    flush();
+    expect(view).not.toHaveBeenCalled();
+    model.masks!.toggleOverlay();
+    flush();
+    expect(view).toHaveBeenLastCalledWith({ type: 'mask-overlay', enabled: false });
+    expect(model.masks!.overlay()).toBe(false);
+    expect(layers.state().historyStates).toHaveLength(steps);
+  });
+
+  it('shows the mask corner and the painting-on-mask header on the strip, and its controls work', () => {
+    const { model, layers, ids } = masked();
+    mountStrip(model);
+    const corner = document.querySelector<HTMLButtonElement>('[aria-label="Toggle mask target for Ink"]')!;
+    expect(corner).not.toBeNull();
+    expect(corner.hasAttribute('data-active')).toBe(true);
+    const header = document.querySelector<HTMLElement>('[role="toolbar"][aria-label="Mask controls"]')!;
+    expect(header).not.toBeNull();
+    // While painting the mask, the header offers Reveal and Hide, the red overlay and leaving the mask.
+    header.querySelector<HTMLButtonElement>('[aria-label="Red mask overlay"]')!.click();
+    flush();
+    expect(layers.maskCommand).toHaveBeenLastCalledWith({ type: 'mask-overlay', enabled: false });
+    header.querySelector<HTMLButtonElement>('[aria-label="Exit mask mode"]')!.click();
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink, target: 'pixels' });
+    expect(document.querySelector('[role="toolbar"][aria-label="Mask controls"]')).toBeNull();
+    // The corner takes the mask back as the target.
+    document.querySelector<HTMLButtonElement>('[aria-label="Toggle mask target for Ink"]')!.click();
+    flush();
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'select', id: ids.ink, target: 'mask' });
+  });
+
+  it('shows the mask thumbnail beside the layer’s in the wide look', () => {
+    const { model, layers, ids } = masked();
+    mountView(() => <LayersStripPart model={model} wide interactive acquireThumbnails />);
+    const maskId = layers.state().nodes.find((node) => node.id === ids.ink)!.mask!.id;
+    const button = document.querySelector<HTMLButtonElement>('[aria-label="Select mask for Ink"]')!;
+    expect(button.querySelector('img')?.getAttribute('src')).toBe(`blob:${maskId}`);
+  });
+
+  it('offers the mask page: target, enabled, overlay, linked, apply, invert and delete', () => {
+    const { model, layers, ids } = masked();
+    mountStrip(model);
+    document.querySelector<HTMLButtonElement>('[aria-label="Layer properties for Ink"]')!.click();
+    flush();
+    const popover = () => document.querySelector<HTMLElement>('[role="dialog"][aria-label="Layer properties: Ink"]')!;
+    popover().querySelector<HTMLButtonElement>('[aria-label="Open mask settings"]')!.click();
+    flush();
+    const labels = [...popover().querySelectorAll('button')].map((button) => button.textContent?.trim());
+    expect(labels).toEqual(
+      expect.arrayContaining([
+        'Layer',
+        'Mask',
+        'Enabled',
+        'Red overlay',
+        'Linked',
+        'Apply mask',
+        'Invert mask',
+        'Delete mask'
+      ])
+    );
+    const press = (label: string) =>
+      [...popover().querySelectorAll<HTMLButtonElement>('button')]
+        .find((button) => button.textContent?.trim() === label)!
+        .click();
+    press('Linked');
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'update-mask', id: ids.ink, patch: { linked: false } });
+    press('Apply mask');
+    expect(layers.action).toHaveBeenLastCalledWith({ type: 'apply-mask', id: ids.ink });
   });
 });
 
@@ -763,20 +953,32 @@ describe('layers parts', () => {
 function seeded(layers = fourLayers, thumbnails: () => boolean = () => false, ready: () => boolean = () => true) {
   const drawing = seededDocument(layers);
   const [state, setState] = createSignal(drawing.state());
+  const [maskView, setMaskView] = createSignal<MaskView>({ overlay: false, paint: 'reveal' });
   const fake: LegoServices['layers'] = {
     state,
     ready: createMemo(ready),
     wantThumbnails: vi.fn(() => () => {}),
     thumbnail: vi.fn((id: string) => `blob:${id}`),
     action: vi.fn((action: LayerAction) => {
-      if (action.type !== 'merge-down') {
+      if (action.type !== 'merge-down' && action.type !== 'apply-mask') {
         drawing.changeLayer(action);
+        // As the engine does: a new mask shows its red overlay.
+        if (action.type === 'add-mask') {
+          setMaskView((view) => ({ ...view, overlay: true }));
+        }
+
         setState(drawing.state());
       }
     }),
-    blending: vi.fn()
+    blending: vi.fn(),
+    maskView,
+    maskCommand: vi.fn((command: Parameters<LegoServices['layers']['maskCommand']>[0]) =>
+      setMaskView((view) =>
+        command.type === 'mask-overlay' ? { ...view, overlay: command.enabled } : { ...view, paint: command.paint }
+      )
+    )
   };
-  const model = createDocumentLayers({ layers: fake, send: fake.action, thumbnails });
+  const model = createDocumentLayers({ layers: fake, send: fake.action, view: fake.maskCommand, thumbnails });
   const byName = (name: string) => drawing.state().layers.find((layer) => layer.name === name)?.id ?? '';
   const ids = {
     flat: byName('Flat colors'),

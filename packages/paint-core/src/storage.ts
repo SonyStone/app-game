@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { TILE_SIZE } from './brush';
 import type { Camera } from './camera';
 import {
+  checkMasks,
   MAX_DOCUMENT_BYTES,
   MAX_DOCUMENT_TILES,
   MAX_LAYERS,
@@ -13,6 +14,7 @@ import {
   type LayerGroup,
   type PsdDocumentIdentity
 } from './document';
+import { coverageTile, unpackMaskTile, type LayerMask } from './layerMask';
 import { clipBases, MAX_FOLDERS, orderLayerTree } from './layerTree';
 import { packTile, unpackTile, type TileData, type TileReference } from './tilePixels';
 
@@ -28,6 +30,11 @@ import { packTile, unpackTile, type TileData, type TileReference } from './tileP
  * version 4 it shows unclipped, as before folders could be clipping bases. `snapshotDocument` writes version 5 only
  * for a drawing with such a layer, so builds that would show it unclipped refuse it, and every other drawing stays
  * version 4.
+ *
+ * Version 6 adds masks: a node may carry `mask`, its properties and its coverage tiles as a list, like a raster's
+ * pixels (see `LayerMask`), and `activeMask` says the active node's mask is the paint target. It has the meaning of
+ * version 5 otherwise. `snapshotDocument` writes it only for a drawing with a mask, so a build before masks refuses
+ * such a drawing rather than open it without them, which would show what they hide.
  */
 export type SavedDocument = ReturnType<typeof snapshotDocument>;
 
@@ -43,14 +50,17 @@ export function snapshotDocument(
   camera: Camera,
   features: Readonly<Record<string, unknown>> = {},
   linearBlending = true,
-  psdIdentity?: PsdDocumentIdentity
+  psdIdentity?: PsdDocumentIdentity,
+  maskTarget = false
 ) {
   const clipsToFolder = [...clipBases(nodes).values()].some((base) => base.kind === 'group');
+  const masked = nodes.some((node) => node.mask);
   return {
-    version: (clipsToFolder ? 5 : 4) as 4 | 5,
+    version: (masked ? 6 : clipsToFolder ? 5 : 4) as 4 | 5 | 6,
     ...(psdIdentity ? { psdIdentity: structuredClone(psdIdentity) } : {}),
     tileSize: TILE_SIZE,
     activeId,
+    ...(masked && maskTarget ? { activeMask: true } : {}),
     blending: linearBlending ? ('linear' as const) : ('classic' as const),
     camera: { ...camera },
     features: { ...features },
@@ -58,14 +68,46 @@ export function snapshotDocument(
   };
 }
 
-/** A node as `snapshotDocument` saves it: a folder as it is, a raster with `kind` and its tiles as a list. */
+/**
+ * A node as `snapshotDocument` saves it: a folder as it is, a raster with `kind` and its tiles as a list, and a mask
+ * with its tiles as a list.
+ */
 function savedNode(node: DocumentNode) {
+  const mask = node.mask && savedMask(node.mask);
   if (node.kind === 'group') {
-    return { ...node };
+    const { mask: _mask, ...group } = node;
+    return { ...group, ...(mask ? { mask } : {}) };
   }
 
-  const { tiles, ...layer } = node;
-  return { ...layer, kind: 'raster' as const, tiles: [...tiles].map(([key, pixels]) => ({ key, pixels })) };
+  const { tiles, mask: _mask, ...layer } = node;
+  return {
+    ...layer,
+    kind: 'raster' as const,
+    tiles: tileList(tiles),
+    ...(mask ? { mask } : {})
+  };
+}
+
+/** A mask as `snapshotDocument` saves it. */
+function savedMask({ tiles, ...mask }: LayerMask) {
+  return { ...mask, tiles: tileList(tiles) };
+}
+
+function tileList(tiles: ReadonlyMap<string, TileData>) {
+  return [...tiles].map(([key, pixels]) => ({ key, pixels }));
+}
+
+/** `node` with `change` applied to its pixel tiles, if a raster, and to its mask's tiles, if it has a mask. */
+function mapSavedTiles<T extends SavedNode, P>(
+  node: T,
+  change: (tiles: readonly { key: string; pixels: TileData }[]) => { key: string; pixels: P }[]
+) {
+  const mask = node.mask && { ...node.mask, tiles: change(node.mask.tiles) };
+  const tiles = node.kind === 'group' ? {} : { tiles: change(node.tiles) };
+  return { ...node, ...tiles, ...(mask ? { mask } : {}) } as Omit<T, 'tiles' | 'mask'> & {
+    tiles?: { key: string; pixels: P }[];
+    mask?: Omit<NonNullable<T['mask']>, 'tiles'> & { tiles: { key: string; pixels: P }[] };
+  };
 }
 
 /** A node of a {@link SavedDocument}. */
@@ -78,20 +120,26 @@ export type SavedNode = SavedDocument['layers'][number];
 export function checkpointDocument(snapshot: SavedDocument, capture: (pixels: TileData) => TileReference) {
   return {
     ...snapshot,
-    layers: snapshot.layers.map((node) =>
-      node.kind === 'group'
-        ? node
-        : { ...node, tiles: node.tiles.map((tile) => ({ ...tile, pixels: capture(tile.pixels) })) }
+    layers: snapshot.layers.map(
+      (node) =>
+        mapSavedTiles(node, (tiles) =>
+          tiles.map((tile) => ({ ...tile, pixels: capture(tile.pixels) as TileData }))
+        ) as typeof node
     )
   };
 }
 
-/** The tile pixels or stored versions a saved document of any version refers to, from data read back from storage. */
+/**
+ * The tile pixels or stored versions a saved document of any version refers to, from data read back from storage:
+ * the pixels of its layers and the coverage of its masks.
+ */
 export function* savedTiles(saved: unknown): Generator<unknown> {
   const layers = (saved as { layers?: unknown } | undefined)?.layers;
-  for (const layer of Array.isArray(layers) ? (layers as { tiles?: unknown }[]) : []) {
-    for (const tile of Array.isArray(layer?.tiles) ? (layer.tiles as { pixels?: unknown }[]) : []) {
-      yield tile?.pixels;
+  for (const layer of Array.isArray(layers) ? (layers as { tiles?: unknown; mask?: { tiles?: unknown } }[]) : []) {
+    for (const tiles of [layer?.tiles, layer?.mask?.tiles]) {
+      for (const tile of Array.isArray(tiles) ? (tiles as { pixels?: unknown }[]) : []) {
+        yield tile?.pixels;
+      }
     }
   }
 }
@@ -118,6 +166,8 @@ export function restoreDocument(
   features: Record<string, unknown>;
   linearBlending: boolean;
   psdIdentity?: PsdDocumentIdentity;
+  /** The active node's mask is the paint target (version 6 `activeMask`). */
+  maskTarget?: boolean;
 } {
   const parsed = savedSchema.parse(value);
   if (
@@ -126,6 +176,7 @@ export function restoreDocument(
   )
     throw new Error('Invalid layer identifiers.');
   const entries: (LegacyLayer | SavedRaster | SavedGroup)[] = parsed.layers;
+  checkMasks(entries as { id: string; mask?: SavedMask }[]);
   const rasterEntries = entries.filter(
     (entry): entry is LegacyLayer | SavedRaster => !('kind' in entry) || entry.kind !== 'group'
   );
@@ -137,28 +188,46 @@ export function restoreDocument(
   const references = !portable && parsed.version >= 3;
   let bytes = 0,
     count = 0;
-  const nodes = entries.map((entry): DocumentNode => {
-    if ('kind' in entry && entry.kind === 'group') {
-      return { ...entry };
+  /** The tiles of a layer's pixels, or with `outside` of a mask's coverage, validated and counted. */
+  const restoreTiles = (saved: SavedRaster['tiles'], outside?: number) => {
+    if (new Set(saved.map((t) => t.key)).size !== saved.length) throw new Error('Duplicate tile coordinates.');
+    const tiles = new Map<string, TileData>();
+    for (const tile of saved) {
+      if (parsed.version === 1 && tile.pixels.byteLength !== TILE_BYTES) throw new Error('Invalid tile length.');
+      if (!references && !(tile.pixels instanceof Uint8Array)) throw new Error('Unexpected external tile reference.');
+      const pixels =
+        tile.pixels instanceof Uint8Array
+          ? outside === undefined
+            ? packTile(unpackTile(tile.pixels))
+            : coverageTile(unpackMaskTile(tile.pixels), outside)
+          : tile.pixels;
+      // A mask tile of only `outside` coverage needs no tile.
+      if (!pixels) continue;
+      bytes += pixels.byteLength;
+      if (++count > MAX_DOCUMENT_TILES) throw new Error('Too many tiles in this document.');
+      if (!references && bytes > MAX_DOCUMENT_BYTES) throw new Error('This document exceeds the 256 MiB import limit.');
+      tiles.set(tile.key, pixels);
     }
 
-    const { kind: _kind, ...layer } = entry as SavedRaster;
-    if (new Set(layer.tiles.map((t) => t.key)).size !== layer.tiles.length)
-      throw new Error('Duplicate tile coordinates.');
-    const tiles = new Map(
-      layer.tiles.map((tile) => {
-        if (parsed.version === 1 && tile.pixels.byteLength !== TILE_BYTES) throw new Error('Invalid tile length.');
-        if (!references && !(tile.pixels instanceof Uint8Array)) throw new Error('Unexpected external tile reference.');
-        const pixels = tile.pixels instanceof Uint8Array ? packTile(unpackTile(tile.pixels)) : tile.pixels;
-        bytes += pixels.byteLength;
-        if (++count > MAX_DOCUMENT_TILES) throw new Error('Too many tiles in this document.');
-        if (!references && bytes > MAX_DOCUMENT_BYTES)
-          throw new Error('This document exceeds the 256 MiB import limit.');
-        return [tile.key, pixels] as const;
-      })
-    );
+    return tiles;
+  };
+  const restoreMask = (mask: SavedMask | undefined): { mask?: LayerMask } =>
+    mask ? { mask: { ...mask, tiles: restoreTiles(mask.tiles, mask.outside) } } : {};
+  const nodes = entries.map((entry): DocumentNode => {
+    if ('kind' in entry && entry.kind === 'group') {
+      const { mask, ...group } = entry as SavedGroup & { mask?: SavedMask };
+      return { ...group, ...restoreMask(mask) };
+    }
+
+    const { kind: _kind, mask, ...layer } = entry as SavedRaster & { mask?: SavedMask };
+    const tiles = restoreTiles(layer.tiles);
     // Smooth color layers become Normal ones in a document that blends in linear light.
-    return { ...layer, blend: layer.blend === 'linear' ? ('normal' as const) : layer.blend, tiles };
+    return {
+      ...layer,
+      blend: layer.blend === 'linear' ? ('normal' as const) : layer.blend,
+      tiles,
+      ...restoreMask(mask)
+    };
   });
   let ordered = orderLayerTree(nodes);
   if (parsed.version === 4) {
@@ -178,7 +247,8 @@ export function restoreDocument(
     camera: parsed.camera,
     features: { ...legacy, ...parsed.features },
     psdIdentity: parsed.psdIdentity,
-    linearBlending
+    linearBlending,
+    maskTarget: 'activeMask' in parsed && !!parsed.activeMask
   };
 }
 
@@ -229,16 +299,12 @@ export function encodeDocument(document: SavedDocument): string {
   return JSON.stringify({
     ...document,
     layers: document.layers.map((node) =>
-      node.kind === 'group'
-        ? node
-        : {
-            ...node,
-            tiles: node.tiles.map((tile) => {
-              if (!(tile.pixels instanceof Uint8Array))
-                throw new Error('Materialize tile references before exporting.');
-              return { key: tile.key, pixels: toBase64(tile.pixels) };
-            })
-          }
+      mapSavedTiles(node, (tiles) =>
+        tiles.map((tile) => {
+          if (!(tile.pixels instanceof Uint8Array)) throw new Error('Materialize tile references before exporting.');
+          return { key: tile.key, pixels: toBase64(tile.pixels) };
+        })
+      )
     )
   });
 }
@@ -324,22 +390,35 @@ const legacyLayerSchema = z.object(rasterFields);
 type LegacyLayer = z.infer<typeof legacyLayerSchema>;
 const savedRasterSchema = z.object({ kind: z.literal('raster'), parentId: nodeId.optional(), ...rasterFields });
 type SavedRaster = z.infer<typeof savedRasterSchema>;
-const savedGroupSchema = z
-  .object({
-    kind: z.literal('group'),
-    id: nodeId,
-    parentId: nodeId.optional(),
-    name: z.string().max(200),
-    visible: z.boolean(),
-    opacity: unit,
-    blend: z.enum(['pass-through', 'normal', 'multiply', 'screen', 'overlay']),
-    clipping: z.boolean().optional()
-  })
-  // A folder cannot be clipped; one saved clipped would show wrongly, so it is refused.
-  .refine((group) => !group.clipping, {
-    message: 'This drawing has clipped folders, which this version of Paint cannot show.'
-  });
-type SavedGroup = z.infer<typeof savedGroupSchema> & LayerGroup;
+const groupFields = {
+  kind: z.literal('group'),
+  id: nodeId,
+  parentId: nodeId.optional(),
+  name: z.string().max(200),
+  visible: z.boolean(),
+  opacity: unit,
+  blend: z.enum(['pass-through', 'normal', 'multiply', 'screen', 'overlay']),
+  clipping: z.boolean().optional()
+};
+/** A folder cannot be clipped; one saved clipped would show wrongly, so it is refused. */
+const unclipped = [
+  (group: { clipping?: boolean }) => !group.clipping,
+  { message: 'This drawing has clipped folders, which this version of Paint cannot show.' }
+] as const;
+const savedGroupSchema = z.object(groupFields).refine(...unclipped);
+type SavedGroup = Omit<z.infer<typeof savedGroupSchema>, 'mask'> & Omit<LayerGroup, 'mask'>;
+/** A mask of a version 6 node: its properties and its coverage tiles (see `LayerMask`). */
+const savedMaskSchema = z.object({
+  id: nodeId,
+  outside: z.number().int().min(0).max(255),
+  enabled: z.boolean(),
+  linked: z.boolean(),
+  inverted: z.boolean(),
+  tiles: tileEntries
+});
+type SavedMask = z.infer<typeof savedMaskSchema>;
+const maskedRasterSchema = savedRasterSchema.extend({ mask: savedMaskSchema.optional() });
+const maskedGroupSchema = z.object({ ...groupFields, mask: savedMaskSchema.optional() }).refine(...unclipped);
 const savedFields = {
   psdIdentity: psdIdentitySchema.optional(),
   tileSize: z.literal(TILE_SIZE),
@@ -362,6 +441,15 @@ const savedSchema = z.union([
     version: z.union([z.literal(4), z.literal(5)]),
     layers: z
       .array(z.discriminatedUnion('kind', [savedRasterSchema, savedGroupSchema]))
+      .min(1)
+      .max(MAX_LAYERS + MAX_FOLDERS)
+  }),
+  z.object({
+    ...savedFields,
+    version: z.literal(6),
+    activeMask: z.boolean().optional(),
+    layers: z
+      .array(z.discriminatedUnion('kind', [maskedRasterSchema, maskedGroupSchema]))
       .min(1)
       .max(MAX_LAYERS + MAX_FOLDERS)
   })
