@@ -4,8 +4,10 @@ import type { createAbrRetouch } from '@app-game/abr-paint/gpu/retouch';
 import type { Result } from '../asyncResult';
 import { dabTiles, type Brush, type Dab } from '../brush';
 import type { Layer, TileChange } from '../document';
-import { tileHasAlpha, type TileData } from '../tilePixels';
+import { coverageFromRgba, coverageTile } from '../layerMask';
+import { tileHasAlpha, unpackTile, type TileData } from '../tilePixels';
 import type { createDisplayCache } from './displayCache';
+import { isMaskPlane } from './maskPlane';
 import type { StrokeRaster } from './strokeRaster';
 import type { TargetViews } from './targetView';
 import type { TileResidency } from './tileResidency';
@@ -125,7 +127,11 @@ export function createStrokeState(
       setTail(data.current ? dabs : []);
     },
 
-    /** Commits touched pixels in bounded readback chunks; retains reusable GPU resources for subsequent strokes. */
+    /**
+     * Commits touched pixels in bounded readback chunks; retains reusable GPU resources for subsequent strokes. A
+     * stroke on a mask's plane (`maskPlane`) commits stored coverage (`coverageFromRgba`), no tile where it is all
+     * `outside`.
+     */
     async finish(): Promise<TileChange[]> {
       const stroke = data.current;
       if (!stroke) {
@@ -137,18 +143,33 @@ export function createStrokeState(
 
       const outputs = await residency.readBack([...data.tiles.keys()].filter((id) => residency.has(id)));
       const changes: TileChange[] = [];
+      const plane = isMaskPlane(stroke.layer) ? stroke.layer.maskOf : undefined;
       for (const [id, snapshot] of data.tiles) {
         const read = outputs.get(id);
         const after = read?.pixels ?? snapshot.output;
         const key = id.slice(stroke.layer.id.length + 1);
-        if (after) {
+        if (!after) {
+          continue;
+        }
+
+        // A mask's plane goes back to one channel of stored coverage, without the tiles that are all `outside`.
+        if (plane) {
+          const coverage = coverageFromRgba(unpackTile(after), plane.inverted);
           changes.push({
             layerId: stroke.layer.id,
             key,
             before: snapshot.before,
-            after: (read ? read.alpha : tileHasAlpha(after)) ? after : undefined
+            after: coverageTile(coverage, plane.outside)
           });
+          continue;
         }
+
+        changes.push({
+          layerId: stroke.layer.id,
+          key,
+          before: snapshot.before,
+          after: (read ? read.alpha : tileHasAlpha(after)) ? after : undefined
+        });
       }
 
       data.tiles.clear();

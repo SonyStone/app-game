@@ -1,6 +1,6 @@
 import type { DocumentEditContext } from '@app-game/paint-core/composition/documentEdit';
 import type { Layer } from '@app-game/paint-core/document';
-import { coverageReader } from '@app-game/paint-core/layerMask';
+import { coverageReader, newMask } from '@app-game/paint-core/layerMask';
 import {
   coverageAt,
   emptySelection,
@@ -9,7 +9,7 @@ import {
   selectionBounds,
   type SelectionMask
 } from '@app-game/paint-core/selectionMask';
-import { unpackTile } from '@app-game/paint-core/tilePixels';
+import { TILE_BYTES, unpackTile } from '@app-game/paint-core/tilePixels';
 import { expect, it, vi } from 'vitest';
 import { applyAffine, boxAffine, identity, invertAffine, multiplyAffine, type Affine } from './affine';
 import { fromAffine, rectToQuad } from './projective';
@@ -168,8 +168,24 @@ it('builds box transforms about a pivot and inverts them', () => {
   expect(invertAffine([0, 0, 0, 1, 0, 0])).toBeUndefined();
 });
 
-function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptySelection) {
-  const layer: Layer = { id: 'layer', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles };
+it('refuses to move a mask, or pixels whose linked mask would stay behind', async () => {
+  const tiles = new Map([['0,0', new Uint8Array(TILE_BYTES).fill(255)]]);
+  const linked = setup(tiles, emptySelection, { mask: newMask('m') });
+  await expect(linked.run({ phase: 'begin' })).rejects.toThrow('linked');
+  const onMask = setup(tiles, emptySelection, { mask: { ...newMask('m'), linked: false } }, true);
+  await expect(onMask.run({ phase: 'begin' })).rejects.toThrow('cannot change a mask');
+  // Unlinked, the pixels move alone.
+  const unlinked = setup(tiles, emptySelection, { mask: { ...newMask('m'), linked: false } });
+  await expect(unlinked.run({ phase: 'begin' })).resolves.toMatchObject({ reply: { bounds: expect.anything() } });
+});
+
+function setup(
+  tiles: Map<string, Uint8Array>,
+  selection: SelectionMask = emptySelection,
+  extra: Partial<Layer> = {},
+  maskTarget = false
+) {
+  const layer: Layer = { id: 'layer', name: 'Layer', visible: true, opacity: 1, blend: 'normal', tiles, ...extra };
   let state: unknown;
   const floating = {
     show: vi.fn<DocumentEditContext['floating']['show']>(),
@@ -179,6 +195,7 @@ function setup(tiles: Map<string, Uint8Array>, selection: SelectionMask = emptyS
   const context: DocumentEditContext = {
     layers: [layer],
     active: layer,
+    ...(maskTarget && layer.mask ? { mask: layer.mask } : {}),
     readTile: async (pixels) => unpackTile(pixels),
     readCoverage: coverageReader((data) => data as Uint8Array),
     linearBlending: false,

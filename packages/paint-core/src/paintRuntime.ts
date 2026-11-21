@@ -10,7 +10,7 @@ import type { CanvasTargetValue } from './composition/CanvasTarget';
 import type { BrushEngine, BrushSession, PaintModules, PaintRenderer, PaintStorage } from './composition/contracts';
 import type { PreviewTile } from './composition/documentEdit';
 import { createReplacementProcessor } from './strokeProcessors';
-import type { Layer, TileChange } from './document';
+import { nodeShows, type Layer, type TileChange } from './document';
 import type { FloatingPixels } from './gpu/floatingPixels';
 import { createResourceSession } from './composition/resourceSession';
 import { restoreFeatureData } from './composition/documentFeature';
@@ -19,6 +19,8 @@ import { isPsdFile, psdExportLayers, readPsdFile, writePsdFile } from './psdFile
 import srgbProfileUrl from './assets/sRGB.icc?url';
 import type { PaintEvent, PaintRuntimeCommand } from './protocol';
 import { coverageReader } from './layerMask';
+import { maskStrokeBrush, maskStrokeRefusal } from './maskStroke';
+import { maskPlane } from './gpu/maskPlane';
 import { appliedMaskTiles, mergeDownTiles } from './layerMerge';
 import { captureSelection, editSelection, type SelectionPixels } from './selection';
 import { applyLiveState, listLiveTiles, readLiveTiles } from './liveDrawing';
@@ -35,7 +37,7 @@ import {
 import { decodeDocument, snapshotDocument, type EngineHandoff, type restoreDocument } from './storage';
 import { unpackTile, type TileData } from './tilePixels';
 import { withPrediction } from './strokePrediction';
-import type { Sample } from './brush';
+import type { Brush, Sample } from './brush';
 import { errorMessage, type GpuError } from '@app-game/solid-gpu/errors';
 
 /** Owns document, persistence and GPU resources in either execution mode. Commands stay ordered.
@@ -299,6 +301,25 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
         ...[...masked.keys()].map((key) => ({ layerId: id, key, before: undefined, after: undefined })),
         ...[...mask.tiles.keys()].map((key) => ({ layerId: mask.id, key, before: undefined, after: undefined }))
       ];
+    };
+    /**
+     * What a stroke beginning now paints, pinned for the whole stroke: the active raster layer's pixels with `brush` as
+     * it is, or the active mask's plane (`maskPlane`) with `brush` painting its stored goal grey (see
+     * `maskStrokeBrush`). Undefined when the target does not show or nothing can be painted; throws, changing nothing,
+     * for a tool that cannot paint a mask (`maskStrokeRefusal`).
+     */
+    const strokeTarget = (brush: Brush, modifiers: Extract<PaintRuntimeCommand, { type: 'begin' }>['modifiers']) => {
+      const target = document.activeTarget;
+      if (target.type === 'pixels') {
+        const layer = document.activeLayer;
+        return layer?.visible ? { layer: layer as Layer, brush } : undefined;
+      }
+
+      const mask = document.activeMask;
+      if (target.type !== 'mask' || !mask || !nodeShows(document.nodes, document.activeId)) return undefined;
+      const refusal = maskStrokeRefusal(brush, modifiers, modules.selectEngine(brush));
+      if (refusal) throw new Error(refusal);
+      return { layer: maskPlane(mask) as Layer, brush: maskStrokeBrush(brush, mask) };
     };
     /** The active raster layer, for a command that edits its pixels; throws while a folder is active. */
     const paintTarget = () => {
@@ -1086,15 +1107,16 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
           case 'begin': {
             processedInputTime = undefined;
             prediction = [];
-            // A stroke needs a raster layer that shows; otherwise it is ignored, and the editor reads why from
-            // `activePaintable`.
-            const target = document.activeLayer;
-            if (!renderer || lost || !target?.visible || document.activeTarget.type !== 'pixels') return;
+            // A stroke needs a target that shows, a raster layer's pixels or a mask; otherwise it is ignored, and the
+            // editor reads why from `activePaintable`. A tool that cannot paint a mask throws, telling the user.
+            const resolved = renderer && !lost ? strokeTarget(command.brush, command.modifiers) : undefined;
+            if (!renderer || !resolved) return;
+            const { layer: target, brush } = resolved;
             await end();
             // Strokes paint over the layer's own resident tiles.
             dropPreview();
-            const engineId = command.brush.engine?.id ?? modules.selectEngine(command.brush);
-            const processorId = modules.selectProcessor(command.brush);
+            const engineId = brush.engine?.id ?? modules.selectEngine(brush);
+            const processorId = modules.selectProcessor(brush);
             const engine = Object.hasOwn(modules.engines, engineId) ? modules.engines[engineId] : undefined;
             const processor = Object.hasOwn(modules.processors, processorId)
               ? modules.processors[processorId]
@@ -1105,12 +1127,11 @@ export function createPaintRuntime(post: (event: PaintEvent) => void, close: () 
             renderer.clipStroke(isSelected(selection) ? selection : undefined);
             const strokeRenderer = modules.features.reduce(
               (decorated, feature) =>
-                feature.decorateStroke?.({ data: featureData[feature.id], brush: command.brush, renderer: decorated }) ??
+                feature.decorateStroke?.({ data: featureData[feature.id], brush, renderer: decorated }) ??
                 decorated,
               renderer
             );
-            const brush = command.brush,
-              zoom = command.zoom ?? camera.zoom;
+            const zoom = command.zoom ?? camera.zoom;
             strokeStart = {
               engine,
               context: {

@@ -14,6 +14,7 @@ import { verifyLayerFolders } from '../gpu/layerFolderVerification';
 import { verifyLayerMasks } from '../gpu/layerMaskVerification';
 import { verifyLayerMerge } from '../gpu/layerMergeVerification';
 import { verifyLiveTail } from '../gpu/liveTailVerification';
+import { verifyMaskPainting } from '../gpu/maskPaintVerification';
 import { verifyColdNavigation } from '../gpu/navigationStreamingVerification';
 import { verifyOverviewQuality } from '../gpu/overviewQualityVerification';
 import { verifyPatternRegions } from '../gpu/patternRegionVerification';
@@ -77,6 +78,7 @@ export const verifications = {
   'layer-folders': verifyLayerFolders,
   'isolated-folders': verifyIsolatedFolders,
   'layer-masks': verifyLayerMasks,
+  'mask-painting': verifyMaskPainting,
   pressure: verifyPressureSpacing,
   'stroke-filtering': verifyStrokeFiltering,
   'live-tail': verifyLiveTail,
